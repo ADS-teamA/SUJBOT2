@@ -36,22 +36,36 @@ class ClaudeSDKClient:
         self.current_message = None
         self.options = None
 
-    async def query(self, prompt: str, options: Optional[ClaudeCodeOptions] = None):
-        """Odešle dotaz na Claude API"""
+    async def query(self, prompt: str, options: Optional[ClaudeCodeOptions] = None) -> str:
+        """Odešle dotaz na Claude API a vrátí odpověď"""
         self.options = options or ClaudeCodeOptions()
 
         messages = [{"role": "user", "content": prompt}]
 
         try:
             # Volání Claude API
-            self.current_message = await self.client.messages.create(
-                model=self.options.model,
-                messages=messages,
-                system=self.options.system_prompt if self.options.system_prompt else None,
-                max_tokens=self.options.max_tokens,
-                temperature=self.options.temperature
-            )
+            # Prepare system parameter - only include if not empty
+            create_params = {
+                'model': self.options.model,
+                'messages': messages,
+                'max_tokens': self.options.max_tokens,
+                'temperature': self.options.temperature
+            }
+
+            if self.options.system_prompt and self.options.system_prompt.strip():
+                create_params['system'] = self.options.system_prompt
+
+            self.current_message = await self.client.messages.create(**create_params)
             logger.info(f"Dotaz odeslán na model {self.options.model}")
+
+            # Extract and return response text
+            response_parts = []
+            for content in self.current_message.content:
+                if content.type == 'text':
+                    response_parts.append(content.text)
+
+            return "".join(response_parts)
+
         except Exception as e:
             logger.error(f"Chyba při volání Claude API: {e}")
             raise

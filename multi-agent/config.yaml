@@ -46,7 +46,7 @@ retrieval:
   # Search parameters
   top_k: 20                    # Number of chunks to retrieve
   rerank_top_k: 5              # Number of chunks after reranking
-  min_score: 0.3               # Minimum similarity score threshold
+  min_score: 0.1               # Minimum similarity score threshold (lowered for better recall)
 
   # Reranking
   enable_reranking: true
