@@ -54,8 +54,47 @@ class VectorizedDocumentAnalyzer:
         if not api_key:
             raise ValueError("CLAUDE_API_KEY není nastavený v prostředí")
 
+        # Načtení konfigurace z environment proměnných
+        self.main_model = os.getenv("MAIN_AGENT_MODEL", "claude-3-5-sonnet-20241022")
+        self.subagent_model = os.getenv("SUBAGENT_MODEL", "claude-3-5-haiku-20241022")
+        self.max_parallel_agents = int(os.getenv("MAX_PARALLEL_AGENTS", "10"))
+        self.chunk_size = int(os.getenv("CHUNK_SIZE", "50000"))
+        self.agent_timeout = int(os.getenv("AGENT_TIMEOUT", "120"))
+        self.query_timeout = int(os.getenv("QUERY_TIMEOUT", "60"))
+        self.debug_mode = os.getenv("DEBUG_MODE", "false").lower() == "true"
+        self.verbose_logging = os.getenv("VERBOSE_LOGGING", "false").lower() == "true"
+        self.enable_cache = os.getenv("ENABLE_CACHE", "true").lower() == "true"
+        self.cache_dir = os.getenv("CACHE_DIR", ".cache")
+        self.prompts_dir = os.getenv("PROMPTS_DIR", "prompts")
+        self.custom_system_prompt = os.getenv("CUSTOM_SYSTEM_PROMPT", "")
+
+        # Nastavení loggingu na základě environment proměnných
+        if self.verbose_logging:
+            logging.getLogger().setLevel(logging.DEBUG)
+        elif self.debug_mode:
+            logging.getLogger().setLevel(logging.DEBUG)
+
         self.claude_client = ClaudeSDKClient(api_key=api_key)
         self.indexed_documents = {}
+
+        # Vytvoření cache adresáře pokud je povolena cache a adresář neexistuje
+        if self.enable_cache:
+            cache_path = Path(self.cache_dir)
+            cache_path.mkdir(exist_ok=True)
+
+        # Výpis aktuální konfigurace
+        logger.info(f"Inicializace VectorizedDocumentAnalyzer:")
+        logger.info(f"  • Hlavní model: {self.main_model}")
+        logger.info(f"  • Subagent model: {self.subagent_model}")
+        logger.info(f"  • Max paralelní agenti: {self.max_parallel_agents}")
+        logger.info(f"  • Chunk size: {self.chunk_size}")
+        logger.info(f"  • Agent timeout: {self.agent_timeout}s")
+        logger.info(f"  • Query timeout: {self.query_timeout}s")
+        logger.info(f"  • Debug mode: {self.debug_mode}")
+        logger.info(f"  • Verbose logging: {self.verbose_logging}")
+        logger.info(f"  • Cache povolena: {self.enable_cache}")
+        logger.info(f"  • Cache adresář: {self.cache_dir}")
+        logger.info(f"  • Prompts adresář: {self.prompts_dir}")
 
     async def index_document(self, document_path: str) -> Dict[str, Any]:
         """Index document for vector search"""
@@ -85,9 +124,13 @@ class VectorizedDocumentAnalyzer:
 
         return result
 
-    async def answer_question(self, question: str, max_context_tokens: int = 4000) -> Dict[str, Any]:
+    async def answer_question(self, question: str, max_context_tokens: int = None) -> Dict[str, Any]:
         """Answer question using vector search and Claude"""
         console.print(f"\n[yellow]🔍 Hledám relevantní kontext pro: {question}[/yellow]")
+
+        # Nastavení max_context_tokens na základě konfigurace
+        if max_context_tokens is None:
+            max_context_tokens = min(self.chunk_size, 4000)
 
         # Retrieve relevant context
         with Progress(
@@ -113,7 +156,7 @@ class VectorizedDocumentAnalyzer:
             }
 
         # Prepare prompt for Claude
-        prompt = f"""Na základě následujícího kontextu z dokumentu odpověz na otázku.
+        base_prompt = f"""Na základě následujícího kontextu z dokumentu odpověz na otázku.
 
 KONTEXT:
 {context}
@@ -122,12 +165,18 @@ OTÁZKA: {question}
 
 Odpověz přesně a uveď konkrétní informace z kontextu. Pokud informace není v kontextu, řekni to."""
 
+        # Přidání vlastního system promptu pokud je nastaven
+        if self.custom_system_prompt:
+            prompt = f"{self.custom_system_prompt}\n\n{base_prompt}"
+        else:
+            prompt = base_prompt
+
         console.print("[yellow]🤖 Analyzuji s Claude...[/yellow]")
 
         # Get answer from Claude
         try:
             options = ClaudeCodeOptions(
-                model="claude-3-5-sonnet-latest",
+                model=self.main_model,
                 max_tokens=2000,
                 temperature=0.3
             )

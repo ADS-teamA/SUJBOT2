@@ -60,7 +60,7 @@ query:
 
 # LLM configuration
 llm:
-  main_agent_model: "claude-3-5-sonnet-latest"
+  main_agent_model: "claude-3-5-sonnet-20241022"  # Nejnovější dostupný přes API
   sub_agent_model: "claude-3-5-haiku-20241022"
   temperature: 0.7
   max_tokens: 4000
