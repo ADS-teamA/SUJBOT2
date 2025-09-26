@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import yaml
 
-from vector_store import VectorStore, SearchResult, create_vector_store
+from vector_store_faiss import FAISSVectorStore as VectorStore, SearchResult, create_vector_store
 from indexing_pipeline import DocumentChunker, ChunkingStrategy
 
 logger = logging.getLogger(__name__)

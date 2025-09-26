@@ -15,13 +15,6 @@ from pathlib import Path
 
 import yaml
 from sentence_transformers import SentenceTransformer
-from qdrant_client import QdrantClient
-from qdrant_client.models import (
-    Distance, VectorParams, PointStruct,
-    Filter, FieldCondition, Range, SearchRequest, NamedVector
-)
-import chromadb
-from chromadb.config import Settings
 import faiss
 from tqdm.asyncio import tqdm
 

@@ -22,7 +22,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 
 from document_reader import DocumentReader
-from vector_store import DocumentChunk, create_vector_store
+from vector_store_faiss import DocumentChunk, create_vector_store
 
 logger = logging.getLogger(__name__)
 console = Console()
