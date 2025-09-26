@@ -1,33 +1,38 @@
 # Document Analyzer
 
-Pokročilý nástroj pro paralelní analýzu rozsáhlých dokumentů pomocí Claude Code SDK.
+Pokročilý nástroj pro inteligentní analýzu rozsáhlých dokumentů pomocí hybridního vyhledávání a Claude API.
 
 ## 🚀 Vlastnosti
 
-- **Paralelní zpracování** - Využívá více subagentů pro rychlou analýzu velkých dokumentů (10000+ stran)
-- **Inteligentní extrakce struktury** - Automaticky analyzuje hierarchii dokumentu
-- **Přesné odpovědi s citacemi** - Každá odpověď obsahuje přesné odkazy na zdroje
-- **Podpora více formátů** - PDF, DOCX, TXT, Markdown
-- **Škálovatelnost** - Konfigurovatelný počet paralelních agentů
+- **Hybridní vyhledávání** - Kombinuje sémantické (vector) a klíčové (BM25) vyhledávání pro optimální přesnost
+- **Pokročilé chunkovanie** - Sémantické dělení dokumentů zachovávající strukturu a kontext
+- **Reranking** - Cross-encoder model pro zvýšení relevance výsledků
+- **Více vektorových databází** - Podpora FAISS, Qdrant, ChromaDB
+- **Přesné odpovědi s citacemi** - Každá odpověď obsahuje odkazy na konkrétní části dokumentu
+- **Podpora více formátů** - PDF, DOCX, TXT, Markdown s fallback mechanismy
 
 ## 📋 Požadavky
 
 - Python 3.8+
-- Claude Code SDK
+- Claude API klíč (Anthropic)
 - Závislosti v `requirements.txt`
 
 ## 🛠️ Instalace
 
 ```bash
-# Klonování repozitáře
-git clone <repository_url>
-cd document-analyzer
+# Navigace do adresáře
+cd multi-agent
+
+# Vytvoření virtuálního prostředí
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Instalace závislostí
 pip install -r requirements.txt
 
-# Alternativně pomocí setup.py
-python setup.py install
+# Nastavení prostředí
+cp .env.example .env
+# Edituj .env a nastav CLAUDE_API_KEY
 ```
 
 ## 💻 Použití
@@ -48,44 +53,47 @@ python analyze.py specifikace.docx otazky.md --output vysledky.json
 ### Pokročilé možnosti
 
 ```bash
-# Zvýšení počtu paralelních agentů pro rychlejší zpracování
-python analyze.py velky_dokument.pdf otazky.md --parallel 20
-
 # Detailní výstup pro debugging
 python analyze.py dokument.pdf otazky.md --verbose
 
-# Vlastní adresář s prompty
-python analyze.py dokument.pdf otazky.md --prompts-dir ./custom_prompts
+# Vlastní konfigurace
+python analyze.py dokument.pdf otazky.md --config custom_config.yaml
+
+# Interaktivní režim (bez předem připravených otázek)
+python analyze.py dokument.pdf
 ```
 
 ## 📁 Struktura projektu
 
 ```
-document-analyzer/
-├── analyze.py              # Hlavní spouštěč
-├── requirements.txt        # Python závislosti
-├── setup.py               # Instalační skript
-├── README.md              # Dokumentace
+multi-agent/
+├── analyze.py                  # Hlavní spouštěč - Enhanced vector analyzer
+├── config.yaml                # Konfigurace systému
+├── requirements.txt           # Python závislosti (optimalizované)
+├── setup.py                   # Instalační skript
+├── .env.example              # Template pro prostředí
+├── README.md                 # Dokumentace
 │
-├── src/                   # Zdrojové kódy
-│   ├── document_analyzer.py    # Hlavní orchestrátor
-│   ├── document_reader.py      # Čtení různých formátů
-│   ├── question_parser.py      # Parsování otázek
-│   ├── result_aggregator.py    # Agregace výsledků
-│   └── prompt_manager.py       # Správa prompt templates
+├── src/                      # Zdrojové kódy
+│   ├── hybrid_retriever.py        # Hybridní vyhledávání (semantic + BM25)
+│   ├── indexing_pipeline.py       # Zpracování a indexování dokumentů
+│   ├── vector_store.py            # Abstrakce vektorových databází
+│   ├── document_reader.py         # Čtení různých formátů (pdfplumber + fallback)
+│   ├── claude_sdk_wrapper.py      # Wrapper pro Anthropic SDK
+│   ├── document_analyzer.py       # Legacy parallel system (reference)
+│   ├── question_parser.py         # Parsování otázek
+│   ├── result_aggregator.py       # Agregace výsledků
+│   └── prompt_manager.py          # Správa prompt templates
 │
-├── prompts/               # Prompt templates
-│   ├── structure_analyzer.md   # Analýza struktury
-│   ├── question_analyzer.md    # Odpovídání na otázky
-│   └── structure_merger.md     # Slučování struktur
+├── prompts/                  # Prompt templates s YAML frontmatter
+│   ├── structure_analyzer.md      # Analýza struktury
+│   ├── question_analyzer.md       # Odpovídání na otázky
+│   └── structure_merger.md        # Slučování struktur
 │
-├── examples/              # Příklady použití
-│   ├── sample_questions.md     # Ukázkové otázky
-│   └── sample_contract.pdf     # Ukázkový dokument
+├── examples/                 # Příklady použití
+│   └── [sample documents]
 │
-└── tests/                 # Testy
-    └── test_analyzer.py
-
+└── indexes/                  # Generované indexy (auto-created)
 ```
 
 ## 📝 Formát otázek
@@ -215,29 +223,33 @@ python analyze.py sbirka_zakonu.pdf "Jaké jsou podmínky pro získání licence
 
 ### Technické specifikace
 ```bash
-python analyze.py specifikace_jaderne_elektrarny.pdf tech_questions.md --parallel 30
+python analyze.py specifikace_jaderne_elektrarny.pdf tech_questions.md --config production_config.yaml
 ```
 
 ## ⚡ Tipy pro optimalizaci
 
-1. **Velké dokumenty**: Zvyšte počet paralelních agentů (`--parallel 20`)
-2. **Mnoho otázek**: Použijte strukturovaný markdown formát s prioritami
-3. **Opakované analýzy**: Výsledky se ukládají do cache pro rychlejší opakované dotazy
-4. **Specifické domény**: Upravte prompty pro vaši doménu
+1. **Velké dokumenty**: Povolte streaming režim v `config.yaml`
+2. **Lepší relevance**: Upravte `hybrid_alpha` v konfiguraci (více sémantické vs. klíčové vyhledávání)
+3. **Rychlost**: Použijte FAISS pro lokální zpracování, Qdrant pro produkci
+4. **Paměť**: Snižte `batch_size` a `memory_limit_gb` v konfiguraci
+5. **Přesnost**: Zapněte cross-encoder reranking pro lepší výsledky
 
 ## 🐛 Řešení problémů
 
 ### Nedostatečná paměť
-- Snižte počet paralelních agentů
-- Rozdělte dokument na menší části
+- Snižte `batch_size` a `memory_limit_gb` v konfiguraci
+- Povolte streaming pro velké dokumenty
 
 ### Pomalé zpracování
-- Zvyšte počet paralelních agentů
-- Optimalizujte otázky (méně komplexní)
+- Použijte FAISS místo Qdrant pro lokální zpracování
+- Zvyšte `max_workers` v konfiguraci
+- Vypněte reranking pro rychlejší (ale méně přesné) výsledky
 
 ### Nízká přesnost odpovědí
-- Upravte prompty pro lepší instrukce
+- Zapněte cross-encoder reranking
+- Upravte `hybrid_alpha` (více sémantického vyhledávání)
 - Zkontrolujte kvalitu OCR u skenovaných PDF
+- Zvyšte `chunk_overlap` pro lepší kontext
 
 ## 📄 Licence
 
