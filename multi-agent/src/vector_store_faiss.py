@@ -50,8 +50,12 @@ class SearchResult:
 class FAISSVectorStore:
     """FAISS-based vector store"""
 
-    def __init__(self, config_path: str = "config.yaml"):
-        self.config = self._load_config(config_path)
+    def __init__(self, config_or_path = "config.yaml"):
+        # Handle both config dict and config path
+        if isinstance(config_or_path, dict):
+            self.config = config_or_path
+        else:
+            self.config = self._load_config(config_or_path)
 
         # Initialize embedding model
         model_name = self.config.get('embeddings', {}).get('model', 'sentence-transformers/all-MiniLM-L6-v2')
@@ -254,6 +258,6 @@ class FAISSVectorStore:
         return stats
 
 
-def create_vector_store(config_path: str = "config.yaml") -> FAISSVectorStore:
+def create_vector_store(config_or_path = "config.yaml") -> FAISSVectorStore:
     """Factory function to create vector store"""
-    return FAISSVectorStore(config_path)
+    return FAISSVectorStore(config_or_path)
