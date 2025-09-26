@@ -1,0 +1,126 @@
+# Document Analyzer Configuration
+# Optimized for processing millions of pages
+
+# Indexing configuration
+indexing:
+  chunk_size: 512              # Token size per chunk
+  chunk_overlap: 0.15          # 15% overlap between chunks
+  batch_size: 1000             # Documents per batch
+  max_workers: 8               # Parallel workers for indexing
+  semantic_chunking: true      # Use semantic chunking instead of fixed-size
+  min_chunk_size: 128          # Minimum tokens per chunk
+  max_chunk_size: 1024         # Maximum tokens per chunk
+
+# Vector database configuration
+vector_db:
+  type: "faiss"                # Options: qdrant, chromadb, faiss (using FAISS for local processing)
+  host: "localhost"
+  port: 6333
+  collection: "documents"
+  vector_size: 384             # Dimension of embeddings
+  distance: "cosine"           # Distance metric: cosine, euclidean, dot
+
+  # Performance settings
+  enable_cache: true
+  cache_size: 10000            # Number of cached vectors
+  batch_upsert_size: 100       # Batch size for insertions
+
+# Embedding configuration
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"  # Fast and efficient
+  device: "cpu"                # Options: cpu, cuda, mps
+  normalize: true              # Normalize embeddings
+  batch_size: 32               # Batch size for embedding generation
+
+  # Alternative models (uncomment to use):
+  # model: "BAAI/bge-small-en-v1.5"        # Better quality, slower
+  # model: "thenlper/gte-small"            # Good balance
+  # model: "all-mpnet-base-v2"             # Best quality, slowest
+
+# Retrieval configuration
+retrieval:
+  # Hybrid search settings
+  hybrid_search: true
+  hybrid_alpha: 0.7            # Weight for semantic search (0.7 = 70% semantic, 30% keyword)
+
+  # Search parameters
+  top_k: 20                    # Number of chunks to retrieve
+  rerank_top_k: 5              # Number of chunks after reranking
+  min_score: 0.3               # Minimum similarity score threshold
+
+  # Reranking
+  enable_reranking: true
+  reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+# Query processing
+query:
+  enable_decomposition: true    # Break complex queries into sub-queries
+  max_sub_queries: 5           # Maximum number of sub-queries
+  enable_query_expansion: true  # Expand queries with synonyms
+
+# LLM configuration
+llm:
+  main_agent_model: "claude-3-5-sonnet-20241022"
+  sub_agent_model: "claude-3-5-haiku-20241022"
+  temperature: 0.7
+  max_tokens: 4000
+  timeout: 120                 # Seconds
+
+# Agent configuration
+agents:
+  max_parallel_agents: 10
+  agent_types:
+    - name: "factual"
+      description: "Answers specific factual questions"
+      model: "claude-3-5-haiku-20241022"
+    - name: "analytical"
+      description: "Performs complex analysis and reasoning"
+      model: "claude-3-5-sonnet-20241022"
+    - name: "summary"
+      description: "Creates summaries and overviews"
+      model: "claude-3-5-haiku-20241022"
+
+# Caching configuration
+cache:
+  enable: true
+  type: "redis"                # Options: redis, sqlite, memory
+  redis_host: "localhost"
+  redis_port: 6379
+  redis_db: 0
+  ttl: 3600                    # Cache TTL in seconds
+  max_size: 1000               # Maximum cache entries
+
+# Processing configuration
+processing:
+  enable_streaming: true       # Stream large documents
+  max_file_size_mb: 1000      # Maximum file size in MB
+  temp_dir: ".tmp"            # Temporary directory for processing
+  cleanup_temp: true          # Clean temporary files after processing
+
+# Monitoring and logging
+monitoring:
+  enable_metrics: true
+  metrics_port: 8000
+  log_level: "INFO"           # DEBUG, INFO, WARNING, ERROR
+  log_file: "document_analyzer.log"
+  enable_progress_bar: true
+
+# Performance optimization
+optimization:
+  enable_gpu: false           # Use GPU if available
+  num_threads: 4             # Number of threads for CPU operations
+  memory_limit_gb: 8         # Maximum memory usage in GB
+
+# Storage paths
+paths:
+  index_dir: "./indexes"      # Directory for storing indexes
+  cache_dir: "./.cache"       # Cache directory
+  temp_dir: "./.tmp"          # Temporary files
+  logs_dir: "./logs"          # Log files
+
+# Development settings
+development:
+  debug_mode: false
+  verbose: false
+  profile: false              # Enable profiling
+  test_mode: false           # Use smaller models for testing

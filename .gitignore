@@ -1,0 +1,138 @@
+# Claude Code specific files
+CLAUDE.md
+.claude/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Document processing artifacts
+.tmp/
+*.tmp
+temp/
+temporary/
+
+# Vector databases and indexes
+indexes/
+.indexes/
+*.index
+*.faiss
+vector_store/
+embeddings/
+
+# Cache directories
+.cache/
+cache/
+.redis/
+
+# Log files
+*.log
+logs/
+.logs/
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Large test files
+*.pdf
+*.docx
+*.txt
+!examples/*.pdf
+!examples/*.docx
+!examples/*.txt
+
+# Model files and embeddings
+models/
+*.bin
+*.pt
+*.pth
+sentence_transformers_cache/
+
+# Monitoring and metrics
+prometheus/
+grafana/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
