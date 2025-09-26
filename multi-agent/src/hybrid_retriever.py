@@ -223,9 +223,22 @@ class BM25Searcher:
 
     def _build_index(self, documents: List[str]):
         """Build BM25 index"""
+        if not documents:
+            logger.warning("No documents to index for BM25")
+            self.bm25 = None
+            return
+
         tokenized_docs = [self._tokenize(doc) for doc in documents]
+        # Filter out empty tokenized docs to prevent division by zero
+        tokenized_docs = [doc for doc in tokenized_docs if doc]
+
+        if not tokenized_docs:
+            logger.warning("All documents resulted in empty tokens for BM25")
+            self.bm25 = None
+            return
+
         self.bm25 = BM25Okapi(tokenized_docs)
-        logger.info(f"Built BM25 index with {len(documents)} documents")
+        logger.info(f"Built BM25 index with {len(tokenized_docs)} documents")
 
     def update_index(self, documents: List[str]):
         """Update BM25 index with new documents"""
