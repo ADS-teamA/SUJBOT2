@@ -150,65 +150,6 @@ async def analyze_custom():
 asyncio.run(analyze_custom())
 ```
 
-## 🔧 Konfigurace
-
-### Úprava promptů
-
-Prompty jsou uloženy jako markdown soubory v adresáři `prompts/`. Můžete je upravit podle svých potřeb:
-
-1. Otevřete soubor promptu (např. `prompts/question_analyzer.md`)
-2. Upravte instrukce nebo formát výstupu
-3. Aplikace automaticky načte změny
-
-### Přidání vlastních promptů
-
-1. Vytvořte nový `.md` soubor v adresáři `prompts/`
-2. Přidejte YAML frontmatter s metadaty
-3. Definujte prompt template s proměnnými v `{}`
-
-Příklad:
-```markdown
----
-name: custom_analyzer
-description: Vlastní analyzátor pro specifické účely
----
-
-Analyzuj dokument s fokusem na {focus_area}.
-
-Dokument: {document_content}
-```
-
-## 📊 Výstupní formát
-
-Aplikace generuje strukturovaný JSON výstup:
-
-```json
-{
-  "document_path": "dokument.pdf",
-  "document_size": 150000,
-  "structure": {
-    "sections": [...]
-  },
-  "questions_count": 10,
-  "results": [
-    {
-      "question_id": "q_1_abc123",
-      "question": "Jaké jsou termíny?",
-      "answer": "Projekt musí být dokončen do 31.12.2024",
-      "sources": [
-        {
-          "reference": "Kapitola 3 (str. 15-16)",
-          "quote": "Dokončení díla: 31.12.2024"
-        }
-      ],
-      "confidence": 0.95
-    }
-  ],
-  "processing_time": 45.2,
-  "timestamp": "2024-01-20T10:30:00"
-}
-```
-
 ## 🚦 Příklady use-cases
 
 ### Analýza smluv
@@ -233,33 +174,3 @@ python analyze.py specifikace_jaderne_elektrarny.pdf tech_questions.md --config 
 3. **Rychlost**: Použijte FAISS pro lokální zpracování, Qdrant pro produkci
 4. **Paměť**: Snižte `batch_size` a `memory_limit_gb` v konfiguraci
 5. **Přesnost**: Zapněte cross-encoder reranking pro lepší výsledky
-
-## 🐛 Řešení problémů
-
-### Nedostatečná paměť
-- Snižte `batch_size` a `memory_limit_gb` v konfiguraci
-- Povolte streaming pro velké dokumenty
-
-### Pomalé zpracování
-- Použijte FAISS místo Qdrant pro lokální zpracování
-- Zvyšte `max_workers` v konfiguraci
-- Vypněte reranking pro rychlejší (ale méně přesné) výsledky
-
-### Nízká přesnost odpovědí
-- Zapněte cross-encoder reranking
-- Upravte `hybrid_alpha` (více sémantického vyhledávání)
-- Zkontrolujte kvalitu OCR u skenovaných PDF
-- Zvyšte `chunk_overlap` pro lepší kontext
-
-## 📄 Licence
-
-MIT License - viz LICENSE soubor
-
-## 🤝 Příspěvky
-
-Příspěvky jsou vítány! Prosím:
-1. Forkněte repozitář
-2. Vytvořte feature branch
-3. Commitujte změny
-4. Pushněte branch
-5. Otevřete Pull Request
