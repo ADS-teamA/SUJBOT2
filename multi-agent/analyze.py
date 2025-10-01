@@ -110,11 +110,12 @@ class VectorizedDocumentAnalyzer:
             # The chunks are already indexed in vector store by indexing_pipeline
             # We only need to index them in BM25 for hybrid retriever
 
-            # Get the already-created chunks from indexing pipeline
-            chunks = self.indexing_pipeline.chunker.chunk_document(
-                result.get('document_content', ''),
-                metadata={'document_id': result['document_id'], 'document_path': document_path}
-            )
+            # Get the ACTUAL chunks that were indexed (not re-chunked!)
+            chunks = result.get('chunks', [])
+
+            if not chunks:
+                logger.warning(f"No chunks returned from indexing pipeline for {document_path}")
+                return result
 
             # Only index in BM25 (not in vector store - already done)
             await self.hybrid_retriever.index_documents_bm25_only(chunks)
@@ -162,15 +163,20 @@ class VectorizedDocumentAnalyzer:
         sources = []
 
         for i, chunk in enumerate(retrieved_chunks, 1):
+            # Validate chunk has required attributes
+            if not hasattr(chunk, 'content') or chunk.content is None:
+                logger.warning(f"Invalid chunk at index {i}: missing content")
+                continue
+
             # Add numbered context for citation reference
             context_parts.append(f"[{i}] {chunk.content}")
 
             # Extract source information
             source = {
-                "chunk_id": chunk.chunk_id,
+                "chunk_id": getattr(chunk, 'chunk_id', f'unknown_{i}'),
                 "reference": f"[{i}]",
                 "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content,
-                "score": float(chunk.score),
+                "score": float(chunk.score) if hasattr(chunk, 'score') else 0.0,
                 "metadata": chunk.metadata or {}
             }
 
@@ -180,18 +186,41 @@ class VectorizedDocumentAnalyzer:
 
             sources.append(source)
 
+        if not context_parts:
+            logger.error("No valid chunks found after validation")
+            return {
+                "question": question,
+                "answer": "Nepodařilo se najít relevantní kontext pro zodpovězení otázky.",
+                "confidence": 0.0,
+                "sources": [],
+                "context_used": 0
+            }
+
         context = "\n\n".join(context_parts)
 
         # Calculate dynamic confidence based on retrieval scores
-        avg_score = sum(chunk.score for chunk in retrieved_chunks) / len(retrieved_chunks)
+        # Load confidence scoring config
+        confidence_config = self.config.get('retrieval', {}).get('confidence_scoring', {})
+        cross_encoder_min = confidence_config.get('cross_encoder_min', -15)
+        cross_encoder_max = confidence_config.get('cross_encoder_max', 10)
+        min_confidence = confidence_config.get('min_confidence', 0.1)
+
+        valid_chunks = [c for c in retrieved_chunks if hasattr(c, 'score')]
+        if not valid_chunks:
+            avg_score = 0.0
+        else:
+            avg_score = sum(c.score for c in valid_chunks) / len(valid_chunks)
 
         # Normalize confidence score based on score type
         # If scores are negative (from cross-encoder reranking), normalize differently
         if avg_score < 0:
-            # Cross-encoder scores typically range from -15 to +10
-            # Map to 0-1 range with sigmoid-like function
-            # score > 0 = high confidence (>0.6), score around -10 = medium (0.2-0.4)
-            confidence = max(0.1, min(1.0, (avg_score + 15) / 25))
+            # Cross-encoder scores - map to 0-1 range
+            score_range = cross_encoder_max - cross_encoder_min
+            confidence = max(min_confidence, min(1.0, (avg_score - cross_encoder_min) / score_range))
+
+            # Log warning if score is out of expected range
+            if avg_score < cross_encoder_min or avg_score > cross_encoder_max:
+                logger.warning(f"Cross-encoder score {avg_score:.2f} outside expected range [{cross_encoder_min}, {cross_encoder_max}]")
         else:
             # Semantic similarity scores are already 0-1
             confidence = min(max(avg_score, 0.0), 1.0)

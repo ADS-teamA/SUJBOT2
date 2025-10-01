@@ -308,6 +308,7 @@ class IndexingPipeline:
             "document_id": document_id,
             "document_path": document_path,
             "document_content": content,  # Include content for hybrid retriever
+            "chunks": chunks,  # Return actual chunks for BM25 indexing
             "total_chunks": len(chunks),
             "processing_time": processing_time,
             "avg_chunk_size": sum(len(c.content) for c in chunks) / len(chunks) if chunks else 0,
