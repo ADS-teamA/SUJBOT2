@@ -300,7 +300,7 @@ class HybridRetriever:
         self.chunk_texts = []
 
     async def index_documents(self, chunks: List[Any]):
-        """Index document chunks for retrieval"""
+        """Index document chunks for retrieval (both vector + BM25)"""
         # Store chunks for BM25
         self.document_chunks = chunks
         self.chunk_texts = [chunk.content for chunk in chunks]
@@ -312,6 +312,17 @@ class HybridRetriever:
         await self.vector_store.add_documents(chunks)
 
         logger.info(f"Indexed {len(chunks)} chunks for hybrid retrieval")
+
+    async def index_documents_bm25_only(self, chunks: List[Any]):
+        """Index document chunks ONLY in BM25 (vector store already done by pipeline)"""
+        # Store chunks for BM25
+        self.document_chunks = chunks
+        self.chunk_texts = [chunk.content for chunk in chunks]
+
+        # Build BM25 index only
+        self.bm25_searcher.update_index(self.chunk_texts)
+
+        logger.info(f"Indexed {len(chunks)} chunks in BM25 (vector store skipped - already indexed)")
 
     async def retrieve(self, query: str, filters: Dict = None) -> List[SearchResult]:
         """Perform hybrid retrieval"""
@@ -361,9 +372,11 @@ class HybridRetriever:
         # Rerank if enabled
         if self.retrieval_config.enable_reranking and self.reranker and results:
             results = await self._rerank_results(query, results)
-
-        # Filter by minimum score
-        results = [r for r in results if r.score >= self.retrieval_config.min_score]
+            # After reranking, scores are from cross-encoder (can be negative)
+            # Don't apply min_score filter to reranked results - reranker already selected best ones
+        else:
+            # Only filter by minimum score if not reranking
+            results = [r for r in results if r.score >= self.retrieval_config.min_score]
 
         return results
 

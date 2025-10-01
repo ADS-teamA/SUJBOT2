@@ -52,6 +52,12 @@ retrieval:
   enable_reranking: true
   reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
+  # Confidence scoring normalization
+  confidence_scoring:
+    cross_encoder_min: -15     # Minimum expected cross-encoder score
+    cross_encoder_max: 10      # Maximum expected cross-encoder score
+    min_confidence: 0.1        # Minimum confidence threshold
+
 # Query processing
 query:
   enable_decomposition: true    # Break complex queries into sub-queries

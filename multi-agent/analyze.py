@@ -106,15 +106,19 @@ class VectorizedDocumentAnalyzer:
         if result.get('status') == 'success':
             self.indexed_documents[document_path] = result
 
-            # IMPORTANT: Also index chunks in the hybrid retriever
-            # Get the chunks from the vector store
-            chunks = self.indexing_pipeline.chunker.chunk_document(
-                result.get('document_content', ''),
-                metadata={'document_id': result['document_id'], 'document_path': document_path}
-            )
+            # FIX: No more duplicate indexing!
+            # The chunks are already indexed in vector store by indexing_pipeline
+            # We only need to index them in BM25 for hybrid retriever
 
-            # Index chunks in hybrid retriever for BM25 search
-            await self.hybrid_retriever.index_documents(chunks)
+            # Get the ACTUAL chunks that were indexed (not re-chunked!)
+            chunks = result.get('chunks', [])
+
+            if not chunks:
+                logger.warning(f"No chunks returned from indexing pipeline for {document_path}")
+                return result
+
+            # Only index in BM25 (not in vector store - already done)
+            await self.hybrid_retriever.index_documents_bm25_only(chunks)
 
             console.print(f"[green]✓ Dokument úspěšně zaindexován[/green]")
             console.print(f"  • Počet chunků: {result['total_chunks']}")
@@ -132,7 +136,7 @@ class VectorizedDocumentAnalyzer:
         if max_context_tokens is None:
             max_context_tokens = min(self.chunk_size, 4000)
 
-        # Retrieve relevant context
+        # Retrieve relevant context with source tracking
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -140,30 +144,99 @@ class VectorizedDocumentAnalyzer:
         ) as progress:
             task = progress.add_task("Vyhledávání v dokumentu...", total=None)
 
-            # Get relevant context using hybrid retrieval
-            context = await self.hybrid_retriever.get_relevant_context(
-                question,
-                max_tokens=max_context_tokens
-            )
+            # Get relevant chunks (not just text, but full SearchResult objects)
+            retrieved_chunks = await self.hybrid_retriever.retrieve(question)
 
             progress.update(task, completed=True)
 
-        if not context:
+        if not retrieved_chunks:
             return {
                 "question": question,
                 "answer": "Nepodařilo se najít relevantní kontext pro zodpovězení otázky.",
-                "confidence": 0.0
+                "confidence": 0.0,
+                "sources": [],
+                "context_used": 0
             }
 
-        # Prepare prompt for Claude
+        # Build context and citations from retrieved chunks
+        context_parts = []
+        sources = []
+
+        for i, chunk in enumerate(retrieved_chunks, 1):
+            # Validate chunk has required attributes
+            if not hasattr(chunk, 'content') or chunk.content is None:
+                logger.warning(f"Invalid chunk at index {i}: missing content")
+                continue
+
+            # Add numbered context for citation reference
+            context_parts.append(f"[{i}] {chunk.content}")
+
+            # Extract source information
+            source = {
+                "chunk_id": getattr(chunk, 'chunk_id', f'unknown_{i}'),
+                "reference": f"[{i}]",
+                "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content,
+                "score": float(chunk.score) if hasattr(chunk, 'score') else 0.0,
+                "metadata": chunk.metadata or {}
+            }
+
+            # Add page number if available
+            if chunk.metadata and 'page' in chunk.metadata:
+                source['page'] = chunk.metadata['page']
+
+            sources.append(source)
+
+        if not context_parts:
+            logger.error("No valid chunks found after validation")
+            return {
+                "question": question,
+                "answer": "Nepodařilo se najít relevantní kontext pro zodpovězení otázky.",
+                "confidence": 0.0,
+                "sources": [],
+                "context_used": 0
+            }
+
+        context = "\n\n".join(context_parts)
+
+        # Calculate dynamic confidence based on retrieval scores
+        # Load confidence scoring config
+        confidence_config = self.config.get('retrieval', {}).get('confidence_scoring', {})
+        cross_encoder_min = confidence_config.get('cross_encoder_min', -15)
+        cross_encoder_max = confidence_config.get('cross_encoder_max', 10)
+        min_confidence = confidence_config.get('min_confidence', 0.1)
+
+        valid_chunks = [c for c in retrieved_chunks if hasattr(c, 'score')]
+        if not valid_chunks:
+            avg_score = 0.0
+        else:
+            avg_score = sum(c.score for c in valid_chunks) / len(valid_chunks)
+
+        # Normalize confidence score based on score type
+        # If scores are negative (from cross-encoder reranking), normalize differently
+        if avg_score < 0:
+            # Cross-encoder scores - map to 0-1 range
+            score_range = cross_encoder_max - cross_encoder_min
+            confidence = max(min_confidence, min(1.0, (avg_score - cross_encoder_min) / score_range))
+
+            # Log warning if score is out of expected range
+            if avg_score < cross_encoder_min or avg_score > cross_encoder_max:
+                logger.warning(f"Cross-encoder score {avg_score:.2f} outside expected range [{cross_encoder_min}, {cross_encoder_max}]")
+        else:
+            # Semantic similarity scores are already 0-1
+            confidence = min(max(avg_score, 0.0), 1.0)
+
+        # Prepare prompt for Claude with citation instructions
         base_prompt = f"""Na základě následujícího kontextu z dokumentu odpověz na otázku.
+Každá část kontextu je označena číslem v hranatých závorkách [1], [2], atd.
+Pokud odkazuješ na informace z kontextu, uveď jejich zdroj pomocí tohoto čísla.
 
 KONTEXT:
 {context}
 
 OTÁZKA: {question}
 
-Odpověz přesně a uveď konkrétní informace z kontextu. Pokud informace není v kontextu, řekni to."""
+Odpověz přesně a uveď konkrétní informace z kontextu. Při citaci použij formát [číslo].
+Pokud informace není v kontextu, řekni to."""
 
         # Přidání vlastního system promptu pokud je nastaven
         if self.custom_system_prompt:
@@ -186,8 +259,10 @@ Odpověz přesně a uveď konkrétní informace z kontextu. Pokud informace nen�
             return {
                 "question": question,
                 "answer": response,
-                "confidence": 0.85,  # Can be calculated based on retrieval scores
+                "confidence": round(confidence, 3),  # Dynamic confidence from retrieval scores
+                "sources": sources,  # Citation tracking!
                 "context_used": len(context),
+                "num_sources": len(sources),
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -196,7 +271,9 @@ Odpověz přesně a uveď konkrétní informace z kontextu. Pokud informace nen�
             return {
                 "question": question,
                 "answer": f"Chyba při zpracování: {str(e)}",
-                "confidence": 0.0
+                "confidence": 0.0,
+                "sources": [],
+                "context_used": 0
             }
 
     async def analyze_document(self, document_path: str, questions: List[str]) -> List[Dict[str, Any]]:
@@ -218,7 +295,17 @@ Odpověz přesně a uveď konkrétní informace z kontextu. Pokud informace nen�
             results.append(result)
 
             console.print(f"[green]Odpověď:[/green] {result['answer'][:200]}...")
-            console.print(f"[dim]Confidence: {result['confidence']:.2%}[/dim]")
+            console.print(f"[dim]Confidence: {result['confidence']:.1%} | Zdroje: {result.get('num_sources', 0)}[/dim]")
+
+            # Display sources if available
+            if result.get('sources'):
+                console.print(f"\n[dim]📚 Zdroje citací:[/dim]")
+                for source in result['sources'][:3]:  # Show top 3 sources
+                    ref = source['reference']
+                    score = source['score']
+                    preview = source['content_preview']
+                    page = source.get('page', 'N/A')
+                    console.print(f"  {ref} [Score: {score:.3f}] Page {page}: {preview[:100]}...")
 
         return results
 
