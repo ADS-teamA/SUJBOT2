@@ -17,7 +17,7 @@ vector_db:
   host: "localhost"
   port: 6333
   collection: "documents"
-  vector_size: 384             # Dimension of embeddings
+  vector_size: 1024            # Dimension of embeddings (multilingual-e5-large)
   distance: "cosine"           # Distance metric: cosine, euclidean, dot
 
   # Performance settings
@@ -27,15 +27,15 @@ vector_db:
 
 # Embedding configuration
 embeddings:
-  model: "sentence-transformers/all-MiniLM-L6-v2"  # Fast and efficient
-  device: "cpu"                # Options: cpu, cuda, mps
+  model: "intfloat/multilingual-e5-large"  # Best multilingual model (1024 dim)
+  device: "mps"                # Options: cpu, cuda, mps (use mps for Apple Silicon)
   normalize: true              # Normalize embeddings
-  batch_size: 32               # Batch size for embedding generation
+  batch_size: 32               # Batch size for embeddings
 
-  # Alternative models (uncomment to use):
-  # model: "BAAI/bge-small-en-v1.5"        # Better quality, slower
-  # model: "thenlper/gte-small"            # Good balance
-  # model: "all-mpnet-base-v2"             # Best quality, slowest
+  # Alternative models (comment out to use):
+  # model: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"  # 768 dim, good balance
+  # model: "intfloat/multilingual-e5-base"                                # 768 dim, faster
+  # model: "BAAI/bge-m3"                                                  # 1024 dim, SOTA multilingual
 
 # Retrieval configuration
 retrieval:
@@ -66,9 +66,9 @@ query:
 
 # LLM configuration
 llm:
-  main_agent_model: "claude-3-5-sonnet-20241022"  # Nejnovější dostupný přes API
-  sub_agent_model: "claude-3-5-haiku-20241022"
-  temperature: 0.7
+  main_agent_model: "claude-sonnet-4-5-20250929"  # Sonnet for synthesis
+  sub_agent_model: "claude-3-5-haiku-20241022"    # Haiku for decomposition
+  temperature: 0.3             # Lower for more consistent answers
   max_tokens: 4000
   timeout: 120                 # Seconds
 
@@ -81,7 +81,7 @@ agents:
       model: "claude-3-5-haiku-20241022"
     - name: "analytical"
       description: "Performs complex analysis and reasoning"
-      model: "claude-3-5-sonnet-20241022"
+      model: "claude-sonnet-4-5-20250929"
     - name: "summary"
       description: "Creates summaries and overviews"
       model: "claude-3-5-haiku-20241022"
