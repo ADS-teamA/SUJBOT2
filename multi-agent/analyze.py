@@ -28,6 +28,8 @@ from document_reader import DocumentReader
 from indexing_pipeline import IndexingPipeline
 from hybrid_retriever import HybridRetriever
 from claude_sdk_wrapper import ClaudeSDKClient, ClaudeCodeOptions
+from question_decomposer import QuestionDecomposer, QuestionDecompositionResult
+from answer_synthesizer import AnswerSynthesizer, SubAnswer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -45,6 +47,12 @@ class VectorizedDocumentAnalyzer:
 
     def __init__(self, config_path: str = "config.yaml"):
         self.config_path = config_path
+
+        # Load config file
+        import yaml
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+
         self.document_reader = DocumentReader()
         self.indexing_pipeline = IndexingPipeline(config_path)
         self.hybrid_retriever = HybridRetriever(config_path)
@@ -76,6 +84,14 @@ class VectorizedDocumentAnalyzer:
 
         self.claude_client = ClaudeSDKClient(api_key=api_key)
         self.indexed_documents = {}
+
+        # Inicializace question decomposer a answer synthesizer
+        self.question_decomposer = QuestionDecomposer(self.claude_client, model=self.subagent_model)
+        self.answer_synthesizer = AnswerSynthesizer(self.claude_client, model=self.main_model)
+
+        # Nastavení pro decomposition
+        self.enable_question_decomposition = os.getenv("ENABLE_QUESTION_DECOMPOSITION", "true").lower() == "true"
+        self.max_sub_questions = int(os.getenv("MAX_SUB_QUESTIONS", "5"))
 
         # Vytvoření cache adresáře pokud je povolena cache a adresář neexistuje
         if self.enable_cache:
@@ -128,8 +144,40 @@ class VectorizedDocumentAnalyzer:
 
         return result
 
-    async def answer_question(self, question: str, max_context_tokens: int = None) -> Dict[str, Any]:
-        """Answer question using vector search and Claude"""
+    async def answer_question(self, question: str, max_context_tokens: int = None, question_id: str = None) -> Dict[str, Any]:
+        """Answer question using vector search and Claude with optional decomposition"""
+
+        # Decompose question if enabled
+        if self.enable_question_decomposition:
+            console.print(f"\n[cyan]🔬 Rozklad otázky na podotázky...[/cyan]")
+            decomposition = await self.question_decomposer.decompose_question(
+                question,
+                question_id=question_id,
+                max_sub_questions=self.max_sub_questions
+            )
+
+            console.print(f"[dim]  • Strategie: {decomposition.decomposition_strategy}[/dim]")
+            console.print(f"[dim]  • Podotázek: {decomposition.total_sub_questions}[/dim]")
+
+            # If simple question (only 1 sub-question), use regular flow
+            if decomposition.total_sub_questions == 1:
+                return await self._answer_single_question(
+                    decomposition.sub_questions[0].text,
+                    max_context_tokens
+                )
+
+            # Multiple sub-questions: answer each and synthesize
+            return await self._answer_with_decomposition(
+                question,
+                decomposition,
+                max_context_tokens
+            )
+        else:
+            # Regular single-question flow
+            return await self._answer_single_question(question, max_context_tokens)
+
+    async def _answer_single_question(self, question: str, max_context_tokens: int = None) -> Dict[str, Any]:
+        """Answer a single question using vector search and Claude"""
         console.print(f"\n[yellow]🔍 Hledám relevantní kontext pro: {question}[/yellow]")
 
         # Nastavení max_context_tokens na základě konfigurace
@@ -276,6 +324,172 @@ Pokud informace není v kontextu, řekni to."""
                 "context_used": 0
             }
 
+    async def _answer_with_decomposition(
+        self,
+        original_question: str,
+        decomposition: QuestionDecompositionResult,
+        max_context_tokens: int = None
+    ) -> Dict[str, Any]:
+        """Answer question using decomposition -> retrieval -> synthesis pipeline"""
+
+        console.print(f"\n[cyan]📝 Zpracovávám {decomposition.total_sub_questions} podotázek...[/cyan]")
+
+        # Answer each sub-question
+        sub_answers = []
+
+        for i, sub_q in enumerate(decomposition.sub_questions, 1):
+            console.print(f"\n[dim]  [{i}/{decomposition.total_sub_questions}] {sub_q.text}[/dim]")
+
+            # Retrieve context for sub-question
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task("Vyhledávání...", total=None)
+                retrieved_chunks = await self.hybrid_retriever.retrieve(sub_q.text)
+                progress.update(task, completed=True)
+
+            if not retrieved_chunks:
+                console.print(f"[yellow]    ⚠ Nenalezen kontext[/yellow]")
+                continue
+
+            # Calculate retrieval score (for weighting in synthesis)
+            retrieval_score = sum(c.score for c in retrieved_chunks if hasattr(c, 'score')) / len(retrieved_chunks) if retrieved_chunks else 0.0
+
+            # Build context
+            context_parts = []
+            sources = []
+
+            for j, chunk in enumerate(retrieved_chunks, 1):
+                if not hasattr(chunk, 'content') or chunk.content is None:
+                    continue
+
+                context_parts.append(f"[{j}] {chunk.content}")
+
+                source = {
+                    "chunk_id": getattr(chunk, 'chunk_id', f'unknown_{j}'),
+                    "reference": f"[{j}]",
+                    "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content,
+                    "score": float(chunk.score) if hasattr(chunk, 'score') else 0.0,
+                    "metadata": chunk.metadata or {}
+                }
+
+                if chunk.metadata and 'page' in chunk.metadata:
+                    source['page'] = chunk.metadata['page']
+
+                sources.append(source)
+
+            if not context_parts:
+                console.print(f"[yellow]    ⚠ Žádný validní kontext[/yellow]")
+                continue
+
+            context = "\n\n".join(context_parts)
+
+            # Get answer from Claude (Haiku for sub-questions)
+            prompt = f"""Na základě následujícího kontextu odpověz na otázku stručně a přesně.
+
+KONTEXT:
+{context}
+
+OTÁZKA: {sub_q.text}
+
+Odpověz stručně a uveď zdroje [číslo]."""
+
+            try:
+                options = ClaudeCodeOptions(
+                    model=self.subagent_model,  # Haiku for sub-questions
+                    max_tokens=1000,
+                    temperature=0.3
+                )
+
+                response = await self.claude_client.query(prompt, options)
+
+                # Calculate confidence
+                avg_score = sum(c.score for c in retrieved_chunks if hasattr(c, 'score')) / len(retrieved_chunks) if retrieved_chunks else 0.0
+                confidence = min(max(avg_score, 0.0), 1.0)
+
+                # Create SubAnswer
+                sub_answer = SubAnswer(
+                    sub_question_id=sub_q.id,
+                    sub_question_text=sub_q.text,
+                    answer=response,
+                    confidence=confidence,
+                    sources=sources,
+                    retrieval_score=retrieval_score
+                )
+
+                sub_answers.append(sub_answer)
+                console.print(f"[green]    ✓ Odpovězeno (confidence: {confidence:.2%})[/green]")
+
+            except Exception as e:
+                logger.error(f"Error answering sub-question {sub_q.id}: {e}")
+                console.print(f"[red]    ✗ Chyba: {e}[/red]")
+
+        # Synthesize answers
+        if not sub_answers:
+            console.print(f"\n[red]✗ Nepodařilo se získat žádné dílčí odpovědi[/red]")
+            return {
+                "question": original_question,
+                "answer": "Nepodařilo se najít odpověď na tuto otázku v dokumentu.",
+                "confidence": 0.0,
+                "sources": [],
+                "context_used": 0,
+                "decomposition": {
+                    "enabled": True,
+                    "sub_questions_count": decomposition.total_sub_questions,
+                    "sub_answers_count": 0
+                }
+            }
+
+        console.print(f"\n[cyan]🔗 Syntetizuji finální odpověď...[/cyan]")
+
+        try:
+            synthesized = await self.answer_synthesizer.synthesize_answers(
+                original_question,
+                sub_answers
+            )
+
+            console.print(f"[green]✓ Syntéza dokončena (strategie: {synthesized.synthesis_strategy})[/green]")
+
+            return {
+                "question": original_question,
+                "answer": synthesized.final_answer,
+                "confidence": synthesized.confidence,
+                "sources": synthesized.sources,
+                "num_sources": len(synthesized.sources),
+                "context_used": sum(len(sa.answer) for sa in sub_answers),
+                "timestamp": datetime.now().isoformat(),
+                "decomposition": {
+                    "enabled": True,
+                    "strategy": decomposition.decomposition_strategy,
+                    "sub_questions_count": decomposition.total_sub_questions,
+                    "sub_answers_count": synthesized.sub_answers_count,
+                    "synthesis_strategy": synthesized.synthesis_strategy,
+                    "sub_questions": [sq.text for sq in decomposition.sub_questions],
+                    "metadata": synthesized.metadata
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error during synthesis: {e}")
+            # Fallback: vrátíme první odpověď s nejlepší confidence
+            best_answer = max(sub_answers, key=lambda x: x.confidence)
+            return {
+                "question": original_question,
+                "answer": best_answer.answer,
+                "confidence": best_answer.confidence,
+                "sources": best_answer.sources,
+                "num_sources": len(best_answer.sources),
+                "context_used": len(best_answer.answer),
+                "timestamp": datetime.now().isoformat(),
+                "decomposition": {
+                    "enabled": True,
+                    "error": str(e),
+                    "fallback": "best_sub_answer"
+                }
+            }
+
     async def analyze_document(self, document_path: str, questions: List[str]) -> List[Dict[str, Any]]:
         """Analyze document with multiple questions"""
 
@@ -318,11 +532,15 @@ async def main():
     parser.add_argument("--config", default="config.yaml", help="Konfigurační soubor")
     parser.add_argument("--output", "-o", help="Výstupní soubor pro výsledky")
     parser.add_argument("--verbose", "-v", action="store_true", help="Detailní výstup")
+    parser.add_argument("--debug", "-d", help="Debug režim (DEBUG level logging)")
 
     args = parser.parse_args()
 
-    if args.verbose:
+    if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+        console.print("[yellow]🐛 Debug mode aktivován[/yellow]")
+    elif args.verbose:
+        logging.getLogger().setLevel(logging.INFO)
 
     # Check document exists
     doc_path = Path(args.document)
@@ -382,6 +600,13 @@ async def main():
         console.print(f"✓ Zodpovězeno otázek: {len(results)}")
         avg_confidence = sum(r['confidence'] for r in results) / len(results) if results else 0
         console.print(f"📊 Průměrná confidence: {avg_confidence:.2%}")
+
+        # Print all Q&A pairs
+        console.print(f"\n[bold cyan]═══ Otázky a odpovědi ═══[/bold cyan]")
+        for i, result in enumerate(results, 1):
+            console.print(f"\n[bold yellow]Q{i}:[/bold yellow] {result.get('question', 'N/A')}")
+            console.print(f"[bold green]A{i}:[/bold green] {result.get('answer', 'N/A')}")
+            console.print(f"[dim]Confidence: {result.get('confidence', 0):.1%} | Zdroje: {result.get('num_sources', 0)}[/dim]")
 
     except Exception as e:
         console.print(f"[red]Chyba při analýze: {e}[/red]")
