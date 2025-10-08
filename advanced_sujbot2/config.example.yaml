@@ -1,0 +1,109 @@
+# Configuration for Advanced Legal Compliance System
+# Based on specifications in specs/
+
+# ============================================================================
+# Reranking Configuration
+# ============================================================================
+reranking:
+  # Cross-Encoder Settings (Multilingual Semantic Relevance)
+  # Model: mmarco-mMiniLMv2-L12-H384-v1 (Czech language support)
+  cross_encoder_model: "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+  cross_encoder_batch_size: 16
+  cross_encoder_device: "cpu"  # Options: cpu | cuda | mps (Apple Silicon)
+  cross_encoder_max_length: 512
+
+  # Graph-Aware Reranking
+  # Leverages knowledge graph structure for proximity/centrality scoring
+  enable_graph_reranking: true
+  graph_proximity_weight: 0.4    # Weight for distance to query-relevant chunks
+  graph_centrality_weight: 0.3   # Weight for betweenness centrality
+  graph_authority_weight: 0.3    # Weight for PageRank-like authority
+  max_hop_distance: 3            # Maximum graph distance to consider
+
+  # Legal Precedence Weighting
+  # Czech legal hierarchy: Constitutional > Statutory > Regulatory > Contractual
+  enable_precedence_weighting: true
+  temporal_decay_factor: 0.95    # Newer laws slightly favored (lex posterior)
+  precedence_weights:
+    constitutional: 1.0    # Ústava ČR, Listina základních práv
+    statutory: 0.9         # Zákony (e.g., Zákon č. 89/2012 Sb.)
+    regulatory: 0.7        # Vyhlášky, nařízení vlády
+    contractual: 0.5       # Smlouvy
+    guidance: 0.3          # Metodiky, doporučení
+
+  # Ensemble Fusion
+  # Methods: weighted_average | borda_count | rrf (reciprocal rank fusion)
+  ensemble_method: "weighted_average"
+  ensemble_weights:
+    cross_encoder: 0.5   # Semantic relevance (most important)
+    graph: 0.3           # Structural features
+    precedence: 0.2      # Legal hierarchy
+
+  # Output Settings
+  final_top_k: 5                    # Number of results to return after reranking
+  min_confidence_threshold: 0.1     # Minimum confidence to include result
+  explain_reranking: true           # Generate human-readable explanations
+
+  # Score Calibration (for cross-encoder normalization)
+  # These values are calibrated on validation data
+  cross_encoder_score_mean: 0.0
+  cross_encoder_score_std: 5.0
+
+# ============================================================================
+# Embeddings Configuration (for hybrid retrieval)
+# ============================================================================
+embeddings:
+  # Model: BAAI/bge-m3 (multilingual, Czech support)
+  model: "BAAI/bge-m3"
+  device: "cpu"  # cpu | cuda | mps
+  normalize: true
+  batch_size: 32
+  max_length: 512
+
+# ============================================================================
+# Retrieval Configuration
+# ============================================================================
+retrieval:
+  # Hybrid search (semantic + keyword BM25)
+  hybrid_alpha: 0.7        # 0=keyword only, 1=semantic only
+  top_k: 20                # Candidates before reranking
+  min_score: 0.1           # Minimum hybrid score threshold
+
+  # BM25 parameters
+  bm25_k1: 1.5
+  bm25_b: 0.75
+
+# ============================================================================
+# Indexing Configuration
+# ============================================================================
+indexing:
+  # Semantic chunking
+  chunk_size: 512           # Tokens per chunk
+  chunk_overlap: 0.15       # 15% overlap
+  semantic_chunking: true   # Respect sentence/paragraph boundaries
+  min_chunk_size: 128
+  max_chunk_size: 1024
+
+  # Performance
+  batch_size: 32
+  max_workers: 8
+
+# ============================================================================
+# Knowledge Graph Configuration
+# ============================================================================
+knowledge_graph:
+  enable_graph_construction: true
+  reference_extraction: true
+  hierarchy_detection: true
+
+  # Graph storage
+  persist_graph: true
+  graph_path: "indexes/knowledge_graph.pkl"
+
+# ============================================================================
+# Logging
+# ============================================================================
+logging:
+  level: "INFO"  # DEBUG | INFO | WARNING | ERROR
+  verbose: false
+  log_file: "logs/sujbot.log"

@@ -1,0 +1,63 @@
+{
+  "upload": {
+    "contract": "Upload Contract",
+    "law": "Upload Law",
+    "dragDrop": "Drag and drop or click",
+    "processing": "Processing...",
+    "button": "Upload File"
+  },
+  "chat": {
+    "placeholder": "Ask something...",
+    "send": "Send",
+    "thinking": "Thinking...",
+    "typing": "Typing..."
+  },
+  "document": {
+    "pages": "pages",
+    "words": "words",
+    "preview": "Preview",
+    "remove": "Remove",
+    "status": {
+      "uploading": "Uploading",
+      "uploaded": "Uploaded",
+      "processing": "Processing",
+      "indexed": "Indexed",
+      "error": "Error"
+    }
+  },
+  "panel": {
+    "contracts": "Contracts",
+    "laws": "Laws",
+    "noDocuments": "No documents"
+  },
+  "compliance": {
+    "issues": "Compliance Issues",
+    "recommendations": "Recommendations",
+    "severity": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "info": "Info"
+    }
+  },
+  "sources": "Sources",
+  "contract": "Contract",
+  "law": "Law",
+  "language": {
+    "czech": "Czech",
+    "english": "English"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "toggle": "Toggle theme"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "close": "Close"
+  }
+}

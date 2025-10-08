@@ -1,0 +1,62 @@
+# Prometheus Configuration for SUJBOT2
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'sujbot2-production'
+    environment: 'production'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter - Host metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node_exporter:9100']
+        labels:
+          instance: 'sujbot2-host'
+
+  # cAdvisor - Container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          instance: 'sujbot2-containers'
+
+  # Redis metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis_exporter:9121']
+        labels:
+          instance: 'sujbot2-redis'
+
+  # FastAPI application metrics (if you add prometheus-fastapi-instrumentator)
+  - job_name: 'backend'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:8000']
+        labels:
+          service: 'backend-api'
+
+  # Nginx metrics (if you add nginx-prometheus-exporter)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx_exporter:9113']
+        labels:
+          service: 'nginx'

@@ -1,0 +1,63 @@
+{
+  "upload": {
+    "contract": "Nahrát smlouvu",
+    "law": "Nahrát zákon",
+    "dragDrop": "Přetáhněte soubor nebo klikněte",
+    "processing": "Zpracovávám...",
+    "button": "Nahrát soubor"
+  },
+  "chat": {
+    "placeholder": "Zeptejte se na něco...",
+    "send": "Odeslat",
+    "thinking": "Přemýšlím...",
+    "typing": "Píše..."
+  },
+  "document": {
+    "pages": "stránek",
+    "words": "slov",
+    "preview": "Náhled",
+    "remove": "Odebrat",
+    "status": {
+      "uploading": "Nahrávání",
+      "uploaded": "Nahráno",
+      "processing": "Zpracovávání",
+      "indexed": "Indexováno",
+      "error": "Chyba"
+    }
+  },
+  "panel": {
+    "contracts": "Smlouvy",
+    "laws": "Zákony",
+    "noDocuments": "Žádné dokumenty"
+  },
+  "compliance": {
+    "issues": "Problémy s kompatibilitou",
+    "recommendations": "Doporučení",
+    "severity": {
+      "critical": "Kritické",
+      "high": "Vysoká",
+      "medium": "Střední",
+      "low": "Nízká",
+      "info": "Info"
+    }
+  },
+  "sources": "Zdroje",
+  "contract": "Smlouva",
+  "law": "Zákon",
+  "language": {
+    "czech": "Čeština",
+    "english": "Angličtina"
+  },
+  "theme": {
+    "light": "Světlý",
+    "dark": "Tmavý",
+    "toggle": "Přepnout téma"
+  },
+  "common": {
+    "loading": "Načítání...",
+    "error": "Chyba",
+    "success": "Úspěch",
+    "cancel": "Zrušit",
+    "close": "Zavřít"
+  }
+}

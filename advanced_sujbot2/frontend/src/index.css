@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 5%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 5%;
+    --primary: 0 0% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 92%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 20%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 0 0% 8%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 8%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 22%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 80%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .prose {
+    @apply text-gray-900 dark:text-gray-100;
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    @apply text-gray-900 dark:text-gray-100 font-semibold;
+  }
+
+  .prose p {
+    @apply text-gray-700 dark:text-gray-300;
+  }
+
+  .prose code {
+    @apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm;
+  }
+
+  .prose pre {
+    @apply bg-gray-100 dark:bg-gray-800 p-4 rounded;
+  }
+
+  .prose a {
+    @apply text-primary hover:underline;
+  }
+
+  .prose ul,
+  .prose ol {
+    @apply text-gray-700 dark:text-gray-300;
+  }
+
+  .prose strong {
+    @apply font-semibold text-gray-900 dark:text-gray-100;
+  }
+
+  /* Modern gradient backgrounds */
+  .gradient-subtle {
+    background: linear-gradient(135deg, rgb(255, 255, 255) 0%, rgb(248, 248, 248) 100%);
+  }
+
+  .dark .gradient-subtle {
+    background: linear-gradient(135deg, rgb(20, 20, 20) 0%, rgb(10, 10, 10) 100%);
+  }
+
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(135deg, rgb(0, 0, 0) 0%, rgb(60, 60, 60) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .dark .gradient-border {
+    background: linear-gradient(135deg, rgb(255, 255, 255) 0%, rgb(180, 180, 180) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-bounce {
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+}

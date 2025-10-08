@@ -1,0 +1,158 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata (tags, labels) for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_WS_URL=${{ secrets.VITE_WS_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Server
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd /opt/advanced_sujbot2
+
+            # Pull latest code
+            git pull origin main
+
+            # Pull new images
+            docker-compose -f docker-compose.prod.yml pull
+
+            # Create backup
+            ./deployment/scripts/backup.sh
+
+            # Deploy with zero downtime
+            docker-compose -f docker-compose.prod.yml up -d --no-deps --build backend
+
+            # Wait for backend to be healthy
+            sleep 10
+
+            # Deploy other services
+            docker-compose -f docker-compose.prod.yml up -d
+
+            # Cleanup old images
+            docker image prune -f
+
+            # Health check
+            ./deployment/scripts/health-check.sh docker-compose.prod.yml || exit 1
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "Deployment successful!"
+          # Add Slack/Discord notification here if needed
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Deployment failed!"
+          # Add Slack/Discord notification here if needed
+
+  rollback:
+    name: Rollback on Failure
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: failure()
+
+    steps:
+      - name: Rollback deployment
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd /opt/advanced_sujbot2
+
+            # Find latest backup
+            LATEST_BACKUP=$(ls -t deployment/backups/*.tar.gz | head -n 1 | xargs dirname)
+
+            # Restore from backup
+            ./deployment/scripts/restore.sh "$LATEST_BACKUP" all
+
+            # Restart services
+            docker-compose -f docker-compose.prod.yml up -d

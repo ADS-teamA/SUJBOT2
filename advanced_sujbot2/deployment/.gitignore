@@ -1,0 +1,27 @@
+# Deployment .gitignore
+# Ignore sensitive and generated files
+
+# SSL certificates
+nginx/ssl/*
+!nginx/ssl/.gitkeep
+
+# Certbot webroot
+nginx/certbot-webroot/*
+!nginx/certbot-webroot/.gitkeep
+
+# Logs
+*.log
+
+# Backups
+backups/*
+!backups/.gitkeep
+
+# Environment files (keep examples only)
+.env
+.env.prod
+.env.dev
+
+# Temporary files
+*.tmp
+*.swp
+*~
