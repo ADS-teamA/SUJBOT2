@@ -48,7 +48,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [message]);
 
   return (
-    <div className="flex gap-2 items-end p-4 bg-gradient-to-t from-white via-gray-50 to-white dark:from-black dark:via-gray-950 dark:to-black border-t border-gray-200 dark:border-gray-800 backdrop-blur-sm transition-all duration-300">
+    <div className="flex-shrink-0 flex gap-2 items-end p-4 bg-gradient-to-t from-white via-gray-50 to-white dark:from-black dark:via-gray-950 dark:to-black border-t border-gray-200 dark:border-gray-800 backdrop-blur-sm transition-all duration-300">
       <Textarea
         ref={textareaRef}
         value={message}

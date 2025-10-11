@@ -630,12 +630,56 @@ class SemanticMatcher:
         top_k: int
     ) -> List[Dict[str, Any]]:
         """
-        Search vector store for similar documents
-        This is a placeholder - actual implementation depends on vector store structure
+        Search vector store for similar documents using pre-computed embedding
+
+        Args:
+            query_embedding: Pre-computed query embedding
+            target_document_id: Document to search in
+            top_k: Number of results
+
+        Returns:
+            List of dicts with 'score' and 'chunk' keys
         """
-        # Placeholder implementation
-        # Real implementation would interact with FAISS/Qdrant/etc.
-        return []
+        # Check if document exists in vector store
+        if target_document_id not in self.vector_store.indices:
+            logger.warning(f"Document {target_document_id} not found in vector store")
+            return []
+
+        try:
+            # Get the FAISS index for the target document
+            index = self.vector_store.indices[target_document_id]
+
+            # Reshape embedding for FAISS search (needs to be 2D)
+            query_vector = query_embedding.reshape(1, -1)
+
+            # Perform FAISS search
+            scores, indices = index.search(query_vector, top_k)
+
+            # Get metadata store for this document
+            metadata_store = self.vector_store.metadata_stores.get(target_document_id, {})
+            chunk_ids = list(metadata_store.keys())
+
+            # Build results
+            results = []
+            for score, idx in zip(scores[0], indices[0]):
+                # Check if index is valid
+                if idx < 0 or idx >= len(chunk_ids):
+                    continue
+
+                chunk_id = chunk_ids[idx]
+                chunk = metadata_store.get(chunk_id)
+
+                if chunk:
+                    results.append({
+                        'score': float(score),
+                        'chunk': chunk
+                    })
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Error searching vector store for document {target_document_id}: {e}")
+            return []
 
 
 # ============================================================================
@@ -728,9 +772,40 @@ class StructuralMatcher:
         if not source_topic:
             return []
 
-        # Placeholder - would need to iterate through target chunks
-        # Real implementation needs access to all chunks in target document
+        # Get all chunks from target document
+        target_chunks = self.vector_store.get_document_chunks(target_document_id)
+
+        if not target_chunks:
+            logger.warning(f"No chunks found for document {target_document_id}")
+            return []
+
         pairs = []
+
+        # Find target chunks with matching topics
+        for target_chunk in target_chunks:
+            target_topic = self._extract_topic(target_chunk)
+
+            if self._topics_match(source_topic, target_topic):
+                # Calculate score based on keyword overlap
+                score = 0.7  # Base score for topic match
+
+                pair = DocumentPair(
+                    source_chunk=source_chunk,
+                    source_document_id=source_chunk.document_id,
+                    target_chunk=target_chunk,
+                    target_document_id=target_document_id,
+                    match_type=MatchType.TOPIC_RELATED,
+                    structural_score=score,
+                    overall_score=score,
+                    evidence={
+                        'source_topic': source_topic,
+                        'target_topic': target_topic,
+                        'match_method': 'topic_pattern'
+                    },
+                    confidence=score,
+                    explanation=f"Topic match: {source_topic} ↔ {target_topic}"
+                )
+                pairs.append(pair)
 
         return pairs
 
@@ -746,8 +821,39 @@ class StructuralMatcher:
         if source_type == 'general':
             return []
 
-        # Placeholder - would filter target chunks by content type
+        # Get all chunks from target document
+        target_chunks = self.vector_store.get_document_chunks(target_document_id)
+
+        if not target_chunks:
+            logger.warning(f"No chunks found for document {target_document_id}")
+            return []
+
         pairs = []
+
+        # Find target chunks with matching content type
+        for target_chunk in target_chunks:
+            target_type = target_chunk.metadata.get('content_type', 'general')
+
+            if target_type == source_type:
+                # Same content type - create match
+                score = 0.6  # Base score for content type match
+
+                pair = DocumentPair(
+                    source_chunk=source_chunk,
+                    source_document_id=source_chunk.document_id,
+                    target_chunk=target_chunk,
+                    target_document_id=target_document_id,
+                    match_type=MatchType.STRUCTURAL_PATTERN,
+                    structural_score=score,
+                    overall_score=score,
+                    evidence={
+                        'content_type': source_type,
+                        'match_method': 'content_type_pattern'
+                    },
+                    confidence=score,
+                    explanation=f"Content type match: {source_type}"
+                )
+                pairs.append(pair)
 
         return pairs
 
@@ -772,8 +878,52 @@ class StructuralMatcher:
 
         source_position = source_index / source_total  # 0.0 - 1.0
 
-        # Placeholder - would need to iterate through target chunks
+        # Get all chunks from target document
+        target_chunks = self.vector_store.get_document_chunks(target_document_id)
+
+        if not target_chunks:
+            logger.warning(f"No chunks found for document {target_document_id}")
+            return []
+
         pairs = []
+        position_threshold = 0.2  # Match chunks within ±20% position range
+
+        # Find target chunks at similar positions
+        for target_chunk in target_chunks:
+            target_index = target_chunk.metadata.get('chunk_index', 0)
+            target_total = target_chunk.metadata.get('total_chunks', 1)
+
+            if target_total == 0:
+                continue
+
+            target_position = target_index / target_total
+
+            # Calculate position distance
+            position_distance = abs(source_position - target_position)
+
+            if position_distance <= position_threshold:
+                # Positions are similar - create match
+                # Score inversely proportional to distance
+                score = 0.5 * (1.0 - position_distance / position_threshold)
+
+                pair = DocumentPair(
+                    source_chunk=source_chunk,
+                    source_document_id=source_chunk.document_id,
+                    target_chunk=target_chunk,
+                    target_document_id=target_document_id,
+                    match_type=MatchType.STRUCTURAL_PATTERN,
+                    structural_score=score,
+                    overall_score=score,
+                    evidence={
+                        'source_position': source_position,
+                        'target_position': target_position,
+                        'position_distance': position_distance,
+                        'match_method': 'position_pattern'
+                    },
+                    confidence=score,
+                    explanation=f"Position match: {source_position:.2f} ↔ {target_position:.2f}"
+                )
+                pairs.append(pair)
 
         return pairs
 

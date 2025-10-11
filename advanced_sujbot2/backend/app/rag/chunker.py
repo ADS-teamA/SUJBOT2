@@ -85,7 +85,7 @@ class ChunkingConfig:
     respect_sentence_boundaries: bool = True
 
     # Overlap
-    chunk_overlap: float = 0.0  # No overlap for legal chunks (structure defines boundaries)
+    chunk_overlap: float = 0.15  # 15% overlap between adjacent chunks (as per specification)
 
     # Validation
     min_acceptable_size: int = 10  # tokens
@@ -979,6 +979,7 @@ class LegalChunkingPipeline:
         # Post-processing
         chunks = self._add_chunk_indices(chunks)
         chunks = self._enrich_metadata(chunks, legal_doc)
+        chunks = self._add_overlap(chunks)  # Add 15% overlap between adjacent chunks
         chunks = self._validate_chunks(chunks)
 
         logger.info(f"Chunked {getattr(legal_doc, 'document_id', 'document')}: {len(chunks)} chunks")
@@ -1016,6 +1017,71 @@ class LegalChunkingPipeline:
 
         return chunks
 
+    def _add_overlap(self, chunks: List[LegalChunk]) -> List[LegalChunk]:
+        """
+        Add overlap between adjacent chunks (15% as per specification).
+
+        This helps maintain context across chunk boundaries for better retrieval.
+
+        Args:
+            chunks: List of chunks
+
+        Returns:
+            List of chunks with overlap added
+        """
+        if not chunks or len(chunks) < 2 or self.config.chunk_overlap <= 0:
+            return chunks
+
+        logger.debug(f"Adding {self.config.chunk_overlap*100}% overlap between {len(chunks)} chunks")
+
+        for i in range(len(chunks) - 1):
+            current_chunk = chunks[i]
+            next_chunk = chunks[i + 1]
+
+            # Skip if chunks are from different documents or different structural paths
+            # (we don't want to overlap across unrelated content)
+            if current_chunk.document_id != next_chunk.document_id:
+                continue
+
+            # Calculate overlap size in tokens
+            current_tokens = current_chunk.metadata.get('token_count', 0)
+            overlap_tokens = int(current_tokens * self.config.chunk_overlap)
+
+            if overlap_tokens < 10:  # Skip very small overlaps
+                continue
+
+            # Extract last sentences from current chunk to use as overlap
+            current_sentences = self._split_into_sentences(current_chunk.content)
+            if not current_sentences:
+                continue
+
+            # Collect sentences from end until we reach overlap_tokens
+            overlap_sentences = []
+            token_count = 0
+
+            for sentence in reversed(current_sentences):
+                sent_tokens = self._count_tokens(sentence)
+                if token_count + sent_tokens <= overlap_tokens:
+                    overlap_sentences.insert(0, sentence)
+                    token_count += sent_tokens
+                else:
+                    break
+
+            # Add overlap to beginning of next chunk
+            if overlap_sentences:
+                overlap_text = " ".join(overlap_sentences)
+                next_chunk.content = overlap_text + "\n\n" + next_chunk.content
+
+                # Update metadata
+                next_chunk.metadata['has_overlap'] = True
+                next_chunk.metadata['overlap_tokens'] = token_count
+                next_chunk.metadata['overlap_from_chunk'] = current_chunk.chunk_id
+                next_chunk.metadata['token_count'] = self._count_tokens(next_chunk.content)
+
+                logger.debug(f"Added {token_count} token overlap from {current_chunk.chunk_id} to {next_chunk.chunk_id}")
+
+        return chunks
+
     def _validate_chunks(self, chunks: List[LegalChunk]) -> List[LegalChunk]:
         """Validate chunk quality"""
         validated = []
@@ -1047,3 +1113,9 @@ class LegalChunkingPipeline:
     def _count_tokens(self, text: str) -> int:
         """Count tokens using tiktoken"""
         return len(self.tokenizer.encode(text))
+
+    def _split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentences respecting legal conventions"""
+        # Simple sentence splitting (can be enhanced with spaCy)
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        return [s for s in sentences if s.strip()]

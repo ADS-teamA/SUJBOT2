@@ -23,21 +23,29 @@ class CallbackTask(Task):
             total: Total progress value
             message: Progress message
         """
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": current,
-                "total": total,
-                "percentage": int((current / total) * 100),
-                "message": message
-            }
-        )
+        # Only update state if we have a valid task_id (bound task context)
+        if hasattr(self, 'request') and self.request.id:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "current": current,
+                    "total": total,
+                    "percentage": int((current / total) * 100),
+                    "message": message
+                }
+            )
+        else:
+            # Log progress without Celery state update (useful for debugging)
+            logger.debug(f"Progress: {current}/{total} ({int((current / total) * 100)}%) - {message}")
 
 
-@celery_app.task(bind=True, base=CallbackTask)
+@celery_app.task(bind=True, base=CallbackTask, acks_late=True, reject_on_worker_lost=True)
 def index_document_task(self, document_id: str, document_type: str):
     """
     Index a document asynchronously using the full RAG pipeline.
+
+    This task is interruptible - it checks for revocation signals and
+    gracefully terminates if the task is cancelled.
 
     Args:
         document_id: Document ID
@@ -45,12 +53,31 @@ def index_document_task(self, document_id: str, document_type: str):
 
     Returns:
         Document metadata with indexing info
+
+    Raises:
+        Terminated: If task is revoked during execution
     """
+    from celery.exceptions import Terminated
+
     logger.info(f"Starting RAG indexing for document {document_id}")
     document_service = DocumentService()
     rag_pipeline = get_rag_pipeline()
 
+    # Flag to check if task was cancelled
+    def check_if_revoked():
+        """Check if task has been revoked and raise Terminated if so."""
+        if self.request.id:
+            from celery.result import AsyncResult
+            task_result = AsyncResult(self.request.id, app=celery_app)
+            # Check if task was revoked
+            if task_result.state == 'REVOKED':
+                logger.warning(f"Task {self.request.id} was revoked, terminating gracefully")
+                raise Terminated("Task was cancelled by user")
+
     try:
+        # Check for cancellation before starting
+        check_if_revoked()
+
         # Update initial progress
         self.update_progress(0, 100, "Starting indexing...")
         document_service.update_document_status(document_id, "processing", 0)
@@ -61,7 +88,12 @@ def index_document_task(self, document_id: str, document_type: str):
             raise ValueError(f"Document {document_id} not found")
 
         # Define progress callback that syncs with Celery and document service
+        # AND checks for task cancellation at each progress update
         def progress_callback(current: int, total: int, message: str):
+            # Check if task was cancelled
+            check_if_revoked()
+
+            # Update progress
             self.update_progress(current, total, message)
             document_service.update_document_status(
                 document_id,
@@ -101,6 +133,22 @@ def index_document_task(self, document_id: str, document_type: str):
             "document_id": document_id,
             "status": "indexed",
             "metadata": metadata
+        }
+
+    except Terminated as e:
+        # Task was cancelled - this is expected behavior
+        logger.info(f"Task cancelled for document {document_id}: {e}")
+        document_service.update_document_status(
+            document_id,
+            "cancelled",
+            0,
+            error_message="Document processing was cancelled"
+        )
+        # Don't re-raise - task was cancelled gracefully
+        return {
+            "document_id": document_id,
+            "status": "cancelled",
+            "message": "Task was cancelled by user"
         }
 
     except (DocumentProcessingError, IndexingError) as e:

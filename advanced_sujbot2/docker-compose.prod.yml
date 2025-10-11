@@ -1,8 +1,6 @@
 # Docker Compose - Production Environment
 # Nginx reverse proxy, SSL, scaled workers, logging
 
-version: '3.8'
-
 services:
   # Nginx Reverse Proxy
   nginx:

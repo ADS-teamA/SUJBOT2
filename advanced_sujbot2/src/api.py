@@ -144,71 +144,126 @@ class ComplianceChecker:
     def document_reader(self):
         """Get or initialize DocumentReader."""
         if self._document_reader is None:
-            # TODO: Import and initialize DocumentReader
-            # from .document_reader import DocumentReader
-            # self._document_reader = DocumentReader(self.config)
-            self.logger.warning("DocumentReader not yet implemented - placeholder")
-            self._document_reader = "DocumentReader placeholder"
+            from .document_reader import LegalDocumentReader
+            self._document_reader = LegalDocumentReader()
+            self.logger.info("DocumentReader initialized")
         return self._document_reader
 
     @property
     def indexing_pipeline(self):
         """Get or initialize IndexingPipeline."""
         if self._indexing_pipeline is None:
-            # TODO: Import and initialize IndexingPipeline
-            # from .indexing_pipeline import IndexingPipeline
-            # self._indexing_pipeline = IndexingPipeline(self.config)
-            self.logger.warning("IndexingPipeline not yet implemented - placeholder")
-            self._indexing_pipeline = "IndexingPipeline placeholder"
+            from .embeddings import LegalEmbedder, EmbeddingConfig
+            from .indexing import MultiDocumentVectorStore, VectorStoreConfig
+            from .chunker import LegalChunkingPipeline, ChunkingConfig
+
+            # Initialize components
+            embedding_config = EmbeddingConfig(**self.config.get('embeddings', {}))
+            embedder = LegalEmbedder(embedding_config)
+
+            vector_config = VectorStoreConfig(**self.config.get('indexing', {}))
+            vector_store = MultiDocumentVectorStore(embedder, vector_config)
+
+            chunking_config = ChunkingConfig(**self.config.get('chunking', {}))
+            chunker = LegalChunkingPipeline(chunking_config)
+
+            # Create pipeline wrapper
+            self._indexing_pipeline = {
+                'chunker': chunker,
+                'embedder': embedder,
+                'vector_store': vector_store
+            }
+            self.logger.info("IndexingPipeline initialized")
         return self._indexing_pipeline
 
     @property
     def hybrid_retriever(self):
         """Get or initialize HybridRetriever."""
         if self._hybrid_retriever is None:
-            # TODO: Import and initialize HybridRetriever
-            # from .hybrid_retriever import HybridRetriever
-            # self._hybrid_retriever = HybridRetriever(self.config)
-            self.logger.warning("HybridRetriever not yet implemented - placeholder")
-            self._hybrid_retriever = "HybridRetriever placeholder"
+            from .hybrid_retriever import create_hybrid_retriever, RetrievalConfig
+
+            # Get vector store and embedder from indexing pipeline
+            pipeline = self.indexing_pipeline
+            vector_store = pipeline['vector_store']
+            embedder = pipeline['embedder']
+
+            # Create config
+            retrieval_config = RetrievalConfig(**self.config.get('retrieval', {}))
+
+            # Initialize retriever
+            self._hybrid_retriever = create_hybrid_retriever(
+                vector_store=vector_store,
+                embedder=embedder,
+                config=retrieval_config
+            )
+            self.logger.info("HybridRetriever initialized")
         return self._hybrid_retriever
 
     @property
     def cross_doc_retriever(self):
         """Get or initialize ComparativeRetriever."""
         if self._cross_doc_retriever is None:
-            # TODO: Import and initialize ComparativeRetriever
-            # from .comparative_retriever import ComparativeRetriever
-            # self._cross_doc_retriever = ComparativeRetriever(self.config)
-            self.logger.warning("ComparativeRetriever not yet implemented - placeholder")
-            self._cross_doc_retriever = "ComparativeRetriever placeholder"
+            from .cross_doc_retrieval import create_comparative_retriever
+
+            # Get vector store and embedder from indexing pipeline
+            pipeline = self.indexing_pipeline
+            vector_store = pipeline['vector_store']
+            embedder = pipeline['embedder']
+
+            # Create retriever
+            cross_doc_config = self.config.get('cross_document', {})
+            self._cross_doc_retriever = create_comparative_retriever(
+                vector_store=vector_store,
+                embedder=embedder,
+                config=cross_doc_config
+            )
+            self.logger.info("ComparativeRetriever initialized")
         return self._cross_doc_retriever
 
     @property
     def compliance_analyzer(self):
         """Get or initialize ComplianceAnalyzer."""
         if self._compliance_analyzer is None:
-            # TODO: Import and initialize ComplianceAnalyzer
-            # from .compliance_analyzer import ComplianceAnalyzer
-            # from anthropic import Anthropic
-            # self._compliance_analyzer = ComplianceAnalyzer(
-            #     self.config,
-            #     self.cross_doc_retriever,
-            #     llm_client=Anthropic(api_key=self.config.get("llm.api_key"))
-            # )
-            self.logger.warning("ComplianceAnalyzer not yet implemented - placeholder")
-            self._compliance_analyzer = "ComplianceAnalyzer placeholder"
+            from .compliance_analyzer import ComplianceAnalyzer
+            from anthropic import Anthropic
+
+            # Get API key from environment or config
+            api_key = os.environ.get('CLAUDE_API_KEY') or self.config.get('llm', {}).get('api_key')
+            if not api_key:
+                raise APIKeyError("Claude API key not found. Set CLAUDE_API_KEY environment variable.")
+
+            # Create LLM client
+            llm_client = Anthropic(api_key=api_key)
+
+            # Initialize analyzer
+            compliance_config = self.config.get('compliance', {})
+            self._compliance_analyzer = ComplianceAnalyzer(
+                config=compliance_config,
+                cross_doc_retriever=self.cross_doc_retriever,
+                llm_client=llm_client
+            )
+            self.logger.info("ComplianceAnalyzer initialized")
         return self._compliance_analyzer
 
     @property
     def query_processor(self):
         """Get or initialize QueryProcessor."""
         if self._query_processor is None:
-            # TODO: Import and initialize QueryProcessor
-            # from .query_processor import QueryProcessor
-            # self._query_processor = QueryProcessor(self.config)
-            self.logger.warning("QueryProcessor not yet implemented - placeholder")
-            self._query_processor = "QueryProcessor placeholder"
+            try:
+                from .query_processor import QueryProcessor
+
+                # Get API key
+                api_key = os.environ.get('CLAUDE_API_KEY') or self.config.get('llm', {}).get('api_key')
+
+                # Create config dict for query processor
+                query_config = self.config.get('query_processing', {})
+                query_config['claude_api_key'] = api_key
+
+                self._query_processor = QueryProcessor(query_config)
+                self.logger.info("QueryProcessor initialized")
+            except ImportError:
+                self.logger.warning("QueryProcessor not found - needs to be copied from multi-agent/src/")
+                self._query_processor = None
         return self._query_processor
 
     @property
@@ -301,12 +356,27 @@ class ComplianceChecker:
 
             self.logger.info("Running compliance analysis...")
 
-            # TODO: Once components are implemented, this will do actual analysis
-            # For now, return a placeholder report
-            report = await self._create_placeholder_report(
-                contract_id,
-                law_ids,
-                request.mode
+            # Get chunks from indexed documents
+            pipeline = self.indexing_pipeline
+            vector_store = pipeline['vector_store']
+
+            # Get contract chunks
+            contract_metadata = vector_store.metadata_stores.get(contract_id, {})
+            contract_chunks = list(contract_metadata.values())
+
+            # Get law chunks
+            law_chunks = []
+            for law_id in law_ids:
+                law_metadata = vector_store.metadata_stores.get(law_id, {})
+                law_chunks.extend(law_metadata.values())
+
+            # Run compliance analysis
+            report = await self.compliance_analyzer.analyze_compliance(
+                contract_chunks=contract_chunks,
+                law_chunks=law_chunks,
+                contract_id=contract_id,
+                law_ids=law_ids,
+                mode=request.mode.value
             )
 
             if progress_callback:
@@ -375,8 +445,7 @@ class ComplianceChecker:
                     message="Parsing document..."
                 ))
 
-            # TODO: Actual document parsing
-            # document = await self.document_reader.read_document(document_path, document_type)
+            document = await self.document_reader.read_document(document_path, document_type)
 
             # Step 2: Chunk document
             if progress_callback:
@@ -388,8 +457,8 @@ class ComplianceChecker:
                     message="Chunking document..."
                 ))
 
-            # TODO: Actual chunking
-            # chunks = await self.indexing_pipeline.chunk_document(document)
+            pipeline = self.indexing_pipeline
+            chunks = await pipeline['chunker'].chunk(document)
 
             # Step 3: Generate embeddings and index
             if progress_callback:
@@ -401,8 +470,12 @@ class ComplianceChecker:
                     message="Generating embeddings..."
                 ))
 
-            # TODO: Actual indexing
-            # await self.indexing_pipeline.index_chunks(chunks, document_id, document_type)
+            await pipeline['vector_store'].add_document(
+                chunks=chunks,
+                document_id=document_id,
+                document_type=document_type,
+                metadata={'path': document_path, 'name': doc_name}
+            )
 
             # Step 4: Complete
             if progress_callback:
@@ -458,25 +531,101 @@ class ComplianceChecker:
         """
         self.logger.info(f"Processing query: {query}")
 
-        # TODO: Actual query processing
-        # For now, return placeholder response
-        processed_query = ProcessedQuery(
-            original_query=query,
-            normalized_query=query.lower().strip(),
-            retrieval_strategy=RetrievalStrategy.HYBRID,
-            sub_queries=[],
-            query_type="factual",
-            expanded_terms=[],
+        # Step 1: Process query if processor available
+        processed_query = None
+        if self.query_processor:
+            try:
+                processed_query = await self.query_processor.process(query)
+                self.logger.info(f"Query processed: intent={processed_query.intent.value}, "
+                                f"complexity={processed_query.complexity.value}")
+            except Exception as e:
+                self.logger.warning(f"Query processing failed, continuing with simple retrieval: {e}")
+
+        # Simple fallback if no processor or processing failed
+        if not processed_query:
+            processed_query = ProcessedQuery(
+                original_query=query,
+                normalized_query=query.lower().strip(),
+                retrieval_strategy=RetrievalStrategy.HYBRID,
+                sub_queries=[],
+                query_type="factual",
+                expanded_terms=[],
+            )
+
+        # Step 2: Retrieve relevant chunks
+        self.logger.info(f"Retrieving chunks (top_k={top_k})...")
+        retrieval_results = await self.hybrid_retriever.search(
+            query=query,
+            top_k=top_k,
+            document_ids=document_ids
         )
+
+        # Convert to Source objects
+        sources = []
+        for result in retrieval_results:
+            sources.append(Source(
+                document_id=result.chunk.document_id,
+                chunk_id=result.chunk.chunk_id,
+                content=result.chunk.content,
+                legal_reference=result.chunk.legal_reference or "N/A",
+                score=result.score,
+                metadata=result.chunk.metadata
+            ))
+
+        # Step 3: Generate answer using LLM
+        self.logger.info("Generating answer with LLM...")
+        try:
+            from anthropic import Anthropic
+
+            # Get API key
+            api_key = os.environ.get('CLAUDE_API_KEY') or self.config.get('llm', {}).get('api_key')
+            if not api_key:
+                raise APIKeyError("Claude API key not found for answer generation")
+
+            client = Anthropic(api_key=api_key)
+
+            # Build context from sources
+            context_parts = []
+            for i, source in enumerate(sources[:5], 1):  # Use top 5 sources
+                ref = source.legal_reference if source.legal_reference != "N/A" else "Provision"
+                context_parts.append(f"[{i}] {ref}:\n{source.content}\n")
+
+            context = "\n".join(context_parts)
+
+            # Generate answer
+            prompt = f"""Based on the following legal provisions, answer the question.
+
+Question: {query}
+
+Legal Provisions:
+{context}
+
+Provide a clear, accurate answer based on the provisions above. Include references to specific provisions in your answer."""
+
+            response_message = client.messages.create(
+                model=self.config.get('llm', {}).get('main_model', 'claude-sonnet-4-5-20250929'),
+                max_tokens=self.config.get('llm', {}).get('max_tokens', 4000),
+                temperature=self.config.get('llm', {}).get('temperature', 0.1),
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            answer = response_message.content[0].text
+            confidence = min(sources[0].score if sources else 0.0, 1.0)
+
+        except Exception as e:
+            self.logger.error(f"Answer generation failed: {e}")
+            answer = f"Retrieved {len(sources)} relevant provisions, but answer generation failed: {e}"
+            confidence = 0.0
 
         response = QueryResponse(
             query=query,
-            answer="[Placeholder answer - query processing not yet implemented]",
-            sources=[],
+            answer=answer,
+            sources=sources,
             processed_query=processed_query,
-            confidence=0.0,
+            confidence=confidence,
         )
 
+        self.logger.info(f"Query complete: {len(sources)} sources, confidence={confidence:.2f}")
         return response
 
     async def build_knowledge_graph(
@@ -501,10 +650,49 @@ class ComplianceChecker:
         """
         self.logger.info(f"Building knowledge graph for {len(document_ids)} documents")
 
-        # TODO: Actual graph building
-        # For now, return placeholder
-        self.logger.warning("Knowledge graph building not yet implemented")
-        return None
+        from .knowledge_graph import GraphBuilder, ReferenceLinker, LegalKnowledgeGraph
+
+        # Get documents
+        documents = []
+        pipeline = self.indexing_pipeline
+        vector_store = pipeline['vector_store']
+
+        for doc_id in document_ids:
+            if doc_id in self._indexed_documents:
+                doc_metadata = self._indexed_documents[doc_id]
+                # Create mock document structure for graph building
+                # In production, we'd load the full document structure
+                documents.append({
+                    'document_id': doc_id,
+                    'document_type': doc_metadata['type'],
+                    'chunks': list(vector_store.metadata_stores.get(doc_id, {}).values())
+                })
+
+        # Build graph
+        builder = GraphBuilder()
+        kg = LegalKnowledgeGraph()
+
+        # Add documents to graph (simplified - would need full document structure)
+        for doc in documents:
+            for chunk in doc['chunks']:
+                from .knowledge_graph import GraphNode, NodeType
+                node = GraphNode(
+                    node_id=chunk.chunk_id,
+                    node_type=NodeType.CHUNK,
+                    content=chunk.content,
+                    legal_reference=chunk.legal_reference,
+                    hierarchy_path=chunk.hierarchy_path,
+                    hierarchy_level=0,
+                    metadata=chunk.metadata
+                )
+                kg.add_node(node)
+
+        # Link references
+        ref_linker = ReferenceLinker()
+        ref_linker.link_references(kg)
+
+        self.logger.info(f"Knowledge graph built: {kg.node_count} nodes, {kg.edge_count} edges")
+        return kg
 
     async def batch_check_compliance(
         self,

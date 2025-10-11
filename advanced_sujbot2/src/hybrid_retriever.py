@@ -140,32 +140,12 @@ class RetrievalConfig:
 
 
 # ============================================================================
-# Mock Dependencies (to be replaced with actual implementations)
+# Import Real Components (previously mock dependencies)
 # ============================================================================
 
-class MultiDocumentVectorStore:
-    """Mock multi-document vector store (from 04_embedding_indexing.md)"""
-
-    def __init__(self):
-        self.indices: Dict[str, faiss.Index] = {}
-        self.metadata_stores: Dict[str, Dict[str, LegalChunk]] = {}
-
-
-class LegalEmbedder:
-    """Mock legal embedder (from 04_embedding_indexing.md)"""
-
-    def __init__(self, model_name: str = "BAAI/bge-m3"):
-        self.model_name = model_name
-        self.vector_size = 1024
-
-    async def embed_chunks(self, chunks: List[LegalChunk]) -> np.ndarray:
-        """Generate embeddings (mock implementation)"""
-        # Mock: return random embeddings
-        embeddings = np.random.rand(len(chunks), self.vector_size).astype('float32')
-        # Normalize
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        embeddings = embeddings / norms
-        return embeddings
+# Import real implementations from other modules
+from .indexing import MultiDocumentVectorStore
+from .embeddings import LegalEmbedder
 
 
 class LegalReferenceExtractor:
@@ -1145,24 +1125,43 @@ class HybridRetriever:
         combined_results = []
 
         for chunk_id in all_chunk_ids:
-            sem_score = semantic_scores.get(chunk_id, 0.0)
-            key_score = keyword_scores.get(chunk_id, 0.0)
-            struct_score = structural_scores.get(chunk_id, 0.0)
+            sem_score = semantic_scores.get(chunk_id, None)
+            key_score = keyword_scores.get(chunk_id, None)
+            struct_score = structural_scores.get(chunk_id, None)
 
-            # Weighted combination
-            combined_score = (
-                weights['semantic'] * sem_score +
-                weights['keyword'] * key_score +
-                weights['structural'] * struct_score
-            )
+            # Count active strategies and normalize weights
+            # This ensures chunks found by only one strategy don't lose score
+            active_weights = {}
+            if sem_score is not None:
+                active_weights['semantic'] = weights['semantic']
+            if key_score is not None:
+                active_weights['keyword'] = weights['keyword']
+            if struct_score is not None:
+                active_weights['structural'] = weights['structural']
+
+            # Normalize weights by active strategies only
+            if active_weights:
+                total_active_weight = sum(active_weights.values())
+                normalized_weights = {k: v / total_active_weight for k, v in active_weights.items()}
+
+                # Weighted combination with normalized weights
+                combined_score = 0.0
+                if sem_score is not None:
+                    combined_score += normalized_weights.get('semantic', 0.0) * sem_score
+                if key_score is not None:
+                    combined_score += normalized_weights.get('keyword', 0.0) * key_score
+                if struct_score is not None:
+                    combined_score += normalized_weights.get('structural', 0.0) * struct_score
+            else:
+                combined_score = 0.0
 
             # Get result object
             result = chunk_map[chunk_id]
 
-            # Update scores
-            result.semantic_score = sem_score if sem_score > 0 else None
-            result.keyword_score = key_score if key_score > 0 else None
-            result.structural_score = struct_score if struct_score > 0 else None
+            # Update scores (already None if strategy didn't find the chunk)
+            result.semantic_score = sem_score
+            result.keyword_score = key_score
+            result.structural_score = struct_score
             result.score = combined_score
             result.retrieval_method = "hybrid"
 

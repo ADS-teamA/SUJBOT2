@@ -3,6 +3,8 @@
     "contract": "Nahrát smlouvu",
     "law": "Nahrát zákon",
     "dragDrop": "Přetáhněte soubor nebo klikněte",
+    "dragDropDescription": "Nahrajte dokumenty PDF, DOCX nebo TXT",
+    "orClickToSelect": "nebo klikněte pro výběr souborů",
     "processing": "Zpracovávám...",
     "button": "Nahrát soubor"
   },
@@ -22,7 +24,8 @@
       "uploaded": "Nahráno",
       "processing": "Zpracovávání",
       "indexed": "Indexováno",
-      "error": "Chyba"
+      "error": "Chyba",
+      "cancelled": "Zrušeno"
     }
   },
   "panel": {
@@ -59,5 +62,27 @@
     "success": "Úspěch",
     "cancel": "Zrušit",
     "close": "Zavřít"
+  },
+  "toast": {
+    "upload": {
+      "started": "Nahrávání dokumentu {{filename}}",
+      "success": "Dokument {{filename}} úspěšně nahrán a indexován",
+      "error": "Chyba při nahrávání: {{error}}",
+      "cancelled": "Zpracování dokumentu {{filename}} bylo zrušeno"
+    },
+    "document": {
+      "removed": "Dokument {{filename}} odebrán",
+      "removeError": "Chyba při odebírání: {{error}}"
+    },
+    "websocket": {
+      "connecting": "Připojování k serveru...",
+      "reconnected": "Připojení obnoveno",
+      "connectionFailed": "Nepodařilo se připojit k serveru",
+      "error": "Chyba komunikace: {{message}}"
+    },
+    "api": {
+      "error": "Chyba API",
+      "missingClaudeKey": "Chybí Claude API klíč v konfiguraci backendu"
+    }
   }
 }

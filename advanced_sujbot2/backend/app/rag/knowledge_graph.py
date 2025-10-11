@@ -175,6 +175,42 @@ class LegalKnowledgeGraph:
         """Find all nodes in a document."""
         return self.document_index.get(document_id, [])
 
+    def get_chunks_by_reference(self, legal_reference: str) -> List[Any]:
+        """
+        Get chunk objects by legal reference.
+
+        This method is used by cross-document retrieval and reranking
+        to find target chunks by their legal reference (e.g., "§89", "Článek 5").
+
+        Args:
+            legal_reference: Legal reference string (e.g., "§89 odst. 2")
+
+        Returns:
+            List of chunk-like dictionaries with matching legal reference
+        """
+        # Get node IDs with this reference
+        node_ids = self.get_nodes_by_reference(legal_reference)
+
+        chunks = []
+        for node_id in node_ids:
+            node = self.get_node(node_id)
+            if node and node.content:
+                # Convert GraphNode to chunk-like dictionary
+                # This format is compatible with cross_doc_retrieval and reranker
+                chunk_data = {
+                    'chunk_id': node.metadata.get('chunk_id', node_id),
+                    'content': node.content,
+                    'title': node.label,
+                    'document_id': node.document_id,
+                    'legal_reference': node.legal_reference,
+                    'hierarchy_path': node.hierarchy_path,
+                    'metadata': node.metadata,
+                    'node_type': node.node_type.value
+                }
+                chunks.append(chunk_data)
+
+        return chunks
+
     def get_subgraph_by_edge_type(self, edge_type: EdgeType) -> nx.DiGraph:
         """Extract subgraph with only specific edge type."""
         edges = [
@@ -308,6 +344,9 @@ class GraphBuilder:
             return
 
         for part in document.parts:
+            # Use element_id to match chunker.py chunk_id format
+            part_element_id = getattr(part, 'element_id', f"part_{part.number}")
+
             # Add Part node
             part_node = GraphNode(
                 node_id=f"{document.document_id}_part_{part.number}",
@@ -316,7 +355,10 @@ class GraphBuilder:
                 document_id=document.document_id,
                 legal_reference=f"Část {part.number}",
                 hierarchy_path=f"Část {part.number}",
-                hierarchy_level=1
+                hierarchy_level=1,
+                metadata={
+                    "chunk_id": f"chunk_{part_element_id}"  # Match chunker.py format
+                }
             )
             kg.add_node(part_node)
 
@@ -334,6 +376,9 @@ class GraphBuilder:
 
     def _add_chapter(self, chapter, part, document, kg, part_node):
         """Add chapter node and its children."""
+        # Use element_id to match chunker.py chunk_id format
+        chapter_element_id = getattr(chapter, 'element_id', f"chapter_{chapter.number}")
+
         chapter_node = GraphNode(
             node_id=f"{document.document_id}_chapter_{part.number}_{chapter.number}",
             node_type=NodeType.CHAPTER,
@@ -341,7 +386,10 @@ class GraphBuilder:
             document_id=document.document_id,
             legal_reference=f"Hlava {chapter.number}",
             hierarchy_path=f"{part_node.hierarchy_path} > Hlava {chapter.number}",
-            hierarchy_level=2
+            hierarchy_level=2,
+            metadata={
+                "chunk_id": f"chunk_{chapter_element_id}"  # Match chunker.py format
+            }
         )
         kg.add_node(chapter_node)
 
@@ -358,6 +406,9 @@ class GraphBuilder:
 
     def _add_paragraph(self, paragraph, chapter, document, kg, chapter_node):
         """Add paragraph node and its children."""
+        # Use element_id to match chunker.py chunk_id format: chunk_{element_id}
+        element_id = getattr(paragraph, 'element_id', f"para_{paragraph.number}")
+
         para_node = GraphNode(
             node_id=f"{document.document_id}_para_{paragraph.number}",
             node_type=NodeType.PARAGRAPH,
@@ -368,6 +419,7 @@ class GraphBuilder:
             hierarchy_path=f"{chapter_node.hierarchy_path} > §{paragraph.number}",
             hierarchy_level=3,
             metadata={
+                "chunk_id": f"chunk_{element_id}",  # Match chunker.py format
                 "contains_obligation": getattr(paragraph, 'contains_obligation', False),
                 "contains_prohibition": getattr(paragraph, 'contains_prohibition', False)
             }
@@ -383,6 +435,9 @@ class GraphBuilder:
         # Add subsections
         if hasattr(paragraph, 'subsections'):
             for subsec in paragraph.subsections:
+                # Use element_id to match chunker.py chunk_id format
+                subsec_element_id = getattr(subsec, 'element_id', f"subsec_{subsec.number}")
+
                 subsec_node = GraphNode(
                     node_id=f"{para_node.node_id}_subsec_{subsec.number}",
                     node_type=NodeType.SUBSECTION,
@@ -391,7 +446,10 @@ class GraphBuilder:
                     content=getattr(subsec, 'content', ''),
                     legal_reference=f"§{paragraph.number} odst. {subsec.number}",
                     hierarchy_path=f"{para_node.hierarchy_path} > odst. {subsec.number}",
-                    hierarchy_level=4
+                    hierarchy_level=4,
+                    metadata={
+                        "chunk_id": f"chunk_{subsec_element_id}"  # Match chunker.py format
+                    }
                 )
                 kg.add_node(subsec_node)
 
@@ -412,6 +470,9 @@ class GraphBuilder:
             return
 
         for article in document.articles:
+            # Use element_id to match chunker.py chunk_id format
+            article_element_id = getattr(article, 'element_id', f"article_{article.number}")
+
             article_node = GraphNode(
                 node_id=f"{document.document_id}_article_{article.number}",
                 node_type=NodeType.ARTICLE,
@@ -420,7 +481,10 @@ class GraphBuilder:
                 content=getattr(article, 'content', ''),
                 legal_reference=f"Článek {article.number}",
                 hierarchy_path=f"Článek {article.number}",
-                hierarchy_level=1
+                hierarchy_level=1,
+                metadata={
+                    "chunk_id": f"chunk_{article_element_id}"  # Match chunker.py format
+                }
             )
             kg.add_node(article_node)
 
@@ -433,6 +497,9 @@ class GraphBuilder:
             # Add points
             if hasattr(article, 'points'):
                 for point in article.points:
+                    # Use element_id to match chunker.py chunk_id format
+                    point_element_id = getattr(point, 'element_id', f"point_{point.number}")
+
                     point_node = GraphNode(
                         node_id=f"{article_node.node_id}_point_{point.number}",
                         node_type=NodeType.POINT,
@@ -441,7 +508,10 @@ class GraphBuilder:
                         content=getattr(point, 'content', ''),
                         legal_reference=f"Článek {article.number}.{point.number}",
                         hierarchy_path=f"{article_node.hierarchy_path} > {point.number}",
-                        hierarchy_level=2
+                        hierarchy_level=2,
+                        metadata={
+                            "chunk_id": f"chunk_{point_element_id}"  # Match chunker.py format
+                        }
                     )
                     kg.add_node(point_node)
 

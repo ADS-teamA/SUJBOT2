@@ -16,6 +16,8 @@ Key capabilities:
 
 import logging
 import time
+import sys
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from anthropic import Anthropic
@@ -26,6 +28,19 @@ from .models import (
     ComplianceMode,
     SeverityLevel
 )
+
+# Import compliance helper modules from src/
+# backend/app/rag/compliance_analyzer.py -> ../../../src = /app/src (in Docker)
+src_path = Path(__file__).parent.parent.parent / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+from src.requirement_extractor import RequirementExtractor
+from src.clause_mapper import ContractClauseMapper
+from src.compliance_checkers import ComplianceChecker
+from src.risk_scorer import RiskScorer
+from src.recommendation_generator import RecommendationGenerator
+from src.compliance_reporter import ComplianceReporter
 
 
 class ComplianceAnalyzer:

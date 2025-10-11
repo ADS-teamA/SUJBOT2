@@ -1,8 +1,6 @@
 # Docker Compose - Development Environment
 # Hot reload enabled, debug mode, ports exposed
 
-version: '3.8'
-
 services:
   # Redis - Message broker & cache
   redis:
@@ -39,11 +37,11 @@ services:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
       - HF_HOME=/app/models
-      - TRANSFORMERS_CACHE=/app/models/transformers
       - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence-transformers
       - TOKENIZERS_PARALLELISM=false
     volumes:
       - ./backend:/app  # Hot reload
+      - ./src:/app/src  # Mount src/ for compliance modules
       - uploads_dev:/app/uploads
       - indexes_dev:/app/indexes
       - ./backend/logs:/app/logs
@@ -76,11 +74,11 @@ services:
       - ENVIRONMENT=development
       - LOG_LEVEL=DEBUG
       - HF_HOME=/app/models
-      - TRANSFORMERS_CACHE=/app/models/transformers
       - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence-transformers
       - TOKENIZERS_PARALLELISM=false
     volumes:
       - ./backend:/app
+      - ./src:/app/src  # Mount src/ for compliance modules
       - uploads_dev:/app/uploads
       - indexes_dev:/app/indexes
       - ./backend/logs:/app/logs
@@ -88,9 +86,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 12G
         reservations:
-          memory: 4G
+          memory: 6G
     depends_on:
       - redis
     networks:
@@ -111,6 +109,13 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - FLOWER_UNAUTHENTICATED_API=true
       - FLOWER_BASIC_AUTH=admin:admin123
+      - HF_HOME=/app/models
+      - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence-transformers
+      - TOKENIZERS_PARALLELISM=false
+    volumes:
+      - ./backend:/app
+      - ./src:/app/src  # Mount src/ for compliance modules
+      - model_cache:/app/models
     depends_on:
       - redis
       - celery_worker

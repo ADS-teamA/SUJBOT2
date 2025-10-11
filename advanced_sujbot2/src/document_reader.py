@@ -34,6 +34,19 @@ try:
 except ImportError:
     HAS_DOCX = False
 
+try:
+    from odf import text as odf_text, teletype
+    from odf.opendocument import load as odf_load
+    HAS_ODF = True
+except ImportError:
+    HAS_ODF = False
+
+try:
+    from striprtf.striprtf import rtf_to_text
+    HAS_STRIPRTF = True
+except ImportError:
+    HAS_STRIPRTF = False
+
 from .models import (
     LegalDocument, DocumentStructure, DocumentMetadata,
     StructuralElement, Part, Chapter, Section, Paragraph,
@@ -165,6 +178,85 @@ class DOCXReader(FormatReader):
         except Exception as e:
             logger.error(f"Failed to read DOCX: {e}")
             raise DocumentReadError(f"Error reading DOCX file: {e}")
+
+
+class ODTReader(FormatReader):
+    """ODT (OpenDocument Text) reader using odfpy"""
+
+    async def read(self, file_path: str) -> Tuple[str, Dict[str, Any]]:
+        """Read ODT file"""
+
+        if not HAS_ODF:
+            raise UnsupportedFormatError("odfpy not installed (pip install odfpy)")
+
+        try:
+            logger.debug(f"Reading ODT: {file_path}")
+            doc = odf_load(file_path)
+
+            # Extract all text from paragraphs
+            paragraphs = doc.getElementsByType(odf_text.P)
+            text_parts = []
+            for para in paragraphs:
+                para_text = teletype.extractText(para)
+                if para_text.strip():
+                    text_parts.append(para_text)
+
+            text = "\n".join(text_parts)
+
+            page_info = {
+                "total_pages": 1,  # ODT doesn't have fixed pages
+                "total_paragraphs": len(paragraphs),
+                "reader": "odfpy"
+            }
+
+            logger.info(f"Successfully read ODT: {page_info['total_paragraphs']} paragraphs")
+            return text, page_info
+
+        except Exception as e:
+            logger.error(f"Failed to read ODT: {e}")
+            raise DocumentReadError(f"Error reading ODT file: {e}")
+
+
+class RTFReader(FormatReader):
+    """RTF reader using striprtf"""
+
+    async def read(self, file_path: str) -> Tuple[str, Dict[str, Any]]:
+        """Read RTF file"""
+
+        if not HAS_STRIPRTF:
+            raise UnsupportedFormatError("striprtf not installed (pip install striprtf)")
+
+        try:
+            logger.debug(f"Reading RTF: {file_path}")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                rtf_content = f.read()
+
+            # Convert RTF to plain text
+            text = rtf_to_text(rtf_content)
+
+            page_info = {
+                "total_pages": 1,
+                "reader": "striprtf"
+            }
+
+            logger.info(f"Successfully read RTF: {len(text)} characters")
+            return text, page_info
+
+        except UnicodeDecodeError:
+            # Try with different encoding
+            try:
+                with open(file_path, 'r', encoding='latin-1') as f:
+                    rtf_content = f.read()
+                text = rtf_to_text(rtf_content)
+                logger.info(f"Successfully read RTF with latin-1 encoding")
+                page_info = {"total_pages": 1, "reader": "striprtf"}
+                return text, page_info
+            except Exception as e:
+                raise DocumentReadError(f"Error reading RTF file: {e}")
+
+        except Exception as e:
+            logger.error(f"Failed to read RTF: {e}")
+            raise DocumentReadError(f"Error reading RTF file: {e}")
 
 
 class TXTReader(FormatReader):
@@ -327,22 +419,58 @@ class LawStructureParser(StructureParser):
                     current_part.chapters.append(current_chapter)
                     current_part.children_ids.append(current_chapter.element_id)
                 hierarchy.append(current_chapter)
+                current_section = None
                 current_paragraph = None
                 current_subsection = None
                 logger.debug(f"Found chapter: {current_chapter.legal_reference}")
 
+            # Section (DÍL)
+            elif match := re.match(self.PATTERNS['section'], line, re.IGNORECASE):
+                number, title = match.groups()
+                current_section = Section(
+                    element_id=f"section_{number}",
+                    element_type=ElementType.SECTION.value,
+                    number=number,
+                    title=title.strip(),
+                    content="",
+                    level=2,
+                    parent_id=current_chapter.element_id if current_chapter else None,
+                    children_ids=[],
+                    start_line=line_num,
+                    end_line=line_num,
+                    start_char=char_offset,
+                    end_char=char_offset + line_length,
+                    legal_reference=f"Díl {number}",
+                    metadata={'type': 'section'},
+                    chapter=current_chapter,
+                    paragraphs=[]
+                )
+                if current_chapter:
+                    current_chapter.sections.append(current_section)
+                    current_chapter.children_ids.append(current_section.element_id)
+                hierarchy.append(current_section)
+                current_paragraph = None
+                current_subsection = None
+                logger.debug(f"Found section: {current_section.legal_reference}")
+
             # Paragraph
             elif match := re.match(self.PATTERNS['paragraph'], line):
                 number, title = match.groups()
-                para_num = int(re.sub(r'[a-z]', '', number))  # Remove letter suffix
+                para_num = int(re.sub(r'[a-zA-Z]', '', number))  # Remove letter suffix (both cases)
+
+                # Determine parent (Section if exists, otherwise Chapter)
+                parent = current_section if current_section else current_chapter
+                parent_id = parent.element_id if parent else None
+                level = 3 if current_section else 2
+
                 current_paragraph = Paragraph(
                     element_id=f"paragraph_{number}",
                     element_type=ElementType.PARAGRAPH.value,
                     number=para_num,
                     title=title.strip(),
                     content=title.strip(),
-                    level=2,
-                    parent_id=current_chapter.element_id if current_chapter else None,
+                    level=level,
+                    parent_id=parent_id,
                     children_ids=[],
                     start_line=line_num,
                     end_line=line_num,
@@ -351,14 +479,22 @@ class LawStructureParser(StructureParser):
                     legal_reference=f"§{number}",
                     metadata={'type': 'paragraph'},
                     chapter=current_chapter,
+                    section=current_section,
                     subsections=[],
                     contains_obligation=False,
                     contains_prohibition=False,
                     contains_definition=False
                 )
-                if current_chapter:
+
+                # Add to parent (Section or Chapter)
+                if current_section:
+                    current_section.paragraphs.append(current_paragraph)
+                    current_section.children_ids.append(current_paragraph.element_id)
+                elif current_chapter:
+                    # Note: Chapter.sections can contain both Section and Paragraph
                     current_chapter.sections.append(current_paragraph)
                     current_chapter.children_ids.append(current_paragraph.element_id)
+
                 hierarchy.append(current_paragraph)
                 current_subsection = None
                 logger.debug(f"Found paragraph: {current_paragraph.legal_reference}")
@@ -735,6 +871,8 @@ class LegalDocumentReader:
         self.format_readers = {
             'pdf': PDFReader(),
             'docx': DOCXReader(),
+            'odt': ODTReader(),
+            'rtf': RTFReader(),
             'xml': XMLReader(),
             'txt': TXTReader()
         }
@@ -827,6 +965,8 @@ class LegalDocumentReader:
             '.pdf': 'pdf',
             '.docx': 'docx',
             '.doc': 'docx',
+            '.odt': 'odt',
+            '.rtf': 'rtf',
             '.xml': 'xml',
             '.txt': 'txt',
             '.md': 'txt'

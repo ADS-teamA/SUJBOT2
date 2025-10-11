@@ -1,24 +1,88 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowDown } from 'lucide-react';
 import { useChatStore } from '@/stores/chatStore';
 import { BotMessage } from './BotMessage';
 import { UserMessage } from './UserMessage';
 import { ChatInput } from './ChatInput';
+import { Button } from './ui/button';
 
 export const ChatArea: React.FC = () => {
   const { messages, sendMessage } = useChatStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const isAutoScrollingRef = useRef(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (force = false) => {
+    // Only auto-scroll if user hasn't manually scrolled up, or if forced
+    if (force || !userScrolledRef.current) {
+      const container = scrollContainerRef.current;
+      if (container) {
+        isAutoScrollingRef.current = true;
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
+        // Reset flag after animation completes
+        setTimeout(() => {
+          isAutoScrollingRef.current = false;
+        }, 500);
+      }
+    }
+  };
+
+  const handleScroll = () => {
+    // Ignore scroll events triggered by auto-scrolling
+    if (isAutoScrollingRef.current) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+    // Detect user-initiated upward scroll
+    const scrollingUp = scrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = scrollTop;
+
+    if (scrollingUp && !isAtBottom) {
+      // User is actively scrolling up - disable auto-scroll
+      userScrolledRef.current = true;
+      setShowScrollButton(true);
+    } else if (isAtBottom) {
+      // User scrolled back to bottom - re-enable auto-scroll
+      userScrolledRef.current = false;
+      setShowScrollButton(false);
+    }
+  };
+
+  const handleScrollToBottomClick = () => {
+    userScrolledRef.current = false;
+    setShowScrollButton(false);
+    scrollToBottom(true);
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Only auto-scroll for new messages, not on initial load
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages.length]); // Only trigger on message count change, not content updates
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-white via-gray-50 to-white dark:from-black dark:via-gray-950 dark:to-black transition-all duration-500">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="h-full flex flex-col relative bg-gradient-to-br from-white via-gray-50 to-white dark:from-black dark:via-gray-950 dark:to-black transition-all duration-500">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-4 scroll-smooth"
+        style={{
+          scrollBehavior: 'smooth',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch'
+        }}
+      >
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
             <div className="text-center animate-fade-in-up">
@@ -44,6 +108,20 @@ export const ChatArea: React.FC = () => {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Scroll to bottom button - positioned above ChatInput */}
+      {showScrollButton && (
+        <div className="absolute bottom-[100px] right-8 z-10 animate-fade-in">
+          <Button
+            onClick={handleScrollToBottomClick}
+            size="icon"
+            className="rounded-full shadow-lg bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all hover:scale-110"
+            aria-label="Scroll to bottom"
+          >
+            <ArrowDown className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+          </Button>
+        </div>
+      )}
 
       <ChatInput onSend={sendMessage} />
     </div>

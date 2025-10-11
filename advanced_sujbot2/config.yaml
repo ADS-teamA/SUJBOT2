@@ -118,6 +118,8 @@ document_processing:
     - docx
     - txt
     - md
+    - odt
+    - rtf
 
   # OCR settings
   enable_ocr: false  # Enable OCR for scanned PDFs

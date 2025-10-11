@@ -62,7 +62,8 @@ embeddings:
   # - "BAAI/bge-small-en-v1.5"  # Better quality
   # - "all-mpnet-base-v2"  # Best quality (slower)
 
-  device: "cpu"  # cpu | cuda | mps (Apple Silicon)
+  # Device selection with automatic fallback: auto (cuda > mps > cpu)
+  device: "auto"  # auto | cuda | mps | cpu
   normalize: true  # required for FAISS IndexFlatIP
   batch_size: 32
 

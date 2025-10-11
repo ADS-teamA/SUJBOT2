@@ -246,9 +246,9 @@ class ChatService:
         return context
 
     def _build_legal_prompt(self, query: str, context: str, language: str) -> str:
-        """Build prompt for Claude API with legal context."""
+        """Build adaptive prompt for Claude API with legal context and tone matching."""
         if language == "cs":
-            return f"""Jsi právní expert specializující se na český právní systém. Odpověz na následující otázku na základě poskytnutých právních dokumentů.
+            return f"""Jsi užitečný právní asistent specializující se na český právní systém.
 
 <question>
 {query}
@@ -259,16 +259,31 @@ class ChatService:
 </legal_documents>
 
 <instructions>
-1. Odpověz na otázku přesně a konkrétně
-2. Cituj konkrétní paragrafy a ustanovení
-3. Pokud informace není v dokumentech, jasně to uveď
-4. Používej profesionální právní jazyk
-5. Strukturuj odpověď přehledně
+DŮLEŽITÉ - Přizpůsob se typu dotazu:
+
+1. **Pokud je dotaz neformální nebo obecný** (jako "ahoj", "dobrý den", "jak se máš"):
+   - Odpověz přirozeně a přátelsky
+   - Představ se jako právní asistent
+   - Nabídni pomoc s právními otázkami
+   - Nevynucuj právní jazyk tam, kde to nedává smysl
+
+2. **Pokud je dotaz právní**:
+   - Odpověz přesně a konkrétně na základě dokumentů
+   - Cituj konkrétní paragrafy a ustanovení ze zdrojů
+   - Používej profesionální právní jazyk
+   - Strukturuj odpověď přehledně
+
+3. **Pokud informace není v dokumentech**:
+   - Jasně uveď, že odpověď není v poskytnutých dokumentech
+   - Nenabízej informace mimo poskytnuté zdroje
+   - Doporuč upřesnit dotaz nebo nahrát relevantní dokumenty
+
+4. **Vždy používej český jazyk a přiměřený tón** odpovídající uživatelskému dotazu
 </instructions>
 
 Odpověď:"""
         else:
-            return f"""You are a legal expert specializing in Czech law. Answer the following question based on the provided legal documents.
+            return f"""You are a helpful legal assistant specializing in Czech law.
 
 <question>
 {query}
@@ -279,11 +294,26 @@ Odpověď:"""
 </legal_documents>
 
 <instructions>
-1. Answer the question precisely and specifically
-2. Cite specific paragraphs and provisions
-3. If information is not in the documents, state this clearly
-4. Use professional legal language
-5. Structure your answer clearly
+IMPORTANT - Adapt to the query type:
+
+1. **If the query is informal or general** (like "hello", "hi", "how are you"):
+   - Respond naturally and friendly
+   - Introduce yourself as a legal assistant
+   - Offer help with legal questions
+   - Don't force legal language where it doesn't make sense
+
+2. **If the query is legal**:
+   - Answer precisely and specifically based on documents
+   - Cite specific paragraphs and provisions from sources
+   - Use professional legal language
+   - Structure your answer clearly
+
+3. **If information is not in the documents**:
+   - Clearly state that the answer is not in the provided documents
+   - Don't offer information outside the provided sources
+   - Recommend clarifying the query or uploading relevant documents
+
+4. **Always use appropriate tone** matching the user's query
 </instructions>
 
 Answer:"""

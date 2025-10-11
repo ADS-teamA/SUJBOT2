@@ -65,7 +65,7 @@ class Config:
         },
         "embeddings": {
             "model": "sentence-transformers/all-MiniLM-L6-v2",
-            "device": "cpu",
+            "device": "auto",  # auto (cuda > mps > cpu) | cuda | mps | cpu
             "normalize": True,
             "batch_size": 32,
         },

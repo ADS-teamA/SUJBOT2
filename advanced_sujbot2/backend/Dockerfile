@@ -24,6 +24,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Note: src/ directory is mounted via volume in docker-compose
+# (not copied at build time to avoid build context issues)
+
 # Create necessary directories including model cache
 RUN mkdir -p /app/uploads /app/indexes /app/logs /app/models
 

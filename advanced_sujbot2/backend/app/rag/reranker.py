@@ -28,6 +28,21 @@ import networkx as nx
 import numpy as np
 from sentence_transformers import CrossEncoder
 
+try:
+    from .device_utils import get_device
+except ImportError:
+    # Fallback if device_utils not available
+    def get_device(device_str: str) -> str:
+        """Simple fallback device selection"""
+        if device_str == "auto":
+            import torch
+            if torch.cuda.is_available():
+                return "cuda"
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                return "mps"
+            return "cpu"
+        return device_str
+
 
 # ============================================================================
 # Data Structures
@@ -133,6 +148,12 @@ class RerankingConfig:
     explain_reranking: bool = True
 
     # Score calibration (for cross-encoder normalization)
+    # Min-max normalization bounds for mMiniLMv2 model
+    # Typical range: -2.0 to +2.0 (can be adjusted based on empirical data)
+    cross_encoder_score_min: float = -3.0  # Conservative lower bound
+    cross_encoder_score_max: float = 3.0   # Conservative upper bound
+
+    # Legacy sigmoid normalization parameters (deprecated)
     cross_encoder_score_mean: float = 0.0
     cross_encoder_score_std: float = 5.0
 
@@ -202,21 +223,28 @@ class CrossEncoderReranker:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
+        # Resolve device (convert "auto" to actual device)
+        self.device = get_device(config.cross_encoder_device)
+
         try:
             self.model = CrossEncoder(
                 config.cross_encoder_model,
-                device=config.cross_encoder_device,
+                device=self.device,
                 max_length=config.cross_encoder_max_length
             )
             self.logger.info(
                 f"Loaded cross-encoder model: {config.cross_encoder_model} "
-                f"on device: {config.cross_encoder_device}"
+                f"on device: {self.device}"
             )
         except Exception as e:
             self.logger.error(f"Failed to load cross-encoder model: {e}")
             raise
 
-        # Score normalization params (calibrated on validation set)
+        # Score normalization params (min-max bounds for mMiniLMv2)
+        self.score_min = config.cross_encoder_score_min
+        self.score_max = config.cross_encoder_score_max
+
+        # Legacy sigmoid params (for backward compatibility)
         self.score_mean = config.cross_encoder_score_mean
         self.score_std = config.cross_encoder_score_std
 
@@ -309,8 +337,8 @@ class CrossEncoderReranker:
     def _normalize_scores(self, scores: np.ndarray) -> np.ndarray:
         """Normalize cross-encoder logits to [0, 1] range.
 
-        Uses sigmoid transformation with calibrated mean/std parameters.
-        Raw cross-encoder scores are typically in range [-15, +15].
+        Uses min-max normalization with calibrated bounds.
+        For mmarco-mMiniLMv2-L12-H384-v1, typical range is [-2, +2].
 
         Args:
             scores: Raw logit scores from cross-encoder
@@ -318,18 +346,27 @@ class CrossEncoderReranker:
         Returns:
             Normalized scores in [0, 1]
         """
-        # Z-score normalization
-        z_scores = (scores - self.score_mean) / self.score_std
+        # Log actual score range for calibration
+        actual_min = float(scores.min())
+        actual_max = float(scores.max())
+        if actual_min < self.score_min or actual_max > self.score_max:
+            self.logger.warning(
+                f"Cross-encoder scores outside calibrated range: "
+                f"actual=[{actual_min:.2f}, {actual_max:.2f}], "
+                f"expected=[{self.score_min:.2f}, {self.score_max:.2f}]. "
+                f"Consider adjusting cross_encoder_score_min/max in config."
+            )
 
-        # Sigmoid transformation
-        normalized = 1 / (1 + np.exp(-z_scores))
+        # Min-max normalization with clipping
+        normalized = (scores - self.score_min) / (self.score_max - self.score_min)
+        normalized = np.clip(normalized, 0.0, 1.0)
 
         return normalized
 
     def get_confidence(self, score: float) -> float:
         """Estimate confidence in cross-encoder score.
 
-        Higher absolute scores (further from decision boundary) = higher confidence.
+        Higher absolute scores (further from decision boundary 0.5) = higher confidence.
 
         Args:
             score: Normalized cross-encoder score [0, 1]
@@ -337,12 +374,11 @@ class CrossEncoderReranker:
         Returns:
             Confidence estimate [0, 1]
         """
-        # Convert back to raw score
-        raw_score = score * self.score_std + self.score_mean
-
-        # Confidence based on distance from decision boundary (0)
-        confidence = min(1.0, abs(raw_score) / 10.0)  # Max at |score| = 10
-        return confidence
+        # Confidence based on distance from decision boundary (0.5)
+        # score=0.0 or 1.0 → confidence=1.0
+        # score=0.5 → confidence=0.0
+        confidence = abs(2.0 * score - 1.0)
+        return float(confidence)
 
 
 # ============================================================================

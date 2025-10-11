@@ -1,8 +1,6 @@
 # Docker Compose - Monitoring Stack
 # Prometheus + Grafana for metrics and visualization
 
-version: '3.8'
-
 services:
   # Prometheus - Metrics collection
   prometheus:

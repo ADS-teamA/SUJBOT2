@@ -40,19 +40,48 @@ class ComplianceService:
         Returns:
             Report response or None if not found
         """
-        # In production, query Celery result backend
-        # For now, load from file
+        # Load from file (saved by Celery task)
         report_path = os.path.join(self.reports_dir, f"{task_id}.json")
 
         if not os.path.exists(report_path):
-            # Check if task is still running (mock)
-            return ComplianceReportResponse(
-                task_id=task_id,
-                status="processing",
-                progress=50,
-                report=None
-            )
+            # Check Celery task status
+            from celery.result import AsyncResult
+            from app.core.celery_app import celery_app
 
+            result = AsyncResult(task_id, app=celery_app)
+
+            if result.state == "PENDING":
+                return ComplianceReportResponse(
+                    task_id=task_id,
+                    status="pending",
+                    progress=0,
+                    report=None
+                )
+            elif result.state == "STARTED" or result.state == "PROGRESS":
+                # Get progress from task
+                info = result.info or {}
+                progress = info.get("current", 0)
+                message = info.get("message", "Processing...")
+
+                return ComplianceReportResponse(
+                    task_id=task_id,
+                    status="processing",
+                    progress=progress,
+                    report=None
+                )
+            elif result.state == "FAILURE":
+                return ComplianceReportResponse(
+                    task_id=task_id,
+                    status="failed",
+                    progress=0,
+                    report=None,
+                    error_message=str(result.info)
+                )
+            else:
+                # Unknown state, report not found
+                return None
+
+        # Load completed report from file
         with open(report_path, 'r') as f:
             data = json.load(f)
 

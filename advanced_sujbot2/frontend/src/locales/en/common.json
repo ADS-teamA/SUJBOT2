@@ -3,6 +3,8 @@
     "contract": "Upload Contract",
     "law": "Upload Law",
     "dragDrop": "Drag and drop or click",
+    "dragDropDescription": "Upload PDF, DOCX or TXT documents",
+    "orClickToSelect": "or click to select files",
     "processing": "Processing...",
     "button": "Upload File"
   },
@@ -22,7 +24,8 @@
       "uploaded": "Uploaded",
       "processing": "Processing",
       "indexed": "Indexed",
-      "error": "Error"
+      "error": "Error",
+      "cancelled": "Cancelled"
     }
   },
   "panel": {
@@ -59,5 +62,27 @@
     "success": "Success",
     "cancel": "Cancel",
     "close": "Close"
+  },
+  "toast": {
+    "upload": {
+      "started": "Uploading document {{filename}}",
+      "success": "Document {{filename}} uploaded and indexed successfully",
+      "error": "Upload error: {{error}}",
+      "cancelled": "Processing of document {{filename}} was cancelled"
+    },
+    "document": {
+      "removed": "Document {{filename}} removed",
+      "removeError": "Removal error: {{error}}"
+    },
+    "websocket": {
+      "connecting": "Connecting to server...",
+      "reconnected": "Connection restored",
+      "connectionFailed": "Failed to connect to server",
+      "error": "Communication error: {{message}}"
+    },
+    "api": {
+      "error": "API Error",
+      "missingClaudeKey": "Missing Claude API key in backend configuration"
+    }
   }
 }

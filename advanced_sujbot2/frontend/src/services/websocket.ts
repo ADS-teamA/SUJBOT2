@@ -1,9 +1,12 @@
+import { useToastStore } from '@/stores/toastStore';
+
 class ChatWebSocketService {
   private ws: WebSocket | null = null;
   private messageHandlers: Array<(message: any) => void> = [];
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private url: string = '';
+  private hasShownConnectionError = false;
 
   connect(url: string): void {
     this.url = url;
@@ -14,17 +17,30 @@ class ChatWebSocketService {
       this.ws.onopen = () => {
         console.log('✅ WebSocket connected');
         this.reconnectAttempts = 0;
+        this.hasShownConnectionError = false;
+
+        // Show success toast on reconnection (but not on initial connection)
+        if (this.reconnectAttempts > 0) {
+          useToastStore.getState().success('toast.websocket.reconnected');
+        }
       };
 
       this.ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+
+        // Handle error messages from backend
+        if (data.type === 'error') {
+          useToastStore.getState().error('toast.websocket.error', { message: data.message });
+        }
+
         this.messageHandlers.forEach(handler => handler(data));
       };
 
-      this.ws.onerror = (error) => {
-        // Suppress error logging during reconnect attempts
-        if (this.reconnectAttempts === 0) {
-          console.warn('WebSocket connection error (will retry)');
+      this.ws.onerror = () => {
+        // Show error toast only once per connection attempt
+        if (!this.hasShownConnectionError) {
+          useToastStore.getState().warning('toast.websocket.connecting');
+          this.hasShownConnectionError = true;
         }
       };
 
@@ -46,6 +62,9 @@ class ChatWebSocketService {
       const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
       console.log(`Reconnecting in ${delay}ms...`);
       setTimeout(() => this.connect(this.url), delay);
+    } else {
+      // Show error toast if max reconnection attempts reached
+      useToastStore.getState().error('toast.websocket.connectionFailed');
     }
   }
 

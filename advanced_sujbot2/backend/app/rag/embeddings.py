@@ -11,6 +11,8 @@ import torch
 from sentence_transformers import SentenceTransformer
 from dataclasses import dataclass, field
 
+from .device_utils import get_device
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +56,7 @@ class EmbeddingConfig:
 
     # Model settings
     model_name: str = "BAAI/bge-m3"
-    device: str = "cpu"  # cpu | cuda | mps
+    device: str = "auto"  # auto | cuda | mps | cpu (auto = cuda > mps > cpu)
     batch_size: int = 32
     max_sequence_length: int = 8192
     normalize: bool = True
@@ -83,13 +85,15 @@ class LegalEmbedder:
         self._initialize_model()
 
     def _get_device(self) -> str:
-        """Determine the best available device"""
-        if self.config.device == "cuda" and torch.cuda.is_available():
-            return "cuda"
-        elif self.config.device == "mps" and torch.backends.mps.is_available():
-            return "mps"
-        else:
-            return "cpu"
+        """
+        Determine the best available device with automatic fallback.
+
+        Priority: CUDA → MPS → CPU
+
+        Returns:
+            Device string: "cuda", "mps", or "cpu"
+        """
+        return get_device(self.config.device)
 
     def _initialize_model(self):
         """Load the embedding model"""
@@ -115,7 +119,8 @@ class LegalEmbedder:
     async def embed_chunks(
         self,
         chunks: List[LegalChunk],
-        add_context: Optional[bool] = None
+        add_context: Optional[bool] = None,
+        progress_callback: Optional[callable] = None
     ) -> np.ndarray:
         """
         Generate embeddings for chunks with optional context
@@ -123,6 +128,7 @@ class LegalEmbedder:
         Args:
             chunks: List of legal chunks
             add_context: Whether to add hierarchical context (uses config default if None)
+            progress_callback: Optional callback(current, total) for embedding progress
 
         Returns:
             Normalized embedding matrix (N x 1024)
@@ -144,7 +150,8 @@ class LegalEmbedder:
         try:
             embeddings = await asyncio.to_thread(
                 self._encode_texts,
-                texts
+                texts,
+                progress_callback
             )
             return embeddings
 
@@ -152,17 +159,51 @@ class LegalEmbedder:
             logger.error(f"Failed to generate embeddings: {e}")
             raise EmbeddingError(f"Embedding generation failed: {e}")
 
-    def _encode_texts(self, texts: List[str]) -> np.ndarray:
+    def _encode_texts(self, texts: List[str], progress_callback: Optional[callable] = None) -> np.ndarray:
         """Encode texts using the model (runs in thread)"""
-        embeddings = self.model.encode(
-            texts,
-            batch_size=self.config.batch_size,
-            normalize_embeddings=self.config.normalize,
-            show_progress_bar=self.config.show_progress_bar,
-            device=self.device,
-            convert_to_numpy=True
-        )
-        return embeddings
+        # If we have a progress callback, we need to manually handle batch processing
+        # to call the callback after each batch
+        if progress_callback and len(texts) > 0:
+            from tqdm import tqdm
+            import numpy as np
+
+            batch_size = self.config.batch_size
+            total_batches = (len(texts) + batch_size - 1) // batch_size
+            all_embeddings = []
+
+            # Process in batches with progress callback
+            for batch_idx in range(0, len(texts), batch_size):
+                batch_texts = texts[batch_idx:batch_idx + batch_size]
+
+                # Encode this batch
+                batch_embeddings = self.model.encode(
+                    batch_texts,
+                    batch_size=batch_size,
+                    normalize_embeddings=self.config.normalize,
+                    show_progress_bar=False,  # Disable tqdm, use our callback
+                    device=self.device,
+                    convert_to_numpy=True
+                )
+
+                all_embeddings.append(batch_embeddings)
+
+                # Call progress callback
+                current_batch = (batch_idx // batch_size) + 1
+                progress_callback(current_batch, total_batches)
+
+            # Stack all batches
+            return np.vstack(all_embeddings) if all_embeddings else np.array([])
+        else:
+            # Original behavior when no callback
+            embeddings = self.model.encode(
+                texts,
+                batch_size=self.config.batch_size,
+                normalize_embeddings=self.config.normalize,
+                show_progress_bar=self.config.show_progress_bar,
+                device=self.device,
+                convert_to_numpy=True
+            )
+            return embeddings
 
     def _contextualize(self, chunk: LegalChunk) -> str:
         """

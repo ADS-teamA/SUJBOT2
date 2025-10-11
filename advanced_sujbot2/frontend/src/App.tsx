@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { TopBar } from './components/TopBar';
 import { DocumentPanel } from './components/DocumentPanel';
 import { ChatArea } from './components/ChatArea';
+import { Toaster } from './components/Toaster';
 import { chatWebSocket } from './services/websocket';
 import { useChatStore } from './stores/chatStore';
 import { useUIStore } from './stores/uiStore';
@@ -57,6 +58,8 @@ function App() {
         <ChatArea />
         <DocumentPanel type="law" />
       </div>
+
+      <Toaster />
     </div>
   );
 }

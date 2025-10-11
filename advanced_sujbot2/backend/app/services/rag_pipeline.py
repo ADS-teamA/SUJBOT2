@@ -117,7 +117,7 @@ class RAGPipeline:
             from app.rag.embeddings import EmbeddingConfig
             embedding_config = EmbeddingConfig(
                 model_name="BAAI/bge-m3",
-                device="cpu",
+                device="auto",  # Auto-detect: CUDA > MPS > CPU
                 batch_size=32,
                 max_sequence_length=8192,
                 normalize=True,
@@ -132,7 +132,7 @@ class RAGPipeline:
         """Lazy load vector store."""
         if self._vector_store is None:
             logger.info("Initializing vector store...")
-            from app.rag.indexing import VectorStoreConfig
+            from app.rag.indexing import VectorStoreConfig, IndexPersistence
             vector_config = VectorStoreConfig(
                 index_type="flat",
                 vector_size=1024,
@@ -142,6 +142,40 @@ class RAGPipeline:
                 embedder=self.embedding_service,
                 config=vector_config
             )
+
+            # Load existing indices from disk
+            logger.info("Loading existing indices from disk...")
+            persistence = IndexPersistence(self.index_dir)
+            existing_docs = persistence.list_documents()
+
+            if existing_docs:
+                logger.info(f"Found {len(existing_docs)} existing indices")
+                import asyncio
+                for doc_id in existing_docs:
+                    try:
+                        index, metadata, chunks, ref_map = asyncio.run(persistence.load(doc_id))
+
+                        # Load into vector store
+                        self._vector_store.indices[doc_id] = index
+                        self._vector_store.metadata_stores[doc_id] = {
+                            chunk.chunk_id: chunk for chunk in chunks
+                        }
+                        self._vector_store.document_info[doc_id] = metadata
+
+                        # Merge reference maps
+                        if ref_map:
+                            for ref, chunk_ids in ref_map.ref_to_chunks.items():
+                                self._vector_store.reference_map.ref_to_chunks[ref].extend(chunk_ids)
+                            self._vector_store.reference_map.chunk_to_refs.update(ref_map.chunk_to_refs)
+
+                        logger.info(f"Loaded index for {doc_id}: {len(chunks)} chunks")
+                    except Exception as e:
+                        logger.error(f"Failed to load index for {doc_id}: {e}")
+
+                logger.info(f"Successfully loaded {len(self._vector_store.indices)} indices")
+            else:
+                logger.info("No existing indices found")
+
             logger.info("Vector store ready")
         return self._vector_store
 
@@ -217,7 +251,7 @@ class RAGPipeline:
             reranking_config = RerankingConfig(
                 cross_encoder_model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
                 cross_encoder_batch_size=16,
-                cross_encoder_device="cpu",
+                cross_encoder_device="auto",  # Auto-detect: CUDA > MPS > CPU
                 cross_encoder_max_length=512,
                 enable_graph_reranking=False,  # Disable for now (no knowledge graph ready yet)
                 enable_precedence_weighting=True,
@@ -287,11 +321,14 @@ class RAGPipeline:
                 logger.info(f"[{current}/{total}] {message}")
 
             update_progress(0, 100, "Starting indexing...")
+            update_progress(5, 100, "Initializing document reader...")
 
             # Step 1: Read document
             update_progress(10, 100, "Reading document...")
             import asyncio
+            update_progress(15, 100, "Parsing document structure...")
             doc = asyncio.run(self.document_reader.read_legal_document(str(doc_path), document_type))
+            update_progress(22, 100, "Extracting text content...")
 
             # Convert LegalDocument to metadata dict
             # Note: Keep structure and references as objects to avoid recursion issues
@@ -311,11 +348,13 @@ class RAGPipeline:
             if not doc_metadata:
                 raise DocumentProcessingError("Failed to extract document metadata")
 
-            update_progress(20, 100, "Document read successfully")
+            update_progress(28, 100, "Document read successfully")
 
             # Step 2: Chunk document
-            update_progress(30, 100, "Chunking document...")
+            update_progress(32, 100, "Initializing chunker...")
+            update_progress(35, 100, "Chunking document...")
             chunks = asyncio.run(self.chunker.chunk(doc))
+            update_progress(48, 100, "Analyzing chunk boundaries...")
 
             # Fallback: if no chunks created, use simple text-based chunking
             if len(chunks) == 0:
@@ -342,23 +381,65 @@ class RAGPipeline:
 
             chunk_count = len(chunks)
             logger.info(f"Generated {chunk_count} chunks")
-            update_progress(50, 100, f"Generated {chunk_count} chunks")
+            update_progress(52, 100, f"Generated {chunk_count} chunks")
 
             # Step 3: Generate embeddings and build index
-            update_progress(60, 100, "Generating embeddings...")
+            update_progress(55, 100, "Initializing embedding model...")
             index_path = self.index_dir / document_id
             index_path.mkdir(parents=True, exist_ok=True)
 
-            # Add chunks to vector store
+            # Create simple progress callback for chunk batch processing
+            # Map embedding progress from 55% to 85% (30% of total time)
+            EMBEDDING_START = 55
+            EMBEDDING_END = 85
+            EMBEDDING_RANGE = EMBEDDING_END - EMBEDDING_START
+
+            def embedding_batch_progress(chunks_processed, total_chunks):
+                """
+                Track progress through chunk batches with smooth linear progression.
+
+                Args:
+                    chunks_processed: Number of chunks processed so far
+                    total_chunks: Total number of chunks to process
+                """
+                if total_chunks == 0:
+                    update_progress(EMBEDDING_END, 100, "No chunks to process")
+                    return
+
+                # Calculate linear progress from 55% to 85%
+                chunk_progress = chunks_processed / total_chunks
+                overall_progress = EMBEDDING_START + int(chunk_progress * EMBEDDING_RANGE)
+                overall_progress = min(overall_progress, EMBEDDING_END)  # Cap at 85%
+
+                # Create descriptive message
+                message = f"Generating embeddings: {chunks_processed}/{total_chunks} chunks"
+
+                update_progress(overall_progress, 100, message)
+
+            # Add chunks to vector store with simple progress tracking
             asyncio.run(self.vector_store.add_document(
                 document_id=document_id,
                 document_type=document_type,
-                chunks=chunks
+                chunks=chunks,
+                progress_callback=embedding_batch_progress
             ))
-            update_progress(80, 100, "Embeddings generated")
+            update_progress(85, 100, "Embeddings generated and indexed")
 
-            # Persist index (handled by add_document internally, skip for now)
-            update_progress(95, 100, "Index built successfully")
+            # Persist index to disk
+            update_progress(85, 100, "Preparing index for storage...")
+            update_progress(88, 100, "Saving index to disk...")
+            from app.rag.indexing import IndexPersistence
+            persistence = IndexPersistence(self.index_dir)
+            asyncio.run(persistence.save(
+                document_id=document_id,
+                index=self.vector_store.indices[document_id],
+                metadata=self.vector_store.document_info[document_id],
+                chunks=chunks,
+                reference_map=self.vector_store.reference_map
+            ))
+            logger.info(f"Index persisted to {self.index_dir / document_id}")
+            update_progress(93, 100, "Index built and saved successfully")
+            update_progress(96, 100, "Finalizing...")
 
             index_metadata = {
                 "vector_count": len(chunks),

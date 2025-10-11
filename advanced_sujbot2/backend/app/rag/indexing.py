@@ -167,7 +167,8 @@ class MultiDocumentVectorStore:
         document_id: str,
         document_type: str,
         metadata: Optional[Dict[str, Any]] = None,
-        batch_size: int = 100
+        batch_size: int = 100,
+        progress_callback: Optional[callable] = None
     ):
         """
         Add document to store with batch processing for memory efficiency
@@ -178,13 +179,15 @@ class MultiDocumentVectorStore:
             document_type: Type of document (law_code, contract, etc.)
             metadata: Additional document metadata
             batch_size: Number of chunks to process at once (default: 100)
+            progress_callback: Optional callback(chunks_processed, total_chunks)
         """
         if not chunks:
             logger.warning(f"No chunks provided for document {document_id}")
             return
 
         total_chunks = len(chunks)
-        logger.info(f"Adding document {document_id} with {total_chunks} chunks (batch_size={batch_size})")
+        total_batches = (total_chunks + batch_size - 1) // batch_size
+        logger.info(f"Adding document {document_id} with {total_chunks} chunks in {total_batches} batches (batch_size={batch_size})")
 
         # 1. Create/get index for this document
         if document_id not in self.indices:
@@ -197,11 +200,15 @@ class MultiDocumentVectorStore:
         for batch_start in range(0, total_chunks, batch_size):
             batch_end = min(batch_start + batch_size, total_chunks)
             batch_chunks = chunks[batch_start:batch_end]
+            batch_num = (batch_start // batch_size) + 1
 
-            logger.info(f"Processing batch {batch_start//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size}: chunks {batch_start}-{batch_end-1}")
+            logger.info(f"Processing batch {batch_num}/{total_batches}: chunks {batch_start}-{batch_end-1}")
 
-            # Generate embeddings for this batch
-            batch_embeddings = await self.embedder.embed_chunks(batch_chunks)
+            # Generate embeddings for this batch (no sub-batch progress for smoother UI)
+            batch_embeddings = await self.embedder.embed_chunks(
+                batch_chunks,
+                progress_callback=None  # Don't pass embedding-level progress to avoid flickering
+            )
 
             # Add to index immediately
             self.indices[document_id].add(batch_embeddings)
@@ -210,6 +217,10 @@ class MultiDocumentVectorStore:
             all_embeddings.append(batch_embeddings)
 
             logger.info(f"Batch complete: added {len(batch_chunks)} chunks to index")
+
+            # Report progress after batch completion for smooth progression
+            if progress_callback:
+                progress_callback(batch_end, total_chunks)
 
         # 3. Store metadata for all chunks
         self.metadata_stores[document_id] = {
@@ -422,6 +433,22 @@ class MultiDocumentVectorStore:
     def get_document_info(self, document_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a document"""
         return self.document_info.get(document_id)
+
+    def get_document_chunks(self, document_id: str) -> List[LegalChunk]:
+        """
+        Get all chunks for a document from metadata store.
+
+        This method is used by structural matching in cross-document retrieval
+        to iterate through target document chunks.
+
+        Args:
+            document_id: Document identifier
+
+        Returns:
+            List of all chunks for the document (empty if not found)
+        """
+        metadata_store = self.metadata_stores.get(document_id, {})
+        return list(metadata_store.values())
 
 
 class IndexPersistence:

@@ -107,8 +107,11 @@ class Chapter(StructuralElement):
 
 @dataclass
 class Section(StructuralElement):
-    """Generic section - can be paragraph or article"""
-    pass
+    """Section (Díl) - third-level division in laws between Chapter and Paragraph"""
+
+    number: str = ""  # Roman numeral: "I", "II", etc.
+    chapter: Optional[Chapter] = None
+    paragraphs: List['Paragraph'] = field(default_factory=list)
 
 
 @dataclass
@@ -117,6 +120,7 @@ class Paragraph(StructuralElement):
 
     number: int = 0  # Arabic numeral: 1, 2, 89, etc.
     chapter: Optional[Chapter] = None
+    section: Optional[Section] = None  # Parent Section (Díl) if exists
     subsections: List['Subsection'] = field(default_factory=list)
 
     # Content classification

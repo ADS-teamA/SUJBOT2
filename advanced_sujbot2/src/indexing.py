@@ -188,10 +188,22 @@ class MultiDocumentVectorStore:
 
         # 2. Create/get index for this document
         if document_id not in self.indices:
-            self.indices[document_id] = self._create_faiss_index()
+            # For IVF index, pass embeddings for automatic training
+            if self.config.index_type == 'ivf':
+                logger.info(f"Creating and training IVF index for {document_id}")
+                self.indices[document_id] = self._create_faiss_index(training_vectors=embeddings)
+            else:
+                self.indices[document_id] = self._create_faiss_index()
 
         # 3. Add to index
-        self.indices[document_id].add(embeddings)
+        index = self.indices[document_id]
+
+        # For IVF index, check if it's trained before adding
+        if self.config.index_type == 'ivf' and not index.is_trained:
+            logger.warning(f"IVF index for {document_id} not trained, training now...")
+            index.train(embeddings)
+
+        index.add(embeddings)
 
         # 4. Store metadata
         self.metadata_stores[document_id] = {
@@ -404,6 +416,22 @@ class MultiDocumentVectorStore:
     def get_document_info(self, document_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a document"""
         return self.document_info.get(document_id)
+
+    def get_document_chunks(self, document_id: str) -> List[LegalChunk]:
+        """
+        Get all chunks for a document from metadata store.
+
+        This method is used by structural matching in cross-document retrieval
+        to iterate through target document chunks.
+
+        Args:
+            document_id: Document identifier
+
+        Returns:
+            List of all chunks for the document (empty if not found)
+        """
+        metadata_store = self.metadata_stores.get(document_id, {})
+        return list(metadata_store.values())
 
 
 class IndexPersistence:

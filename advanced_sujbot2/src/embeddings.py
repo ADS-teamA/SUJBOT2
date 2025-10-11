@@ -11,6 +11,8 @@ import torch
 from sentence_transformers import SentenceTransformer
 from dataclasses import dataclass, field
 
+from .device_utils import get_device
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +56,7 @@ class EmbeddingConfig:
 
     # Model settings
     model_name: str = "BAAI/bge-m3"
-    device: str = "cpu"  # cpu | cuda | mps
+    device: str = "auto"  # auto | cuda | mps | cpu (auto = cuda > mps > cpu)
     batch_size: int = 32
     max_sequence_length: int = 8192
     normalize: bool = True
@@ -83,13 +85,15 @@ class LegalEmbedder:
         self._initialize_model()
 
     def _get_device(self) -> str:
-        """Determine the best available device"""
-        if self.config.device == "cuda" and torch.cuda.is_available():
-            return "cuda"
-        elif self.config.device == "mps" and torch.backends.mps.is_available():
-            return "mps"
-        else:
-            return "cpu"
+        """
+        Determine the best available device with automatic fallback.
+
+        Priority: CUDA → MPS → CPU
+
+        Returns:
+            Device string: "cuda", "mps", or "cpu"
+        """
+        return get_device(self.config.device)
 
     def _initialize_model(self):
         """Load the embedding model"""

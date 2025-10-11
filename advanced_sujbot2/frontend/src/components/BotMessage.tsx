@@ -1,12 +1,14 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Bot } from 'lucide-react';
+import { Loader2, Bot, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage, Source } from '@/types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { formatTimestamp } from '@/utils/date';
+import { useChatStore } from '@/stores/chatStore';
 
 interface BotMessageProps {
   message: ChatMessage;
@@ -15,9 +17,14 @@ interface BotMessageProps {
 
 export const BotMessage: React.FC<BotMessageProps> = ({ message, onCitationClick }) => {
   const { t } = useTranslation();
+  const { regenerateResponse, isTyping } = useChatStore();
+
+  const handleRegenerate = () => {
+    regenerateResponse(message.id);
+  };
 
   return (
-    <div className="flex gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+    <div className="group flex gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
       <Avatar>
         <AvatarFallback className="bg-primary text-white">
           <Bot className="h-5 w-5" />
@@ -59,9 +66,23 @@ export const BotMessage: React.FC<BotMessageProps> = ({ message, onCitationClick
           </div>
         )}
 
-        <p className="text-xs text-gray-500 mt-2">
-          {formatTimestamp(message.timestamp)}
-        </p>
+        <div className="flex items-center gap-2 mt-2">
+          <p className="text-xs text-gray-500">
+            {formatTimestamp(message.timestamp)}
+          </p>
+          {!message.isStreaming && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="opacity-0 group-hover:opacity-100 transition-opacity h-6 px-2"
+              onClick={handleRegenerate}
+              disabled={isTyping}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Regenerate
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

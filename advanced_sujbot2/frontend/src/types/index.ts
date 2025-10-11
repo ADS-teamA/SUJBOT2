@@ -1,6 +1,6 @@
 export type DocumentFormat = 'pdf' | 'docx' | 'txt' | 'md' | 'odt' | 'rtf' | 'html' | 'epub';
 
-export type DocumentStatus = 'uploading' | 'uploaded' | 'processing' | 'indexed' | 'error';
+export type DocumentStatus = 'uploading' | 'uploaded' | 'processing' | 'indexed' | 'error' | 'cancelled';
 
 export interface Document {
   id: string;
