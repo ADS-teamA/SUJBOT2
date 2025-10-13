@@ -20,7 +20,7 @@ from .reranker import CrossEncoderReranker
 
 # Analysis
 from .knowledge_graph import LegalKnowledgeGraph
-from .compliance_analyzer import ComplianceAnalyzer
+from .advanced_compliance_pipeline import AdvancedCompliancePipeline, ComplianceReport, ComplianceIssue
 
 # Configuration
 from .config import Config
@@ -52,7 +52,9 @@ __all__ = [
     "CrossEncoderReranker",
     # Analysis
     "LegalKnowledgeGraph",
-    "ComplianceAnalyzer",
+    "AdvancedCompliancePipeline",
+    "ComplianceReport",
+    "ComplianceIssue",
     # Config
     "Config",
     # Exceptions

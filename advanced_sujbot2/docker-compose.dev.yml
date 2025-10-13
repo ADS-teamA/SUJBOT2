@@ -2,6 +2,29 @@
 # Hot reload enabled, debug mode, ports exposed
 
 services:
+  # PostgreSQL with pgvector - Vector database
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: sujbot2_postgres_dev
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=sujbot2
+      - POSTGRES_USER=sujbot_app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_this_password}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sujbot_app -d sujbot2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sujbot2_network
+    restart: unless-stopped
+
   # Redis - Message broker & cache
   redis:
     image: redis:7.2-alpine
@@ -32,7 +55,13 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=sujbot2
+      - POSTGRES_USER=sujbot_app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_this_password}
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173","http://192.168.65.1:3000"]
       - ENVIRONMENT=development
       - DEBUG=true
       - LOG_LEVEL=DEBUG
@@ -42,8 +71,8 @@ services:
     volumes:
       - ./backend:/app  # Hot reload
       - ./src:/app/src  # Mount src/ for compliance modules
-      - uploads_dev:/app/uploads
-      - indexes_dev:/app/indexes
+      - ./backend/uploads:/app/uploads  # Use bind mount for correct permissions
+      - ./backend/indexes:/app/indexes  # Use bind mount for correct permissions
       - ./backend/logs:/app/logs
       - model_cache:/app/models
     deploy:
@@ -53,6 +82,8 @@ services:
         reservations:
           memory: 2G
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -70,6 +101,11 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=sujbot2
+      - POSTGRES_USER=sujbot_app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_this_password}
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - ENVIRONMENT=development
       - LOG_LEVEL=DEBUG
@@ -79,8 +115,8 @@ services:
     volumes:
       - ./backend:/app
       - ./src:/app/src  # Mount src/ for compliance modules
-      - uploads_dev:/app/uploads
-      - indexes_dev:/app/indexes
+      - ./backend/uploads:/app/uploads  # Use bind mount for correct permissions
+      - ./backend/indexes:/app/indexes  # Use bind mount for correct permissions
       - ./backend/logs:/app/logs
       - model_cache:/app/models
     deploy:
@@ -90,11 +126,20 @@ services:
         reservations:
           memory: 6G
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_app inspect ping -d celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - sujbot2_network
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=1 --max-tasks-per-child=1
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=1 --max-tasks-per-child=1 -E
 
   # Celery Flower (monitoring)
   flower:
@@ -119,6 +164,12 @@ services:
     depends_on:
       - redis
       - celery_worker
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5555/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - sujbot2_network
     restart: unless-stopped
@@ -143,6 +194,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres_data_dev:
+    driver: local
   redis_data_dev:
     driver: local
   uploads_dev:

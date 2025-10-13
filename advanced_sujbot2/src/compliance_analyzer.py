@@ -18,7 +18,7 @@ import logging
 import time
 from typing import List, Dict, Any, Optional
 
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 
 from .compliance_types import ComplianceReport
 from .requirement_extractor import RequirementExtractor
@@ -36,7 +36,7 @@ class ComplianceAnalyzer:
         self,
         config: Dict[str, Any],
         cross_doc_retriever: Optional[Any] = None,
-        llm_client: Optional[Anthropic] = None
+        llm_client: Optional[AsyncAnthropic] = None
     ):
         """
         Initialize ComplianceAnalyzer.
@@ -44,7 +44,7 @@ class ComplianceAnalyzer:
         Args:
             config: Configuration dictionary
             cross_doc_retriever: ComparativeRetriever instance for cross-document search
-            llm_client: Anthropic client for LLM operations
+            llm_client: AsyncAnthropic client for LLM operations
         """
         self.config = config
         self.llm = llm_client or self._create_llm_client()
@@ -69,13 +69,13 @@ class ComplianceAnalyzer:
         self.logger = logging.getLogger(__name__)
         self.llm_calls_count = 0
 
-    def _create_llm_client(self) -> Anthropic:
-        """Create Anthropic client from environment variables."""
+    def _create_llm_client(self) -> AsyncAnthropic:
+        """Create AsyncAnthropic client from environment variables."""
         import os
         api_key = os.getenv('CLAUDE_API_KEY') or os.getenv('ANTHROPIC_API_KEY')
         if not api_key:
             raise ValueError("CLAUDE_API_KEY or ANTHROPIC_API_KEY environment variable must be set")
-        return Anthropic(api_key=api_key)
+        return AsyncAnthropic(api_key=api_key)
 
     async def analyze_compliance(
         self,
@@ -194,7 +194,7 @@ async def analyze_contract_compliance(
     law_ids: List[str],
     config: Optional[Dict[str, Any]] = None,
     cross_doc_retriever: Optional[Any] = None,
-    llm_client: Optional[Anthropic] = None,
+    llm_client: Optional[AsyncAnthropic] = None,
     mode: str = "exhaustive"
 ) -> ComplianceReport:
     """
@@ -207,7 +207,7 @@ async def analyze_contract_compliance(
         law_ids: List of law document IDs
         config: Configuration dictionary (optional)
         cross_doc_retriever: Cross-document retriever (optional)
-        llm_client: Anthropic client (optional, will create from env if not provided)
+        llm_client: AsyncAnthropic client (optional, will create from env if not provided)
         mode: Analysis mode ('exhaustive' or 'sample')
 
     Returns:

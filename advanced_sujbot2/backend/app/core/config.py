@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
+    # PostgreSQL Database
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "sujbot2"
+    POSTGRES_USER: str = "sujbot_app"
+    POSTGRES_PASSWORD: str = ""
+
     # File storage
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500 MB

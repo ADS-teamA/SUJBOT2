@@ -20,4 +20,5 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=50,
     result_expires=3600,  # Results expire after 1 hour
+    broker_connection_retry_on_startup=True,  # Celery 6.0+ compatibility
 )

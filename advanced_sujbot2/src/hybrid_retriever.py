@@ -144,8 +144,13 @@ class RetrievalConfig:
 # ============================================================================
 
 # Import real implementations from other modules
-from .indexing import MultiDocumentVectorStore
-from .embeddings import LegalEmbedder
+try:
+    from .indexing import MultiDocumentVectorStore
+    from .embeddings import LegalEmbedder
+except ImportError:
+    # Support both package and direct imports
+    from indexing import MultiDocumentVectorStore
+    from embeddings import LegalEmbedder
 
 
 class LegalReferenceExtractor:

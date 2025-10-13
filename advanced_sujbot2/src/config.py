@@ -229,24 +229,100 @@ class Config:
 
     def _load_from_env(self) -> None:
         """Load configuration overrides from environment variables."""
-        # Claude API key
+        # ===== LLM Configuration =====
         api_key = os.getenv("CLAUDE_API_KEY")
         if api_key:
             if "llm" not in self._config:
                 self._config["llm"] = {}
             self._config["llm"]["api_key"] = api_key
 
-        # Main model
         main_model = os.getenv("MAIN_AGENT_MODEL")
         if main_model:
             self._config["llm"]["main_model"] = main_model
 
-        # Sub model
         sub_model = os.getenv("SUBAGENT_MODEL")
         if sub_model:
             self._config["llm"]["sub_model"] = sub_model
 
-        # Logging level
+        self._load_env_float("LLM_TEMPERATURE", "llm.temperature")
+        self._load_env_int("LLM_MAX_TOKENS", "llm.max_tokens")
+        self._load_env_int("LLM_TIMEOUT", "llm.timeout")
+
+        # ===== Retrieval Configuration =====
+        self._load_env_float("RETRIEVAL_SEMANTIC_WEIGHT", "retrieval.semantic_weight")
+        self._load_env_float("RETRIEVAL_KEYWORD_WEIGHT", "retrieval.keyword_weight")
+        self._load_env_float("RETRIEVAL_STRUCTURAL_WEIGHT", "retrieval.structural_weight")
+        self._load_env_int("RETRIEVAL_TOP_K", "retrieval.top_k")
+        self._load_env_float("RETRIEVAL_CANDIDATE_MULTIPLIER", "retrieval.candidate_multiplier")
+        self._load_env_bool("RETRIEVAL_NORMALIZE_SCORES", "retrieval.normalize_scores")
+        self._load_env_str("RETRIEVAL_NORMALIZATION_METHOD", "retrieval.normalization_method")
+        self._load_env_float("RETRIEVAL_MIN_SCORE_THRESHOLD", "retrieval.min_score_threshold")
+        self._load_env_float("RETRIEVAL_BM25_K1", "retrieval.bm25.k1")
+        self._load_env_float("RETRIEVAL_BM25_B", "retrieval.bm25.b")
+        self._load_env_bool("RETRIEVAL_ADAPTIVE_WEIGHTS", "retrieval.adaptive_weights")
+        self._load_env_float("RETRIEVAL_REFERENCE_BOOST", "retrieval.reference_boost")
+        self._load_env_bool("RETRIEVAL_ENABLE_CACHING", "retrieval.enable_caching")
+        self._load_env_bool("RETRIEVAL_PARALLEL", "retrieval.parallel_retrieval")
+
+        # ===== Embedding Configuration =====
+        self._load_env_str("EMBEDDING_MODEL", "embeddings.model")
+        self._load_env_str("EMBEDDING_DEVICE", "embeddings.device")
+        self._load_env_int("EMBEDDING_BATCH_SIZE", "embeddings.batch_size")
+        self._load_env_int("EMBEDDING_MAX_SEQ_LENGTH", "embeddings.max_sequence_length")
+        self._load_env_bool("EMBEDDING_NORMALIZE", "embeddings.normalize")
+
+        # ===== Reranking Configuration =====
+        self._load_env_str("RERANKING_MODEL", "reranking.cross_encoder_model")
+        self._load_env_str("RERANKING_DEVICE", "reranking.cross_encoder_device")
+        self._load_env_int("RERANKING_BATCH_SIZE", "reranking.cross_encoder_batch_size")
+        self._load_env_int("RERANKING_MAX_LENGTH", "reranking.cross_encoder_max_length")
+        self._load_env_float("RERANKING_SCORE_MIN", "reranking.cross_encoder_score_min")
+        self._load_env_float("RERANKING_SCORE_MAX", "reranking.cross_encoder_score_max")
+        self._load_env_float("RERANKING_GRAPH_PROXIMITY_WEIGHT", "reranking.graph_proximity_weight")
+        self._load_env_float("RERANKING_GRAPH_CENTRALITY_WEIGHT", "reranking.graph_centrality_weight")
+        self._load_env_float("RERANKING_GRAPH_AUTHORITY_WEIGHT", "reranking.graph_authority_weight")
+        self._load_env_int("RERANKING_MAX_HOP_DISTANCE", "reranking.max_hop_distance")
+        self._load_env_float("RERANKING_PRECEDENCE_CONSTITUTIONAL", "reranking.precedence_weights.constitutional")
+        self._load_env_float("RERANKING_PRECEDENCE_STATUTORY", "reranking.precedence_weights.statutory")
+        self._load_env_float("RERANKING_PRECEDENCE_REGULATORY", "reranking.precedence_weights.regulatory")
+        self._load_env_float("RERANKING_PRECEDENCE_CONTRACTUAL", "reranking.precedence_weights.contractual")
+        self._load_env_float("RERANKING_PRECEDENCE_GUIDANCE", "reranking.precedence_weights.guidance")
+        self._load_env_float("RERANKING_TEMPORAL_DECAY", "reranking.temporal_decay_factor")
+        self._load_env_float("RERANKING_ENSEMBLE_CROSS_ENCODER", "reranking.ensemble_weights.cross_encoder")
+        self._load_env_float("RERANKING_ENSEMBLE_GRAPH", "reranking.ensemble_weights.graph")
+        self._load_env_float("RERANKING_ENSEMBLE_PRECEDENCE", "reranking.ensemble_weights.precedence")
+        self._load_env_int("RERANKING_FINAL_TOP_K", "reranking.final_top_k")
+        self._load_env_float("RERANKING_MIN_CONFIDENCE", "reranking.min_confidence_threshold")
+        self._load_env_bool("RERANKING_EXPLAIN", "reranking.explain_reranking")
+
+        # ===== Cross-Document Retrieval =====
+        self._load_env_float("CROSS_DOC_EXPLICIT_WEIGHT", "cross_document.explicit_weight")
+        self._load_env_float("CROSS_DOC_SEMANTIC_WEIGHT", "cross_document.semantic_weight")
+        self._load_env_float("CROSS_DOC_STRUCTURAL_WEIGHT", "cross_document.structural_weight")
+        self._load_env_float("CROSS_DOC_SEMANTIC_THRESHOLD", "cross_document.semantic_similarity_threshold")
+        self._load_env_float("CROSS_DOC_STRUCTURAL_THRESHOLD", "cross_document.structural_similarity_threshold")
+        self._load_env_float("CROSS_DOC_MIN_SIMILARITY", "cross_document.min_similarity")
+        self._load_env_int("CROSS_DOC_MAX_CROSS_REFS", "cross_document.max_cross_references")
+        self._load_env_int("CROSS_DOC_MAX_SIMILAR_PROVISIONS", "cross_document.max_similar_provisions")
+        self._load_env_int("CROSS_DOC_TOP_K", "cross_document.top_k_per_source")
+        self._load_env_bool("CROSS_DOC_COMPUTE_SIMILARITY_MATRIX", "cross_document.compute_similarity_matrix")
+
+        # ===== Knowledge Graph =====
+        self._load_env_bool("ENABLE_KNOWLEDGE_GRAPH", "knowledge_graph.enable")
+        self._load_env_float("SEMANTIC_LINK_THRESHOLD", "knowledge_graph.semantic_link_threshold")
+        self._load_env_bool("KNOWLEDGE_GRAPH_BUILD_ON_INDEXING", "knowledge_graph.build_on_indexing")
+        self._load_env_bool("KNOWLEDGE_GRAPH_INCLUDE_CROSS_DOC_LINKS", "knowledge_graph.include_cross_document_links")
+        self._load_env_int("KNOWLEDGE_GRAPH_MAX_LINKS", "knowledge_graph.max_links_per_node")
+        self._load_env_int("KNOWLEDGE_GRAPH_MAX_HOPS", "knowledge_graph.max_hops")
+        self._load_env_float("KNOWLEDGE_GRAPH_BOOST_FACTOR", "knowledge_graph.graph_boost_factor")
+
+        # ===== Chunking =====
+        self._load_env_int("CHUNKING_MIN_SIZE", "chunking.min_chunk_size")
+        self._load_env_int("CHUNKING_MAX_SIZE", "chunking.max_chunk_size")
+        self._load_env_int("CHUNKING_TARGET_SIZE", "chunking.target_chunk_size")
+        self._load_env_float("CHUNKING_OVERLAP", "chunking.chunk_overlap")
+
+        # ===== Logging Configuration =====
         log_level = os.getenv("LOG_LEVEL") or os.getenv("VERBOSE_LOGGING")
         if log_level:
             if log_level.lower() in ["true", "1", "yes"]:
@@ -254,7 +330,7 @@ class Config:
             elif log_level.upper() in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
                 self._config["api"]["logging"]["level"] = log_level.upper()
 
-        # Max parallel agents
+        # ===== Performance =====
         max_parallel = os.getenv("MAX_PARALLEL_AGENTS")
         if max_parallel:
             try:
@@ -262,16 +338,45 @@ class Config:
             except ValueError:
                 logger.warning(f"Invalid MAX_PARALLEL_AGENTS value: {max_parallel}")
 
-        # Enable question decomposition
+        # ===== Feature Flags =====
         enable_decomp = os.getenv("ENABLE_QUESTION_DECOMPOSITION")
         if enable_decomp:
             self._config["retrieval"]["enable_query_decomposition"] = enable_decomp.lower() in ["true", "1", "yes"]
 
-        # Tokenizers parallelism
+        # ===== Tokenizers =====
         tokenizers_parallel = os.getenv("TOKENIZERS_PARALLELISM")
         if tokenizers_parallel:
-            # Just set it back to environment for libraries to use
             os.environ["TOKENIZERS_PARALLELISM"] = tokenizers_parallel
+
+    def _load_env_str(self, env_key: str, config_path: str) -> None:
+        """Load string value from environment variable."""
+        value = os.getenv(env_key)
+        if value:
+            self.set(config_path, value)
+
+    def _load_env_int(self, env_key: str, config_path: str) -> None:
+        """Load integer value from environment variable."""
+        value = os.getenv(env_key)
+        if value:
+            try:
+                self.set(config_path, int(value))
+            except ValueError:
+                logger.warning(f"Invalid integer value for {env_key}: {value}")
+
+    def _load_env_float(self, env_key: str, config_path: str) -> None:
+        """Load float value from environment variable."""
+        value = os.getenv(env_key)
+        if value:
+            try:
+                self.set(config_path, float(value))
+            except ValueError:
+                logger.warning(f"Invalid float value for {env_key}: {value}")
+
+    def _load_env_bool(self, env_key: str, config_path: str) -> None:
+        """Load boolean value from environment variable."""
+        value = os.getenv(env_key)
+        if value:
+            self.set(config_path, value.lower() in ["true", "1", "yes", "on"])
 
     def _validate(self) -> None:
         """

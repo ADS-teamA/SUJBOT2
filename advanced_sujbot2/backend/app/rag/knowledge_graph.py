@@ -116,7 +116,7 @@ class GraphEdge:
 class LegalKnowledgeGraph:
     """Knowledge graph for legal documents."""
 
-    def __init__(self):
+    def __init__(self, config: Optional[Any] = None):
         # NetworkX directed graph
         self.graph = nx.DiGraph()
 
@@ -125,6 +125,7 @@ class LegalKnowledgeGraph:
         self.reference_index: Dict[str, List[str]] = {}  # legal_ref → [node_ids]
         self.document_index: Dict[str, List[str]] = {}   # doc_id → [node_ids]
 
+        self.config = config
         self.logger = logging.getLogger(__name__)
 
     def add_node(self, node: GraphNode) -> None:

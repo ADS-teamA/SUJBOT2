@@ -48,10 +48,11 @@ retrieval:
 
 embeddings:
   # Model selection
-  model: "BAAI/bge-m3"  # 1024-dim multilingual embeddings
+  model: "joelniklaus/legal-xlm-roberta-base"  # 768-dim multilingual legal embeddings (trained on MultiLegalPile with Czech legal texts)
   # Alternatives:
-  # - "intfloat/multilingual-e5-large" (1024 dim)
-  # - "sentence-transformers/paraphrase-multilingual-mpnet" (768 dim)
+  # - "joelniklaus/legal-czech-roberta-base" (768 dim, Czech-only legal)
+  # - "BAAI/bge-m3" (1024 dim, general multilingual - requires schema change)
+  # - "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" (384 dim, fast)
 
   # Device configuration
   device: "cpu"  # cpu | cuda | mps (Apple Silicon)
@@ -59,7 +60,7 @@ embeddings:
   # Embedding parameters
   normalize: true  # L2 normalization (required for FAISS IndexFlatIP)
   batch_size: 32  # Batch size for embedding generation
-  max_sequence_length: 8192  # Maximum tokens per chunk
+  max_sequence_length: 512  # RoBERTa maximum tokens per chunk
 
   # Contextualization
   add_context: true  # Include hierarchy in embeddings
@@ -189,20 +190,44 @@ reranking:
   # Enable reranking
   enable: true
 
-  # Reranking model
-  model: "cross-encoder/mmarco-mMiniLMv2-L6-H384"  # Multilingual cross-encoder
+  # Cross-encoder model settings
+  cross_encoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Smaller, faster model (6 layers vs 12)
+  cross_encoder_batch_size: 16
+  cross_encoder_device: "mps"  # cpu | cuda | mps (auto = cuda > mps > cpu)
+  cross_encoder_max_length: 512
 
-  # Reranking parameters
-  top_k: 5  # Number of results after reranking
-  batch_size: 32
+  # Score calibration (for cross-encoder normalization)
+  cross_encoder_score_min: -3.0  # Min-max normalization lower bound
+  cross_encoder_score_max: 3.0   # Min-max normalization upper bound
 
   # Graph-aware reranking
-  enable_graph_aware: true
-  graph_proximity_weight: 0.3  # Weight of graph proximity in final score
+  enable_graph_reranking: true
+  graph_proximity_weight: 0.4    # Weight of graph proximity (0-1)
+  graph_centrality_weight: 0.3   # Weight of betweenness centrality (0-1)
+  graph_authority_weight: 0.3    # Weight of PageRank authority (0-1)
+  max_hop_distance: 3            # Maximum hops for proximity calculation
 
-  # Legal precedence
-  enable_legal_precedence: true
-  precedence_weight: 0.2  # Weight of legal precedence in final score
+  # Legal precedence weighting
+  enable_precedence_weighting: true
+  precedence_weights:
+    constitutional: 1.0  # Ústava, Listina
+    statutory: 0.9       # Zákony
+    regulatory: 0.7      # Vyhlášky, nařízení
+    contractual: 0.5     # Smlouvy
+    guidance: 0.3        # Metodiky
+  temporal_decay_factor: 0.95  # Favor newer laws (lex posterior)
+
+  # Ensemble fusion
+  ensemble_method: "weighted_average"  # weighted_average | borda_count | rrf
+  ensemble_weights:
+    cross_encoder: 0.5  # Semantic relevance weight
+    graph: 0.3          # Graph structure weight
+    precedence: 0.2     # Legal hierarchy weight
+
+  # Output settings
+  final_top_k: 64                    # Number of final results to return
+  min_confidence_threshold: 0.1     # Minimum confidence for result inclusion
+  explain_reranking: true           # Generate human-readable explanations
 
 
 # ============================================================================
@@ -218,13 +243,25 @@ cross_document:
   enable_semantic_matching: true    # Match by semantic similarity
   enable_structural_matching: true   # Match by structural patterns
 
+  # Strategy weights (must sum to 1.0)
+  explicit_weight: 0.5     # Weight for explicit reference matches
+  semantic_weight: 0.3     # Weight for semantic similarity matches
+  structural_weight: 0.2   # Weight for structural pattern matches
+
   # Similarity thresholds
-  semantic_similarity_threshold: 0.75
-  structural_similarity_threshold: 0.6
+  semantic_similarity_threshold: 0.75  # Minimum cosine similarity for semantic matches
+  structural_similarity_threshold: 0.6  # Minimum score for structural matches
+
+  # Min similarity for semantic matching
+  min_similarity: 0.5  # Lower bound for considering a semantic match
 
   # Result limits
   max_cross_references: 10
   max_similar_provisions: 5
+  top_k_per_source: 10  # Number of target matches per source chunk
+
+  # Performance
+  compute_similarity_matrix: false  # Compute full NxM similarity matrix (expensive)
 
 
 # ============================================================================
@@ -283,6 +320,9 @@ knowledge_graph:
   # Graph-based retrieval
   enable_graph_retrieval: true
   proximity_scoring: true
+
+  # Graph boosting for reranking
+  graph_boost_factor: 1.2  # Multiply scores by this for important graph nodes (1.0 = no boost)
 
 
 # ============================================================================

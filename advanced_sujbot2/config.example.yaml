@@ -53,8 +53,8 @@ reranking:
 # Embeddings Configuration (for hybrid retrieval)
 # ============================================================================
 embeddings:
-  # Model: BAAI/bge-m3 (multilingual, Czech support)
-  model: "BAAI/bge-m3"
+  # Model: joelniklaus/legal-xlm-roberta-base (Czech legal-specialized, trained on MultiLegalPile)
+  model: "joelniklaus/legal-xlm-roberta-base"
   device: "cpu"  # cpu | cuda | mps
   normalize: true
   batch_size: 32

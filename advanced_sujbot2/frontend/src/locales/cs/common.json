@@ -45,6 +45,9 @@
     }
   },
   "sources": "Zdroje",
+  "source": "zdroj",
+  "context": "Kontext",
+  "processing": "Zpracovávám",
   "contract": "Smlouva",
   "law": "Zákon",
   "language": {
@@ -78,6 +81,7 @@
       "connecting": "Připojování k serveru...",
       "reconnected": "Připojení obnoveno",
       "connectionFailed": "Nepodařilo se připojit k serveru",
+      "notConnected": "Nejste připojeni k serveru. Připojuji...",
       "error": "Chyba komunikace: {{message}}"
     },
     "api": {

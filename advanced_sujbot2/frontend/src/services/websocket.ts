@@ -69,12 +69,24 @@ class ChatWebSocketService {
   }
 
   sendMessage(message: string, documentIds?: string[]): void {
+    console.log('🚀 Sending message via WebSocket', { message: message.substring(0, 50), documentIds, readyState: this.ws?.readyState });
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
+      const payload = {
         type: 'chat_message',
         content: message,
         document_ids: documentIds || []
-      }));
+      };
+      console.log('📤 WebSocket payload:', payload);
+      this.ws.send(JSON.stringify(payload));
+    } else {
+      console.error('❌ WebSocket not ready! ReadyState:', this.ws?.readyState);
+      useToastStore.getState().error('toast.websocket.notConnected');
+
+      // Try to reconnect
+      if (this.url && this.ws?.readyState !== WebSocket.CONNECTING) {
+        console.log('🔄 Attempting to reconnect...');
+        this.connect(this.url);
+      }
     }
   }
 

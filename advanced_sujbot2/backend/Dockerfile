@@ -27,14 +27,21 @@ COPY . .
 # Note: src/ directory is mounted via volume in docker-compose
 # (not copied at build time to avoid build context issues)
 
-# Create necessary directories including model cache
-RUN mkdir -p /app/uploads /app/indexes /app/logs /app/models
+# Create non-root user for security
+RUN useradd -m -u 1000 -s /bin/bash appuser
+
+# Create necessary directories including model cache with proper permissions
+RUN mkdir -p /app/uploads /app/indexes /app/logs /app/models /app/models/hub /app/models/sentence-transformers && \
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app/models
 
 # Set environment variables for HuggingFace cache
 ENV HF_HOME=/app/models
-ENV TRANSFORMERS_CACHE=/app/models/transformers
 ENV SENTENCE_TRANSFORMERS_HOME=/app/models/sentence-transformers
 ENV TOKENIZERS_PARALLELISM=false
+
+# Switch to non-root user
+USER appuser
 
 # Health check endpoint
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

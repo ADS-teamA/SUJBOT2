@@ -298,31 +298,23 @@ class DocumentService:
                 logger.error(f"Failed to cancel task {task_id}: {e}")
                 # Continue with deletion even if task cancellation fails
 
-        # STEP 2: Remove from vector store (in-memory)
+        # STEP 2: Remove from PostgreSQL vector store
         try:
             from app.services.rag_pipeline import get_rag_pipeline
             rag_pipeline = get_rag_pipeline()
 
-            # Remove from vector store indices
-            if document_id in rag_pipeline.vector_store.indices:
-                del rag_pipeline.vector_store.indices[document_id]
-                logger.info(f"Removed FAISS index for {document_id} from memory")
-
-            # Remove from metadata stores
-            if document_id in rag_pipeline.vector_store.metadata_stores:
-                del rag_pipeline.vector_store.metadata_stores[document_id]
-                logger.info(f"Removed metadata store for {document_id} from memory")
-
-            # Remove from document info
-            if document_id in rag_pipeline.vector_store.document_info:
-                del rag_pipeline.vector_store.document_info[document_id]
-                logger.info(f"Removed document info for {document_id} from memory")
+            # Use the delete_document method from PostgreSQLVectorStore
+            # This will delete from PostgreSQL and update in-memory cache
+            import asyncio
+            asyncio.run(rag_pipeline.vector_store.delete_document(document_id))
+            logger.info(f"Removed document {document_id} from PostgreSQL vector store")
 
         except Exception as e:
             logger.error(f"Failed to remove {document_id} from vector store: {e}")
             # Continue with deletion
 
-        # STEP 3: Delete FAISS index directory from disk
+        # STEP 3: Delete index directory from disk (if exists - legacy FAISS support)
+        # Note: PostgreSQL stores data in database, but may have cached files
         index_path = os.path.join(self.index_dir, document_id)
         if os.path.exists(index_path):
             try:

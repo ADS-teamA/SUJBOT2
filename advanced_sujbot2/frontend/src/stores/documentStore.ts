@@ -142,7 +142,14 @@ export const useDocumentStore = create<DocumentStore>()(
               useToastStore.getState().success('toast.document.removed', { filename: doc?.filename || '' });
             })
             .catch((error) => {
-              // If backend deletion fails, add document back (rollback optimistic update)
+              // If document doesn't exist (404), that's fine - it's already gone
+              if (error?.response?.status === 404) {
+                console.log(`Document ${id} already deleted from backend`);
+                useToastStore.getState().success('toast.document.removed', { filename: doc?.filename || '' });
+                return;
+              }
+
+              // For other errors, rollback the optimistic update
               if (doc) {
                 set((state) => ({
                   [type === 'contract' ? 'contracts' : 'laws']: [
@@ -323,6 +330,30 @@ export const useDocumentStore = create<DocumentStore>()(
           const allDocs = [...state.contracts, ...state.laws];
 
           allDocs.forEach(doc => {
+            // Check if document exists on backend (for all documents, not just processing ones)
+            const checkDocument = async () => {
+              try {
+                await getDocumentStatus(doc.id);
+              } catch (error: any) {
+                // If document doesn't exist (404), remove it from localStorage
+                if (error?.response?.status === 404) {
+                  console.log(`Document ${doc.id} no longer exists on backend, removing from localStorage`);
+                  const state = get();
+                  const isContract = state.contracts.some(d => d.id === doc.id);
+                  const type = isContract ? 'contract' : 'law';
+
+                  // Remove from store silently (no API call, no toast)
+                  set((state) => ({
+                    [type === 'contract' ? 'contracts' : 'laws']:
+                      state[type === 'contract' ? 'contracts' : 'laws'].filter(d => d.id !== doc.id),
+                    selectedDocumentIds: state.selectedDocumentIds.filter(docId => docId !== doc.id)
+                  }));
+                }
+              }
+            };
+
+            checkDocument();
+
             if (doc.status === 'uploaded' || doc.status === 'processing' || doc.status === 'uploading') {
               // Resume polling for this document
               const pollStatus = async () => {

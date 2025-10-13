@@ -1,6 +1,7 @@
 """
-Legal Document Embedder - BGE-M3 Model
+Legal Document Embedder - Legal XLM-RoBERTa Model
 Generates contextualized embeddings for legal chunks with hierarchical context
+Uses Czech legal-specialized RoBERTa trained on MultiLegalPile corpus
 """
 
 import asyncio
@@ -55,10 +56,10 @@ class EmbeddingConfig:
     """Configuration for embedding generation"""
 
     # Model settings
-    model_name: str = "BAAI/bge-m3"
+    model_name: str = "joelniklaus/legal-xlm-roberta-base"
     device: str = "auto"  # auto | cuda | mps | cpu (auto = cuda > mps > cpu)
     batch_size: int = 32
-    max_sequence_length: int = 8192
+    max_sequence_length: int = 512  # Legal XLM-RoBERTa max length
     normalize: bool = True
 
     # Contextualization
@@ -70,7 +71,7 @@ class EmbeddingConfig:
 
 
 class LegalEmbedder:
-    """Generate contextualized embeddings for legal chunks using BGE-M3"""
+    """Generate contextualized embeddings for legal chunks using Legal XLM-RoBERTa (Czech legal-specialized)"""
 
     def __init__(self, config: Optional[EmbeddingConfig] = None):
         """
@@ -131,7 +132,7 @@ class LegalEmbedder:
             progress_callback: Optional callback(current, total) for embedding progress
 
         Returns:
-            Normalized embedding matrix (N x 1024)
+            Normalized embedding matrix (N x 768)
         """
         if not chunks:
             return np.array([])
@@ -237,7 +238,7 @@ class LegalEmbedder:
             query: Search query string
 
         Returns:
-            Normalized query embedding (1 x 1024)
+            Normalized query embedding (1 x 768)
         """
         try:
             # Create a temporary chunk for the query
@@ -261,7 +262,7 @@ class LegalEmbedder:
     def get_embedding_dimension(self) -> int:
         """Get the dimension of the embeddings"""
         if self.model is None:
-            return 1024  # BGE-M3 default
+            return 768  # Legal XLM-RoBERTa default
         return self.model.get_sentence_embedding_dimension()
 
 

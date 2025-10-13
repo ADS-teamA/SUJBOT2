@@ -2,11 +2,13 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from typing import Dict
 import json
+import logging
 from datetime import datetime
 
 from app.services.chat_service import ChatService
 from app.core.dependencies import get_chat_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -25,8 +27,10 @@ class ConnectionManager:
             websocket: WebSocket instance
             client_id: Unique client identifier
         """
+        logger.info(f"ConnectionManager.connect() called for client {client_id}")
         await websocket.accept()
         self.active_connections[client_id] = websocket
+        logger.info(f"Client {client_id} accepted and stored")
 
     def disconnect(self, client_id: str):
         """
@@ -53,6 +57,8 @@ class ConnectionManager:
         """
         Stream chunks to client.
 
+        Handles special status messages in format: __STATUS__{json}__STATUS__
+
         Args:
             client_id: Client identifier
             response_stream: Async iterator of response chunks
@@ -63,6 +69,25 @@ class ConnectionManager:
 
         try:
             async for chunk in response_stream:
+                # Check if chunk contains pipeline status
+                if "__STATUS__" in chunk:
+                    # Extract status JSON
+                    parts = chunk.split("__STATUS__")
+                    if len(parts) >= 3:  # Should be: ['', '{json}', '\n']
+                        status_json = parts[1]
+                        try:
+                            status_data = json.loads(status_json)
+                            # Send pipeline status as separate message
+                            await websocket.send_json(status_data)
+                        except json.JSONDecodeError:
+                            # If parsing fails, send as regular content
+                            await websocket.send_json({
+                                "type": "stream_chunk",
+                                "content": chunk
+                            })
+                    continue  # Don't send status markers to frontend
+
+                # Send regular content chunk
                 await websocket.send_json({
                     "type": "stream_chunk",
                     "content": chunk
@@ -105,14 +130,17 @@ async def websocket_chat(
     """
     # Generate client ID
     client_id = str(id(websocket))
+    logger.info(f"WebSocket handler started for client {client_id}")
 
     await manager.connect(websocket, client_id)
+    logger.info(f"Client {client_id} connected, waiting for messages...")
 
     try:
         while True:
             # Receive message
             data = await websocket.receive_text()
             message = json.loads(data)
+            logger.info(f"Received WebSocket message: type={message.get('type')}, content={message.get('content', '')[:50]}...")
 
             if message["type"] == "chat_message":
                 # Send acknowledgment
@@ -121,6 +149,8 @@ async def websocket_chat(
                     "timestamp": datetime.now().isoformat()
                 })
 
+                logger.info(f"Processing query with {len(message.get('document_ids', []))} documents")
+
                 # Process query and stream response
                 response_stream = chat_service.process_query_stream(
                     query=message["content"],
@@ -128,6 +158,7 @@ async def websocket_chat(
                 )
 
                 await manager.stream_response(client_id, response_stream)
+                logger.info("Query processing complete")
 
             elif message["type"] == "ping":
                 # Heartbeat
@@ -135,10 +166,10 @@ async def websocket_chat(
 
     except WebSocketDisconnect:
         manager.disconnect(client_id)
-        print(f"Client {client_id} disconnected")
+        logger.info(f"Client {client_id} disconnected")
 
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}", exc_info=True)
         await manager.send_message(client_id, {
             "type": "error",
             "message": str(e)

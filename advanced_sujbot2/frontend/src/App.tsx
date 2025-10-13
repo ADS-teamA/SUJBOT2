@@ -9,7 +9,7 @@ import { useUIStore } from './stores/uiStore';
 import { useDocumentStore } from './stores/documentStore';
 
 function App() {
-  const { updateStreamingMessage, finishStreaming } = useChatStore();
+  const { updateStreamingMessage, updatePipelineStatus, attachSources, finishStreaming } = useChatStore();
   const { theme } = useUIStore();
   const { resumePolling } = useDocumentStore();
 
@@ -33,11 +33,24 @@ function App() {
     const handleMessage = (data: any) => {
       if (data.type === 'stream_chunk') {
         updateStreamingMessage(data.content);
+      } else if (data.type === 'pipeline_status') {
+        // Update pipeline status
+        updatePipelineStatus({
+          pipeline: data.pipeline,
+          stage: data.stage,
+          stage_name: data.stage_name,
+          step: data.step,
+          total_steps: data.total_steps,
+          progress: data.progress,
+          message: data.message
+        });
+      } else if (data.type === 'sources') {
+        // Attach sources to current message
+        if (data.sources && Array.isArray(data.sources)) {
+          attachSources(data.sources);
+        }
       } else if (data.type === 'stream_complete') {
         finishStreaming();
-      } else if (data.type === 'sources') {
-        // Handle sources (already included in stream)
-        console.log('Received sources:', data.sources);
       }
     };
 
@@ -47,7 +60,7 @@ function App() {
       chatWebSocket.removeMessageHandler(handleMessage);
       chatWebSocket.disconnect();
     };
-  }, [updateStreamingMessage, finishStreaming]);
+  }, [updateStreamingMessage, updatePipelineStatus, attachSources, finishStreaming]);
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-black dark:to-gray-950 transition-all duration-500">

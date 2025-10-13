@@ -65,18 +65,22 @@ export const ChatArea: React.FC = () => {
   };
 
   useEffect(() => {
-    // Only auto-scroll for new messages, not on initial load
+    // Auto-scroll for new messages and during streaming
     if (messages.length > 0) {
-      scrollToBottom();
+      const lastMessage = messages[messages.length - 1];
+      // Auto-scroll if the last message is streaming or just added
+      if (lastMessage.isStreaming || !userScrolledRef.current) {
+        scrollToBottom();
+      }
     }
-  }, [messages.length]); // Only trigger on message count change, not content updates
+  }, [messages]); // Trigger on any message changes (new messages + streaming updates)
 
   return (
-    <div className="h-full flex flex-col relative bg-gradient-to-br from-white via-gray-50 to-white dark:from-black dark:via-gray-950 dark:to-black transition-all duration-500">
+    <div className="h-full flex flex-col relative overflow-hidden bg-gradient-to-br from-white via-gray-50 to-white dark:from-black dark:via-gray-950 dark:to-black transition-all duration-500">
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-4 scroll-smooth"
+        className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 scroll-smooth"
         style={{
           scrollBehavior: 'smooth',
           overscrollBehavior: 'contain',

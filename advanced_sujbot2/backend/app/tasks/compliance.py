@@ -16,9 +16,9 @@ from app.rag.indexing import MultiDocumentVectorStore
 from app.rag.embeddings import LegalEmbedder, EmbeddingConfig
 from app.rag.cross_doc_retrieval import ComparativeRetriever
 
-# Import compliance analyzer from app.rag
-from app.rag.compliance_analyzer import ComplianceAnalyzer
-from app.rag.models import ComplianceReport
+# Import new advanced compliance pipeline
+from app.rag.advanced_compliance_pipeline import AdvancedCompliancePipeline, ComplianceReport
+from anthropic import AsyncAnthropic
 
 logger = logging.getLogger(__name__)
 
@@ -154,74 +154,141 @@ async def _run_compliance_analysis(
 
     logger.info(f"Total law chunks: {len(all_law_chunks)}")
 
-    # Step 4: Initialize cross-document retriever
+    # Step 4: Build reference map from all chunks
+    task.update_progress(25, 100, "Building reference map...")
+
+    from app.rag.indexing import ReferenceMap
+    reference_map = ReferenceMap()
+    all_chunks = contract_chunks + all_law_chunks
+    await reference_map.build(all_chunks)
+
+    logger.info(f"Reference map built with {len(reference_map.references)} references")
+
+    # Step 5: Initialize cross-document retriever
     task.update_progress(30, 100, "Initializing cross-document retrieval...")
 
     cross_doc_retriever = ComparativeRetriever(
         vector_store=vector_store,
+        embedder=embedder,
+        reference_map=reference_map,
         config={}
     )
 
-    # Step 5: Initialize ComplianceAnalyzer
-    task.update_progress(35, 100, "Initializing compliance analyzer...")
+    # Step 6: Initialize AsyncAnthropic client
+    task.update_progress(35, 100, "Initializing LLM client...")
 
-    config = {
-        "compliance": {
-            "generate_recommendations": True,
-            "confidence_threshold": 0.7
+    if not settings.CLAUDE_API_KEY:
+        raise ValueError("CLAUDE_API_KEY not configured in environment")
+
+    llm_client = AsyncAnthropic(api_key=settings.CLAUDE_API_KEY)
+
+    # Step 7: Initialize AdvancedCompliancePipeline
+    task.update_progress(38, 100, "Initializing advanced compliance pipeline...")
+
+    pipeline_config = {
+        "pre_filter": {
+            "min_chunk_size": 50,
+            "max_chunk_size": 5000
+        },
+        "multi_round": {
+            "num_rounds": 2,
+            "final_top_k": 5
+        },
+        "haiku": {
+            "max_tokens": 1000,
+            "temperature": 0.1,
+            "high_confidence_threshold": 0.85,
+            "low_confidence_threshold": 0.60
+        },
+        "sonnet": {
+            "max_tokens": 3000,
+            "temperature": 0.1
         }
     }
 
-    analyzer = ComplianceAnalyzer(
-        config=config,
-        cross_doc_retriever=cross_doc_retriever
+    pipeline = AdvancedCompliancePipeline(
+        llm_client=llm_client,
+        comparative_retriever=cross_doc_retriever,
+        config=pipeline_config
     )
 
-    # Step 6: Run compliance analysis
-    task.update_progress(40, 100, "Running compliance analysis...")
+    # Step 8: Run advanced compliance analysis
+    task.update_progress(40, 100, "Starting compliance analysis pipeline...")
 
-    # Define progress callback
-    def analysis_progress(step: int, total: int, message: str):
-        # Map analysis steps (0-6) to progress range (40-95)
-        progress = 40 + int((step / total) * 55)
+    # Define progress callback for 5-stage pipeline
+    def analysis_progress(stage: int, total_stages: int, message: str):
+        # Map 5 stages to progress range (40-95)
+        # Stage 1 (pre-filter): 40-50
+        # Stage 2 (multi-round): 50-65
+        # Stage 3 (haiku): 65-75
+        # Stage 4 (sonnet): 75-90
+        # Stage 5 (report): 90-95
+        stage_ranges = {
+            1: (40, 50),
+            2: (50, 65),
+            3: (65, 75),
+            4: (75, 90),
+            5: (90, 95)
+        }
+        start, end = stage_ranges.get(stage, (40, 95))
+        progress = start + int((end - start) * 0.5)  # Mid-point of range
         task.update_progress(progress, 100, message)
 
-    # Monkey-patch logger to capture progress
+    # Monkey-patch logger to capture pipeline progress
     original_info = logger.info
     def info_with_progress(msg):
         original_info(msg)
-        if "Step" in msg:
-            # Parse "Step X/Y: message"
+        if "Stage" in msg:
+            # Parse "Stage X/Y: message"
             try:
                 parts = msg.split(":")
-                step_part = parts[0].split("/")
-                if len(step_part) == 2:
-                    current = int(step_part[0].replace("Step", "").strip())
-                    total = int(step_part[1].strip())
-                    message = ":".join(parts[1:]).strip()
-                    analysis_progress(current, total, message)
+                if "Stage" in parts[0]:
+                    stage_part = parts[0].split("/")
+                    if len(stage_part) == 2:
+                        current = int(stage_part[0].replace("Stage", "").strip())
+                        total = int(stage_part[1].strip())
+                        message = ":".join(parts[1:]).strip()
+                        analysis_progress(current, total, message)
             except:
                 pass
 
     logger.info = info_with_progress
 
     try:
-        report: ComplianceReport = await analyzer.analyze_compliance(
+        # Run compliance analysis against ALL provided laws
+        logger.info(f"Analyzing {len(contract_chunks)} contract chunks against {len(law_ids)} laws")
+        report: ComplianceReport = await pipeline.analyze_compliance(
             contract_chunks=contract_chunks,
-            law_chunks=all_law_chunks,
-            contract_id=contract_id,
             law_ids=law_ids,
-            mode=mode
+            contract_id=contract_id
         )
     finally:
         logger.info = original_info
 
-    # Step 7: Convert report to dictionary
+    # Step 9: Convert report to dictionary
     task.update_progress(95, 100, "Generating report...")
 
-    report_dict = report.to_dict()
+    # Convert dataclass to dict
+    from dataclasses import asdict
+    report_dict = asdict(report)
 
-    # Step 8: Save report
+    # Convert nested dataclasses and enums
+    def convert_nested(obj):
+        """Recursively convert dataclasses and enums to JSON-serializable format"""
+        if isinstance(obj, dict):
+            return {k: convert_nested(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_nested(item) for item in obj]
+        elif hasattr(obj, '__dict__'):  # dataclass or object
+            return convert_nested(asdict(obj) if hasattr(obj, '__dataclass_fields__') else obj.__dict__)
+        elif hasattr(obj, 'value'):  # enum
+            return obj.value
+        else:
+            return obj
+
+    report_dict = convert_nested(report_dict)
+
+    # Step 10: Save report
     reports_dir = os.path.join(settings.UPLOAD_DIR, "reports")
     os.makedirs(reports_dir, exist_ok=True)
 

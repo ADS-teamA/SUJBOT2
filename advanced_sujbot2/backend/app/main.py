@@ -7,13 +7,14 @@ import os
 import redis
 import logging
 
-from app.routers import documents, compliance, query, websocket
+from app.routers import documents, compliance, query, websocket, conversations
 from app.core.config import settings
 from app.middleware.logging import LoggingMiddleware
 
 # Configure logging
+log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 logging.basicConfig(
-    level=logging.INFO if settings.VERBOSE_LOGGING else logging.WARNING,
+    level=log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
@@ -121,6 +122,10 @@ app.include_router(
     websocket.router,
     prefix="/ws",
     tags=["websocket"]
+)
+app.include_router(
+    conversations.router,
+    tags=["conversations"]
 )
 
 # Serve uploaded files (if needed)

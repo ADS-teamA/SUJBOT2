@@ -52,10 +52,11 @@ def load_rag_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             "max_workers": 8,
         },
         "embeddings": {
-            "model": "BAAI/bge-m3",  # Multilingual BGE-M3 for Czech + English
+            "model": "joelniklaus/legal-xlm-roberta-base",  # Czech legal-specialized XLM-RoBERTa trained on MultiLegalPile
             "device": "cpu",  # Override with "cuda" or "mps" in production
             "normalize": True,
             "batch_size": 32,
+            "max_sequence_length": 512,
         },
         "retrieval": {
             "hybrid_alpha": 0.7,  # 70% semantic, 30% BM25

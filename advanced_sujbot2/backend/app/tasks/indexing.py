@@ -106,14 +106,15 @@ def index_document_task(self, document_id: str, document_type: str):
         # 1. DocumentReader - PDF/DOCX parsing
         # 2. LegalChunker - Hierarchical semantic chunking
         # 3. EmbeddingService - BGE-M3 embeddings
-        # 4. IndexingPipeline - FAISS indexing
+        # 4. IndexingPipeline - PostgreSQL + pgvector indexing
         # 5. KnowledgeGraph - Legal graph construction (for laws)
-        metadata = rag_pipeline.index_document(
+        import asyncio
+        metadata = asyncio.run(rag_pipeline.index_document(
             document_path=doc_path,
             document_id=document_id,
             document_type=document_type,
             progress_callback=progress_callback
-        )
+        ))
 
         # Update document status with comprehensive metadata
         document_service.update_document_status(
@@ -122,6 +123,16 @@ def index_document_task(self, document_id: str, document_type: str):
             100,
             metadata_update=metadata
         )
+
+        # CRITICAL: Reload the index into the main backend RAG pipeline
+        # This ensures the backend can immediately use the newly indexed document
+        # without requiring a restart
+        logger.info(f"Reloading index into backend vector store for {document_id}...")
+        try:
+            asyncio.run(rag_pipeline.reload_document_index(document_id))
+            logger.info(f"Index reloaded successfully for {document_id}")
+        except Exception as e:
+            logger.warning(f"Failed to reload index for {document_id}: {e}. Backend restart may be required.")
 
         logger.info(
             f"Successfully indexed document {document_id}: "

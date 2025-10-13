@@ -213,14 +213,14 @@ class ReferenceMap:
                 cid: {
                     'chunk_id': c.chunk_id,
                     'content': c.content,
-                    'title': c.title,
+                    'title': getattr(c, 'title', None),
                     'document_id': c.document_id,
                     'document_type': c.document_type,
                     'hierarchy_path': c.hierarchy_path,
                     'legal_reference': c.legal_reference,
                     'structural_level': c.structural_level,
                     'metadata': c.metadata,
-                    'chunk_index': c.chunk_index
+                    'chunk_index': getattr(c, 'chunk_index', None)
                 }
                 for cid, c in self.chunks_cache.items()
             }
@@ -787,8 +787,9 @@ class StructuralMatcher:
         """
 
         # Try title first
-        if chunk.title:
-            title_lower = chunk.title.lower()
+        title = getattr(chunk, 'title', None)
+        if title:
+            title_lower = title.lower()
             for topic, keywords in self.pattern_mappings.items():
                 if any(kw in title_lower for kw in keywords):
                     return topic

@@ -14,6 +14,10 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """Log request and response details."""
+        # Skip middleware for WebSocket connections
+        if request.url.path.startswith("/ws"):
+            return await call_next(request)
+
         start_time = time.time()
 
         # Log request

@@ -23,6 +23,21 @@ export interface Source {
   page?: number;
   quote?: string;
   relevance?: number;
+  content?: string;
+  document_id?: string;
+  confidence?: number;
+}
+
+export type PipelineType = 'simple_query' | 'compliance_analysis' | 'cross_document' | 'greeting';
+
+export interface PipelineStatus {
+  pipeline: PipelineType;
+  stage: string;
+  stage_name: string;
+  step: number;
+  total_steps: number;
+  progress: number;
+  message: string;
 }
 
 export type SeverityLevel = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -50,6 +65,7 @@ export interface ChatMessage {
   sources?: Source[];
   complianceIssues?: ComplianceIssue[];
   isStreaming?: boolean;
+  pipelineStatus?: PipelineStatus;
 }
 
 export interface ComplianceReport {

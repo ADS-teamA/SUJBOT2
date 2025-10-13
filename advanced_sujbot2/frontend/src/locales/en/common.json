@@ -45,6 +45,9 @@
     }
   },
   "sources": "Sources",
+  "source": "source",
+  "context": "Context",
+  "processing": "Processing",
   "contract": "Contract",
   "law": "Law",
   "language": {
@@ -78,6 +81,7 @@
       "connecting": "Connecting to server...",
       "reconnected": "Connection restored",
       "connectionFailed": "Failed to connect to server",
+      "notConnected": "Not connected to server. Reconnecting...",
       "error": "Communication error: {{message}}"
     },
     "api": {

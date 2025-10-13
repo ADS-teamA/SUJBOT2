@@ -201,6 +201,22 @@ class SemanticSearcher:
             List of search results sorted by semantic similarity
         """
 
+        # Check if this is PostgreSQL vector store (has search method for semantic search)
+        if hasattr(self.vector_store, 'search') and not hasattr(self.vector_store, 'indices'):
+            # PostgreSQL vector store - use its native search
+            results = await self.vector_store.search(
+                query=query,
+                document_ids=document_ids,
+                top_k=top_k,
+                filter_metadata=filters
+            )
+            # Add semantic_score to results
+            for result in results:
+                result.semantic_score = result.score
+                result.retrieval_method = "semantic"
+            return results
+
+        # FAISS vector store - use traditional approach
         # 1. Embed query
         query_embedding = await self._embed_query(query)
 
@@ -361,39 +377,61 @@ class KeywordSearcher:
         self.k1 = k1
         self.b = b
 
-        # BM25 indices per document
+        # BM25 indices per document (lazy loaded)
         self.bm25_indices: Dict[str, BM25Okapi] = {}
         self.tokenized_docs: Dict[str, List[List[str]]] = {}
         self.chunk_ids: Dict[str, List[str]] = {}
+        self.chunks_cache: Dict[str, Dict[str, LegalChunk]] = {}  # Cache chunks
 
-        # Build indices
-        self._build_indices()
+        # Note: Indices are built lazily on first search to support async PostgreSQL
 
-    def _build_indices(self):
-        """Build BM25 indices for all documents"""
+    async def _ensure_index_built(self, document_id: str):
+        """Build BM25 index for a document if not already built"""
 
-        for doc_id, metadata_store in self.vector_store.metadata_stores.items():
-            # Get all chunks
-            chunks = list(metadata_store.values())
+        if document_id in self.bm25_indices:
+            return  # Already built
 
-            # Tokenize
-            tokenized_docs = [
-                self._tokenize(chunk.content)
-                for chunk in chunks
-            ]
+        # Get chunks from vector store
+        # Check if this is PostgreSQL vector store (has get_document_chunks) or FAISS (has metadata_stores)
+        if hasattr(self.vector_store, 'get_document_chunks'):
+            # PostgreSQL vector store
+            chunks = await self.vector_store.get_document_chunks(document_id)
+        elif hasattr(self.vector_store, 'metadata_stores'):
+            # FAISS vector store
+            metadata_store = self.vector_store.metadata_stores.get(document_id)
+            if metadata_store:
+                chunks = list(metadata_store.values())
+            else:
+                chunks = []
+        else:
+            logger.warning(f"Unknown vector store type, cannot load chunks for {document_id}")
+            chunks = []
 
-            # Build BM25 index
-            if tokenized_docs:  # Only build if there are docs
-                self.bm25_indices[doc_id] = BM25Okapi(
-                    tokenized_docs,
-                    k1=self.k1,
-                    b=self.b
-                )
+        if not chunks:
+            logger.warning(f"No chunks found for document {document_id}")
+            return
 
-                self.tokenized_docs[doc_id] = tokenized_docs
-                self.chunk_ids[doc_id] = [chunk.chunk_id for chunk in chunks]
+        # Tokenize
+        tokenized_docs = [
+            self._tokenize(chunk.content)
+            for chunk in chunks
+        ]
 
-                logger.info(f"Built BM25 index for {doc_id}: {len(chunks)} chunks")
+        # Build BM25 index
+        if tokenized_docs:
+            self.bm25_indices[document_id] = BM25Okapi(
+                tokenized_docs,
+                k1=self.k1,
+                b=self.b
+            )
+
+            self.tokenized_docs[document_id] = tokenized_docs
+            self.chunk_ids[document_id] = [chunk.chunk_id for chunk in chunks]
+
+            # Cache chunks for later retrieval
+            self.chunks_cache[document_id] = {chunk.chunk_id: chunk for chunk in chunks}
+
+            logger.info(f"Built BM25 index for {document_id}: {len(chunks)} chunks")
 
     def _tokenize(self, text: str) -> List[str]:
         """
@@ -453,12 +491,24 @@ class KeywordSearcher:
         # 1. Tokenize query
         query_tokens = self._tokenize(query)
 
-        # 2. Search in selected indices
-        indices_to_search = document_ids or list(self.bm25_indices.keys())
+        # 2. Determine which documents to search
+        if document_ids:
+            indices_to_search = document_ids
+        else:
+            # Get all available documents from vector store
+            if hasattr(self.vector_store, 'document_info'):
+                indices_to_search = list(self.vector_store.document_info.keys())
+            elif hasattr(self.vector_store, 'metadata_stores'):
+                indices_to_search = list(self.vector_store.metadata_stores.keys())
+            else:
+                indices_to_search = []
 
         all_results = []
 
         for doc_id in indices_to_search:
+            # Ensure BM25 index is built for this document
+            await self._ensure_index_built(doc_id)
+
             if doc_id not in self.bm25_indices:
                 continue
 
@@ -491,8 +541,8 @@ class KeywordSearcher:
         # Get top-K indices
         top_indices = np.argsort(scores)[::-1][:top_k]
 
-        # Map to chunks
-        metadata_store = self.vector_store.metadata_stores[document_id]
+        # Get cached chunks and chunk_ids
+        chunks_cache = self.chunks_cache[document_id]
         chunk_ids = self.chunk_ids[document_id]
 
         results = []
@@ -504,7 +554,7 @@ class KeywordSearcher:
                 continue
 
             chunk_id = chunk_ids[idx]
-            chunk = metadata_store[chunk_id]
+            chunk = chunks_cache[chunk_id]
 
             # Apply filters
             if filters and not self._matches_filters(chunk, filters):
@@ -580,13 +630,22 @@ class StructuralSearcher:
         # 2. Build structural filters
         structural_filters = self._build_filters(structural_hints, filters)
 
-        # 3. Search in selected documents
-        indices_to_search = document_ids or list(self.vector_store.metadata_stores.keys())
+        # 3. Determine which documents to search
+        if document_ids:
+            indices_to_search = document_ids
+        else:
+            # Get all available documents from vector store
+            if hasattr(self.vector_store, 'document_info'):
+                indices_to_search = list(self.vector_store.document_info.keys())
+            elif hasattr(self.vector_store, 'metadata_stores'):
+                indices_to_search = list(self.vector_store.metadata_stores.keys())
+            else:
+                indices_to_search = []
 
         all_results = []
 
         for doc_id in indices_to_search:
-            results = self._search_by_structure(
+            results = await self._search_by_structure(
                 doc_id,
                 structural_filters,
                 structural_hints
@@ -669,7 +728,7 @@ class StructuralSearcher:
 
         return filters
 
-    def _search_by_structure(
+    async def _search_by_structure(
         self,
         document_id: str,
         filters: Dict[str, Any],
@@ -677,14 +736,28 @@ class StructuralSearcher:
     ) -> List[SearchResult]:
         """Search in a single document by structure"""
 
-        if document_id not in self.vector_store.metadata_stores:
+        # Get chunks from vector store
+        # Check if this is PostgreSQL vector store (has get_document_chunks) or FAISS (has metadata_stores)
+        if hasattr(self.vector_store, 'get_document_chunks'):
+            # PostgreSQL vector store
+            chunks = await self.vector_store.get_document_chunks(document_id)
+        elif hasattr(self.vector_store, 'metadata_stores'):
+            # FAISS vector store
+            if document_id not in self.vector_store.metadata_stores:
+                return []
+            metadata_store = self.vector_store.metadata_stores[document_id]
+            chunks = [chunk for chunk_id, chunk in metadata_store.items()]
+        else:
+            logger.warning(f"Unknown vector store type, cannot load chunks for {document_id}")
             return []
 
-        metadata_store = self.vector_store.metadata_stores[document_id]
+        if not chunks:
+            return []
+
         results = []
 
-        # Get all chunks
-        for chunk_id, chunk in metadata_store.items():
+        # Iterate through chunks
+        for chunk in chunks:
 
             # Check if matches filters
             if not self._matches_structural_filters(chunk, filters):
@@ -697,7 +770,7 @@ class StructuralSearcher:
 
             # Create result with placeholder score (will be computed later)
             result = SearchResult(
-                chunk_id=chunk_id,
+                chunk_id=chunk.chunk_id,
                 chunk=chunk,
                 document_id=document_id,
                 score=0.0,

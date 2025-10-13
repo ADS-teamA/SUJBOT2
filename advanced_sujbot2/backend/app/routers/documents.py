@@ -29,6 +29,15 @@ async def upload_document(
 
     Returns document metadata and starts background indexing task.
     """
+    # Map frontend document types to database types
+    # Frontend uses 'law' for simplicity, but database uses 'law_code'
+    type_mapping = {
+        'law': 'law_code',
+        'contract': 'contract',
+        'regulation': 'regulation'
+    }
+    document_type = type_mapping.get(document_type, document_type)
+
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")

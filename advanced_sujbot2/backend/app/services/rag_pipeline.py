@@ -18,12 +18,11 @@ from app.rag.config import Config
 from app.rag.document_reader import LegalDocumentReader
 from app.rag.chunker import LawCodeChunker
 from app.rag.embeddings import LegalEmbedder
-from app.rag.indexing import MultiDocumentVectorStore
+from app.rag.pg_vector_store import PostgreSQLVectorStore
 from app.rag.hybrid_retriever import HybridRetriever
 from app.rag.cross_doc_retrieval import ComparativeRetriever
 from app.rag.reranker import RerankingPipeline
 from app.rag.knowledge_graph import LegalKnowledgeGraph
-from app.rag.compliance_analyzer import ComplianceAnalyzer
 from app.rag.exceptions import (
     DocumentProcessingError,
     IndexingError,
@@ -82,12 +81,12 @@ class RAGPipeline:
 
         # Heavy components - lazy load on first use
         self._embedding_service: Optional[LegalEmbedder] = None
-        self._vector_store: Optional[MultiDocumentVectorStore] = None
+        self._vector_store: Optional[PostgreSQLVectorStore] = None
         self._hybrid_retriever: Optional[HybridRetriever] = None
         self._cross_doc_retriever: Optional[ComparativeRetriever] = None
         self._reranker: Optional[RerankingPipeline] = None
         self._knowledge_graph: Optional[LegalKnowledgeGraph] = None
-        self._compliance_analyzer: Optional[ComplianceAnalyzer] = None
+        # Note: ComplianceAnalyzer removed - use AdvancedCompliancePipeline directly
 
         # Index directory
         self.index_dir = Path(settings.INDEX_DIR)
@@ -116,10 +115,10 @@ class RAGPipeline:
             logger.info("Initializing embedding service...")
             from app.rag.embeddings import EmbeddingConfig
             embedding_config = EmbeddingConfig(
-                model_name="BAAI/bge-m3",
+                model_name="joelniklaus/legal-xlm-roberta-base",  # 768-dim legal multilingual (trained on MultiLegalPile with Czech)
                 device="auto",  # Auto-detect: CUDA > MPS > CPU
                 batch_size=32,
-                max_sequence_length=8192,
+                max_sequence_length=512,  # RoBERTa limit
                 normalize=True,
                 add_hierarchical_context=True
             )
@@ -128,55 +127,33 @@ class RAGPipeline:
         return self._embedding_service
 
     @property
-    def vector_store(self) -> MultiDocumentVectorStore:
-        """Lazy load vector store."""
+    def vector_store(self) -> PostgreSQLVectorStore:
+        """Lazy load PostgreSQL vector store."""
         if self._vector_store is None:
-            logger.info("Initializing vector store...")
-            from app.rag.indexing import VectorStoreConfig, IndexPersistence
-            vector_config = VectorStoreConfig(
-                index_type="flat",
-                vector_size=1024,
-                enable_gpu=False
+            logger.info("Initializing PostgreSQL vector store...")
+            from app.rag.pg_vector_store import PostgreSQLConfig
+
+            # Load PostgreSQL config from environment
+            pg_config = PostgreSQLConfig(
+                host=os.getenv("POSTGRES_HOST", "localhost"),
+                port=int(os.getenv("POSTGRES_PORT", "5432")),
+                database=os.getenv("POSTGRES_DB", "sujbot2"),
+                user=os.getenv("POSTGRES_USER", "sujbot_app"),
+                password=os.getenv("POSTGRES_PASSWORD", ""),
+                min_pool_size=5,
+                max_pool_size=20,
+                vector_search_probes=10,
+                enable_query_cache=True
             )
-            self._vector_store = MultiDocumentVectorStore(
+
+            self._vector_store = PostgreSQLVectorStore(
                 embedder=self.embedding_service,
-                config=vector_config
+                config=pg_config
             )
 
-            # Load existing indices from disk
-            logger.info("Loading existing indices from disk...")
-            persistence = IndexPersistence(self.index_dir)
-            existing_docs = persistence.list_documents()
-
-            if existing_docs:
-                logger.info(f"Found {len(existing_docs)} existing indices")
-                import asyncio
-                for doc_id in existing_docs:
-                    try:
-                        index, metadata, chunks, ref_map = asyncio.run(persistence.load(doc_id))
-
-                        # Load into vector store
-                        self._vector_store.indices[doc_id] = index
-                        self._vector_store.metadata_stores[doc_id] = {
-                            chunk.chunk_id: chunk for chunk in chunks
-                        }
-                        self._vector_store.document_info[doc_id] = metadata
-
-                        # Merge reference maps
-                        if ref_map:
-                            for ref, chunk_ids in ref_map.ref_to_chunks.items():
-                                self._vector_store.reference_map.ref_to_chunks[ref].extend(chunk_ids)
-                            self._vector_store.reference_map.chunk_to_refs.update(ref_map.chunk_to_refs)
-
-                        logger.info(f"Loaded index for {doc_id}: {len(chunks)} chunks")
-                    except Exception as e:
-                        logger.error(f"Failed to load index for {doc_id}: {e}")
-
-                logger.info(f"Successfully loaded {len(self._vector_store.indices)} indices")
-            else:
-                logger.info("No existing indices found")
-
-            logger.info("Vector store ready")
+            # Note: Document info loading is deferred to first async operation
+            # This avoids asyncio.run() from within an event loop
+            logger.info("PostgreSQL vector store ready (document loading deferred)")
         return self._vector_store
 
     @property
@@ -233,9 +210,17 @@ class RAGPipeline:
         """Lazy load cross-document retriever."""
         if self._cross_doc_retriever is None:
             logger.info("Initializing cross-document retriever...")
+
+            # Create empty reference map (will be populated when documents are loaded)
+            from app.rag.indexing import ReferenceMap
+            reference_map = ReferenceMap()
+
+            # Create cross-document retriever with correct arguments
             self._cross_doc_retriever = ComparativeRetriever(
-                self.config,
-                self.hybrid_retriever
+                vector_store=self.vector_store,
+                embedder=self.embedding_service,
+                reference_map=reference_map,
+                config={}
             )
             logger.info("Cross-document retriever ready")
         return self._cross_doc_retriever
@@ -249,7 +234,7 @@ class RAGPipeline:
 
             # Create RerankingConfig from main config
             reranking_config = RerankingConfig(
-                cross_encoder_model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+                cross_encoder_model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # Smaller, faster model (already cached)
                 cross_encoder_batch_size=16,
                 cross_encoder_device="auto",  # Auto-detect: CUDA > MPS > CPU
                 cross_encoder_max_length=512,
@@ -270,23 +255,14 @@ class RAGPipeline:
         """Lazy load knowledge graph."""
         if self._knowledge_graph is None:
             logger.info("Initializing knowledge graph...")
-            self._knowledge_graph = LegalKnowledgeGraph(self.config)
+            self._knowledge_graph = LegalKnowledgeGraph(config=self.config)
             logger.info("Knowledge graph ready")
         return self._knowledge_graph
 
-    @property
-    def compliance_analyzer(self) -> ComplianceAnalyzer:
-        """Lazy load compliance analyzer."""
-        if self._compliance_analyzer is None:
-            logger.info("Initializing compliance analyzer...")
-            self._compliance_analyzer = ComplianceAnalyzer(
-                self.config,
-                self.hybrid_retriever
-            )
-            logger.info("Compliance analyzer ready")
-        return self._compliance_analyzer
+    # NOTE: Old ComplianceAnalyzer removed
+    # Use AdvancedCompliancePipeline directly instead (see chat_service.py)
 
-    def index_document(
+    async def index_document(
         self,
         document_path: str,
         document_id: str,
@@ -325,9 +301,8 @@ class RAGPipeline:
 
             # Step 1: Read document
             update_progress(10, 100, "Reading document...")
-            import asyncio
             update_progress(15, 100, "Parsing document structure...")
-            doc = asyncio.run(self.document_reader.read_legal_document(str(doc_path), document_type))
+            doc = await self.document_reader.read_legal_document(str(doc_path), document_type)
             update_progress(22, 100, "Extracting text content...")
 
             # Convert LegalDocument to metadata dict
@@ -353,7 +328,7 @@ class RAGPipeline:
             # Step 2: Chunk document
             update_progress(32, 100, "Initializing chunker...")
             update_progress(35, 100, "Chunking document...")
-            chunks = asyncio.run(self.chunker.chunk(doc))
+            chunks = await self.chunker.chunk(doc)
             update_progress(48, 100, "Analyzing chunk boundaries...")
 
             # Fallback: if no chunks created, use simple text-based chunking
@@ -385,8 +360,6 @@ class RAGPipeline:
 
             # Step 3: Generate embeddings and build index
             update_progress(55, 100, "Initializing embedding model...")
-            index_path = self.index_dir / document_id
-            index_path.mkdir(parents=True, exist_ok=True)
 
             # Create simple progress callback for chunk batch processing
             # Map embedding progress from 55% to 85% (30% of total time)
@@ -417,33 +390,23 @@ class RAGPipeline:
                 update_progress(overall_progress, 100, message)
 
             # Add chunks to vector store with simple progress tracking
-            asyncio.run(self.vector_store.add_document(
+            await self.vector_store.add_document(
                 document_id=document_id,
                 document_type=document_type,
                 chunks=chunks,
                 progress_callback=embedding_batch_progress
-            ))
+            )
             update_progress(85, 100, "Embeddings generated and indexed")
 
-            # Persist index to disk
-            update_progress(85, 100, "Preparing index for storage...")
-            update_progress(88, 100, "Saving index to disk...")
-            from app.rag.indexing import IndexPersistence
-            persistence = IndexPersistence(self.index_dir)
-            asyncio.run(persistence.save(
-                document_id=document_id,
-                index=self.vector_store.indices[document_id],
-                metadata=self.vector_store.document_info[document_id],
-                chunks=chunks,
-                reference_map=self.vector_store.reference_map
-            ))
-            logger.info(f"Index persisted to {self.index_dir / document_id}")
+            # PostgreSQL persists automatically, no separate save step needed
+            update_progress(88, 100, "Data persisted to PostgreSQL")
+            logger.info(f"Document indexed in PostgreSQL: {document_id}")
             update_progress(93, 100, "Index built and saved successfully")
             update_progress(96, 100, "Finalizing...")
 
             index_metadata = {
                 "vector_count": len(chunks),
-                "index_size": sum(f.stat().st_size for f in index_path.glob("*") if f.is_file())
+                "storage_backend": "postgresql"
             }
 
             # Step 4: Build knowledge graph (if applicable)
@@ -468,7 +431,6 @@ class RAGPipeline:
                 "word_count": doc_metadata.get("word_count", 0),
                 "char_count": doc_metadata.get("char_count", 0),
                 "chunk_count": chunk_count,
-                "index_path": str(index_path),
                 "indexed_at": datetime.now().isoformat(),
                 **index_metadata
             }
@@ -502,14 +464,18 @@ class RAGPipeline:
             RetrievalError: If retrieval fails
         """
         try:
-            # Verify that documents are indexed
+            # Load document info from PostgreSQL if not already loaded
+            if not self.vector_store.document_info:
+                logger.info("Loading document info from PostgreSQL...")
+                await self.vector_store.load_document_info_from_db()
+
+            # Verify that documents are indexed in PostgreSQL
             available_docs = []
             for doc_id in document_ids:
-                index_path = self.index_dir / doc_id
-                if index_path.exists():
+                if doc_id in self.vector_store.document_info:
                     available_docs.append(doc_id)
                 else:
-                    logger.warning(f"Index not found for document: {doc_id}")
+                    logger.warning(f"Document not found in database: {doc_id}")
 
             if not available_docs:
                 raise RetrievalError("No indexed documents found")
@@ -530,16 +496,17 @@ class RAGPipeline:
 
                 search_results = []
                 for i, result in enumerate(results):
+                    # SearchResult is a dataclass with attributes, not a dict
                     search_result = RerankSearchResult(
-                        chunk_id=result.get("chunk_id", f"chunk_{i}"),
-                        content=result.get("content", ""),
-                        legal_reference=result.get("metadata", {}).get("section", ""),
-                        document_id=result.get("document_id", ""),
-                        document_type=result.get("metadata", {}).get("document_type", "law_code"),
-                        hierarchy_path=result.get("metadata", {}).get("hierarchy_path", ""),
+                        chunk_id=result.chunk_id,
+                        content=result.chunk.content,
+                        legal_reference=result.chunk.legal_reference or "",
+                        document_id=result.document_id,
+                        document_type=result.chunk.document_type,
+                        hierarchy_path=result.chunk.hierarchy_path or "",
                         rank=i+1,
-                        hybrid_score=result.get("score", 0.0),
-                        metadata=result.get("metadata", {})
+                        hybrid_score=result.score,
+                        metadata=result.chunk.metadata or {}
                     )
                     search_results.append(search_result)
 
@@ -601,14 +568,14 @@ class RAGPipeline:
             Cross-document query results with provision links
         """
         try:
-            # Prepare index paths
+            # Verify documents exist in database
             contract_indexes = [
-                str(self.index_dir / cid) for cid in contract_ids
-                if (self.index_dir / cid).exists()
+                cid for cid in contract_ids
+                if cid in self.vector_store.document_info
             ]
             law_indexes = [
-                str(self.index_dir / lid) for lid in law_ids
-                if (self.index_dir / lid).exists()
+                lid for lid in law_ids
+                if lid in self.vector_store.document_info
             ]
 
             # Execute cross-document retrieval
@@ -630,48 +597,43 @@ class RAGPipeline:
             logger.error(f"Cross-document query failed: {e}")
             raise RetrievalError(f"Failed to execute cross-document query: {e}") from e
 
-    def analyze_compliance(
-        self,
-        contract_id: str,
-        law_ids: List[str],
-        mode: str = "exhaustive"
-    ) -> Dict[str, Any]:
+    async def reload_document_index(self, document_id: str) -> bool:
         """
-        Analyze contract compliance against laws.
+        Reload document metadata from PostgreSQL into cache.
+
+        This is useful after a document has been indexed by a Celery worker,
+        so the backend can immediately use the new document without restarting.
 
         Args:
-            contract_id: Contract document ID
-            law_ids: List of law/regulation document IDs
-            mode: Analysis mode ('quick' or 'exhaustive')
+            document_id: Document ID to reload
 
         Returns:
-            Compliance analysis results
+            True if successfully reloaded, False otherwise
         """
         try:
-            contract_index = str(self.index_dir / contract_id)
-            law_indexes = [
-                str(self.index_dir / lid) for lid in law_ids
-                if (self.index_dir / lid).exists()
-            ]
+            logger.info(f"Reloading document info for {document_id} from PostgreSQL...")
 
-            if not Path(contract_index).exists():
-                raise RetrievalError(f"Contract index not found: {contract_id}")
+            # Small delay to ensure connection pool is released from previous operations
+            import asyncio
+            await asyncio.sleep(0.5)
 
-            if not law_indexes:
-                raise RetrievalError("No law indexes found")
+            # Reload document info from database
+            await self.vector_store.load_document_info_from_db()
 
-            # Run compliance analysis
-            results = self.compliance_analyzer.analyze(
-                contract_index=contract_index,
-                law_indexes=law_indexes,
-                mode=mode
-            )
-
-            return results
+            if document_id in self.vector_store.document_info:
+                doc_info = self.vector_store.document_info[document_id]
+                logger.info(f"Successfully reloaded {document_id}: {doc_info.get('num_chunks', 0)} chunks")
+                return True
+            else:
+                logger.warning(f"Document {document_id} not found in database")
+                return False
 
         except Exception as e:
-            logger.error(f"Compliance analysis failed: {e}")
-            raise
+            logger.error(f"Failed to reload document info for {document_id}: {e}")
+            return False
+
+    # NOTE: Old analyze_compliance method removed
+    # Use AdvancedCompliancePipeline directly instead (see chat_service.py or tasks/compliance.py)
 
 
 # Global singleton instance
