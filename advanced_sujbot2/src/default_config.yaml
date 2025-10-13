@@ -1,0 +1,137 @@
+# SUJBOT2 Default Configuration
+# This file provides default settings for all system components
+
+# API Configuration
+api:
+  version: "1.0.0"
+  environment: "development"  # development | production
+
+  # Python API Settings
+  python_api:
+    enable_progress_callbacks: true
+    max_parallel_tasks: 5
+
+  # REST API Settings (future)
+  rest_api:
+    host: "0.0.0.0"
+    port: 8000
+    enable_cors: true
+    allowed_origins: ["*"]
+
+  # Rate Limiting (future)
+  rate_limiting:
+    enabled: false
+    requests_per_minute: 60
+
+  # Authentication (future)
+  authentication:
+    enabled: false
+    method: "api_key"  # api_key | oauth2
+
+  # Logging
+  logging:
+    level: "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
+    format: "json"  # json | text
+    output: "stdout"  # stdout | file
+
+# Document Processing
+document_processing:
+  max_file_size_mb: 500
+  supported_formats:
+    - pdf
+    - docx
+  temp_storage_path: "/tmp/sujbot2"
+
+# Indexing Configuration
+indexing:
+  # Chunking strategy
+  chunk_size: 512  # tokens per chunk
+  chunk_overlap: 0.15  # 15% overlap between chunks
+  semantic_chunking: true  # respect sentence/paragraph boundaries
+  min_chunk_size: 128
+  max_chunk_size: 1024
+
+  # Processing
+  batch_size: 32
+  max_workers: 8
+
+# Embedding Configuration
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  # Alternative models:
+  # - "BAAI/bge-small-en-v1.5"  # Better quality
+  # - "all-mpnet-base-v2"  # Best quality (slower)
+
+  # Device selection with automatic fallback: auto (cuda > mps > cpu)
+  device: "auto"  # auto | cuda | mps | cpu
+  normalize: true  # required for FAISS IndexFlatIP
+  batch_size: 32
+
+# Retrieval Configuration
+retrieval:
+  # Hybrid search
+  hybrid_alpha: 0.7  # 0.0 = keyword only, 1.0 = semantic only
+  top_k: 20  # candidates before reranking
+  rerank_top_k: 5  # final chunks for LLM
+  min_score: 0.1  # filter threshold
+
+  # Features
+  enable_reranking: true
+  enable_query_decomposition: true
+  enable_query_expansion: true
+
+  # BM25 parameters
+  bm25:
+    k1: 1.5
+    b: 0.75
+
+  # Confidence scoring
+  confidence_scoring:
+    cross_encoder_min: -15
+    cross_encoder_max: 10
+
+# Cross-Document Retrieval
+cross_document:
+  similarity_threshold: 0.75
+  max_cross_references: 10
+  enable_provision_linking: true
+
+# Compliance Analysis
+compliance:
+  default_mode: "exhaustive"  # exhaustive | sample
+  generate_recommendations: true
+
+  # Severity thresholds
+  severity_thresholds:
+    critical: 0.9
+    high: 0.7
+    medium: 0.5
+    low: 0.3
+
+# LLM Configuration
+llm:
+  # Models
+  main_model: "claude-sonnet-4-5-20250929"  # for answer synthesis
+  sub_model: "claude-3-5-haiku-20241022"  # for question decomposition
+
+  # API key (override with environment variable CLAUDE_API_KEY)
+  # api_key: "your-api-key-here"
+
+  # Generation parameters
+  temperature: 0.1
+  max_tokens: 4000
+  timeout: 120  # seconds
+  max_retries: 3
+
+# Knowledge Graph Configuration
+knowledge_graph:
+  enable: true
+  semantic_link_threshold: 0.75
+  max_links_per_node: 20
+  include_cross_document_links: true
+
+# Batch Processing Configuration
+batch_processing:
+  max_parallel: 3
+  timeout_per_task: 600  # seconds
+  continue_on_error: true

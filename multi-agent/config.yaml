@@ -64,6 +64,33 @@ query:
   max_sub_queries: 5           # Maximum number of sub-queries
   enable_query_expansion: true  # Expand queries with synonyms
 
+# Advanced query processing (Legal compliance)
+query_processing:
+  # LLM for classification and decomposition
+  llm_model: "claude-3-5-haiku-20241022"
+  llm_temperature: 0.3
+  llm_max_tokens: 1000
+
+  # Decomposition settings
+  enable_decomposition: true
+  max_sub_queries: 5
+  decomposition_complexity_threshold: "moderate"  # simple | moderate | complex
+
+  # Entity extraction
+  extract_legal_references: true
+  extract_temporal_entities: true
+  extract_obligations: true
+
+  # Query expansion
+  enable_query_expansion: true
+  max_synonyms_per_term: 3
+
+  # Retrieval strategy selection
+  auto_select_strategy: true  # Automatically choose retrieval strategy
+
+  # Logging
+  verbose_logging: false
+
 # LLM configuration
 llm:
   main_agent_model: "claude-sonnet-4-5-20250929"  # Sonnet for synthesis
@@ -123,6 +150,51 @@ paths:
   cache_dir: "./.cache"       # Cache directory
   temp_dir: "./.tmp"          # Temporary files
   logs_dir: "./logs"          # Log files
+
+# Cross-document retrieval configuration
+cross_document_retrieval:
+  # Strategy weights for combining different matching approaches
+  explicit_weight: 0.5        # α - explicit references (§89, Článek 5)
+  semantic_weight: 0.3        # β - semantic similarity
+  structural_weight: 0.2      # γ - structural patterns
+
+  # Semantic matching settings
+  semantic:
+    top_k: 5                  # Candidates per query
+    min_similarity: 0.5       # Minimum cosine similarity threshold
+
+  # Structural matching settings
+  structural:
+    top_k: 5                  # Candidates per query
+    enable_topic_matching: true
+    enable_content_type_matching: true
+    enable_position_matching: false  # Low confidence heuristic, disabled by default
+
+  # Performance settings
+  compute_similarity_matrix: false  # Expensive operation, enable only if needed
+  enable_caching: true
+  parallel_matching: true     # Run matchers in parallel
+
+  # Reference extraction patterns
+  reference_extraction:
+    patterns:
+      - paragraph             # §89, §89 odst. 2
+      - article              # Článek 5, Čl. 5.2
+      - law_citation         # Zákon č. 89/2012 Sb.
+      - contextual           # podle §89, dle Článku 5
+    deduplicate_overlaps: true
+
+  # Multi-tier scoring
+  scoring:
+    # Boost factors for different match types
+    explicit_boost: 1.5       # Boost explicit matches
+    semantic_boost: 1.0       # No boost for semantic
+    structural_boost: 0.8     # Slightly lower structural matches
+
+    # Confidence thresholds
+    high_confidence: 0.8      # High confidence threshold
+    medium_confidence: 0.5    # Medium confidence threshold
+    low_confidence: 0.3       # Low confidence threshold
 
 # Development settings
 development:

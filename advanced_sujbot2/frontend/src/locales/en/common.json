@@ -1,0 +1,92 @@
+{
+  "upload": {
+    "contract": "Upload Contract",
+    "law": "Upload Law",
+    "dragDrop": "Drag and drop or click",
+    "dragDropDescription": "Upload PDF, DOCX or TXT documents",
+    "orClickToSelect": "or click to select files",
+    "processing": "Processing...",
+    "button": "Upload File"
+  },
+  "chat": {
+    "placeholder": "Ask something...",
+    "send": "Send",
+    "thinking": "Thinking...",
+    "typing": "Typing..."
+  },
+  "document": {
+    "pages": "pages",
+    "words": "words",
+    "preview": "Preview",
+    "remove": "Remove",
+    "status": {
+      "uploading": "Uploading",
+      "uploaded": "Uploaded",
+      "processing": "Processing",
+      "indexed": "Indexed",
+      "error": "Error",
+      "cancelled": "Cancelled"
+    }
+  },
+  "panel": {
+    "contracts": "Contracts",
+    "laws": "Laws",
+    "noDocuments": "No documents"
+  },
+  "compliance": {
+    "issues": "Compliance Issues",
+    "recommendations": "Recommendations",
+    "severity": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "info": "Info"
+    }
+  },
+  "sources": "Sources",
+  "source": "source",
+  "context": "Context",
+  "processing": "Processing",
+  "contract": "Contract",
+  "law": "Law",
+  "language": {
+    "czech": "Czech",
+    "english": "English"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "toggle": "Toggle theme"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "toast": {
+    "upload": {
+      "started": "Uploading document {{filename}}",
+      "success": "Document {{filename}} uploaded and indexed successfully",
+      "error": "Upload error: {{error}}",
+      "cancelled": "Processing of document {{filename}} was cancelled"
+    },
+    "document": {
+      "removed": "Document {{filename}} removed",
+      "removeError": "Removal error: {{error}}"
+    },
+    "websocket": {
+      "connecting": "Connecting to server...",
+      "reconnected": "Connection restored",
+      "connectionFailed": "Failed to connect to server",
+      "notConnected": "Not connected to server. Reconnecting...",
+      "error": "Communication error: {{message}}"
+    },
+    "api": {
+      "error": "API Error",
+      "missingClaudeKey": "Missing Claude API key in backend configuration"
+    }
+  }
+}

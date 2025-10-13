@@ -1,0 +1,434 @@
+# SUJBOT2 Configuration
+# Triple Hybrid Retrieval System
+
+# ============================================================================
+# Retrieval Configuration
+# ============================================================================
+
+retrieval:
+  # Triple hybrid weights (must sum to 1.0)
+  semantic_weight: 0.5   # α - semantic search (embeddings)
+  keyword_weight: 0.3    # β - keyword search (BM25)
+  structural_weight: 0.2  # γ - structural search (hierarchy/refs)
+
+  # Top-K parameters
+  top_k: 20  # Number of final results to return
+  candidate_multiplier: 1.5  # Retrieve top_k * multiplier per strategy (e.g., 30 candidates each)
+
+  # Score normalization
+  normalize_scores: true
+  normalization_method: min-max  # min-max | z-score
+
+  # Filtering
+  enable_metadata_filtering: true
+  enable_score_threshold: true
+  min_score_threshold: 0.1  # Minimum score for result inclusion
+
+  # Performance
+  enable_caching: true
+  parallel_retrieval: true  # Execute retrieval strategies in parallel
+
+  # BM25 parameters
+  bm25:
+    k1: 1.5  # Saturation parameter (1.2-2.0)
+    b: 0.75  # Length normalization (0.0-1.0)
+
+  # Adaptive weighting
+  adaptive_weights: true  # Adjust weights based on query characteristics
+  reference_boost: 0.2  # Boost structural weight when legal references detected
+
+  # Query expansion (optional)
+  enable_query_expansion: false
+  max_expansions: 3
+
+
+# ============================================================================
+# Embedding Configuration
+# ============================================================================
+
+embeddings:
+  # Model selection
+  model: "joelniklaus/legal-xlm-roberta-base"  # 768-dim multilingual legal embeddings (trained on MultiLegalPile with Czech legal texts)
+  # Alternatives:
+  # - "joelniklaus/legal-czech-roberta-base" (768 dim, Czech-only legal)
+  # - "BAAI/bge-m3" (1024 dim, general multilingual - requires schema change)
+  # - "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" (384 dim, fast)
+
+  # Device configuration
+  device: "cpu"  # cpu | cuda | mps (Apple Silicon)
+
+  # Embedding parameters
+  normalize: true  # L2 normalization (required for FAISS IndexFlatIP)
+  batch_size: 32  # Batch size for embedding generation
+  max_sequence_length: 512  # RoBERTa maximum tokens per chunk
+
+  # Contextualization
+  add_context: true  # Include hierarchy in embeddings
+
+
+# ============================================================================
+# Indexing Configuration
+# ============================================================================
+
+indexing:
+  # FAISS index type
+  index_type: "flat"  # flat | ivf | hnsw
+  # flat: Exact search, best for <100k vectors
+  # ivf: Approximate search with inverted file, 100k-1M vectors
+  # hnsw: HNSW graph, best for >1M vectors
+
+  # IVF parameters (only used if index_type=ivf)
+  ivf_nlist: 100  # Number of clusters
+
+  # HNSW parameters (only used if index_type=hnsw)
+  hnsw_m: 32  # Number of connections per node
+
+  # Index persistence
+  save_indices: true
+  index_dir: "data/indices"
+
+
+# ============================================================================
+# Chunking Configuration
+# ============================================================================
+
+chunking:
+  # Size parameters (in tokens)
+  min_chunk_size: 128  # Minimum tokens per chunk
+  max_chunk_size: 1024  # Maximum tokens per chunk
+  target_chunk_size: 512  # Target size for normal chunks
+
+  # Overlap
+  chunk_overlap: 0.15  # 15% overlap between adjacent chunks
+
+  # Context inclusion
+  include_context: true  # Add hierarchical context to chunks
+
+  # Aggregation
+  aggregate_small_chunks: true  # Combine chunks smaller than min_size
+
+
+# ============================================================================
+# Document Processing
+# ============================================================================
+
+document_processing:
+  # Supported formats
+  supported_formats:
+    - pdf
+    - docx
+    - txt
+    - md
+    - odt
+    - rtf
+
+  # OCR settings
+  enable_ocr: false  # Enable OCR for scanned PDFs
+  ocr_language: "ces"  # Czech language
+
+  # Reference extraction
+  extract_references: true
+  reference_patterns:
+    - r'§\s*\d+(?:\s+odst\.\s*\d+)?(?:\s+písm\.\s*[a-z])?'
+    - r'[Čč]l(?:ánek|\.)\s*\d+(?:\.\s*\d+)?'
+
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+
+logging:
+  level: INFO  # DEBUG | INFO | WARNING | ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/sujbot2.log"
+  console: true
+
+
+# ============================================================================
+# Performance Tuning
+# ============================================================================
+
+performance:
+  # Parallelization
+  max_workers: 4  # Number of parallel workers for document processing
+  enable_gpu: false  # Use GPU for embeddings if available
+
+  # Memory management
+  max_memory_mb: 4096  # Maximum memory usage in MB
+  cache_size: 1000  # Number of queries to cache
+
+  # Batch processing
+  batch_size: 32
+
+
+# ============================================================================
+# Query Processing
+# ============================================================================
+
+query_processing:
+  # Query classification
+  enable_classification: true
+
+  # Query decomposition
+  enable_decomposition: false
+  max_sub_queries: 5
+
+  # Entity extraction
+  extract_entities: true
+  entity_types:
+    - legal_reference
+    - date
+    - organization
+    - person
+
+
+# ============================================================================
+# Reranking Configuration
+# ============================================================================
+
+reranking:
+  # Enable reranking
+  enable: true
+
+  # Cross-encoder model settings
+  cross_encoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Smaller, faster model (6 layers vs 12)
+  cross_encoder_batch_size: 16
+  cross_encoder_device: "mps"  # cpu | cuda | mps (auto = cuda > mps > cpu)
+  cross_encoder_max_length: 512
+
+  # Score calibration (for cross-encoder normalization)
+  cross_encoder_score_min: -3.0  # Min-max normalization lower bound
+  cross_encoder_score_max: 3.0   # Min-max normalization upper bound
+
+  # Graph-aware reranking
+  enable_graph_reranking: true
+  graph_proximity_weight: 0.4    # Weight of graph proximity (0-1)
+  graph_centrality_weight: 0.3   # Weight of betweenness centrality (0-1)
+  graph_authority_weight: 0.3    # Weight of PageRank authority (0-1)
+  max_hop_distance: 3            # Maximum hops for proximity calculation
+
+  # Legal precedence weighting
+  enable_precedence_weighting: true
+  precedence_weights:
+    constitutional: 1.0  # Ústava, Listina
+    statutory: 0.9       # Zákony
+    regulatory: 0.7      # Vyhlášky, nařízení
+    contractual: 0.5     # Smlouvy
+    guidance: 0.3        # Metodiky
+  temporal_decay_factor: 0.95  # Favor newer laws (lex posterior)
+
+  # Ensemble fusion
+  ensemble_method: "weighted_average"  # weighted_average | borda_count | rrf
+  ensemble_weights:
+    cross_encoder: 0.5  # Semantic relevance weight
+    graph: 0.3          # Graph structure weight
+    precedence: 0.2     # Legal hierarchy weight
+
+  # Output settings
+  final_top_k: 64                    # Number of final results to return
+  min_confidence_threshold: 0.1     # Minimum confidence for result inclusion
+  explain_reranking: true           # Generate human-readable explanations
+
+
+# ============================================================================
+# Cross-Document Retrieval
+# ============================================================================
+
+cross_document:
+  # Enable cross-document retrieval
+  enable: true
+
+  # Matching strategies
+  enable_explicit_references: true  # Match explicit references (§89, Článek 5)
+  enable_semantic_matching: true    # Match by semantic similarity
+  enable_structural_matching: true   # Match by structural patterns
+
+  # Strategy weights (must sum to 1.0)
+  explicit_weight: 0.5     # Weight for explicit reference matches
+  semantic_weight: 0.3     # Weight for semantic similarity matches
+  structural_weight: 0.2   # Weight for structural pattern matches
+
+  # Similarity thresholds
+  semantic_similarity_threshold: 0.75  # Minimum cosine similarity for semantic matches
+  structural_similarity_threshold: 0.6  # Minimum score for structural matches
+
+  # Min similarity for semantic matching
+  min_similarity: 0.5  # Lower bound for considering a semantic match
+
+  # Result limits
+  max_cross_references: 10
+  max_similar_provisions: 5
+  top_k_per_source: 10  # Number of target matches per source chunk
+
+  # Performance
+  compute_similarity_matrix: false  # Compute full NxM similarity matrix (expensive)
+
+
+# ============================================================================
+# Compliance Configuration
+# ============================================================================
+
+compliance:
+  # Analysis modes
+  default_mode: "exhaustive"  # exhaustive | quick
+
+  # Features
+  enable_requirement_extraction: true
+  enable_clause_mapping: true
+  enable_conflict_detection: true
+  enable_gap_analysis: true
+  enable_deviation_assessment: true
+
+  # Risk scoring
+  enable_risk_scoring: true
+  severity_thresholds:
+    critical: 0.9
+    high: 0.7
+    medium: 0.5
+    low: 0.3
+
+  # Recommendations
+  generate_recommendations: true
+  max_recommendations: 10
+
+  # Reporting
+  include_evidence: true
+  include_citations: true
+  detailed_explanations: true
+
+
+# ============================================================================
+# Knowledge Graph Configuration
+# ============================================================================
+
+knowledge_graph:
+  # Enable knowledge graph
+  enable: true
+
+  # Graph construction
+  build_on_indexing: true
+  include_cross_document_links: true
+
+  # Semantic linking
+  semantic_link_threshold: 0.75
+  max_links_per_node: 20
+
+  # Multi-hop reasoning
+  enable_multi_hop: true
+  max_hops: 3
+
+  # Graph-based retrieval
+  enable_graph_retrieval: true
+  proximity_scoring: true
+
+  # Graph boosting for reranking
+  graph_boost_factor: 1.2  # Multiply scores by this for important graph nodes (1.0 = no boost)
+
+
+# ============================================================================
+# LLM Configuration
+# ============================================================================
+
+llm:
+  # Models (can be overridden by environment variables)
+  main_model: "claude-sonnet-4-5-20250929"
+  sub_model: "claude-3-5-haiku-20241022"
+
+  # API configuration
+  timeout: 120
+  max_retries: 3
+  retry_delay: 1.0
+
+  # Generation parameters
+  temperature: 0.1
+  max_tokens: 4000
+
+  # Rate limiting
+  max_requests_per_minute: 60
+  max_tokens_per_minute: 100000
+
+
+# ============================================================================
+# API Configuration
+# ============================================================================
+
+api:
+  # Version
+  version: "1.0.0"
+
+  # Environment
+  environment: "development"  # development | production
+
+  # Python API
+  python_api:
+    enable_progress_callbacks: true
+    max_parallel_tasks: 5
+
+  # REST API (future)
+  rest_api:
+    enable: false
+    host: "0.0.0.0"
+    port: 8000
+    enable_cors: true
+    cors_origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+
+  # WebSocket (future)
+  websocket:
+    enable: false
+    max_connections: 100
+
+
+# ============================================================================
+# Batch Processing
+# ============================================================================
+
+batch_processing:
+  # Parallelization
+  max_parallel: 3
+
+  # Timeouts
+  timeout_per_task: 600
+
+  # Error handling
+  continue_on_error: true
+  max_retries: 2
+
+
+# ============================================================================
+# Preset Configurations
+# ============================================================================
+
+# Uncomment and modify as needed for specific use cases
+
+# High Precision (legal/compliance)
+# retrieval:
+#   semantic_weight: 0.6
+#   keyword_weight: 0.25
+#   structural_weight: 0.15
+#   top_k: 10
+#   min_score_threshold: 0.3
+#   chunking:
+#     target_chunk_size: 256
+
+# High Recall (research/exploration)
+# retrieval:
+#   semantic_weight: 0.4
+#   keyword_weight: 0.4
+#   structural_weight: 0.2
+#   top_k: 30
+#   min_score_threshold: 0.05
+#   enable_query_expansion: true
+#   chunking:
+#     target_chunk_size: 768
+
+# Speed Optimized
+# retrieval:
+#   semantic_weight: 0.3
+#   keyword_weight: 0.5
+#   structural_weight: 0.2
+#   parallel_retrieval: true
+#   enable_caching: true
+#   indexing:
+#     index_type: hnsw

@@ -1,0 +1,210 @@
+# Docker Compose - Development Environment
+# Hot reload enabled, debug mode, ports exposed
+
+services:
+  # PostgreSQL with pgvector - Vector database
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: sujbot2_postgres_dev
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=sujbot2
+      - POSTGRES_USER=sujbot_app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sujbot_app -d sujbot2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sujbot2_network
+    restart: unless-stopped
+
+  # Redis - Message broker & cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: sujbot2_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - sujbot2_network
+    restart: unless-stopped
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sujbot2_backend_dev
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=sujbot2
+      - POSTGRES_USER=sujbot_app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173","http://192.168.65.1:3000"]
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - HF_HOME=/app/models
+      - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence-transformers
+      - TOKENIZERS_PARALLELISM=false
+    volumes:
+      - ./backend:/app  # Hot reload
+      - ./src:/app/src  # Mount src/ for compliance modules
+      - ./backend/uploads:/app/uploads  # Use bind mount for correct permissions
+      - ./backend/indexes:/app/indexes  # Use bind mount for correct permissions
+      - ./backend/logs:/app/logs
+      - model_cache:/app/models
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sujbot2_network
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sujbot2_celery_dev
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=sujbot2
+      - POSTGRES_USER=sujbot_app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - HF_HOME=/app/models
+      - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence-transformers
+      - TOKENIZERS_PARALLELISM=false
+    volumes:
+      - ./backend:/app
+      - ./src:/app/src  # Mount src/ for compliance modules
+      - ./backend/uploads:/app/uploads  # Use bind mount for correct permissions
+      - ./backend/indexes:/app/indexes  # Use bind mount for correct permissions
+      - ./backend/logs:/app/logs
+      - model_cache:/app/models
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          memory: 6G
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_app inspect ping -d celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - sujbot2_network
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=1 --max-tasks-per-child=1 -E
+
+  # Celery Flower (monitoring)
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sujbot2_flower_dev
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - FLOWER_UNAUTHENTICATED_API=true
+      - FLOWER_BASIC_AUTH=admin:admin123
+      - HF_HOME=/app/models
+      - SENTENCE_TRANSFORMERS_HOME=/app/models/sentence-transformers
+      - TOKENIZERS_PARALLELISM=false
+    volumes:
+      - ./backend:/app
+      - ./src:/app/src  # Mount src/ for compliance modules
+      - model_cache:/app/models
+    depends_on:
+      - redis
+      - celery_worker
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5555/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - sujbot2_network
+    restart: unless-stopped
+    command: celery -A app.core.celery_app flower --port=5555
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: sujbot2_frontend_dev
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+      - VITE_WS_URL=ws://localhost:8000/ws
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Prevent node_modules from being overwritten
+    networks:
+      - sujbot2_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+  uploads_dev:
+    driver: local
+  indexes_dev:
+    driver: local
+  model_cache:
+    driver: local
+
+networks:
+  sujbot2_network:
+    driver: bridge

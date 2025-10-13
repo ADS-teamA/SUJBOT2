@@ -1,0 +1,92 @@
+{
+  "upload": {
+    "contract": "Nahrát smlouvu",
+    "law": "Nahrát zákon",
+    "dragDrop": "Přetáhněte soubor nebo klikněte",
+    "dragDropDescription": "Nahrajte dokumenty PDF, DOCX nebo TXT",
+    "orClickToSelect": "nebo klikněte pro výběr souborů",
+    "processing": "Zpracovávám...",
+    "button": "Nahrát soubor"
+  },
+  "chat": {
+    "placeholder": "Zeptejte se na něco...",
+    "send": "Odeslat",
+    "thinking": "Přemýšlím...",
+    "typing": "Píše..."
+  },
+  "document": {
+    "pages": "stránek",
+    "words": "slov",
+    "preview": "Náhled",
+    "remove": "Odebrat",
+    "status": {
+      "uploading": "Nahrávání",
+      "uploaded": "Nahráno",
+      "processing": "Zpracovávání",
+      "indexed": "Indexováno",
+      "error": "Chyba",
+      "cancelled": "Zrušeno"
+    }
+  },
+  "panel": {
+    "contracts": "Smlouvy",
+    "laws": "Zákony",
+    "noDocuments": "Žádné dokumenty"
+  },
+  "compliance": {
+    "issues": "Problémy s kompatibilitou",
+    "recommendations": "Doporučení",
+    "severity": {
+      "critical": "Kritické",
+      "high": "Vysoká",
+      "medium": "Střední",
+      "low": "Nízká",
+      "info": "Info"
+    }
+  },
+  "sources": "Zdroje",
+  "source": "zdroj",
+  "context": "Kontext",
+  "processing": "Zpracovávám",
+  "contract": "Smlouva",
+  "law": "Zákon",
+  "language": {
+    "czech": "Čeština",
+    "english": "Angličtina"
+  },
+  "theme": {
+    "light": "Světlý",
+    "dark": "Tmavý",
+    "toggle": "Přepnout téma"
+  },
+  "common": {
+    "loading": "Načítání...",
+    "error": "Chyba",
+    "success": "Úspěch",
+    "cancel": "Zrušit",
+    "close": "Zavřít"
+  },
+  "toast": {
+    "upload": {
+      "started": "Nahrávání dokumentu {{filename}}",
+      "success": "Dokument {{filename}} úspěšně nahrán a indexován",
+      "error": "Chyba při nahrávání: {{error}}",
+      "cancelled": "Zpracování dokumentu {{filename}} bylo zrušeno"
+    },
+    "document": {
+      "removed": "Dokument {{filename}} odebrán",
+      "removeError": "Chyba při odebírání: {{error}}"
+    },
+    "websocket": {
+      "connecting": "Připojování k serveru...",
+      "reconnected": "Připojení obnoveno",
+      "connectionFailed": "Nepodařilo se připojit k serveru",
+      "notConnected": "Nejste připojeni k serveru. Připojuji...",
+      "error": "Chyba komunikace: {{message}}"
+    },
+    "api": {
+      "error": "Chyba API",
+      "missingClaudeKey": "Chybí Claude API klíč v konfiguraci backendu"
+    }
+  }
+}
