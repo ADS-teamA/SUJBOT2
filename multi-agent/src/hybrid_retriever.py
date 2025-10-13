@@ -465,9 +465,24 @@ class HybridRetriever:
         logger.info(f"Reranking {len(results)} results")
         rerank_scores = await asyncio.to_thread(self.reranker.predict, pairs)
 
+        # Normalize reranker scores (cross-encoder returns logits, can be negative)
+        # Use min-max normalization to scale to 0-1 range
+        import numpy as np
+        rerank_scores_array = np.array(rerank_scores, dtype=np.float32)
+
+        # Min-max normalization
+        min_score = float(rerank_scores_array.min())
+        max_score = float(rerank_scores_array.max())
+
+        if max_score - min_score > 1e-6:  # Avoid division by zero
+            normalized_scores = (rerank_scores_array - min_score) / (max_score - min_score)
+        else:
+            # All scores are the same, assign 0.5
+            normalized_scores = np.full_like(rerank_scores_array, 0.5)
+
         # Update scores and sort
         for i, result in enumerate(results):
-            result.score = float(rerank_scores[i])
+            result.score = float(normalized_scores[i])
 
         results.sort(key=lambda x: x.score, reverse=True)
 

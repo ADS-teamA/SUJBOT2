@@ -28,6 +28,8 @@ from document_reader import DocumentReader
 from indexing_pipeline import IndexingPipeline
 from hybrid_retriever import HybridRetriever
 from claude_sdk_wrapper import ClaudeSDKClient, ClaudeCodeOptions
+from question_decomposer import QuestionDecomposer, QuestionDecompositionResult
+from answer_synthesizer import AnswerSynthesizer, SubAnswer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -45,6 +47,12 @@ class VectorizedDocumentAnalyzer:
 
     def __init__(self, config_path: str = "config.yaml"):
         self.config_path = config_path
+
+        # Load config file
+        import yaml
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+
         self.document_reader = DocumentReader()
         self.indexing_pipeline = IndexingPipeline(config_path)
         self.hybrid_retriever = HybridRetriever(config_path)
@@ -76,6 +84,14 @@ class VectorizedDocumentAnalyzer:
 
         self.claude_client = ClaudeSDKClient(api_key=api_key)
         self.indexed_documents = {}
+
+        # Inicializace question decomposer a answer synthesizer
+        self.question_decomposer = QuestionDecomposer(self.claude_client, model=self.subagent_model)
+        self.answer_synthesizer = AnswerSynthesizer(self.claude_client, model=self.main_model)
+
+        # Nastavení pro decomposition
+        self.enable_question_decomposition = os.getenv("ENABLE_QUESTION_DECOMPOSITION", "true").lower() == "true"
+        self.max_sub_questions = int(os.getenv("MAX_SUB_QUESTIONS", "5"))
 
         # Vytvoření cache adresáře pokud je povolena cache a adresář neexistuje
         if self.enable_cache:
@@ -128,8 +144,40 @@ class VectorizedDocumentAnalyzer:
 
         return result
 
-    async def answer_question(self, question: str, max_context_tokens: int = None) -> Dict[str, Any]:
-        """Answer question using vector search and Claude"""
+    async def answer_question(self, question: str, max_context_tokens: int = None, question_id: str = None) -> Dict[str, Any]:
+        """Answer question using vector search and Claude with optional decomposition"""
+
+        # Decompose question if enabled
+        if self.enable_question_decomposition:
+            console.print(f"\n[cyan]🔬 Rozklad otázky na podotázky...[/cyan]")
+            decomposition = await self.question_decomposer.decompose_question(
+                question,
+                question_id=question_id,
+                max_sub_questions=self.max_sub_questions
+            )
+
+            console.print(f"[dim]  • Strategie: {decomposition.decomposition_strategy}[/dim]")
+            console.print(f"[dim]  • Podotázek: {decomposition.total_sub_questions}[/dim]")
+
+            # If simple question (only 1 sub-question), use regular flow
+            if decomposition.total_sub_questions == 1:
+                return await self._answer_single_question(
+                    decomposition.sub_questions[0].text,
+                    max_context_tokens
+                )
+
+            # Multiple sub-questions: answer each and synthesize
+            return await self._answer_with_decomposition(
+                question,
+                decomposition,
+                max_context_tokens
+            )
+        else:
+            # Regular single-question flow
+            return await self._answer_single_question(question, max_context_tokens)
+
+    async def _answer_single_question(self, question: str, max_context_tokens: int = None) -> Dict[str, Any]:
+        """Answer a single question using vector search and Claude"""
         console.print(f"\n[yellow]🔍 Hledám relevantní kontext pro: {question}[/yellow]")
 
         # Nastavení max_context_tokens na základě konfigurace
@@ -318,11 +366,15 @@ async def main():
     parser.add_argument("--config", default="config.yaml", help="Konfigurační soubor")
     parser.add_argument("--output", "-o", help="Výstupní soubor pro výsledky")
     parser.add_argument("--verbose", "-v", action="store_true", help="Detailní výstup")
+    parser.add_argument("--debug", "-d", help="Debug režim (DEBUG level logging)")
 
     args = parser.parse_args()
 
-    if args.verbose:
+    if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+        console.print("[yellow]🐛 Debug mode aktivován[/yellow]")
+    elif args.verbose:
+        logging.getLogger().setLevel(logging.INFO)
 
     # Check document exists
     doc_path = Path(args.document)
@@ -382,6 +434,13 @@ async def main():
         console.print(f"✓ Zodpovězeno otázek: {len(results)}")
         avg_confidence = sum(r['confidence'] for r in results) / len(results) if results else 0
         console.print(f"📊 Průměrná confidence: {avg_confidence:.2%}")
+
+        # Print all Q&A pairs
+        console.print(f"\n[bold cyan]═══ Otázky a odpovědi ═══[/bold cyan]")
+        for i, result in enumerate(results, 1):
+            console.print(f"\n[bold yellow]Q{i}:[/bold yellow] {result.get('question', 'N/A')}")
+            console.print(f"[bold green]A{i}:[/bold green] {result.get('answer', 'N/A')}")
+            console.print(f"[dim]Confidence: {result.get('confidence', 0):.1%} | Zdroje: {result.get('num_sources', 0)}[/dim]")
 
     except Exception as e:
         console.print(f"[red]Chyba při analýze: {e}[/red]")
