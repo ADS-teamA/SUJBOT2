@@ -1,5 +1,6 @@
 """Application configuration using Pydantic settings."""
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List
 import os
 
@@ -44,6 +45,23 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "sujbot2"
     POSTGRES_USER: str = "sujbot_app"
     POSTGRES_PASSWORD: str = ""
+
+    @field_validator('POSTGRES_PASSWORD')
+    @classmethod
+    def validate_postgres_password(cls, v: str) -> str:
+        """Validate that PostgreSQL password is set."""
+        if not v or v.strip() == "":
+            raise ValueError(
+                "POSTGRES_PASSWORD must be set. "
+                "Set it in environment variables or .env file. "
+                "Never use empty or default passwords in production."
+            )
+        if v == "change_this_password" or v == "password" or v == "postgres":
+            raise ValueError(
+                f"POSTGRES_PASSWORD cannot be a common weak password like '{v}'. "
+                "Use a strong, unique password."
+            )
+        return v
 
     # File storage
     UPLOAD_DIR: str = "uploads"

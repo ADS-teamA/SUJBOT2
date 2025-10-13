@@ -59,6 +59,15 @@ celery -A app.core.celery_app flower --port=5555
 ### Docker Deployment
 
 ```bash
+# IMPORTANT: Before starting Docker, set required environment variables
+export POSTGRES_PASSWORD="your-secure-password-here"  # REQUIRED
+export CLAUDE_API_KEY="your-claude-api-key"          # REQUIRED
+
+# For first-time setup: Fix file permissions for Docker bind mounts
+# The container runs as UID 1000 (appuser), so host directories need correct ownership
+mkdir -p uploads indexes logs
+sudo chown -R 1000:1000 uploads indexes logs
+
 # Build and start all services
 docker-compose up -d
 
@@ -68,6 +77,12 @@ docker-compose logs -f
 # Stop services
 docker-compose down
 ```
+
+**Docker Permission Notes:**
+- Container runs as non-root user (UID 1000) for security
+- Bind-mounted directories (`uploads/`, `indexes/`, `logs/`) must be writable by UID 1000
+- Named volumes (`model_cache`) handle permissions automatically
+- If you get "Permission denied" errors, run: `sudo chown -R 1000:1000 uploads indexes logs`
 
 ## API Endpoints
 

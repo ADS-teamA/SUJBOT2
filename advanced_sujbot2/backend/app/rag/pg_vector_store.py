@@ -100,7 +100,8 @@ class PostgreSQLVectorStore:
                     password=self.config.password,
                     min_size=self.config.min_pool_size,
                     max_size=self.config.max_pool_size,
-                    command_timeout=60
+                    command_timeout=60,
+                    timeout=30  # Connection acquisition timeout
                 )
                 logger.info(
                     f"Created PostgreSQL connection pool: "
@@ -114,9 +115,51 @@ class PostgreSQLVectorStore:
                     )
                     logger.info(f"Set ivfflat.probes = {self.config.vector_search_probes}")
 
+            except asyncpg.InvalidPasswordError as e:
+                logger.error(
+                    f"PostgreSQL authentication failed for user {self.config.user}: {e}. "
+                    f"Check POSTGRES_PASSWORD in environment."
+                )
+                raise ConnectionError(
+                    f"Database authentication failed for user '{self.config.user}'. "
+                    f"Verify POSTGRES_PASSWORD is set correctly."
+                ) from e
+            except asyncpg.InvalidCatalogNameError as e:
+                logger.error(
+                    f"Database '{self.config.database}' does not exist: {e}. "
+                    f"Run database init script first."
+                )
+                raise ConnectionError(
+                    f"Database '{self.config.database}' not found on "
+                    f"{self.config.host}:{self.config.port}. "
+                    f"Create the database using: psql -c 'CREATE DATABASE {self.config.database}'"
+                ) from e
+            except asyncio.TimeoutError as e:
+                logger.error(
+                    f"Connection timeout to {self.config.host}:{self.config.port}: {e}. "
+                    f"Check PostgreSQL is running and network is reachable."
+                )
+                raise ConnectionError(
+                    f"Database connection timeout to {self.config.host}:{self.config.port}. "
+                    f"Ensure PostgreSQL is running and accessible."
+                ) from e
+            except OSError as e:
+                # Covers connection refused, network unreachable, etc.
+                logger.error(
+                    f"Network error connecting to PostgreSQL at {self.config.host}:{self.config.port}: {e}"
+                )
+                raise ConnectionError(
+                    f"Cannot connect to PostgreSQL at {self.config.host}:{self.config.port}. "
+                    f"Check that PostgreSQL is running and the host/port are correct."
+                ) from e
             except Exception as e:
-                logger.error(f"Failed to create connection pool: {e}")
-                raise
+                logger.error(
+                    f"Unexpected error creating connection pool: {type(e).__name__}: {e}",
+                    exc_info=True
+                )
+                raise ConnectionError(
+                    f"Database connection failed: {type(e).__name__}: {e}"
+                ) from e
 
     async def close(self):
         """Close connection pool"""
@@ -169,36 +212,70 @@ class PostgreSQLVectorStore:
 
         embeddings = np.array(embeddings)
 
-        # 2. Insert into PostgreSQL
-        async with self._pool.acquire() as conn:
-            async with conn.transaction():
-                # Insert document record
-                await self._insert_document(
-                    conn, document_id, document_type, chunks, metadata
-                )
+        # 2. Insert into PostgreSQL with error handling
+        try:
+            async with self._pool.acquire() as conn:
+                async with conn.transaction():
+                    # Insert document record
+                    await self._insert_document(
+                        conn, document_id, document_type, chunks, metadata
+                    )
 
-                # Batch insert chunks with embeddings
-                await self._insert_chunks_batch(
-                    conn, chunks, embeddings, document_id, document_type
-                )
+                    # Batch insert chunks with embeddings
+                    await self._insert_chunks_batch(
+                        conn, chunks, embeddings, document_id, document_type
+                    )
 
-                # Build references table
-                await self._insert_references(conn, chunks, document_id)
+                    # Build references table
+                    await self._insert_references(conn, chunks, document_id)
 
-                # Build knowledge graph edges (if applicable)
-                if document_type == 'law_code':
-                    await self._build_knowledge_graph(conn, chunks, document_id)
+                    # Build knowledge graph edges (if applicable)
+                    if document_type == 'law_code':
+                        await self._build_knowledge_graph(conn, chunks, document_id)
 
-        # 3. Update in-memory caches
-        await self.reference_map.build(chunks)
+            # 3. Update in-memory caches ONLY if transaction succeeded
+            await self.reference_map.build(chunks)
 
-        self.document_info[document_id] = {
-            'document_type': document_type,
-            'num_chunks': len(chunks),
-            'metadata': metadata or {}
-        }
+            self.document_info[document_id] = {
+                'document_type': document_type,
+                'num_chunks': len(chunks),
+                'metadata': metadata or {}
+            }
 
-        logger.info(f"Successfully added document {document_id} to PostgreSQL")
+            logger.info(f"Successfully added document {document_id} to PostgreSQL")
+
+        except asyncpg.UniqueViolationError as e:
+            logger.error(
+                f"Document {document_id} already exists in database: {e}. "
+                f"Delete the existing document first or use a different document_id."
+            )
+            raise ValueError(
+                f"Document '{document_id}' already exists. "
+                f"Use delete_document() first or choose a different ID."
+            ) from e
+        except asyncpg.CheckViolationError as e:
+            logger.error(
+                f"Data constraint violation for {document_id}: {e}. "
+                f"Check embedding dimensions match schema (vector(768))."
+            )
+            raise ValueError(
+                f"Data validation error for document '{document_id}': {e}. "
+                f"Ensure embeddings have correct dimensions (768)."
+            ) from e
+        except asyncpg.DiskFullError as e:
+            logger.error(f"Database disk full while indexing {document_id}: {e}")
+            raise OSError(
+                f"Database storage full. Free up space and retry indexing document '{document_id}'."
+            ) from e
+        except Exception as e:
+            logger.error(
+                f"Failed to add document {document_id} to PostgreSQL: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+            # Don't update caches if transaction failed
+            raise RuntimeError(
+                f"Database indexing failed for document '{document_id}': {type(e).__name__}: {e}"
+            ) from e
 
     async def _insert_document(
         self,

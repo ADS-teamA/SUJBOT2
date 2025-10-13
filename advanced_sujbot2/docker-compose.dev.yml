@@ -11,7 +11,7 @@ services:
     environment:
       - POSTGRES_DB=sujbot2
       - POSTGRES_USER=sujbot_app
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_this_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
@@ -59,7 +59,7 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_DB=sujbot2
       - POSTGRES_USER=sujbot_app
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_this_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment}
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173","http://192.168.65.1:3000"]
       - ENVIRONMENT=development
@@ -105,7 +105,7 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_DB=sujbot2
       - POSTGRES_USER=sujbot_app
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_this_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment}
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - ENVIRONMENT=development
       - LOG_LEVEL=DEBUG

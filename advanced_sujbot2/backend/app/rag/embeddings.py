@@ -147,7 +147,7 @@ class LegalEmbedder:
         else:
             texts = [chunk.content for chunk in chunks]
 
-        # Batch encode
+        # Batch encode with specific error handling
         try:
             embeddings = await asyncio.to_thread(
                 self._encode_texts,
@@ -156,9 +156,44 @@ class LegalEmbedder:
             )
             return embeddings
 
+        except torch.cuda.OutOfMemoryError as e:
+            logger.error(
+                f"GPU out of memory while embedding {len(chunks)} chunks. "
+                f"Total text length: {sum(len(t) for t in texts)} chars. "
+                f"Consider reducing batch_size or using CPU device."
+            )
+            raise EmbeddingError(
+                f"GPU memory exhausted while embedding {len(chunks)} chunks. "
+                f"Try reducing batch_size from {self.config.batch_size} or set device='cpu' in config."
+            ) from e
+        except RuntimeError as e:
+            error_msg = str(e)
+            if "CUDA" in error_msg or "cuda" in error_msg:
+                logger.error(f"CUDA runtime error: {e}. Device: {self.device}")
+                raise EmbeddingError(
+                    f"GPU error (device={self.device}): {e}. "
+                    f"Check CUDA installation or use device='cpu'."
+                ) from e
+            logger.error(f"Runtime error during embedding: {e}", exc_info=True)
+            raise EmbeddingError(f"Embedding runtime error: {e}") from e
+        except ValueError as e:
+            logger.error(
+                f"Invalid input for embedding model: {e}. "
+                f"Chunk count: {len(chunks)}, Text lengths: {[len(t) for t in texts]}"
+            )
+            raise EmbeddingError(
+                f"Invalid embedding input for {len(chunks)} chunks: {e}. "
+                f"Check text content is valid."
+            ) from e
         except Exception as e:
-            logger.error(f"Failed to generate embeddings: {e}")
-            raise EmbeddingError(f"Embedding generation failed: {e}")
+            logger.error(
+                f"Unexpected embedding error: {type(e).__name__}: {e}. "
+                f"Chunks: {len(chunks)}, Device: {self.device}, Model: {self.config.model_name}",
+                exc_info=True
+            )
+            raise EmbeddingError(
+                f"Embedding failed for {len(chunks)} chunks: {type(e).__name__}: {e}"
+            ) from e
 
     def _encode_texts(self, texts: List[str], progress_callback: Optional[callable] = None) -> np.ndarray:
         """Encode texts using the model (runs in thread)"""
