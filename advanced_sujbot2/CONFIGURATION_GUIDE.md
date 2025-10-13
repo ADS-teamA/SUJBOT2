@@ -46,7 +46,7 @@ reranking_config = create_reranking_config(config)
 # Use dot notation for nested values
 semantic_weight = config.get("retrieval.semantic_weight")  # 0.5
 top_k = config.get("retrieval.top_k")  # 20
-model = config.get("embeddings.model")  # "BAAI/bge-m3"
+model = config.get("embeddings.model")  # "joelniklaus/legal-xlm-roberta-base"
 
 # With default values
 batch_size = config.get("embeddings.batch_size", 32)
@@ -69,10 +69,10 @@ retrieval:
 
 # Embeddings
 embeddings:
-  model: "BAAI/bge-m3"      # Multilingual embedding model
+  model: "joelniklaus/legal-xlm-roberta-base"  # Legal XLM-RoBERTa (768 dim, Czech legal-specialized)
   device: "cpu"             # cpu | cuda | mps | auto
   batch_size: 32
-  max_sequence_length: 8192
+  max_sequence_length: 512  # Legal XLM-RoBERTa max length
 
 # Reranking
 reranking:
@@ -134,7 +134,7 @@ CROSS_DOC_EXPLICIT_WEIGHT=0.6
 KNOWLEDGE_GRAPH_BOOST_FACTOR=1.5
 
 # Models
-EMBEDDING_MODEL=BAAI/bge-m3
+EMBEDDING_MODEL=joelniklaus/legal-xlm-roberta-base
 RERANKING_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
 ```
 

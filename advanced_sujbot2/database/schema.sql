@@ -5,7 +5,7 @@
 -- - 100,000+ pages (300K-500K chunks)
 -- - Multi-document architecture (contracts vs laws)
 -- - Legal metadata (§ references, hierarchy paths)
--- - Vector embeddings (BGE-M3, 1024 dimensions)
+-- - Vector embeddings (Legal XLM-RoBERTa, 768 dimensions)
 -- - Full-text search (Czech language)
 -- - Knowledge graph relationships
 -- - Efficient hybrid search (vector + BM25 + metadata)
