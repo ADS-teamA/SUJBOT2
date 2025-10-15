@@ -1,0 +1,430 @@
+import fitz  # PyMuPDF
+import pdfplumber
+import json
+from pathlib import Path
+import statistics
+import re
+import string
+import tiktoken
+from bs4 import BeautifulSoup
+from docx import Document as DocxDocument
+
+# ============================================================
+# Class 1: Document Folder → Structured JSON    
+# ============================================================
+class DocumentToJSONConverter:
+    """
+    Converts all supported documents (PDF, DOCX, HTML) in a folder
+    into structured JSONs with font-size-based or logical sectioning.
+    Output is organized into either a 'regulation' or 'documentation' folder.
+    """
+
+    SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".html", ".htm"]
+
+    def __init__(self, input_folder, output_dir=None, fontsize_threshold=2.0, regulation=False):
+        """
+        :param input_folder: Path to folder containing input documents.
+        :param output_dir: Base output directory (defaults to <repo_root>/processed_data).
+        :param fontsize_threshold: Font-size difference to define section breaks in PDFs.
+        :param regulation: Boolean — if True, save under 'regulation', else under 'documentation'.
+        """
+        self.input_folder = Path(input_folder).resolve()
+        self.fontsize_threshold = fontsize_threshold
+        self.regulation = regulation
+
+        # Base output path
+        repo_root = Path(__file__).resolve().parent
+        base_dir = Path(output_dir).resolve() if output_dir else repo_root / "processed_data"
+
+        # Choose subfolder based on the nature of documents
+        if self.regulation:
+            self.output_dir = base_dir / "regulation"
+        else:
+            self.output_dir = base_dir / "documentation"
+
+        self.json_dir = self.output_dir / "structured_json"
+        self.json_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"📂 Output directory set to: {self.output_dir}")
+
+    # ---------------------------------------------
+    #    universal entry point
+    # ---------------------------------------------
+    def run(self):
+        all_files = [
+            f for f in self.input_folder.iterdir()
+            if f.suffix.lower() in self.SUPPORTED_EXTENSIONS
+        ]
+        if not all_files:
+            print(f"⚠️ No supported files found in {self.input_folder}")
+            return []
+
+        json_paths = []
+        for file in all_files:
+            print(f"\n📄 Processing {file.name}...")
+
+            if file.suffix.lower() == ".pdf":
+                sections = self.extract_from_pdf(file)
+            elif file.suffix.lower() == ".docx":
+                sections = self.extract_from_docx(file)
+            elif file.suffix.lower() in [".html", ".htm"]:
+                sections = self.extract_from_html(file)
+            else:
+                print(f"Skipping unsupported file: {file}")
+                continue
+
+            sections = self.merge_tiny_sections(sections)
+            json_path = self.save_as_json(sections, file)
+            json_paths.append(json_path)
+
+        print(f"\n✅ Completed processing {len(json_paths)} documents.")
+        return json_paths
+
+    # ---------------------------------------------
+    #    PDF extraction   
+    # ---------------------------------------------
+    def extract_from_pdf(self, pdf_path):
+        doc = fitz.open(pdf_path)
+        sections = []
+        current_section = {"font_size": None, "text": "", "page": 1, "tables": []}
+        prev_size = None
+
+        def normalize_whitespace(s):
+            return re.sub(r"[\t\r\n]+", " ", s).strip()
+
+        def is_symbol_only(s):
+            if not s:
+                return False
+            s = s.strip()
+            if len(s) <= 2 and all(ch in string.punctuation for ch in s):
+                return True
+            non_ws = re.sub(r"\s+", "", s)
+            pct_punct = sum(1 for ch in non_ws if ch in string.punctuation) / max(1, len(non_ws))
+            return pct_punct >= 0.8
+
+        for page_num, page in enumerate(doc, start=1):
+            for block in page.get_text("dict")["blocks"]:
+                if "lines" not in block:
+                    continue
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        text = normalize_whitespace(span["text"])
+                        if not text:
+                            continue
+                        size = round(span["size"], 1)
+                        section_break = prev_size and abs(size - prev_size) >= self.fontsize_threshold
+
+                        if is_symbol_only(text):
+                            if current_section["text"].endswith("-"):
+                                current_section["text"] = current_section["text"][:-1] + text
+                            else:
+                                current_section["text"] += text
+                        else:
+                            if section_break and current_section["text"].strip():
+                                sections.append(current_section)
+                                current_section = {"font_size": size, "text": text, "page": page_num, "tables": []}
+                            else:
+                                if current_section["text"].endswith("-"):
+                                    current_section["text"] = current_section["text"][:-1] + text
+                                else:
+                                    if current_section["text"]:
+                                        current_section["text"] += " " + text
+                                    else:
+                                        current_section["text"] = text
+                            current_section["font_size"] = size
+                            current_section["page"] = page_num
+
+                        prev_size = size
+
+            if current_section["text"].strip():
+                current_section["text"] = normalize_whitespace(current_section["text"])
+                sections.append(current_section)
+                current_section = {"font_size": None, "text": "", "page": page_num, "tables": []}
+
+        doc.close()
+        tables = self.extract_tables_from_pdf(pdf_path)
+        sections = self.attach_tables_to_sections(sections, tables)
+
+        print(f"Extracted {len(sections)} text sections from {pdf_path.name}")
+        return sections
+
+    def extract_tables_from_pdf(self, pdf_path):
+        tables = []
+        with pdfplumber.open(pdf_path) as pdf:
+            for page_num, page in enumerate(pdf.pages, start=1):
+                try:
+                    for table_data in page.extract_tables():
+                        if len(table_data) > 1:
+                            tables.append({
+                                "page": page_num,
+                                "headers": table_data[0],
+                                "rows": table_data[1:]
+                            })
+                except Exception as e:
+                    print(f"Table extraction error on page {page_num}: {e}")
+        return tables
+
+    def attach_tables_to_sections(self, sections, tables):
+        for table in tables:
+            same_page = [s for s in sections if s["page"] == table["page"]]
+            if same_page:
+                same_page[-1]["tables"].append(table)
+            else:
+                sections.append({
+                    "font_size": None,
+                    "page": table["page"],
+                    "text": "",
+                    "tables": [table]
+                })
+        return sections
+
+    # ---------------------------------------------
+    #    DOCX extraction   
+    # ---------------------------------------------
+    def extract_from_docx(self, docx_path):
+        doc = DocxDocument(docx_path)
+        sections = []
+        page_counter = 1
+
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if not text:
+                continue
+
+            font_size = para.runs[0].font.size.pt if para.runs and para.runs[0].font.size else 11
+            sections.append({
+                "font_size": round(font_size, 1),
+                "text": text,
+                "page": page_counter,
+                "tables": []
+            })
+
+        for table in doc.tables:
+            headers = [cell.text.strip() for cell in table.rows[0].cells] if table.rows else []
+            rows = [[cell.text.strip() for cell in row.cells] for row in table.rows[1:]]
+            if headers or rows:
+                sections.append({
+                    "font_size": None,
+                    "page": page_counter,
+                    "text": "",
+                    "tables": [{"headers": headers, "rows": rows}]
+                })
+
+        print(f"Extracted {len(sections)} sections from {docx_path.name}")
+        return sections
+
+    # ---------------------------------------------
+    #    HTML extraction   
+    # ---------------------------------------------
+    def extract_from_html(self, html_path):
+        html_content = html_path.read_text(encoding="utf-8", errors="ignore")
+        soup = BeautifulSoup(html_content, "html.parser")
+        sections = []
+        page_counter = 1
+
+        for element in soup.find_all(["h1", "h2", "h3", "p", "li"]):
+            text = element.get_text(strip=True)
+            if not text:
+                continue
+
+            tag = element.name
+            if tag == "h1":
+                font_size = 20
+            elif tag == "h2":
+                font_size = 16
+            elif tag == "h3":
+                font_size = 14
+            else:
+                font_size = 12
+
+            sections.append({
+                "font_size": font_size,
+                "text": text,
+                "page": page_counter,
+                "tables": []
+            })
+
+        for table in soup.find_all("table"):
+            headers = [th.get_text(strip=True) for th in table.find_all("th")]
+            rows = [[td.get_text(strip=True) for td in row.find_all("td")] for row in table.find_all("tr")]
+            if headers or rows:
+                sections.append({
+                    "font_size": None,
+                    "page": page_counter,
+                    "text": "",
+                    "tables": [{"headers": headers, "rows": rows}]
+                })
+
+        print(f"Extracted {len(sections)} sections from {html_path.name}")
+        return sections
+
+    # ---------------------------------------------
+    #    utilities   
+    # ---------------------------------------------
+    def merge_tiny_sections(self, sections, min_length=80):
+        merged = []
+        buffer = None
+
+        for sec in sections:
+            text_len = len(sec["text"].strip())
+
+            if text_len < min_length:
+                if merged:
+                    merged[-1]["text"] += " " + sec["text"].strip()
+                    merged[-1]["tables"].extend(sec.get("tables", []))
+                else:
+                    buffer = sec
+            else:
+                if buffer:
+                    sec["text"] = buffer["text"] + " " + sec["text"]
+                    buffer = None
+                merged.append(sec)
+
+        print(f"Merged tiny sections: {len(sections)} → {len(merged)}")
+        return merged
+
+    def save_as_json(self, sections, source_file):
+        structured = {
+            "metadata": {
+                "source": str(source_file),
+                "type": source_file.suffix.lower(),
+                "num_sections": len(sections),
+                "category": "regulation" if self.regulation else "documentation"
+            },
+            "content": sections
+        }
+
+        json_path = self.json_dir / f"{source_file.stem}.json"
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(structured, f, indent=2, ensure_ascii=False)
+        print(f"✅ Saved structured JSON → {json_path}")
+        return json_path
+
+# ============================================================
+# Class 2: JSON Folder → JSONL + Chunk Analysis
+# ============================================================
+class JSONChunkProcessor:
+    """
+    Converts all structured JSON files in a folder into JSONL files.
+    Supports rechunking, overlap, statistics, and chunk preview.
+    """
+
+    def __init__(self, json_folder, output_dir=None):
+        self.json_folder = Path(json_folder).resolve()
+        repo_root = Path(__file__).resolve().parent
+        self.output_dir = Path(output_dir).resolve() if output_dir else repo_root / "processed_data"
+        self.jsonl_dir = self.output_dir / "jsonl_chunks"
+        self.jsonl_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---------------------------------------------
+    # Token-based rechunking with overlap
+    # ---------------------------------------------
+    def rechunk_with_overlap(self, sections, max_tokens=1000, overlap=150, model="text-embedding-3-small"):
+        enc = tiktoken.encoding_for_model(model)
+        new_sections = []
+        for sec in sections:
+            tokens = enc.encode(sec["text"])
+            start = 0
+            while start < len(tokens):
+                end = start + max_tokens
+                chunk_text = enc.decode(tokens[start:end])
+                new_sections.append({
+                    "page": sec["page"],
+                    "text": chunk_text,
+                    "font_size": sec.get("font_size"),
+                    "tables": sec.get("tables", [])
+                })
+                start += max_tokens - overlap
+        return new_sections
+
+    # ---------------------------------------------
+    # Convert JSON → JSONL
+    # ---------------------------------------------
+    def json_to_jsonl(self, json_path, rechunk=False, **kwargs):
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        sections = data["content"]
+        if rechunk:
+            sections = self.rechunk_with_overlap(sections, **kwargs)
+
+        jsonl_path = self.jsonl_dir / f"{Path(json_path).stem}.jsonl"
+        with open(jsonl_path, "w", encoding="utf-8") as out:
+            for i, chunk in enumerate(sections):
+                record = {
+                    "id": f"{Path(json_path).stem}_{i}",
+                    "page": chunk["page"],
+                    "font_size": chunk["font_size"],
+                    "text": chunk["text"].strip(),
+                    "tables": chunk.get("tables", []),
+                    "metadata": data["metadata"]
+                }
+                out.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+        print(f"✅ Saved JSONL chunks → {jsonl_path}")
+        return jsonl_path
+
+    # ---------------------------------------------
+    # Full folder pipeline
+    # ---------------------------------------------
+    def run(self, rechunk=False, **kwargs):
+        json_files = list(self.json_folder.glob("*.json"))
+        if not json_files:
+            print(f"⚠️ No JSON files found in {self.json_folder}")
+            return []
+
+        jsonl_paths = []
+        for jfile in json_files:
+            print(f"\n📘 Processing {jfile.name}...")
+            jsonl_path = self.json_to_jsonl(jfile, rechunk=rechunk, **kwargs)
+            jsonl_paths.append(jsonl_path)
+
+        print(f"\n✅ Completed conversion of {len(jsonl_paths)} JSON files to JSONL.")
+        return jsonl_paths
+
+    # ---------------------------------------------
+    # Analyze all JSONL files
+    # ---------------------------------------------
+    def analyze_all_chunks(self):
+        jsonl_files = list(self.jsonl_dir.glob("*.jsonl"))
+        if not jsonl_files:
+            print(f"⚠️ No JSONL files found in {self.jsonl_dir}")
+            return
+
+        for fpath in jsonl_files:
+            print(f"\n📊 Analyzing {fpath.name}...")
+            self.analyze_chunks(fpath)
+
+    def analyze_chunks(self, jsonl_path):
+        lengths, num_tables = [], 0
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            for line in f:
+                record = json.loads(line)
+                text_len = len(record.get("text", ""))
+                lengths.append(text_len)
+                num_tables += len(record.get("tables", []))
+
+        print(f"Total chunks: {len(lengths)} | Avg length: {sum(lengths)/len(lengths):.1f} | "
+              f"Median: {statistics.median(lengths):.1f} | Tables: {num_tables}")
+
+    # ---------------------------------------------
+    # Print a specific chunk
+    # ---------------------------------------------
+    def print_chunk(self, file_name, index):
+        jsonl_path = self.jsonl_dir / f"{Path(file_name).stem}.jsonl"
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if index < 0 or index >= len(lines):
+            print(f"❌ Invalid chunk index {index}. File has {len(lines)} chunks.")
+            return
+
+        record = json.loads(lines[index])
+        print(f"\n🧩 Chunk {index} from {file_name}")
+        print(f"Page: {record['page']} | Font size: {record['font_size']}")
+        print(f"Text length: {len(record['text'])} | Tables: {len(record['tables'])}")
+        print("\n--- TEXT ---")
+        print(record["text"][:1000])
+        print("\n--- END ---\n")
+
+DocumentToJSONConverter(input_folder=r'C:\Users\Majitel\Desktop\VŠ\FJFI\NMS\ADS\data\ESG_reporty\PDF', regulation=False).run()
