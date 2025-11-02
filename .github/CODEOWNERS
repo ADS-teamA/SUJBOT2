@@ -13,7 +13,7 @@
 # All changes require approval from @michalprusek
 * @michalprusek
 
-# Specific rules for critical files (optional - can be added later)
-# /.github/workflows/ @michalprusek
-# /src/agent/ @michalprusek
-# /CLAUDE.md @michalprusek
+# Specific rules for critical files
+/.github/workflows/ @michalprusek
+/src/agent/ @michalprusek
+/CLAUDE.md @michalprusek
