@@ -143,6 +143,10 @@ class FAISSVectorStore:
                 "layer": layer,
                 # Store raw_content for generation (without SAC)
                 "content": chunk.raw_content,
+                # Semantic clustering (PHASE 4.5)
+                "cluster_id": chunk.metadata.cluster_id,
+                "cluster_label": chunk.metadata.cluster_label,
+                "cluster_confidence": chunk.metadata.cluster_confidence,
             }
             metadata.append(chunk_meta)
 
@@ -655,6 +659,56 @@ class FAISSVectorStore:
         logger.info(f"Vector store loaded: {store.get_stats()}")
 
         return store
+
+    # ------------------------------------------------------------------
+    # Utilities for analytics/clustering
+    # ------------------------------------------------------------------
+    def get_layer_embeddings_and_metadata(self, layer: int) -> Tuple[np.ndarray, List[Dict]]:
+        """
+        Reconstruct and return all embeddings and metadata for a given layer.
+
+        Args:
+            layer: 1 (document), 2 (section), or 3 (chunk)
+
+        Returns:
+            Tuple of (embeddings, metadata_list)
+            - embeddings: np.ndarray of shape (N, D)
+            - metadata_list: list of metadata dicts aligned with embeddings order
+
+        Notes:
+            - Embeddings are returned as float32 and re-normalized for cosine operations.
+            - Order matches FAISS index order and corresponding metadata list.
+        """
+        if layer == 1:
+            index = self.index_layer1
+            metadata = self.metadata_layer1
+        elif layer == 2:
+            index = self.index_layer2
+            metadata = self.metadata_layer2
+        elif layer == 3:
+            index = self.index_layer3
+            metadata = self.metadata_layer3
+        else:
+            raise ValueError(f"Invalid layer: {layer}")
+
+        n_total = index.ntotal
+        if n_total == 0:
+            return np.zeros((0, self.dimensions), dtype=np.float32), []
+
+        # Reconstruct vectors from FAISS index
+        vectors = np.zeros((n_total, self.dimensions), dtype=np.float32)
+        for i in range(n_total):
+            # IndexFlat supports reconstruct
+            vec = index.reconstruct(i)
+            # Faiss returns np array of float32
+            vectors[i] = vec
+
+        # Normalize for cosine operations (safety)
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1, norms)
+        vectors = vectors / norms
+
+        return vectors, metadata
 
 
 # Example usage

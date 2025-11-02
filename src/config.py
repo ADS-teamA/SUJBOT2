@@ -667,3 +667,68 @@ if __name__ == "__main__":
     print("Models (from .env):")
     print(f"  LLM: {config.models.llm_provider}/{config.models.llm_model}")
     print(f"  Embedding: {config.models.embedding_provider}/{config.models.embedding_model}")
+
+
+@dataclass
+class ClusteringConfig:
+    """
+    Configuration for semantic clustering (PHASE 4.5).
+
+    Clusters chunks based on embedding similarity to enable:
+    - Topic-based retrieval
+    - Diversity-aware search
+    - Cluster-based analytics
+
+    Supported algorithms:
+    - HDBSCAN: Automatic cluster count, noise handling, density-based
+    - Agglomerative: Hierarchical clustering with cosine distance
+
+    All algorithms use cosine distance for consistency with normalized embeddings.
+    """
+
+    # Algorithm selection
+    algorithm: str = "hdbscan"  # "hdbscan" or "agglomerative"
+
+    # Cluster count (agglomerative only, None = auto-detect)
+    n_clusters: Optional[int] = None
+
+    # HDBSCAN parameters
+    min_cluster_size: int = 5  # Minimum chunks per cluster
+
+    # Agglomerative auto-detection parameters
+    max_clusters: int = 50  # Maximum clusters for auto-detection
+    min_clusters: int = 5  # Minimum clusters for auto-detection
+
+    # Label generation
+    enable_cluster_labels: bool = True  # Generate semantic labels using LLM
+
+    # Which layers to cluster (default: [3] for chunk-level only)
+    cluster_layers: List[int] = field(default_factory=lambda: [3])
+
+    # Visualization
+    enable_visualization: bool = False  # Generate UMAP visualization
+    visualization_output_dir: str = "output/clusters"  # Output directory for plots
+
+    @classmethod
+    def from_env(cls) -> "ClusteringConfig":
+        """
+        Load clustering configuration from environment variables.
+
+        Environment Variables:
+            CLUSTERING_ALGORITHM: "hdbscan" or "agglomerative" (default: "hdbscan")
+            CLUSTERING_N_CLUSTERS: Number of clusters for agglomerative (default: None = auto)
+            CLUSTERING_MIN_SIZE: Minimum cluster size for HDBSCAN (default: 5)
+            CLUSTERING_ENABLE_LABELS: Generate semantic labels (default: "true")
+            CLUSTERING_ENABLE_VIZ: Generate UMAP visualization (default: "false")
+
+        Returns:
+            ClusteringConfig instance
+        """
+        return cls(
+            algorithm=os.getenv("CLUSTERING_ALGORITHM", "hdbscan"),
+            n_clusters=int(os.getenv("CLUSTERING_N_CLUSTERS")) if os.getenv("CLUSTERING_N_CLUSTERS") else None,
+            min_cluster_size=int(os.getenv("CLUSTERING_MIN_SIZE", "5")),
+            enable_cluster_labels=os.getenv("CLUSTERING_ENABLE_LABELS", "true").lower() == "true",
+            enable_visualization=os.getenv("CLUSTERING_ENABLE_VIZ", "false").lower() == "true",
+            visualization_output_dir=os.getenv("CLUSTERING_VIZ_DIR", "output/clusters"),
+        )
