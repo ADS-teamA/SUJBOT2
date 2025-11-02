@@ -31,7 +31,7 @@ class TestEntityExtractionConfig:
         assert config.llm_model == "gpt-4o-mini"
         assert config.temperature == 0.0
         assert config.min_confidence == 0.6
-        assert config.batch_size == 10
+        assert config.batch_size == 20  # Optimized: 2× faster
 
     def test_enabled_entity_types(self):
         """Test enabled entity types."""

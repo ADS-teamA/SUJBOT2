@@ -1,65 +1,239 @@
-Extract semantic relationships between entities in the following legal document text.
+Extract semantic relationships between entities in legal and nuclear regulatory documents.
 
 **Entities** (extracted from this text):
 {entities_str}
 
-**Relationship Types**:
-- superseded_by: Old standard → New standard (e.g., "GRI 306:2016" superseded_by "GRI 306:2020")
-- supersedes: New standard → Old standard (inverse of superseded_by)
-- references: Document A → Document B (e.g., "GRI 303" references "ISO 14001")
-- issued_by: Standard → Organization (e.g., "GRI 306" issued_by "GSSB")
-- developed_by: Standard → Organization
-- published_by: Document → Organization
-- effective_date: Standard → Date (e.g., "GRI 303" effective_date "2018-07-01")
-- expiry_date: Contract → Date
-- covers_topic: Standard → Topic (e.g., "GRI 306" covers_topic "waste management")
-- contains_clause: Document → Clause
-- applies_to: Regulation → Location
-- mentioned_in: Entity → Chunk (for provenance)
+**Relationship Types (40 types)**:
+
+=== COMPLIANCE CORE (5 types) ⭐ ===
+- complies_with: Clause → Requirement (with confidence score)
+- contradicts: Clause → Requirement (non-compliance)
+- partially_satisfies: Clause → Requirement (partial compliance)
+- specifies_requirement: Legal Provision → Requirement (law defines obligation)
+- requires_clause: Requirement → Required clause type
+
+=== REGULATORY HIERARCHY (5 types) ===
+- implements: Decree → Law (national implementation, e.g., "vyhláška se vydává podle zákona")
+- transposes: National law → EU directive (EU law transposition)
+- superseded_by: Old regulation → New regulation
+- supersedes: New regulation → Old regulation
+- amends: Amendment → Original regulation
+
+=== DOCUMENT STRUCTURE (4 types) ===
+- contains_clause: Contract/Document → Clause
+- contains_provision: Regulation → Legal provision (law contains §)
+- contains: Document → Section (generic hierarchy)
+- part_of: Section → Document (reverse hierarchy)
+
+=== CITATIONS & REFERENCES (4 types) ===
+- references: Document A → Document B (generic reference)
+- referenced_by: Document B → Document A (reverse)
+- cites_provision: Document → Legal provision (specific § citation)
+- based_on: Analysis/Decision → Evidence/Source
+
+=== AUTHORIZATION & ENFORCEMENT (5 types) ===
+- issued_by: Permit/Regulation → Organization (generic)
+- granted_by: Permit → Authority (specific authorization, e.g., "vydal SÚJB")
+- enforced_by: Regulation → Authority (enforcement responsibility)
+- subject_to_inspection: Facility → Inspection type
+- supervises: Authority → Facility/Operator (oversight, e.g., "vykonává dozor")
+
+=== NUCLEAR TECHNICAL (8 types) ===
+- regulated_by: Facility/Reactor/System → Regulation (e.g., "podléhá zákonu")
+- operated_by: Facility/Reactor → Organization
+- has_system: Facility/Reactor → System
+- performs_function: System → Safety function
+- uses_fuel: Reactor → Fuel type (e.g., "používá palivo IRT-4M")
+- contains_isotope: Fuel/Source → Isotope (e.g., "obsahuje U-235")
+- produces_waste: Reactor/Process → Waste category
+- has_dose_limit: Worker category/Area → Dose limit (e.g., "limit pro kat. A je 20 mSv")
+
+=== TEMPORAL (4 types) ===
+- effective_date: Regulation/Contract → Date
+- expiry_date: Permit/Contract → Date
+- signed_on: Contract → Date
+- decommissioned_on: Facility → Date
+
+=== CONTENT & TOPICS (2 types) ===
+- covers_topic: Document → Topic
+- applies_to: Regulation → Location/Jurisdiction
+
+=== PROVENANCE (3 types) ===
+- mentioned_in: Entity → Chunk (all occurrences)
+- defined_in: Entity → Chunk (first occurrence/definition)
+- documented_in: Activity/Decision → Report/Document
 
 **Document Text**:
 {chunk_content}
 
-**Output Format** (JSON array):
+**Extraction Rules**:
+
+1. **EVIDENCE REQUIRED**: Every relationship MUST have evidence text (exact quote from document)
+2. **DIRECTIONALITY MATTERS**: source → target must be correct
+   - implements: DECREE → LAW (not reverse!)
+   - granted_by: PERMIT → AUTHORITY (not reverse!)
+   - complies_with: CLAUSE → REQUIREMENT (not reverse!)
+3. **CONFIDENCE BASED ON EVIDENCE**:
+   - **0.90-1.00**: Explicit statement (e.g., "vydal SÚJB" → granted_by, 0.98)
+   - **0.70-0.89**: Strong implication (e.g., "podle zákona" → implements, 0.85)
+   - **< 0.70**: Weak inference (SKIP these!)
+4. **AVOID DUPLICATES**: Don't create both A→B and B→A unless genuinely bidirectional
+
+   **Bidirectional Pairs** (create BOTH directions):
+   - superseded_by ↔ supersedes (Regulation updates)
+   - references ↔ referenced_by (Generic citations)
+   - contains ↔ part_of (Structural hierarchy)
+
+   **Unidirectional Only** (create ONE direction):
+   - complies_with (CLAUSE → REQUIREMENT only, not reverse)
+   - granted_by (PERMIT → AUTHORITY only, not reverse)
+   - implements (DECREE → LAW only, not reverse)
+   - transposes (LAW → DIRECTIVE only, not reverse)
+   - regulated_by (FACILITY → REGULATION only, not reverse)
+   - operated_by (FACILITY → ORGANIZATION only, not reverse)
+   - All temporal relationships (ENTITY → DATE only)
+
+**Critical Patterns to Look For**:
+
+Czech Legal Patterns:
+- "se vydává podle § XXX zákona" → implements (Decree → Law)
+- "provádí směrnici" → transposes (Law → Directive)
+- "vydal/udělil [Authority]" → granted_by (Permit → Authority)
+- "vykonává dozor" → supervises (Authority → Facility)
+- "podléhá zákonu" → regulated_by (Facility → Regulation)
+- "v souladu s §" → cites_provision (Document → Provision)
+
+Compliance Patterns:
+- "splňuje požadavek" → complies_with (Clause → Requirement)
+- "v souladu s" → complies_with (Clause → Requirement)
+- "stanovuje" / "musí" / "je povinen" → specifies_requirement (Provision → Requirement)
+
+Nuclear Patterns:
+- "používá palivo" → uses_fuel (Reactor → Fuel type)
+- "obsahuje [isotope]" → contains_isotope (Fuel → Isotope)
+- "limit pro [category] je [value]" → has_dose_limit (Category → Limit)
+- "provozuje [Organization]" → operated_by (Facility → Organization)
+
+**Output Format** (JSON array with properties):
 [
   {{
     "source_entity_id": "E1",
-    "relationship_type": "superseded_by",
+    "relationship_type": "implements",
     "target_entity_id": "E2",
-    "confidence": 0.9,
-    "evidence": "GRI 306:2020 supersedes GRI 306:2016"
+    "confidence": 0.95,
+    "evidence": "Vyhláška č. 378/2016 Sb. se vydává podle § 234 odst. 1 písm. a) zákona č. 263/2016 Sb.",
+    "properties": {{
+      "implementing_paragraph": "§ 234 odst. 1 písm. a",
+      "effective_date": "2017-01-01"
+    }}
+  }},
+  {{
+    "source_entity_id": "E3",
+    "relationship_type": "specifies_requirement",
+    "target_entity_id": "E4",
+    "confidence": 0.95,
+    "evidence": "§ 24 odst. 1: Provozovatel zajišťuje radiační ochranu osob",
+    "properties": {{
+      "extraction_confidence": 0.95,
+      "requirement_text": "zajišťuje radiační ochranu osob",
+      "interpretation_notes": "Applies to all nuclear facility operators"
+    }}
+  }},
+  {{
+    "source_entity_id": "E5",
+    "relationship_type": "granted_by",
+    "target_entity_id": "E6",
+    "confidence": 0.98,
+    "evidence": "Povolení k provozu jaderného zařízení VR-1 vydal Státní úřad pro jadernou bezpečnost dne 15. 3. 2018",
+    "properties": {{
+      "grant_date": "2018-03-15",
+      "permit_number": "SÚJB/2018/012345",
+      "validity_period": "10 years"
+    }}
+  }},
+  {{
+    "source_entity_id": "E7",
+    "relationship_type": "uses_fuel",
+    "target_entity_id": "E8",
+    "confidence": 0.92,
+    "evidence": "Reaktor VR-1 používá palivo typu IRT-4M s obohacením 19,75%",
+    "properties": {{
+      "enrichment_percent": 19.75,
+      "current_inventory": "36 palivových článků"
+    }}
   }}
 ]
 
 **Chain-of-Thought Reasoning Process**:
 Before extracting relationships, follow these steps:
-1. For each entity pair (E1, E2), ask: "Is there a stated relationship?"
-2. Determine relationship TYPE based on context and relationship types list
+1. For each entity pair (E_source, E_target), ask:
+   - "Is there an EXPLICIT relationship stated in the text?"
+   - "What TYPE of relationship is it?" (check 36 types above)
+   - "What is the DIRECTION?" (source → target)
+2. Extract evidence:
+   - Find exact quote that supports this relationship
+   - Keep it concise (<200 chars)
+   - Must clearly state or strongly imply the relationship
 3. Assess confidence:
-   - 0.95-1.0: Explicit statement (e.g., "X supersedes Y")
-   - 0.80-0.94: Clear inference from context
-   - 0.60-0.79: Implied relationship, requires interpretation
-   - <0.60: Uncertain, likely exclude
-4. Extract evidence - exact quote supporting the relationship
-5. Only return relationships with confidence >= {min_confidence}
+   - Explicit verb ("vydal", "používá", "obsahuje") → 0.95+
+   - Clear prepositional phrase ("podle zákona", "v souladu s") → 0.85+
+   - Implied from context (adjacency, listing) → 0.70-0.84
+   - Weak inference (<0.70) → SKIP
+4. Add properties (relationship-specific metadata):
+   - implements: implementing_paragraph, effective_date
+   - granted_by: grant_date, permit_number, validity_period
+   - specifies_requirement: requirement_text, interpretation_notes
+   - complies_with: compliance_status, reasoning, gaps
+5. Filter: Only return relationships with confidence >= {min_confidence}
 
 **Evidence Quality Guidelines**:
-- Evidence must be exact text from document
-- Should be minimal (1-2 sentences max)
+- Evidence must be EXACT text from document
+- Keep it minimal (1-2 sentences max, <{max_evidence_length} chars)
 - Must clearly support the relationship type
-- Keep within {max_evidence_length} characters
+- Include key verbs/prepositions that indicate relationship
+
+**Relationship-Specific Properties Guidelines**:
+
+implements (Decree → Law):
+- implementing_paragraph: § that authorizes decree
+- implemented_paragraph: § being implemented
+- effective_date: When decree takes effect
+
+specifies_requirement (Provision → Requirement):
+- extraction_confidence: LLM confidence
+- requirement_text: Extracted obligation text
+- interpretation_notes: Any clarifications
+
+granted_by (Permit → Authority):
+- grant_date: ISO date
+- permit_number: Reference number
+- validity_period: Duration or expiry date
+
+complies_with (Clause → Requirement):
+⚠️ NOTE: This is typically created by COMPLIANCE VERIFIER agent, not entity extractor!
+- compliance_status: full|partial|non_compliant
+- confidence: LLM confidence in assessment
+- gaps: List of missing elements (if partial)
+- reasoning: Legal reasoning chain
+
+supervises (Authority → Facility):
+- supervision_type: continuous|periodic|event_based
+- frequency: "quarterly", "annually", etc.
+- scope: What aspects are supervised
 
 **Instructions**:
 1. Identify ALL relationships between the entities above that are present in the text
-2. Only use relationship types: {rel_types_str}
-3. For each relationship, provide:
-   - source_entity_id: Source entity ID (E1, E2, etc.)
-   - relationship_type: Type of relationship
+2. Only use relationship types from the 36 types listed above
+3. Verify directionality (source → target) using the type definitions
+4. For each relationship, provide:
+   - source_entity_id: Source entity ID (E1, E2, etc. from entities list)
+   - relationship_type: Type of relationship (exact match from list above)
    - target_entity_id: Target entity ID
    - confidence: Confidence score (0.0-1.0)
-   - evidence: Supporting text snippet (max {max_evidence_length} chars)
-4. Only include relationships with confidence >= {min_confidence}
-5. Evidence must be exact text from the document
-6. Return valid JSON array
+   - evidence: Supporting text snippet (exact quote, max {max_evidence_length} chars)
+   - properties: Relationship-specific metadata (optional, see guidelines above)
+5. Only include relationships with confidence >= {min_confidence}
+6. Evidence must be exact text from the document
+7. Return valid JSON array ONLY, no explanatory text
 
-**Output** (JSON array only):
+**Output** (JSON array only, no other text):

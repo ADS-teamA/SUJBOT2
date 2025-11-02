@@ -30,18 +30,45 @@ class EntityExtractionConfig:
     llm_model: str = "gpt-4o-mini"  # Fast, cost-effective for extraction
     temperature: float = 0.0  # Deterministic extraction
 
-    # Enabled entity types
+    # Enabled entity types (all 30 types for comprehensive extraction)
     enabled_entity_types: Set[EntityType] = field(
         default_factory=lambda: {
+            # CORE ENTITIES
             EntityType.STANDARD,
             EntityType.ORGANIZATION,
             EntityType.DATE,
             EntityType.CLAUSE,
             EntityType.TOPIC,
+            EntityType.PERSON,
+            EntityType.LOCATION,
+            EntityType.CONTRACT,
+            # REGULATORY HIERARCHY
             EntityType.REGULATION,
-            EntityType.LOCATION,  # Added: For jurisdictions, countries, etc.
-            EntityType.PERSON,  # Added: For completeness (authors, signatories)
-            EntityType.CONTRACT,  # Added: For completeness (NDAs, MSAs)
+            EntityType.DECREE,
+            EntityType.DIRECTIVE,
+            EntityType.TREATY,
+            EntityType.LEGAL_PROVISION,
+            EntityType.REQUIREMENT,
+            # AUTHORIZATION & COMPLIANCE
+            EntityType.PERMIT,
+            EntityType.LICENSE_CONDITION,
+            # NUCLEAR TECHNICAL ENTITIES
+            EntityType.REACTOR,
+            EntityType.FACILITY,
+            EntityType.SYSTEM,
+            EntityType.SAFETY_FUNCTION,
+            EntityType.FUEL_TYPE,
+            EntityType.ISOTOPE,
+            EntityType.RADIATION_SOURCE,
+            EntityType.WASTE_CATEGORY,
+            EntityType.DOSE_LIMIT,
+            # EVENTS & PROCESSES
+            EntityType.INCIDENT,
+            EntityType.EMERGENCY_CLASSIFICATION,
+            EntityType.INSPECTION,
+            EntityType.DECOMMISSIONING_PHASE,
+            # LIABILITY & INSURANCE
+            EntityType.LIABILITY_REGIME,
         }
     )
 
@@ -70,32 +97,58 @@ class RelationshipExtractionConfig:
     llm_model: str = "gpt-4o-mini"
     temperature: float = 0.0
 
-    # Enabled relationship types
+    # Enabled relationship types (all 40 types for comprehensive extraction)
     enabled_relationship_types: Set[RelationshipType] = field(
         default_factory=lambda: {
-            # Document relationships
+            # COMPLIANCE CORE
+            RelationshipType.COMPLIES_WITH,
+            RelationshipType.CONTRADICTS,
+            RelationshipType.PARTIALLY_SATISFIES,
+            RelationshipType.SPECIFIES_REQUIREMENT,
+            RelationshipType.REQUIRES_CLAUSE,
+            # REGULATORY HIERARCHY
+            RelationshipType.IMPLEMENTS,
+            RelationshipType.TRANSPOSES,
             RelationshipType.SUPERSEDED_BY,
             RelationshipType.SUPERSEDES,
+            RelationshipType.AMENDS,
+            # DOCUMENT STRUCTURE
+            RelationshipType.CONTAINS_CLAUSE,
+            RelationshipType.CONTAINS_PROVISION,
+            RelationshipType.CONTAINS,
+            RelationshipType.PART_OF,
+            # CITATIONS & REFERENCES
             RelationshipType.REFERENCES,
             RelationshipType.REFERENCED_BY,
-            # Organizational relationships
+            RelationshipType.CITES_PROVISION,
+            RelationshipType.BASED_ON,
+            # AUTHORIZATION & ENFORCEMENT
             RelationshipType.ISSUED_BY,
-            RelationshipType.DEVELOPED_BY,
-            RelationshipType.PUBLISHED_BY,
-            # Temporal relationships
+            RelationshipType.GRANTED_BY,
+            RelationshipType.ENFORCED_BY,
+            RelationshipType.SUBJECT_TO_INSPECTION,
+            RelationshipType.SUPERVISES,
+            # NUCLEAR TECHNICAL RELATIONSHIPS
+            RelationshipType.REGULATED_BY,
+            RelationshipType.OPERATED_BY,
+            RelationshipType.HAS_SYSTEM,
+            RelationshipType.PERFORMS_FUNCTION,
+            RelationshipType.USES_FUEL,
+            RelationshipType.CONTAINS_ISOTOPE,
+            RelationshipType.PRODUCES_WASTE,
+            RelationshipType.HAS_DOSE_LIMIT,
+            # TEMPORAL RELATIONSHIPS
             RelationshipType.EFFECTIVE_DATE,
-            RelationshipType.EXPIRY_DATE,  # Added: For contract expiry dates
+            RelationshipType.EXPIRY_DATE,
             RelationshipType.SIGNED_ON,
-            # Content relationships
+            RelationshipType.DECOMMISSIONED_ON,
+            # CONTENT & TOPICS
             RelationshipType.COVERS_TOPIC,
-            RelationshipType.CONTAINS_CLAUSE,
-            RelationshipType.APPLIES_TO,  # Added: For regulation → location
-            # Structural relationships
-            RelationshipType.PART_OF,
-            RelationshipType.CONTAINS,
-            # Provenance relationships
-            RelationshipType.MENTIONED_IN,  # Added: Entity → Chunk provenance
+            RelationshipType.APPLIES_TO,
+            # PROVENANCE
+            RelationshipType.MENTIONED_IN,
             RelationshipType.DEFINED_IN,
+            RelationshipType.DOCUMENTED_IN,
         }
     )
 
