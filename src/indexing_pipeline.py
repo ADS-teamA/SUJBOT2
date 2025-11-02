@@ -40,6 +40,7 @@ import os
 from pathlib import Path
 from typing import Optional, Dict
 from dataclasses import dataclass, field
+import numpy as np
 
 from src.config import (
     ExtractionConfig,
@@ -174,6 +175,10 @@ class IndexingConfig:
     chunking_config: ChunkingConfig = field(default_factory=ChunkingConfig)
     embedding_config: EmbeddingConfig = field(default_factory=EmbeddingConfig)
 
+    # PHASE 4.5: Semantic Clustering (optional)
+    enable_semantic_clustering: bool = False  # Cluster chunks by semantic similarity
+    clustering_config: Optional["ClusteringConfig"] = None
+
     # PHASE 5A: Knowledge Graph (enabled by default for SOTA 2025)
     enable_knowledge_graph: bool = True
     kg_config: Optional[KnowledgeGraphConfig] = None
@@ -232,6 +237,15 @@ class IndexingConfig:
             except ImportError:
                 logger.warning("Knowledge Graph enabled but graph module not available")
 
+        # Initialize clustering config if enabled
+        if self.enable_semantic_clustering and self.clustering_config is None:
+            try:
+                from src.config import ClusteringConfig
+
+                self.clustering_config = ClusteringConfig.from_env()
+            except ImportError:
+                logger.warning("Semantic clustering enabled but clustering module not available")
+
     @classmethod
     def from_env(cls, **overrides) -> "IndexingConfig":
         """
@@ -239,6 +253,7 @@ class IndexingConfig:
 
         Environment Variables:
             SPEED_MODE: "fast" or "eco" (default: "fast")
+            ENABLE_SEMANTIC_CLUSTERING: Enable semantic clustering (default: "false")
             ENABLE_KNOWLEDGE_GRAPH: Enable KG construction (default: "true")
             ENABLE_HYBRID_SEARCH: Enable hybrid search (default: "true")
 
@@ -258,6 +273,7 @@ class IndexingConfig:
             summarization_config=SummarizationConfig.from_env(),
             chunking_config=ChunkingConfig.from_env(),
             embedding_config=EmbeddingConfig.from_env(),
+            enable_semantic_clustering=os.getenv("ENABLE_SEMANTIC_CLUSTERING", "false").lower() == "true",
             enable_knowledge_graph=os.getenv("ENABLE_KNOWLEDGE_GRAPH", "true").lower() == "true",
             enable_hybrid_search=os.getenv("ENABLE_HYBRID_SEARCH", "true").lower() == "true",
             enable_duplicate_detection=(
@@ -639,6 +655,66 @@ class IndexingPipeline:
                 f"Embedded: {self.embedder.dimensions}D vectors, "
                 f"{embeddings['layer3'].shape[0]} Layer 3 chunks"
             )
+
+            # PHASE 4.5: Semantic Clustering (optional)
+            if self.config.enable_semantic_clustering:
+                logger.info("PHASE 4.5: Semantic Clustering")
+
+                try:
+                    from src.clustering import SemanticClusterer
+
+                    clusterer = SemanticClusterer(self.config.clustering_config)
+
+                    # Cluster each enabled layer
+                    for layer in self.config.clustering_config.cluster_layers:
+                        if layer == 1 and embeddings["layer1"] is not None:
+                            chunk_list = chunks["layer1"]
+                            embedding_array = embeddings["layer1"]
+                        elif layer == 2 and embeddings["layer2"] is not None:
+                            chunk_list = chunks["layer2"]
+                            embedding_array = embeddings["layer2"]
+                        elif layer == 3:
+                            chunk_list = chunks["layer3"]
+                            embedding_array = embeddings["layer3"]
+                        else:
+                            continue
+
+                        # Perform clustering
+                        chunk_ids = [c.chunk_id for c in chunk_list]
+                        clustering_result = clusterer.cluster_embeddings(
+                            embeddings=embedding_array,
+                            chunk_ids=chunk_ids,
+                        )
+
+                        # Update chunk metadata with cluster assignments
+                        for chunk in chunk_list:
+                            cluster_info = clustering_result.get_chunk_cluster(chunk.chunk_id)
+                            if cluster_info:
+                                chunk.metadata.cluster_id = cluster_info.cluster_id
+                                chunk.metadata.cluster_label = cluster_info.label
+                                # Calculate confidence as distance to centroid
+                                chunk_idx = chunk_ids.index(chunk.chunk_id)
+                                chunk_embedding = embedding_array[chunk_idx]
+                                centroid = cluster_info.centroid
+                                if centroid is not None:
+                                    # Cosine distance (0 = identical, 2 = opposite)
+                                    distance = 1 - np.dot(chunk_embedding, centroid)
+                                    chunk.metadata.cluster_confidence = float(distance)
+
+                        logger.info(
+                            f"Layer {layer}: Clustered into {clustering_result.n_clusters} clusters "
+                            f"(noise: {clustering_result.noise_count})"
+                        )
+
+                        # Log quality metrics
+                        if clustering_result.quality_metrics:
+                            silhouette = clustering_result.quality_metrics.get("silhouette_score")
+                            if silhouette:
+                                logger.info(f"  Silhouette score: {silhouette:.3f}")
+
+                except ImportError as e:
+                    logger.warning(f"Clustering module not available: {e}")
+                    logger.warning("Skipping semantic clustering")
 
             # PHASE 4: FAISS Indexing
             logger.info("PHASE 4: FAISS Indexing")

@@ -61,6 +61,11 @@ class ChunkMetadata:
     section_level: int = 0
     section_depth: int = 0
 
+    # Semantic clustering (PHASE 4.5)
+    cluster_id: Optional[int] = None  # Semantic cluster assignment
+    cluster_label: Optional[str] = None  # Human-readable cluster topic
+    cluster_confidence: Optional[float] = None  # Distance to cluster centroid (0-1, lower is better)
+
 
 @dataclass
 class Chunk:

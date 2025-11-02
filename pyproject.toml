@@ -61,6 +61,12 @@ dependencies = [
     "rank-bm25>=0.2.2",  # PHASE 5B: Hybrid search (BM25 sparse retrieval)
     "numpy>=1.24.0",
 
+    # Clustering (PHASE 4.5: Semantic clustering)
+    "scikit-learn>=1.3.0",  # Agglomerative clustering, metrics
+    "hdbscan>=0.8.33",  # HDBSCAN clustering with cosine distance
+    "umap-learn>=0.5.5",  # UMAP dimensionality reduction for visualization
+    "matplotlib>=3.5.0",  # Plotting for cluster visualization
+
     # CLI & Utilities
     "click>=8.1.0",
     "tqdm>=4.65.0",
