@@ -3,7 +3,7 @@ Extract semantic relationships between entities in legal and nuclear regulatory 
 **Entities** (extracted from this text):
 {entities_str}
 
-**Relationship Types (36 types)**:
+**Relationship Types (40 types)**:
 
 === COMPLIANCE CORE (5 types) ⭐ ===
 - complies_with: Clause → Requirement (with confidence score)
@@ -78,8 +78,20 @@ Extract semantic relationships between entities in legal and nuclear regulatory 
    - **0.70-0.89**: Strong implication (e.g., "podle zákona" → implements, 0.85)
    - **< 0.70**: Weak inference (SKIP these!)
 4. **AVOID DUPLICATES**: Don't create both A→B and B→A unless genuinely bidirectional
-   - Bidirectional: superseded_by ↔ supersedes (create BOTH)
-   - Unidirectional: granted_by (only PERMIT → AUTHORITY)
+
+   **Bidirectional Pairs** (create BOTH directions):
+   - superseded_by ↔ supersedes (Regulation updates)
+   - references ↔ referenced_by (Generic citations)
+   - contains ↔ part_of (Structural hierarchy)
+
+   **Unidirectional Only** (create ONE direction):
+   - complies_with (CLAUSE → REQUIREMENT only, not reverse)
+   - granted_by (PERMIT → AUTHORITY only, not reverse)
+   - implements (DECREE → LAW only, not reverse)
+   - transposes (LAW → DIRECTIVE only, not reverse)
+   - regulated_by (FACILITY → REGULATION only, not reverse)
+   - operated_by (FACILITY → ORGANIZATION only, not reverse)
+   - All temporal relationships (ENTITY → DATE only)
 
 **Critical Patterns to Look For**:
 

@@ -3,7 +3,7 @@ Extract structured entities from legal and nuclear regulatory documents.
 **Task**: Identify and extract ALL entities of the following types:
 {entity_types_str}
 
-**Entity Type Definitions (28 types)**:
+**Entity Type Definitions (30 types)**:
 
 === CORE ENTITIES ===
 - standard: Technical standards (ISO 14001, GRI 306, IEC 60987)
@@ -39,10 +39,10 @@ Extract structured entities from legal and nuclear regulatory documents.
 - dose_limit: Radiation dose limits (20 mSv za rok, 6 mSv/h)
 
 === EVENTS & PROCESSES ===
-- incident: Specific safety/security events
-- emergency_classification: Event classification levels
-- inspection: Regulatory inspections, audits
-- decommissioning_phase: Phases of decommissioning
+- incident: Safety/security events (havarijní situace, provozní porucha reaktoru, únik radioaktivity)
+- emergency_classification: Event classification levels (INES stupeň 2, mimořádná událost)
+- inspection: Regulatory inspections (inspekce SÚJB, audit bezpečnosti, kontrola dozorového úřadu)
+- decommissioning_phase: Decommissioning phases (ukončení provozu, vyřazování z provozu)
 
 === LIABILITY & INSURANCE ===
 - liability_regime: Operator liability framework

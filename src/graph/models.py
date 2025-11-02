@@ -1,10 +1,18 @@
 """
 Data models for Knowledge Graph entities and relationships.
 
-Defines the schema for legal document knowledge graphs:
-- Entity: Standards, Organizations, Dates, Clauses, Topics
-- Relationship: SUPERSEDED_BY, REFERENCES, ISSUED_BY, EFFECTIVE_DATE, etc.
-- KnowledgeGraph: Complete graph structure with entities and relationships
+Schema v2.0 (Extended for Compliance Checking):
+- 30 Entity Types: Core (8) + Regulatory (6) + Authorization (2) + Nuclear (9) + Events (4) + Liability (1)
+- 40 Relationship Types: Compliance (5) + Regulatory (5) + Structure (4) + Citations (4) +
+  Authorization (5) + Nuclear (8) + Temporal (4) + Content (2) + Provenance (3)
+
+Key Hierarchies:
+- Regulatory: TREATY → REGULATION → DECREE → LEGAL_PROVISION → REQUIREMENT
+- Compliance: REQUIREMENT ← COMPLIES_WITH/CONTRADICTS → CLAUSE
+- Nuclear: FACILITY → REACTOR → SYSTEM → SAFETY_FUNCTION
+- Authorization: AUTHORITY → GRANTED_BY → PERMIT → LICENSE_CONDITION
+
+Complete graph structure with entities, relationships, and compliance verification support.
 """
 
 from dataclasses import dataclass, field
