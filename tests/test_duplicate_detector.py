@@ -4,15 +4,14 @@ Unit and integration tests for DuplicateDetector.
 Tests document duplicate detection using semantic similarity.
 """
 
-import pytest
-import tempfile
-import sys
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
 from contextlib import contextmanager
-import numpy as np
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
 
-from src.duplicate_detector import DuplicateDetector, DuplicateDetectionConfig
+import numpy as np
+import pytest
+
+from src.duplicate_detector import DuplicateDetectionConfig, DuplicateDetector
 
 
 @contextmanager
@@ -20,38 +19,46 @@ def mock_fitz_module(mock_doc_config=None):
     """
     Context manager to mock fitz module for testing.
 
+    This mocks the PyMuPDF (fitz) library which is used to extract text from PDFs.
+    The mock supports configuring:
+    - Number of pages in the document
+    - Text content per page (same text for all pages or different per page)
+
     Args:
         mock_doc_config: Dict with 'pages', 'text_per_page' for configuring mock document
+            Example: {'pages': 5, 'text_per_page': "Sample text"}
+            Example: {'pages': 2, 'text_per_page': ["Page 1", "Page 2"]}
     """
     mock_fitz = Mock()
-    mock_doc = MagicMock()  # MagicMock needed for __len__ and __getitem__
+    mock_doc = MagicMock()  # MagicMock needed for __len__ and __getitem__ support
 
     if mock_doc_config:
-        # Setup mock document based on config
-        pages_count = mock_doc_config.get('pages', 1)
-        text_per_page = mock_doc_config.get('text_per_page', "Sample text")
+        pages_count = mock_doc_config.get("pages", 1)
+        text_per_page = mock_doc_config.get("text_per_page", "Sample text")
 
+        # Configure document length
         mock_doc.__len__.return_value = pages_count
+
         if isinstance(text_per_page, list):
-            # Different text per page
+            # Different text per page - create separate mock page objects
             mock_pages = [Mock() for _ in text_per_page]
             for page, text in zip(mock_pages, text_per_page):
                 page.get_text.return_value = text
             mock_doc.__getitem__.side_effect = mock_pages
         else:
-            # Same text for all pages
+            # Same text for all pages - reuse same mock page
             mock_page = Mock()
             mock_page.get_text.return_value = text_per_page
             mock_doc.__getitem__.return_value = mock_page
 
     mock_fitz.open.return_value = mock_doc
 
-    with patch.dict('sys.modules', {'fitz': mock_fitz}):
+    with patch.dict("sys.modules", {"fitz": mock_fitz}):
         yield mock_fitz, mock_doc
 
 
 @pytest.fixture
-def duplicate_config():
+def duplicate_config() -> DuplicateDetectionConfig:
     """Create standard duplicate detection config."""
     return DuplicateDetectionConfig(
         enabled=True,
@@ -62,7 +69,7 @@ def duplicate_config():
 
 
 @pytest.fixture
-def mock_embedder():
+def mock_embedder() -> Mock:
     """Create mock embedding generator."""
     embedder = Mock()
     # Return consistent 3-dimensional embeddings
@@ -71,10 +78,32 @@ def mock_embedder():
 
 
 @pytest.fixture
-def mock_vector_store():
-    """Create mock vector store."""
+def mock_faiss_store() -> Mock:
+    """
+    Create mock FAISS store with all 3 layer search methods.
+
+    The FAISS store is the underlying storage in HybridVectorStore
+    and exposes search_layer1(), search_layer2(), and search_layer3() methods.
+    Each returns a list of search results with 'score' and 'metadata' keys.
+    """
+    faiss_store = MagicMock()
+    # Configure all 3 layers to return no results by default
+    faiss_store.search_layer1.return_value = []
+    faiss_store.search_layer2.return_value = []
+    faiss_store.search_layer3.return_value = []
+    return faiss_store
+
+
+@pytest.fixture
+def mock_vector_store(mock_faiss_store: Mock) -> Mock:
+    """
+    Create mock vector store (HybridVectorStore with FAISS store).
+
+    The HybridVectorStore exposes a faiss_store attribute which is the
+    underlying FAISS store used for searching embeddings.
+    """
     store = Mock()
-    store.search_layer.return_value = []  # No results by default
+    store.faiss_store = mock_faiss_store
     return store
 
 
@@ -128,7 +157,10 @@ def test_extract_text_sample(duplicate_config):
     detector = DuplicateDetector(duplicate_config)
 
     # Mock fitz with 5-page document
-    with mock_fitz_module({'pages': 5, 'text_per_page': "Sample text from page 1"}) as (mock_fitz, mock_doc):
+    with mock_fitz_module({"pages": 5, "text_per_page": "Sample text from page 1"}) as (
+        mock_fitz,
+        mock_doc,
+    ):
         text = detector._extract_text_sample("test.pdf")
 
     assert text == "Sample text from page 1"
@@ -142,7 +174,10 @@ def test_extract_text_multiple_pages():
     detector = DuplicateDetector(config)
 
     # Mock fitz with 5-page document, different text per page
-    with mock_fitz_module({'pages': 5, 'text_per_page': ["Page 1 text", "Page 2 text"]}) as (mock_fitz, mock_doc):
+    with mock_fitz_module({"pages": 5, "text_per_page": ["Page 1 text", "Page 2 text"]}) as (
+        mock_fitz,
+        mock_doc,
+    ):
         text = detector._extract_text_sample("test.pdf")
 
     assert text == "Page 1 text\nPage 2 text"
@@ -170,17 +205,42 @@ def test_compute_file_hash(duplicate_config, tmp_path):
     assert hash1 != hash3
 
 
+def _setup_detector_with_mocks(
+    config: DuplicateDetectionConfig,
+    embedder: Mock,
+    vector_store: Mock,
+    vector_store_path: str = "test_db",
+) -> DuplicateDetector:
+    """
+    Setup DuplicateDetector with injected mock dependencies.
+
+    Helper function to reduce boilerplate in tests. This is a common pattern
+    where tests need to inject mocks for embedder and vector store.
+
+    Args:
+        config: Duplicate detection configuration
+        embedder: Mock embedder instance
+        vector_store: Mock vector store instance
+        vector_store_path: Path to vector store (for logging)
+
+    Returns:
+        Configured DuplicateDetector instance with mocks injected
+    """
+    detector = DuplicateDetector(config, vector_store_path=vector_store_path)
+    detector._embedder = embedder
+    detector._vector_store = vector_store
+    return detector
+
+
 def test_check_duplicate_no_match(duplicate_config, mock_embedder, mock_vector_store):
     """Test duplicate check when no match found."""
-    detector = DuplicateDetector(duplicate_config, vector_store_path="test_db")
-    detector._embedder = mock_embedder
-    detector._vector_store = mock_vector_store
+    detector = _setup_detector_with_mocks(duplicate_config, mock_embedder, mock_vector_store)
 
-    # No matches from vector store
-    mock_vector_store.search_layer.return_value = []
+    # No matches from vector store (already default in fixture)
+    assert mock_vector_store.faiss_store.search_layer1.return_value == []
 
     # Check duplicate with mocked fitz
-    with mock_fitz_module({'pages': 1, 'text_per_page': "Sample document text"}):
+    with mock_fitz_module({"pages": 1, "text_per_page": "Sample document text"}):
         is_dup, sim, match = detector.check_duplicate("test.pdf")
 
     assert is_dup is False
@@ -196,21 +256,20 @@ def test_check_duplicate_below_threshold(
     test_file = tmp_path / "test.pdf"
     test_file.write_text("test content")
 
-    detector = DuplicateDetector(duplicate_config, vector_store_path="test_db")
-    detector._embedder = mock_embedder
-    detector._vector_store = mock_vector_store
+    detector = _setup_detector_with_mocks(duplicate_config, mock_embedder, mock_vector_store)
 
     # Return match with similarity below threshold (0.95 < 0.98)
-    mock_vector_store.search_layer.return_value = [
+    # FAISS returns flat structure with document_id at top level
+    mock_vector_store.faiss_store.search_layer1.return_value = [
         {
             "score": 0.95,
-            "metadata": {"document_id": "doc1"},
+            "document_id": "doc1",
         }
     ]
 
     # Check duplicate with mocked fitz (text must be >= 100 chars)
     long_text = "Sample document text " * 6  # 120 chars
-    with mock_fitz_module({'pages': 1, 'text_per_page': long_text}):
+    with mock_fitz_module({"pages": 1, "text_per_page": long_text}):
         is_dup, sim, match = detector.check_duplicate(str(test_file))
 
     assert is_dup is False
@@ -226,21 +285,20 @@ def test_check_duplicate_above_threshold(
     test_file = tmp_path / "test.pdf"
     test_file.write_text("test content")
 
-    detector = DuplicateDetector(duplicate_config, vector_store_path="test_db")
-    detector._embedder = mock_embedder
-    detector._vector_store = mock_vector_store
+    detector = _setup_detector_with_mocks(duplicate_config, mock_embedder, mock_vector_store)
 
     # Return match with similarity above threshold (0.99 >= 0.98)
-    mock_vector_store.search_layer.return_value = [
+    # FAISS returns flat structure with document_id at top level
+    mock_vector_store.faiss_store.search_layer1.return_value = [
         {
             "score": 0.99,
-            "metadata": {"document_id": "doc1"},
+            "document_id": "doc1",
         }
     ]
 
     # Check duplicate with mocked fitz (text must be >= 100 chars)
     long_text = "Sample document text " * 6  # 120 chars
-    with mock_fitz_module({'pages': 1, 'text_per_page': long_text}):
+    with mock_fitz_module({"pages": 1, "text_per_page": long_text}):
         is_dup, sim, match = detector.check_duplicate(str(test_file))
 
     assert is_dup is True
@@ -256,54 +314,50 @@ def test_check_duplicate_excludes_self(
     test_file = tmp_path / "test.pdf"
     test_file.write_text("test content")
 
-    detector = DuplicateDetector(duplicate_config, vector_store_path="test_db")
-    detector._embedder = mock_embedder
-    detector._vector_store = mock_vector_store
+    detector = _setup_detector_with_mocks(duplicate_config, mock_embedder, mock_vector_store)
 
-    # Return self as match (should be excluded)
-    mock_vector_store.search_layer.return_value = [
+    # Return self as match (should be excluded by check_duplicate)
+    # FAISS returns flat structure with document_id at top level
+    mock_vector_store.faiss_store.search_layer1.return_value = [
         {
-            "score": 1.0,  # Perfect match
-            "metadata": {"document_id": "test_doc"},
+            "score": 1.0,  # Perfect match (self)
+            "document_id": "test_doc",
         },
         {
             "score": 0.85,  # Different document
-            "metadata": {"document_id": "other_doc"},
+            "document_id": "other_doc",
         },
     ]
 
     # Check duplicate with mocked fitz (text must be >= 100 chars)
     long_text = "Sample document text " * 6  # 120 chars
-    with mock_fitz_module({'pages': 1, 'text_per_page': long_text}):
+    with mock_fitz_module({"pages": 1, "text_per_page": long_text}):
         is_dup, sim, match = detector.check_duplicate(str(test_file), document_id="test_doc")
 
-    # Should skip self and use second match
-    assert is_dup is False  # 0.85 < 0.98
+    # Should skip self and use second match (0.85 < 0.98 threshold)
+    assert is_dup is False
     assert sim == 0.85
     assert match == "other_doc"
 
 
 def test_embedding_cache(duplicate_config, mock_embedder, mock_vector_store, tmp_path):
-    """Test that embeddings are cached."""
+    """Test that embeddings are cached across multiple checks."""
     # Create real test file for hashing
     test_file = tmp_path / "test.pdf"
     test_file.write_text("test content")
 
-    detector = DuplicateDetector(duplicate_config, vector_store_path="test_db")
-    detector._embedder = mock_embedder
-    detector._vector_store = mock_vector_store
-    mock_vector_store.search_layer.return_value = []
+    detector = _setup_detector_with_mocks(duplicate_config, mock_embedder, mock_vector_store)
 
     # Mock fitz for both calls (text must be >= 100 chars)
     long_text = "Sample text " * 10  # 120 chars
-    with mock_fitz_module({'pages': 1, 'text_per_page': long_text}):
-        # First check - should call embedder
+    with mock_fitz_module({"pages": 1, "text_per_page": long_text}):
+        # First check - should call embedder and cache result
         detector.check_duplicate(str(test_file))
         assert mock_embedder.embed_texts.call_count == 1
 
-        # Second check on same file - should use cache
+        # Second check on same file - should use cache (not call embedder again)
         detector.check_duplicate(str(test_file))
-        assert mock_embedder.embed_texts.call_count == 1  # Not called again
+        assert mock_embedder.embed_texts.call_count == 1  # Still 1, not 2
 
 
 def test_text_too_short(duplicate_config):
@@ -311,7 +365,7 @@ def test_text_too_short(duplicate_config):
     detector = DuplicateDetector(duplicate_config)
 
     # Mock fitz with very short text (5 chars)
-    with mock_fitz_module({'pages': 1, 'text_per_page': "short"}):
+    with mock_fitz_module({"pages": 1, "text_per_page": "short"}):
         is_dup, sim, match = detector.check_duplicate("test.pdf")
 
     # Should skip due to short text

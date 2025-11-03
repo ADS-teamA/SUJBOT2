@@ -280,7 +280,8 @@ class DuplicateDetector:
         best_similarity = 0.0
 
         for result in results:
-            doc_id = result.get("metadata", {}).get("document_id")
+            # FAISS returns flat structure with document_id at top level
+            doc_id = result.get("document_id")
             similarity = result.get("score", 0.0)
 
             # Skip if it's the same document
