@@ -175,6 +175,17 @@ Summary (max {self.max_chars} characters):"""
                     )
                     return self.generate_document_summary_strict(text_preview)
 
+                # CRITICAL FIX: Validate summary is not empty
+                if not summary or len(summary) < 10:
+                    logger.warning(
+                        f"LLM returned empty/too-short summary ({len(summary)} chars), using fallback"
+                    )
+                    # Fallback: Use first 150 chars of document
+                    fallback = document_text[:self.max_chars].strip()
+                    if len(fallback) > 0:
+                        return fallback + "..."
+                    return "(Document summary unavailable)"
+
                 logger.debug(f"Generated document summary: {len(summary)} chars")
                 return summary
 
@@ -312,7 +323,12 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
             operation="summary",
         )
 
-        return response.choices[0].message.content.strip()
+        # CRITICAL FIX: Handle None content (can happen with API failures or filters)
+        content = response.choices[0].message.content
+        if content is None:
+            logger.warning(f"OpenAI returned None content! Output tokens: {response.usage.completion_tokens}")
+            return ""
+        return content.strip()
 
     def generate_document_summary_strict(self, document_text: str) -> str:
         """
@@ -463,7 +479,13 @@ Summary (max {self.max_chars} characters):"""
         # Define response parsing function
         def parse_response(response: dict) -> str:
             """Extract and validate summary from API response."""
-            summary = response["choices"][0]["message"]["content"].strip()
+            # CRITICAL FIX: Handle None content (can happen with API failures or filters)
+            content = response["choices"][0]["message"]["content"]
+            if content is None:
+                logger.warning("Batch API returned None content for a summary")
+                return ""
+
+            summary = content.strip()
 
             # Enforce length limit
             if len(summary) > self.max_chars + self.tolerance:

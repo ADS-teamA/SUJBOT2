@@ -337,6 +337,11 @@ The system processes documents through 7 distinct phases:
 - Model: gpt-4o-mini (or gpt-5-nano)
 - Purpose: Generate DOCUMENT summary ONLY (150 chars) - NOT section summaries!
 - Section summaries deferred to PHASE 3B (eliminates truncation problem)
+- **⚠️ CRITICAL CONSTRAINT:** Document summary MUST be generated hierarchically from section summaries
+  - **NEVER pass full document text to LLM** (causes token waste, context overflow, poor quality)
+  - **ALWAYS wait for section summaries** (PHASE 3B) → then aggregate them into document summary
+  - **Flow:** Sections → Section Summaries (PHASE 3B) → Document Summary (hierarchical)
+  - **Exception:** Empty fallback "(Document summary unavailable)" if section summaries fail
 - Critical: Use GENERIC summaries (NOT expert) - counterintuitive but proven better
 - File: `src/summary_generator.py`, `src/docling_extractor_v2.py`
 
@@ -438,27 +443,39 @@ print(tracker.get_summary())
 
 These decisions are backed by research papers and extensive testing:
 
-1. **RCTS > Fixed-size chunking** (LegalBench-RAG)
+1. **Hierarchical Document Summary** (MANDATORY - Architecture Constraint)
+   - Document summary MUST be generated FROM section summaries (hierarchical aggregation)
+   - **NEVER pass full document text to LLM** for document summary generation
+   - **Flow:** Extract sections (PHASE 1) → Generate section summaries (PHASE 3B) → Aggregate into document summary
+   - **Rationale:**
+     - Prevents token overflow (100-page docs exceed context limits)
+     - Better quality (LLM focuses on pre-digested summaries, not raw text)
+     - Cost efficiency (section summaries reused for multiple purposes)
+     - Scalability (works for documents of ANY size)
+   - **Exception:** Fallback "(Document summary unavailable)" if section summaries fail
+   - **Files:** `src/docling_extractor_v2.py`, `src/summary_generator.py`
+
+2. **RCTS > Fixed-size chunking** (LegalBench-RAG)
    - Chunk size: **500 chars** (optimal for legal/technical docs)
    - Overlap: 0 (RCTS handles naturally via hierarchy)
 
-2. **Generic > Expert summaries** (Reuter et al., counterintuitive!)
+3. **Generic > Expert summaries** (Reuter et al., counterintuitive!)
    - Summary length: **150 chars**
    - Style: **Generic** (NOT expert terminology)
 
-3. **SAC reduces DRM by 58%** (Reuter et al.)
+4. **SAC reduces DRM by 58%** (Reuter et al.)
    - Prepend document summary to each chunk during embedding
    - Strip summaries during retrieval (context assembly)
 
-4. **Multi-layer embeddings** (Lima 2024)
+5. **Multi-layer embeddings** (Lima 2024)
    - 3 separate FAISS indexes (not merged)
    - 2.3x essential chunks compared to single-layer
 
-5. **No Cohere reranking** (LegalBench-RAG)
+6. **No Cohere reranking** (LegalBench-RAG)
    - Cohere reranker performs WORSE than baseline on legal documents
    - Use cross-encoder models instead (ms-marco, bge-reranker)
 
-6. **Hybrid > Pure Dense** (Industry best practice 2025)
+7. **Hybrid > Pure Dense** (Industry best practice 2025)
    - BM25 + Dense + RRF fusion outperforms dense-only by +23% precision
    - RRF k=60 is optimal parameter
 
