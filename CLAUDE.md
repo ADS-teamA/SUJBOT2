@@ -139,8 +139,28 @@ uv run python -m src.agent.cli --debug
 ```
 
 ### GPT-5 Compatibility (Breaking Changes)
+
+⚠️ **CRITICAL: DO NOT USE gpt-5-nano** - Always use `gpt-4o-mini` instead!
+- GPT-5-nano has API instability issues (temperature, max_tokens breaking changes)
+- gpt-4o-mini is 40% cheaper ($0.15/$0.60 vs $0.25/$1.00)
+- gpt-4o-mini is more stable and battle-tested
+
 ```python
-# GPT-5/o-series models require different parameters
+# RECOMMENDED (stable):
+model = "gpt-4o-mini"
+params = {
+    "model": model,
+    "max_tokens": 300,
+    "temperature": 0.7
+}
+
+# AVOID (unstable API):
+# model = "gpt-5-nano"  # ❌ DO NOT USE
+```
+
+**If you MUST use GPT-5/o-series** (not recommended):
+```python
+# GPT-5/o-series require different parameters
 if model.startswith(("gpt-5", "o1-", "o3-")):
     params = {
         "model": model,
@@ -181,6 +201,7 @@ Files to check: `src/agent/query_expander.py` ✅, `src/summary_generator.py`, `
 - **Logging:** Use appropriate levels (debug/info/warning/error) - avoid print statements
 - **Testing:** Write tests BEFORE implementing new features (TDD approach)
 - **Documentation:** Update PIPELINE.md if research constraints change
+- **Model selection:** ALWAYS use `gpt-4o-mini` (NOT gpt-5-nano) for stability and cost savings
 
 ### Performance
 - **Embedding cache:** Monitor hit rate with `embedder.get_cache_stats()` (target >80%)
