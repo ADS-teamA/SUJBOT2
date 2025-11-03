@@ -177,13 +177,26 @@ Summary (max {self.max_chars} characters):"""
 
                 # CRITICAL FIX: Validate summary is not empty
                 if not summary or len(summary) < 10:
-                    logger.warning(
-                        f"LLM returned empty/too-short summary ({len(summary)} chars), using fallback"
+                    error_msg = (
+                        f"LLM returned empty/invalid summary ({len(summary)} chars). "
+                        f"This indicates an API failure, content filtering, or authentication issue. "
+                        f"Model: {self.model}, Provider: {self.provider}"
                     )
-                    # Fallback: Use first 150 chars of document
+                    logger.error(error_msg, extra={"error_id": "SUMMARY_EMPTY_RESPONSE"})
+
+                    # Alert user explicitly
+                    print(f"\n❌ SUMMARY GENERATION FAILED")
+                    print(f"   Section: document")
+                    print(f"   Reason: API returned empty response")
+                    print(f"   Impact: Using truncated text fallback (reduced RAG quality)")
+                    print(f"   Action: Check {self.provider.upper()}_API_KEY and model availability\n")
+
+                    # Use fallback but make it obvious this is degraded mode
+                    # Triple-fallback strategy (only used when hierarchical summarization failed):
+                    # 1. LLM summary failed → 2. Truncate document text → 3. Unavailable message
                     fallback = document_text[:self.max_chars].strip()
                     if len(fallback) > 0:
-                        return fallback + "..."
+                        return f"[FALLBACK: {fallback}...]"
                     return "(Document summary unavailable)"
 
                 logger.debug(f"Generated document summary: {len(summary)} chars")
@@ -298,7 +311,8 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
         """
         # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
         # GPT-5 models only support temperature=1.0 (default)
-        # GPT-5 uses reasoning mode by default, set reasoning_effort="low" for simple tasks
+        # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast, deterministic tasks
+        # Valid values: "minimal" (fastest), "low", "medium" (default), "high"
         tokens_param = max_tokens or self.max_tokens
         if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
             response = self.client.chat.completions.create(
@@ -306,7 +320,7 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
                 messages=[{"role": "user", "content": prompt}],
                 temperature=1.0,  # GPT-5 only supports default temperature
                 max_completion_tokens=tokens_param,
-                reasoning_effort="minimal",  # Prevent empty responses from excessive reasoning
+                reasoning_effort="minimal",  # Fast mode for simple tasks (summarization doesn't need deep reasoning)
             )
         else:
             response = self.client.chat.completions.create(
@@ -328,7 +342,30 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
         # CRITICAL FIX: Handle None content (can happen with API failures or filters)
         content = response.choices[0].message.content
         if content is None:
-            logger.warning(f"OpenAI returned None content! Output tokens: {response.usage.completion_tokens}")
+            finish_reason = response.choices[0].finish_reason
+            error_msg = (
+                f"OpenAI returned None content. "
+                f"finish_reason={finish_reason}, model={self.model}, "
+                f"input_tokens={response.usage.prompt_tokens}, "
+                f"output_tokens={response.usage.completion_tokens}, "
+                f"prompt_length={len(prompt)} chars"
+            )
+            logger.error(error_msg, extra={
+                "error_id": "OPENAI_NONE_CONTENT",
+                "finish_reason": finish_reason,
+                "model": self.model,
+                "prompt_preview": prompt[:200]
+            })
+
+            # Explain to user what happened
+            if finish_reason == "content_filter":
+                print("\n⚠️  OpenAI Content Filter Triggered")
+                print("   Your input may contain prohibited content")
+                print("   Review OpenAI usage policies: https://openai.com/policies/usage-policies\n")
+            elif finish_reason == "length":
+                print(f"\n⚠️  Output Truncated (Token Limit)")
+                print(f"   Increase max_tokens parameter (current: {self.max_tokens})\n")
+
             return ""
         return content.strip()
 
@@ -457,7 +494,8 @@ Summary (max {self.max_chars} characters):"""
             # Build request body with model-specific parameters
             # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
             # GPT-5 models only support temperature=1.0 (default)
-            # GPT-5 uses reasoning mode by default, set reasoning_effort="low" for simple tasks
+            # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast tasks
+            # Valid values: "minimal" (fastest), "low", "medium", "high"
             body = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -467,7 +505,7 @@ Summary (max {self.max_chars} characters):"""
                 # GPT-5/o-series parameters
                 body["max_completion_tokens"] = self.max_tokens
                 body["temperature"] = 1.0  # GPT-5 only supports default temperature
-                body["reasoning_effort"] = "minimal"  # Prevent empty responses from excessive reasoning
+                body["reasoning_effort"] = "minimal"  # Fast mode for simple tasks (summarization doesn't need deep reasoning)
             else:
                 # GPT-4 and earlier parameters
                 body["max_tokens"] = self.max_tokens
@@ -486,16 +524,22 @@ Summary (max {self.max_chars} characters):"""
             # CRITICAL FIX: Handle None content (can happen with API failures or filters)
             content = response["choices"][0]["message"]["content"]
             if content is None:
-                logger.warning("Batch API returned None content for a summary")
+                finish_reason = response["choices"][0].get("finish_reason", "unknown")
+                logger.error(
+                    f"Batch API returned None content for a summary. "
+                    f"finish_reason={finish_reason}",
+                    extra={"error_id": "BATCH_NONE_CONTENT", "finish_reason": finish_reason}
+                )
                 return ""
 
             summary = content.strip()
 
             # CRITICAL FIX: Validate summary is not empty or too short
             if not summary or len(summary) < 10:
-                logger.warning(
+                logger.error(
                     f"Batch API returned empty/too-short summary ({len(summary)} chars). "
-                    f"This may indicate a prompt issue or API failure."
+                    f"This may indicate a prompt issue or API failure.",
+                    extra={"error_id": "BATCH_EMPTY_SUMMARY"}
                 )
                 return ""  # Will be handled by caller
 

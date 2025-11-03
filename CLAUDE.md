@@ -138,36 +138,28 @@ uv run python -m src.agent.cli --debug
 [Paste error description]
 ```
 
-### GPT-5 Compatibility (Breaking Changes)
+### GPT-5 and O-Series Model Compatibility
 
-⚠️ **CRITICAL: DO NOT USE gpt-5-nano** - Always use `gpt-4o-mini` instead!
-- GPT-5-nano has API instability issues (temperature, max_tokens breaking changes)
-- gpt-4o-mini is 40% cheaper ($0.15/$0.60 vs $0.25/$1.00)
-- gpt-4o-mini is more stable and battle-tested
+**RECOMMENDED MODELS (production-ready):**
+- **Production:** `claude-sonnet-4-5` (highest quality, best for complex queries)
+- **Development:** `gpt-4o-mini` (best cost/performance, $0.15/$0.60 per 1M tokens)
+- **Budget:** `claude-haiku-4-5` (fastest, cheapest Claude model)
 
-```python
-# RECOMMENDED (stable):
-model = "gpt-4o-mini"
-params = {
-    "model": model,
-    "max_tokens": 300,
-    "temperature": 0.7
-}
+**GPT-5 Support (✅ IMPLEMENTED, EXPERIMENTAL):**
 
-# AVOID (unstable API):
-# model = "gpt-5-nano"  # ❌ DO NOT USE
-```
+GPT-5 and O-series models (`gpt-5`, `gpt-5-mini`, `o1`, `o3`, `o4-mini`) are **now supported** but require special parameter handling:
 
-**If you MUST use GPT-5/o-series** (not recommended):
 ```python
 # GPT-5/o-series require different parameters
-if model.startswith(("gpt-5", "o1-", "o3-")):
+if model.startswith(("gpt-5", "o1", "o3", "o4")):
     params = {
         "model": model,
         "max_completion_tokens": 300,  # NOT max_tokens
-        # NO temperature parameter (only default 1.0 supported)
+        "temperature": 1.0,  # ONLY 1.0 supported (default)
+        "reasoning_effort": "minimal"  # Controls reasoning depth
     }
 else:
+    # GPT-4 and earlier
     params = {
         "model": model,
         "max_tokens": 300,
@@ -175,7 +167,24 @@ else:
     }
 ```
 
-Files to check: `src/agent/query_expander.py` ✅, `src/summary_generator.py`, `src/graph/`
+**`reasoning_effort` parameter:**
+- `"minimal"` - Fastest, used for simple tasks (summarization, context generation)
+- `"low"` - Light reasoning
+- `"medium"` - Default reasoning (if not specified)
+- `"high"` - Deep reasoning for complex tasks
+
+**Why GPT-5/o-series may not be recommended:**
+- ⚠️ API parameter differences can cause confusion (`max_completion_tokens` vs `max_tokens`)
+- ⚠️ Temperature is fixed at 1.0 (no customization)
+- ⚠️ May be more expensive than GPT-4o-mini for simple tasks
+- ⚠️ `reasoning_effort` behavior can be unpredictable for certain prompts
+
+**Files with GPT-5 support:**
+- ✅ `src/summary_generator.py` - Document/section summaries
+- ✅ `src/contextual_retrieval.py` - Context generation
+- ⚠️ `src/agent/query_expander.py` - Not yet updated (uses gpt-4o-mini)
+
+**Testing recommendation:** If you want to use GPT-5 models, test thoroughly with your specific use case before deploying to production. Fall back to `gpt-4o-mini` if you encounter issues.
 
 ---
 
