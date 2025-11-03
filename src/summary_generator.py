@@ -436,16 +436,28 @@ Focus on the main topic and key information. This is a hard constraint.
 
 Summary (max {self.max_chars} characters):"""
 
+            # Build request body with model-specific parameters
+            # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
+            # GPT-5 models only support temperature=1.0 (default)
+            body = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+
+            if self.model.startswith(("gpt-5", "o1-", "o3-", "o4-")):
+                # GPT-5/o-series parameters
+                body["max_completion_tokens"] = self.max_tokens
+                body["temperature"] = 1.0  # GPT-5 only supports default temperature
+            else:
+                # GPT-4 and earlier parameters
+                body["max_tokens"] = self.max_tokens
+                body["temperature"] = self.temperature
+
             return BatchRequest(
                 custom_id=f"section_{section_idx}",
                 method="POST",
                 url="/v1/chat/completions",
-                body={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": self.max_tokens,
-                    "temperature": self.temperature,
-                },
+                body=body,
             )
 
         # Define response parsing function
@@ -607,7 +619,8 @@ Generate summaries (MUST be valid JSON):"""
             raise
 
     def generate_batch_summaries(
-        self, texts: list[tuple[str, str]]  # [(text, title), ...]
+        self, texts: list[tuple[str, str]],  # [(text, title), ...]
+        min_text_length: int | None = None,  # Override min_text_length (None = use self.min_text_length)
     ) -> list[str]:
         """
         Generate summaries for multiple sections.
@@ -624,16 +637,19 @@ Generate summaries (MUST be valid JSON):"""
 
         Args:
             texts: List of (text, title) tuples
+            min_text_length: Override minimum text length (None = use self.min_text_length)
 
         Returns:
             List of summaries (in original order)
         """
+        # Use override or default
+        effective_min_length = min_text_length if min_text_length is not None else self.min_text_length
 
         # Filter out tiny sections
         filtered_texts = []
         skip_indices = []
         for i, (text, title) in enumerate(texts):
-            if len(text.strip()) < self.min_text_length:
+            if len(text.strip()) < effective_min_length:
                 skip_indices.append(i)
                 logger.debug(f"Skipping tiny section '{title}' ({len(text)} chars)")
             else:

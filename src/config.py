@@ -71,6 +71,9 @@ def load_env():
                     if line and not line.startswith("#") and "=" in line:
                         try:
                             key, value = line.split("=", 1)
+                            # Strip inline comments (text after #)
+                            if "#" in value:
+                                value = value.split("#")[0]
                             os.environ[key.strip()] = value.strip()
                         except ValueError as e:
                             logger.warning(f"Skipping malformed line {line_num} in {path}: {line}")
@@ -140,23 +143,31 @@ class ModelConfig:
         Load configuration from environment variables.
 
         Environment Variables:
-            LLM_PROVIDER: "claude" or "openai" (default: "claude")
             LLM_MODEL: Model name (default: "claude-sonnet-4-5-20250929")
+            EMBEDDING_MODEL: Model name (default: "bge-m3")
 
-            EMBEDDING_PROVIDER: "voyage", "openai", or "huggingface" (default: "voyage")
-            EMBEDDING_MODEL: Model name (default: "kanon-2")
+            LLM_PROVIDER: Optional override (auto-detected from LLM_MODEL if not set)
+            EMBEDDING_PROVIDER: Optional override (auto-detected from EMBEDDING_MODEL if not set)
 
             ANTHROPIC_API_KEY: Claude API key
             OPENAI_API_KEY: OpenAI API key
             VOYAGE_API_KEY: Voyage AI API key
         """
+        # Load models first
+        llm_model = os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929")
+        embedding_model = os.getenv("EMBEDDING_MODEL", "bge-m3")
+
+        # Auto-detect providers from model names (unless explicitly set)
+        llm_provider = os.getenv("LLM_PROVIDER") or ModelRegistry.get_provider(llm_model, "llm")
+        embedding_provider = os.getenv("EMBEDDING_PROVIDER") or ModelRegistry.get_provider(embedding_model, "embedding")
+
         return cls(
             # LLM Configuration
-            llm_provider=os.getenv("LLM_PROVIDER", "claude"),
-            llm_model=os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929"),
+            llm_provider=llm_provider,
+            llm_model=llm_model,
             # Embedding Configuration
-            embedding_provider=os.getenv("EMBEDDING_PROVIDER", "huggingface"),
-            embedding_model=os.getenv("EMBEDDING_MODEL", "bge-m3"),
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
             # API Keys
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
@@ -165,7 +176,7 @@ class ModelConfig:
 
     def get_llm_config(self) -> dict:
         """Get LLM configuration for SummaryGenerator."""
-        if self.llm_provider == "claude":
+        if self.llm_provider in ("claude", "anthropic"):
             return {
                 "provider": "claude",
                 "model": self.llm_model,
@@ -407,8 +418,10 @@ class ContextGenerationConfig:
 
         # Load API key from .env based on provider
         if self.api_key is None:
-            if self.provider == "anthropic" or self.provider == "claude":
+            if self.provider in ("anthropic", "claude"):
                 self.api_key = os.getenv("ANTHROPIC_API_KEY")
+                # Normalize provider to "anthropic" (contextual_retrieval.py expects "anthropic", not "claude")
+                self.provider = "anthropic"
                 if not self.api_key:
                     logger.warning(
                         "ANTHROPIC_API_KEY not set in environment. "
@@ -443,6 +456,7 @@ class ChunkingConfig:
     def __post_init__(self):
         """Initialize context_config if not provided."""
         if self.context_config is None and self.enable_contextual:
+            # Default to standard config if not loading from environment
             self.context_config = ContextGenerationConfig()
 
     @classmethod

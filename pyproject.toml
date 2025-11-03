@@ -12,6 +12,7 @@ dependencies = [
 
     # PDF Processing
     "pypdf2>=3.0.0",
+    "pymupdf>=1.23.0",  # Advanced PDF processing (duplicate detection, text extraction)
 
     # IBM Docling - Advanced document structure extraction
     "docling>=2.57.0",

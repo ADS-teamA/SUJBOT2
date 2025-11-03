@@ -292,16 +292,9 @@ class DoclingExtractorV2:
         # Initialize summary generator (PHASE 2)
         if self.config.generate_summaries:
             try:
-                # Create SummarizationConfig from ExtractionConfig
-                summary_config = SummarizationConfig(
-                    model=self.config.summary_model,
-                    max_chars=self.config.summary_max_chars,
-                    style=self.config.summary_style,
-                    # Batch API parameters (50% cost savings)
-                    use_batch_api=self.config.use_batch_api,
-                    batch_api_poll_interval=self.config.batch_api_poll_interval,
-                    batch_api_timeout=self.config.batch_api_timeout,
-                )
+                # Use SummarizationConfig.from_env() to load from environment
+                # This correctly loads LLM_PROVIDER, LLM_MODEL, etc.
+                summary_config = SummarizationConfig.from_env()
 
                 self.summary_generator = SummaryGenerator(
                     config=summary_config, api_key=openai_api_key
@@ -430,10 +423,16 @@ class DoclingExtractorV2:
         # PHASE 1: Extract hierarchical structure
         sections = self._extract_hierarchical_sections(docling_doc)
 
-        # PHASE 2: Generate summaries (if enabled)
+        # PHASE 2: Generate DOCUMENT summary only (NOT section summaries!)
+        # Section summaries will be generated in PHASE 3B from chunk contexts
+        # This eliminates truncation problem (section_text[:2000] → full coverage via chunks)
         if self.config.generate_summaries:
-            sections = self._generate_section_summaries(sections)
-            document_summary = self._generate_document_summary(sections)
+            # Generate document summary from full text (fallback mode)
+            # This is needed for chunk context generation in PHASE 3A
+            logger.info(
+                "PHASE 2: Generating document summary (section summaries deferred to PHASE 3B)"
+            )
+            document_summary = self._generate_document_summary_from_text(full_text)
         else:
             document_summary = None
 
@@ -785,12 +784,47 @@ class DoclingExtractorV2:
 
         return sections
 
+    def _generate_document_summary_from_text(self, full_text: str) -> str:
+        """
+        PHASE 2: Generate document-level summary from full text.
+
+        NEW APPROACH: Uses direct text summarization (fallback mode) because
+        section summaries don't exist yet (they'll be generated in PHASE 3B).
+
+        Args:
+            full_text: Full document text
+
+        Returns:
+            Document summary (150 chars)
+        """
+
+        if not self.summary_generator:
+            logger.warning("Summary generator not initialized")
+            return ""
+
+        logger.info("Generating document summary from full text...")
+
+        try:
+            # Use direct summarization with extended preview
+            # (no section summaries available yet)
+            summary = self.summary_generator.generate_document_summary(
+                document_text=full_text  # Uses full_text[:30000]
+            )
+            logger.info(f"Document summary generated: {len(summary)} chars")
+            return summary
+
+        except Exception as e:
+            logger.error(f"Failed to generate document summary: {e}")
+            return ""
+
     def _generate_document_summary(self, sections: List[DocumentSection]) -> str:
         """
-        PHASE 2: Generate document-level generic summary from section summaries.
+        DEPRECATED: Generate document-level generic summary from section summaries.
 
-        Uses hierarchical summarization: generates summary from section summaries
-        rather than from full text. This is more efficient and covers entire document.
+        This method is NO LONGER USED in the new architecture.
+        Document summary is now generated in _generate_document_summary_from_text().
+
+        Kept for backward compatibility.
         """
 
         if not self.summary_generator:

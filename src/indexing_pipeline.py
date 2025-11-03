@@ -1048,6 +1048,7 @@ class IndexingPipeline:
                 {
                     "section_id": s.section_id,
                     "title": s.title,
+                    "content": s.content,
                     "level": s.level,
                     "depth": s.depth,
                     "path": s.path,
