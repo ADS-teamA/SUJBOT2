@@ -441,6 +441,26 @@ class ContextGenerationConfig:
                         "Contextual retrieval will fail unless API key is provided during initialization."
                     )
 
+    @classmethod
+    def from_env(cls, **overrides) -> "ContextGenerationConfig":
+        """
+        Load configuration from environment variables.
+
+        Environment Variables:
+            LLM_PROVIDER: LLM provider (from ModelConfig)
+            LLM_MODEL: Model name (from ModelConfig)
+            SPEED_MODE: "fast" or "eco" (affects use_batch_api)
+
+        Args:
+            **overrides: Override specific fields
+
+        Returns:
+            ContextGenerationConfig instance loaded from environment
+        """
+        speed_mode = os.getenv("SPEED_MODE", "fast")
+        config = cls(use_batch_api=(speed_mode == "eco"), **overrides)
+        return config
+
 
 @dataclass
 class ChunkingConfig:
@@ -473,13 +493,22 @@ class ChunkingConfig:
         Environment Variables:
             CHUNK_SIZE: Chunk size in characters (default: 500)
             ENABLE_SAC: Enable Summary-Augmented Chunking (default: "true")
+            SPEED_MODE: "fast" or "eco" (affects context generation - passed to ContextGenerationConfig)
 
         Returns:
             ChunkingConfig instance loaded from environment
         """
+        enable_contextual = os.getenv("ENABLE_SAC", "true").lower() == "true"
+
+        # Create context_config from environment if contextual is enabled
+        context_config = None
+        if enable_contextual:
+            context_config = ContextGenerationConfig.from_env()
+
         return cls(
             chunk_size=int(os.getenv("CHUNK_SIZE", "500")),
-            enable_contextual=os.getenv("ENABLE_SAC", "true").lower() == "true",
+            enable_contextual=enable_contextual,
+            context_config=context_config,
         )
 
 
