@@ -152,7 +152,7 @@ class MultiLayerChunker:
                 logger.info("Contextual Retrieval initialized")
             except Exception as e:
                 logger.warning(f"Failed to initialize Contextual Retrieval: {e}")
-                if not self.config.context_config.fallback_to_basic:
+                if not context_config.fallback_to_basic:
                     raise
                 logger.info("Falling back to basic chunking")
                 self.enable_contextual = False
@@ -194,16 +194,21 @@ class MultiLayerChunker:
 
         # PHASE 3B: Generate section summaries FROM chunk contexts (NEW!)
         # This eliminates truncation problem - uses ALL chunks (entire section)
-        if self.enable_contextual and layer3_chunks:
-            logger.info(
-                "PHASE 3B: Generating section summaries from chunk contexts "
-                "(hierarchical approach - NO TRUNCATION)..."
-            )
+        if layer3_chunks:
+            if self.enable_contextual:
+                logger.info(
+                    "PHASE 3B: Generating section summaries from chunk contexts "
+                    "(hierarchical approach - NO TRUNCATION)..."
+                )
+            else:
+                logger.info(
+                    "PHASE 3B: Generating section summaries from chunk content "
+                    "(basic mode - NO TRUNCATION)..."
+                )
             self._generate_section_summaries_from_contexts(extracted_doc, layer3_chunks)
         else:
             logger.warning(
-                "Skipping section summary generation from contexts "
-                "(contextual retrieval disabled or no chunks)"
+                "Skipping section summary generation: no chunks available"
             )
 
         # PHASE 3C: Validate section summaries
@@ -514,20 +519,28 @@ class MultiLayerChunker:
         self, extracted_doc, layer3_chunks: List[Chunk]
     ) -> None:
         """
-        Generate section summaries FROM chunk contexts (PHASE 3B).
+        Generate section summaries FROM chunks (PHASE 3B).
 
         This eliminates the truncation problem:
         - OLD: section_text[:2000] → summary (40% coverage for 5000 char sections)
-        - NEW: ALL chunk contexts → summary (100% coverage)
+        - NEW: ALL chunks → summary (100% coverage)
 
-        Architecture:
-        - Chunk contexts cover ENTIRE section (all chunks)
-        - Section summary is hierarchical aggregation of contexts
-        - No truncation, better quality
+        Architecture (two modes):
+        1. Contextual mode (when enable_contextual=True):
+           - Extracts LLM-generated contexts from chunks
+           - Section summary is hierarchical aggregation of contexts
+           - Highest quality, most concise
+
+        2. Basic mode (when enable_contextual=False):
+           - Uses raw chunk content (no contexts)
+           - Section summary aggregates all chunk texts
+           - Still achieves 100% coverage (no truncation)
+
+        Both modes provide complete section coverage, unlike the old truncated approach.
 
         Args:
             extracted_doc: ExtractedDocument to update
-            layer3_chunks: List of Layer 3 chunks with contexts
+            layer3_chunks: List of Layer 3 chunks (with or without contexts)
 
         Modifies:
             extracted_doc.sections[].summary (in-place update)
@@ -549,14 +562,14 @@ class MultiLayerChunker:
                 logger.info("Initialized SummaryGenerator for section summary generation")
             except Exception as e:
                 logger.warning(
-                    f"Cannot generate section summaries from contexts: {e}\n"
+                    f"Cannot generate section summaries: {e}\n"
                     f"Sections will have empty summaries."
                 )
                 return
 
         logger.info(
-            f"Generating section summaries from {len(layer3_chunks)} chunk contexts "
-            f"(hierarchical approach - NO TRUNCATION)"
+            f"Generating section summaries from {len(layer3_chunks)} chunks "
+            f"(100% coverage - NO TRUNCATION)"
         )
 
         # Group chunks by section_id
@@ -583,21 +596,22 @@ class MultiLayerChunker:
                 logger.debug(f"Section {section_id} has no chunks, skipping summary")
                 continue
 
-            # Extract contexts from chunks
-            # Context is the first part of chunk.content (before "\n\n")
-            contexts = []
+            # Extract contexts or raw content from chunks
+            # When contextual retrieval is enabled: extract context (first part before "\n\n")
+            # When disabled: use raw_content directly
+            chunk_texts = []
             for chunk in section_chunks:
-                # Parse context from augmented content
+                # Check if chunk has contextual prefix (indicated by "\n\n" separator)
                 if "\n\n" in chunk.content:
+                    # Contextual mode: extract context prefix
                     context = chunk.content.split("\n\n", 1)[0]
+                    chunk_texts.append(context)
                 else:
-                    # No context separator - use first 100 chars
-                    context = chunk.content[:100]
+                    # Basic mode: use raw_content (full chunk text, not just first 100 chars)
+                    chunk_texts.append(chunk.raw_content)
 
-                contexts.append(context)
-
-            # Combine contexts into single text
-            contexts_text = "\n".join(f"- {ctx}" for ctx in contexts)
+            # Combine chunk texts into single text for summary generation
+            contexts_text = "\n".join(f"- {txt}" for txt in chunk_texts)
 
             sections_data.append((section_idx, contexts_text, section.title))
 
@@ -606,8 +620,10 @@ class MultiLayerChunker:
             # Build input for generate_batch_summaries: [(text, title), ...]
             batch_input = [(contexts_text, title) for _, contexts_text, title in sections_data]
 
-            # Use min_text_length=0 because chunk contexts are intentionally short
-            # but still cover 100% of section content (no truncation)
+            # Use min_text_length=0 because:
+            # - Chunk contexts (when available) are intentionally short but comprehensive
+            # - Raw chunk content (when contexts not available) still covers 100% of section
+            # Both approaches eliminate truncation problem
             summaries = self.summary_generator.generate_batch_summaries(
                 batch_input, min_text_length=0
             )
@@ -617,12 +633,12 @@ class MultiLayerChunker:
                 extracted_doc.sections[section_idx].summary = summary
 
             logger.info(
-                f"✓ Generated {len(summaries)} section summaries from chunk contexts "
-                f"(hierarchical approach)"
+                f"✓ Generated {len(summaries)} section summaries from chunks "
+                f"(100% coverage - no truncation)"
             )
 
         except Exception as e:
-            logger.error(f"Failed to generate section summaries from contexts: {e}")
+            logger.error(f"Failed to generate section summaries from chunks: {e}")
             logger.warning("Sections will have empty summaries")
 
     def _validate_summaries(self, extracted_doc, min_summary_length: int = 50) -> None:
