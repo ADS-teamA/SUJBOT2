@@ -201,14 +201,27 @@ class BatchAPIClient:
             mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
         ) as f:
             temp_path = f.name
-            for request in requests:
-                f.write(json.dumps(request.to_dict()) + "\n")
+            for idx, request in enumerate(requests):
+                json_line = json.dumps(request.to_dict())
+                f.write(json_line + "\n")
+
+                # Debug: Log first request to verify format
+                if idx == 0:
+                    self.logger.debug(f"First batch request: {json_line[:200]}...")
 
         try:
+            # Debug: Log file size
+            file_size = Path(temp_path).stat().st_size
+            self.logger.debug(
+                f"Batch file created: {temp_path} ({file_size} bytes, {len(requests)} lines)"
+            )
+
             # Upload file
-            self.logger.debug(f"Uploading batch file: {temp_path}")
+            self.logger.debug(f"Uploading batch file to OpenAI...")
             with open(temp_path, "rb") as f:
                 batch_file = self.client.files.create(file=f, purpose="batch")
+
+            self.logger.debug(f"File uploaded: {batch_file.id}")
 
             # Create batch
             batch = self.client.batches.create(
@@ -217,7 +230,7 @@ class BatchAPIClient:
                 completion_window="24h",
             )
 
-            self.logger.info(f"✓ Batch submitted: {batch.id}")
+            self.logger.info(f"✓ Batch submitted: {batch.id} (file: {batch_file.id})")
             return batch.id
 
         finally:
@@ -323,10 +336,44 @@ class BatchAPIClient:
         """
         self.logger.info(f"Parsing batch results from {batch.id}...")
 
+        # Check batch completion status (ALWAYS log for debugging)
+        request_counts = getattr(batch, 'request_counts', None)
+        if request_counts:
+            completed = getattr(request_counts, 'completed', 0) or 0
+            failed = getattr(request_counts, 'failed', 0) or 0
+            total = getattr(request_counts, 'total', 0) or 0
+            self.logger.warning(
+                f"⚠️  Batch request_counts: completed={completed}, failed={failed}, total={total}"
+            )
+
+            # Critical: If total=0, batch processed NO requests!
+            if total == 0:
+                self.logger.error(
+                    f"🔴 BATCH PROCESSED 0 REQUESTS! This indicates malformed batch input. "
+                    f"Batch ID: {batch.id}, Status: {batch.status}"
+                )
+        else:
+            self.logger.warning(f"⚠️  Batch has NO request_counts attribute!")
+
         # Download output file
         output_file_id = batch.output_file_id
         if not output_file_id:
-            raise Exception("Batch has no output file")
+            # Check if there's an error file instead
+            error_file_id = getattr(batch, 'error_file_id', None)
+            if error_file_id:
+                # Download and log errors
+                try:
+                    error_content = self.client.files.content(error_file_id)
+                    error_str = error_content.read().decode("utf-8")
+                    self.logger.error(f"Batch {batch.id} has errors:\n{error_str[:500]}")
+                except Exception as e:
+                    self.logger.error(f"Failed to read error file: {e}")
+
+            raise Exception(
+                f"Batch has no output file. "
+                f"Status: {batch.status}, "
+                f"Request counts: {getattr(batch, 'request_counts', 'unknown')}"
+            )
 
         file_content = self.client.files.content(output_file_id)
         content_str = file_content.read().decode("utf-8")
@@ -364,12 +411,23 @@ class BatchAPIClient:
 
                 # Track tokens
                 usage = response_body.get("usage", {})
-                total_input_tokens += usage.get("prompt_tokens", 0)
-                total_output_tokens += usage.get("completion_tokens", 0)
+                input_tokens = usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("completion_tokens", 0)
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
 
                 # Parse result using custom function
                 try:
                     parsed_result = parse_response_fn(response_body)
+
+                    # Debug: Log parsed result details
+                    if line_num <= 3:  # Only log first 3 for debugging
+                        self.logger.debug(
+                            f"Request {custom_id}: "
+                            f"in={input_tokens} out={output_tokens} "
+                            f"result_len={len(parsed_result) if parsed_result else 0}"
+                        )
+
                     results[custom_id] = parsed_result
                 except Exception as e:
                     self.logger.error(

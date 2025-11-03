@@ -152,7 +152,7 @@ class MultiLayerChunker:
                 logger.info("Contextual Retrieval initialized")
             except Exception as e:
                 logger.warning(f"Failed to initialize Contextual Retrieval: {e}")
-                if not self.config.context_config.fallback_to_basic:
+                if not context_config.fallback_to_basic:
                     raise
                 logger.info("Falling back to basic chunking")
                 self.enable_contextual = False
@@ -168,6 +168,12 @@ class MultiLayerChunker:
         """
         Create multi-layer chunks from ExtractedDocument.
 
+        NEW ARCHITECTURE (PHASE 3B):
+        1. Generate chunk contexts (PHASE 3A)
+        2. Generate section summaries FROM chunk contexts (PHASE 3B) - NO TRUNCATION!
+        3. Validate summaries (PHASE 3C)
+        4. Create layer 1 & 2 chunks using validated summaries
+
         OPTIMIZATION: For documents without hierarchy (depth=1, flat structure),
         only Layer 3 (chunks) is created to save embeddings and storage.
         Documents with hierarchy (depth>1) use all 3 layers.
@@ -181,6 +187,40 @@ class MultiLayerChunker:
 
         logger.info(f"Chunking document: {extracted_doc.document_id}")
 
+        # PHASE 3A: Generate Layer 3 chunks with contexts (FIRST!)
+        # This must happen BEFORE section summaries, because we use contexts to generate summaries
+        logger.info("PHASE 3A: Generating Layer 3 chunks with contextual retrieval...")
+        layer3_chunks = self._create_layer3_chunks(extracted_doc)
+
+        # PHASE 3B: Generate section summaries FROM chunk contexts (NEW!)
+        # This eliminates truncation problem - uses ALL chunks (entire section)
+        if layer3_chunks:
+            if self.enable_contextual:
+                logger.info(
+                    "PHASE 3B: Generating section summaries from chunk contexts "
+                    "(hierarchical approach - NO TRUNCATION)..."
+                )
+            else:
+                logger.info(
+                    "PHASE 3B: Generating section summaries from chunk content "
+                    "(basic mode - NO TRUNCATION)..."
+                )
+            self._generate_section_summaries_from_contexts(extracted_doc, layer3_chunks)
+        else:
+            logger.warning(
+                "Skipping section summary generation: no chunks available"
+            )
+
+        # PHASE 3C: Validate section summaries
+        if layer3_chunks:
+            logger.info("PHASE 3C: Validating section summaries...")
+            try:
+                self._validate_summaries(extracted_doc, min_summary_length=50)
+            except ValueError as e:
+                logger.error(f"Summary validation failed: {e}")
+                # Don't raise - allow pipeline to continue with warnings
+                logger.warning("Continuing with invalid summaries (degraded quality expected)")
+
         # Detect if document has hierarchy
         has_hierarchy = extracted_doc.hierarchy_depth > 1
 
@@ -188,14 +228,11 @@ class MultiLayerChunker:
             # Multi-layer indexing: Document → Sections → Chunks
             logger.info("Document has hierarchy (depth > 1) - using 3-layer indexing")
 
-            # Layer 1: Document level
+            # Layer 1: Document level (uses section summaries)
             layer1_chunks = self._create_layer1_document(extracted_doc)
 
-            # Layer 2: Section level
+            # Layer 2: Section level (uses section summaries)
             layer2_chunks = self._create_layer2_sections(extracted_doc)
-
-            # Layer 3: Chunk level with SAC
-            layer3_chunks = self._create_layer3_chunks(extracted_doc)
 
             logger.info(
                 f"Created {len(layer1_chunks)} L1, "
@@ -208,9 +245,6 @@ class MultiLayerChunker:
 
             layer1_chunks = []
             layer2_chunks = []
-
-            # Layer 3: Chunk level with SAC
-            layer3_chunks = self._create_layer3_chunks(extracted_doc)
 
             logger.info(
                 f"Created {len(layer3_chunks)} L3 chunks "
@@ -480,6 +514,208 @@ class MultiLayerChunker:
                 chunks.append(chunk)
 
         return chunks
+
+    def _generate_section_summaries_from_contexts(
+        self, extracted_doc, layer3_chunks: List[Chunk]
+    ) -> None:
+        """
+        Generate section summaries FROM chunks (PHASE 3B).
+
+        This eliminates the truncation problem:
+        - OLD: section_text[:2000] → summary (40% coverage for 5000 char sections)
+        - NEW: ALL chunks → summary (100% coverage)
+
+        Architecture (two modes):
+        1. Contextual mode (when enable_contextual=True):
+           - Extracts LLM-generated contexts from chunks
+           - Section summary is hierarchical aggregation of contexts
+           - Highest quality, most concise
+
+        2. Basic mode (when enable_contextual=False):
+           - Uses raw chunk content (no contexts)
+           - Section summary aggregates all chunk texts
+           - Still achieves 100% coverage (no truncation)
+
+        Both modes provide complete section coverage, unlike the old truncated approach.
+
+        Args:
+            extracted_doc: ExtractedDocument to update
+            layer3_chunks: List of Layer 3 chunks (with or without contexts)
+
+        Modifies:
+            extracted_doc.sections[].summary (in-place update)
+        """
+        try:
+            from .summary_generator import SummaryGenerator
+            from .config import SummarizationConfig
+        except ImportError:
+            from summary_generator import SummaryGenerator
+            from config import SummarizationConfig
+
+        # Check if summary generator is available
+        if not hasattr(self, "summary_generator") or not self.summary_generator:
+            # Initialize if needed
+            try:
+
+                summary_config = SummarizationConfig.from_env()
+                self.summary_generator = SummaryGenerator(config=summary_config)
+                logger.info("Initialized SummaryGenerator for section summary generation")
+            except Exception as e:
+                logger.warning(
+                    f"Cannot generate section summaries: {e}\n"
+                    f"Sections will have empty summaries."
+                )
+                return
+
+        logger.info(
+            f"Generating section summaries from {len(layer3_chunks)} chunks "
+            f"(100% coverage - NO TRUNCATION)"
+        )
+
+        # Group chunks by section_id
+        chunks_by_section = {}
+        for chunk in layer3_chunks:
+            section_id = chunk.metadata.section_id
+            if section_id not in chunks_by_section:
+                chunks_by_section[section_id] = []
+            chunks_by_section[section_id].append(chunk)
+
+        # Extract contexts for each section
+        sections_data = []  # [(section_index, contexts_text, section_title)]
+        section_index_map = {}  # {section_id: index in extracted_doc.sections}
+
+        for section_idx, section in enumerate(extracted_doc.sections):
+            section_id = section.section_id
+            section_index_map[section_id] = section_idx
+
+            # Get chunks for this section
+            section_chunks = chunks_by_section.get(section_id, [])
+
+            if not section_chunks:
+                # Empty section - skip summary generation
+                logger.debug(f"Section {section_id} has no chunks, skipping summary")
+                continue
+
+            # Extract contexts or raw content from chunks
+            # When contextual retrieval is enabled: extract context (first part before "\n\n")
+            # When disabled: use raw_content directly
+            chunk_texts = []
+            for chunk in section_chunks:
+                # Check if chunk has contextual prefix (indicated by "\n\n" separator)
+                if "\n\n" in chunk.content:
+                    # Contextual mode: extract context prefix
+                    context = chunk.content.split("\n\n", 1)[0]
+                    chunk_texts.append(context)
+                else:
+                    # Basic mode: use raw_content (full chunk text, not just first 100 chars)
+                    chunk_texts.append(chunk.raw_content)
+
+            # Combine chunk texts into single text for summary generation
+            contexts_text = "\n".join(f"- {txt}" for txt in chunk_texts)
+
+            sections_data.append((section_idx, contexts_text, section.title))
+
+        # Generate summaries in batch
+        try:
+            # Build input for generate_batch_summaries: [(text, title), ...]
+            batch_input = [(contexts_text, title) for _, contexts_text, title in sections_data]
+
+            # Use min_text_length=0 because:
+            # - Chunk contexts (when available) are intentionally short but comprehensive
+            # - Raw chunk content (when contexts not available) still covers 100% of section
+            # Both approaches eliminate truncation problem
+            summaries = self.summary_generator.generate_batch_summaries(
+                batch_input, min_text_length=0
+            )
+
+            # Update sections with summaries
+            for (section_idx, _, _), summary in zip(sections_data, summaries):
+                extracted_doc.sections[section_idx].summary = summary
+
+            logger.info(
+                f"✓ Generated {len(summaries)} section summaries from chunks "
+                f"(100% coverage - no truncation)"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to generate section summaries from chunks: {e}")
+            logger.warning("Sections will have empty summaries")
+
+    def _validate_summaries(self, extracted_doc, min_summary_length: int = 50) -> None:
+        """
+        Validate section summaries (PHASE 3C).
+
+        Checks:
+        1. All non-empty sections have summaries
+        2. All summaries have length >= min_summary_length
+        3. Summary quality (no truncation artifacts)
+
+        Args:
+            extracted_doc: ExtractedDocument to validate
+            min_summary_length: Minimum acceptable summary length (default: 50 chars)
+
+        Raises:
+            ValueError: If validation fails
+        """
+        logger.info(f"Validating section summaries (min_length={min_summary_length})")
+
+        issues = []
+        stats = {"total": 0, "valid": 0, "too_short": 0, "missing": 0, "empty_section": 0}
+
+        for section in extracted_doc.sections:
+            stats["total"] += 1
+
+            # Skip empty sections (they shouldn't have summaries)
+            if not section.content.strip():
+                stats["empty_section"] += 1
+                continue
+
+            # Check if summary exists
+            if not section.summary or not section.summary.strip():
+                stats["missing"] += 1
+                issues.append(
+                    f"Section '{section.title}' ({section.section_id}): "
+                    f"Missing summary (content_length={len(section.content)})"
+                )
+                continue
+
+            # Check summary length
+            summary_length = len(section.summary.strip())
+            if summary_length < min_summary_length:
+                stats["too_short"] += 1
+                issues.append(
+                    f"Section '{section.title}' ({section.section_id}): "
+                    f"Summary too short ({summary_length} < {min_summary_length} chars)"
+                )
+            else:
+                stats["valid"] += 1
+
+        # Log statistics
+        logger.info(
+            f"Summary validation: {stats['valid']}/{stats['total']} valid, "
+            f"{stats['missing']} missing, {stats['too_short']} too short, "
+            f"{stats['empty_section']} empty sections (skipped)"
+        )
+
+        # Report issues
+        if issues:
+            logger.warning(f"Found {len(issues)} summary validation issues:")
+            for issue in issues[:10]:  # Log first 10 issues
+                logger.warning(f"  - {issue}")
+            if len(issues) > 10:
+                logger.warning(f"  ... and {len(issues) - 10} more issues")
+
+        # Allow some tolerance (e.g., 90% valid is acceptable)
+        non_empty_sections = stats["total"] - stats["empty_section"]
+        if non_empty_sections > 0:
+            valid_rate = stats["valid"] / non_empty_sections
+            if valid_rate < 0.9:  # Less than 90% valid
+                raise ValueError(
+                    f"Summary validation failed: Only {valid_rate:.1%} of sections have valid summaries. "
+                    f"Expected at least 90%. Issues:\n" + "\n".join(issues[:5])
+                )
+
+        logger.info("✓ Summary validation passed")
 
     def get_chunking_stats(self, chunks_dict: Dict[str, List[Chunk]]) -> Dict:
         """

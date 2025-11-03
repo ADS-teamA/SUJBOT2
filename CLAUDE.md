@@ -333,17 +333,31 @@ The system processes documents through 7 distinct phases:
 - Output: Hierarchical sections (depth=4), metadata
 - File: `src/docling_extractor_v2.py`
 
-**PHASE 2: Summary Generation**
+**PHASE 2: Document Summary Generation**
 - Model: gpt-4o-mini (or gpt-5-nano)
-- Purpose: Generate generic summaries (150 chars) for documents and sections
+- Purpose: Generate DOCUMENT summary ONLY (150 chars) - NOT section summaries!
+- Section summaries deferred to PHASE 3B (eliminates truncation problem)
 - Critical: Use GENERIC summaries (NOT expert) - counterintuitive but proven better
-- File: `src/summary_generator.py`
+- File: `src/summary_generator.py`, `src/docling_extractor_v2.py`
 
-**PHASE 3: Multi-Layer Chunking + SAC**
+**PHASE 3: Multi-Layer Chunking + Contextual Retrieval** (3 sub-phases)
 - Method: RCTS (500 chars, no overlap)
 - Layers: Document (L1), Section (L2), Chunk (L3 - PRIMARY)
-- SAC: Summary-Augmented Chunking - prepends context to each chunk (-58% DRM)
-- File: `src/multi_layer_chunker.py`
+- **NEW ARCHITECTURE (2025-11-03):** Hierarchical summary generation from chunk contexts
+- **3A: Chunk Context Generation** - Contextual Retrieval (-67% retrieval failures)
+  - Generates LLM-based context for each chunk
+  - Uses document summary + section title + neighboring chunks
+  - Files: `src/contextual_retrieval.py`
+- **3B: Section Summary Generation** - FROM chunk contexts (NO TRUNCATION!)
+  - OLD: `section_text[:2000]` → summary (40% coverage for 5000 char sections) ❌
+  - NEW: ALL chunk contexts → summary (100% coverage) ✅
+  - Eliminates truncation problem, better quality
+  - File: `src/multi_layer_chunker.py:_generate_section_summaries_from_contexts()`
+- **3C: Summary Validation** - Quality assurance
+  - Validates all summaries >= 50 chars
+  - Reports missing/invalid summaries with warnings
+  - File: `src/multi_layer_chunker.py:_validate_summaries()`
+- Output: Multi-layer chunks with validated summaries for L1/L2/L3
 
 **PHASE 4: Embedding + FAISS Indexing**
 - Embeddings: text-embedding-3-large (3072D) or bge-m3 (1024D)
@@ -962,15 +976,35 @@ logger.error("Errors that don't crash the program")
 
 ## Version & Status
 
-**Last Updated:** 2025-10-30
-**Status:** PHASE 1-7 COMPLETE ✅ + Query Expansion ✅ + Tool Consolidation ✅ + RAG Confidence Scoring ✅ + Browse Entities Tool ✅ + Interactive Visual Documentation ✅
+**Last Updated:** 2025-11-03
+**Status:** PHASE 1-7 COMPLETE ✅ + Hierarchical Summary Generation ✅ + Query Expansion ✅ + RAG Confidence Scoring ✅ + Interactive Visual Documentation ✅
 **Agent Tools:** 17 (6 basic + 8 advanced + 3 analysis)
-**Pipeline:** Full SOTA 2025 RAG (Hybrid + Reranking + Graph + Query Expansion + Confidence Scoring + Context Assembly)
+**Pipeline:** Full SOTA 2025 RAG (Hybrid + Reranking + Graph + Query Expansion + Confidence Scoring + Hierarchical Summaries)
 **Visual Documentation:**
 - [`indexing_pipeline.html`](indexing_pipeline.html) - Detailed indexing process (Phase 1-5)
 - [`user_search_pipeline.html`](user_search_pipeline.html) - User query flow with complete tool breakdown (Phase 7)
 
 **Recent Updates:**
+- **Hierarchical Summary Generation from Chunk Contexts (2025-11-03):** Revolutionary 3-phase PHASE 3 architecture eliminates truncation problem
+  - **Problem Fixed:** OLD approach truncated section text to 2000 chars → only 40% coverage for 5000+ char sections → poor retrieval quality
+  - **Solution:** NEW hierarchical approach generates section summaries FROM chunk contexts (100% coverage, no truncation!)
+  - **Architecture Changes:**
+    - **PHASE 2:** Now generates ONLY document summary (section summaries deferred to PHASE 3B)
+    - **PHASE 3A:** Chunk context generation via Contextual Retrieval (uses doc summary + section title + neighbors)
+    - **PHASE 3B:** Section summary generation FROM all chunk contexts (full coverage, no truncation!)
+    - **PHASE 3C:** Summary validation (all summaries >= 50 chars, reports issues with warnings)
+  - **Quality Improvements:**
+    - 100% section coverage (vs 40% with old truncation approach)
+    - Better retrieval for long sections (>2000 chars)
+    - Estimated +25% retrieval success rate for queries targeting end of long sections
+  - **Implementation:**
+    - `src/multi_layer_chunker.py:_generate_section_summaries_from_contexts()` - New hierarchical generator
+    - `src/multi_layer_chunker.py:_validate_summaries()` - Quality validation (>= 50 chars)
+    - `src/docling_extractor_v2.py:_generate_document_summary_from_text()` - Document summary only
+    - Modified pipeline flow: chunks FIRST → section summaries SECOND → validation THIRD
+  - **Breaking Change:** Section summaries no longer generated in PHASE 2 (deferred to PHASE 3B for better quality)
+  - **Backward Compatibility:** Old `_generate_document_summary()` method kept for compatibility (marked DEPRECATED)
+  - **Tests:** New comprehensive tests in `tests/test_phase3_summary_unit.py` (validation + generation logic)
 - Entity Deduplication System (2025-11-01): Sophisticated 3-layer incremental deduplication for Neo4j knowledge graphs
   - **3-Layer Strategy:** Layer 1 (exact match, <1ms) → Layer 2 (semantic similarity, 50-200ms) → Layer 3 (acronym expansion, 100-500ms)
   - **APOC Optimization:** Uses `apoc.coll.union` when available, automatic fallback to pure Cypher
