@@ -150,7 +150,7 @@ class DuplicateDetector:
         else:
             # Generate embedding
             embedder = self._get_embedder()
-            embedding = embedder.generate_embeddings([text])[0]
+            embedding = embedder.embed_texts([text])[0]
 
             # Cache embedding
             self._cache_embedding(file_hash, embedding, document_id or file_path)
@@ -265,9 +265,10 @@ class DuplicateDetector:
 
         # Search in Layer 1 (document-level embeddings)
         # Use k=5 to check multiple candidates
-        results = vector_store.search_layer(
-            query_vector=embedding,
-            layer=1,
+        # Access underlying FAISS store from HybridVectorStore
+        faiss_store = getattr(vector_store, 'faiss_store', vector_store)
+        results = faiss_store.search_layer1(
+            query_embedding=embedding,
             k=5,
         )
 

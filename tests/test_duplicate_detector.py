@@ -66,7 +66,7 @@ def mock_embedder():
     """Create mock embedding generator."""
     embedder = Mock()
     # Return consistent 3-dimensional embeddings
-    embedder.generate_embeddings.return_value = [np.array([0.1, 0.2, 0.3])]
+    embedder.embed_texts.return_value = [np.array([0.1, 0.2, 0.3])]
     return embedder
 
 
@@ -299,11 +299,11 @@ def test_embedding_cache(duplicate_config, mock_embedder, mock_vector_store, tmp
     with mock_fitz_module({'pages': 1, 'text_per_page': long_text}):
         # First check - should call embedder
         detector.check_duplicate(str(test_file))
-        assert mock_embedder.generate_embeddings.call_count == 1
+        assert mock_embedder.embed_texts.call_count == 1
 
         # Second check on same file - should use cache
         detector.check_duplicate(str(test_file))
-        assert mock_embedder.generate_embeddings.call_count == 1  # Not called again
+        assert mock_embedder.embed_texts.call_count == 1  # Not called again
 
 
 def test_text_too_short(duplicate_config):
