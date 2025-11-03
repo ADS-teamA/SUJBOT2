@@ -499,14 +499,21 @@ Please give a short succinct context (50-100 words) to situate this chunk within
             section_path = metadata.get("section_path", "")
             chunk_preview = chunk_text[:1500]  # Limit chunk size for context
 
-            prompt = f"""Document: {doc_summary}
+            # Build prompt parts (skip empty values to avoid confusing LLM)
+            prompt_parts = []
 
-Section: {section_path or section_title}
+            if doc_summary:
+                prompt_parts.append(f"Document: {doc_summary}")
 
-Chunk content:
-{chunk_preview}
+            if section_path or section_title:
+                prompt_parts.append(f"Section: {section_path or section_title}")
 
-Provide a brief context (50-100 words) explaining what this chunk discusses within the document."""
+            prompt_parts.append(f"Chunk content:\n{chunk_preview}")
+            prompt_parts.append(
+                "Provide a brief context (50-100 words) explaining what this chunk discusses within the document."
+            )
+
+            prompt = "\n\n".join(prompt_parts)
 
             # Build request body with model-specific parameters
             # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
@@ -535,7 +542,22 @@ Provide a brief context (50-100 words) explaining what this chunk discusses with
         # Define response parsing function
         def parse_response(response: dict) -> str:
             """Extract context from API response."""
-            return response["choices"][0]["message"]["content"].strip()
+            # CRITICAL FIX: Handle None content (can happen with API failures or filters)
+            content = response["choices"][0]["message"]["content"]
+            if content is None:
+                logger.warning("Batch API returned None content for a context")
+                return ""
+
+            context = content.strip()
+
+            # CRITICAL FIX: Log when context is empty (helps debugging)
+            if not context:
+                logger.warning(
+                    "Batch API returned empty context. "
+                    "This may indicate prompt issue or document_summary is empty."
+                )
+
+            return context
 
         # Process batch using centralized client
         results_map = batch_client.process_batch(
