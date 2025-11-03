@@ -272,6 +272,12 @@ class ExtractionConfig:
 
     # Summary generation (PHASE 2 integration)
     generate_summaries: bool = True  # Generate document/section summaries
+    summary_model: Optional[str] = None  # Uses SummarizationConfig default when None
+    summary_max_chars: int = 150  # Generic summary target length
+    summary_style: str = "generic"  # Maintain parity with SummarizationConfig default
+    use_batch_api: bool = True  # Mirror SummarizationConfig default behaviour
+    batch_api_poll_interval: int = 5  # Seconds between batch status checks
+    batch_api_timeout: int = 43200  # Max wait for batch completion (12h)
 
     # Output formats
     generate_markdown: bool = True

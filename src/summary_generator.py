@@ -487,6 +487,14 @@ Summary (max {self.max_chars} characters):"""
 
             summary = content.strip()
 
+            # CRITICAL FIX: Validate summary is not empty or too short
+            if not summary or len(summary) < 10:
+                logger.warning(
+                    f"Batch API returned empty/too-short summary ({len(summary)} chars). "
+                    f"This may indicate a prompt issue or API failure."
+                )
+                return ""  # Will be handled by caller
+
             # Enforce length limit
             if len(summary) > self.max_chars + self.tolerance:
                 summary = summary[: self.max_chars]
