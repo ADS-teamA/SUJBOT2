@@ -191,6 +191,13 @@ class CrossDocumentRelationshipDetector:
         # Build lookup index: normalized_value -> entity
         existing_by_value: Dict[str, List[Entity]] = defaultdict(list)
         for entity in existing_entities:
+            # Skip entities with None normalized_value (should be rare - indicates extraction issue)
+            if entity.normalized_value is None:
+                logger.debug(
+                    f"Skipping entity with None normalized_value: {entity.value} "
+                    f"(type={entity.type}, source={entity.source_chunk_ids})"
+                )
+                continue
             existing_by_value[entity.normalized_value.lower()].append(entity)
 
         # Scan new entities for reference patterns
