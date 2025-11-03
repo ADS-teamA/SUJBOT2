@@ -363,6 +363,7 @@ Please give a short succinct context (50-100 words) to situate this chunk within
 
         # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
         # GPT-5 models only support temperature=1.0 (default)
+        # GPT-5 uses reasoning mode by default, set reasoning_effort="low" for simple tasks
         if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
             logger.debug(f"Using GPT-5/o-series parameters for model: {self.model}")
             response = self.client.chat.completions.create(
@@ -370,6 +371,7 @@ Please give a short succinct context (50-100 words) to situate this chunk within
                 messages=[{"role": "user", "content": prompt}],
                 temperature=1.0,  # GPT-5 only supports default temperature
                 max_completion_tokens=self.config.max_tokens,
+                reasoning_effort="minimal",  # Prevent empty responses from excessive reasoning
             )
         else:
             logger.debug(f"Using standard GPT-4 parameters for model: {self.model}")
@@ -518,6 +520,7 @@ Please give a short succinct context (50-100 words) to situate this chunk within
             # Build request body with model-specific parameters
             # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
             # GPT-5 models only support temperature=1.0 (default)
+            # GPT-5 uses reasoning mode by default, set reasoning_effort="low" for simple tasks
             body = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -527,6 +530,7 @@ Please give a short succinct context (50-100 words) to situate this chunk within
                 # GPT-5/o-series parameters
                 body["max_completion_tokens"] = self.config.max_tokens
                 body["temperature"] = 1.0  # GPT-5 only supports default temperature
+                body["reasoning_effort"] = "minimal"  # Prevent empty responses from excessive reasoning
             else:
                 # GPT-4 and earlier parameters
                 body["max_tokens"] = self.config.max_tokens

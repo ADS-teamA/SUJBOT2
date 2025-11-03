@@ -247,7 +247,7 @@ class Neo4jDeduplicator:
               e.merged_from = apoc.coll.union(e.merged_from, [entity.id]),
               e.metadata = CASE
                 WHEN entity.metadata IS NOT NULL
-                THEN apoc.map.merge(e.metadata, entity.metadata)
+                THEN apoc.map.merge(coalesce(e.metadata, {}), entity.metadata)
                 ELSE e.metadata
               END,
               e.updated_at = datetime(),
@@ -331,7 +331,11 @@ class Neo4jDeduplicator:
                 CASE WHEN chunk IN acc THEN acc ELSE acc + [chunk] END),
               e.confidence = CASE WHEN entity.confidence > e.confidence THEN entity.confidence ELSE e.confidence END,
               e.merged_from = CASE WHEN NOT entity.id IN e.merged_from THEN e.merged_from + [entity.id] ELSE e.merged_from END,
-              e.metadata = coalesce(e.metadata, {}) + coalesce(entity.metadata, {}),
+              e.metadata = CASE
+                WHEN entity.metadata IS NOT NULL
+                THEN entity.metadata
+                ELSE e.metadata
+              END,
               e.updated_at = datetime(),
               e._is_new = false
             RETURN

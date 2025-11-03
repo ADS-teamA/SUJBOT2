@@ -298,6 +298,7 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
         """
         # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
         # GPT-5 models only support temperature=1.0 (default)
+        # GPT-5 uses reasoning mode by default, set reasoning_effort="low" for simple tasks
         tokens_param = max_tokens or self.max_tokens
         if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
             response = self.client.chat.completions.create(
@@ -305,6 +306,7 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
                 messages=[{"role": "user", "content": prompt}],
                 temperature=1.0,  # GPT-5 only supports default temperature
                 max_completion_tokens=tokens_param,
+                reasoning_effort="minimal",  # Prevent empty responses from excessive reasoning
             )
         else:
             response = self.client.chat.completions.create(
@@ -455,6 +457,7 @@ Summary (max {self.max_chars} characters):"""
             # Build request body with model-specific parameters
             # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
             # GPT-5 models only support temperature=1.0 (default)
+            # GPT-5 uses reasoning mode by default, set reasoning_effort="low" for simple tasks
             body = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -464,6 +467,7 @@ Summary (max {self.max_chars} characters):"""
                 # GPT-5/o-series parameters
                 body["max_completion_tokens"] = self.max_tokens
                 body["temperature"] = 1.0  # GPT-5 only supports default temperature
+                body["reasoning_effort"] = "minimal"  # Prevent empty responses from excessive reasoning
             else:
                 # GPT-4 and earlier parameters
                 body["max_tokens"] = self.max_tokens
