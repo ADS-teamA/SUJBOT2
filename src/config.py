@@ -270,6 +270,11 @@ class ExtractionConfig:
     enable_smart_hierarchy: bool = True  # Font-size based classification
     hierarchy_tolerance: float = 0.8  # BBox height clustering tolerance (pixels, lower = stricter)
 
+    # Watermark / rotated text filtering
+    filter_rotated_text: bool = True  # Remove diagonally oriented watermark text
+    rotation_min_angle: float = 25.0  # Minimum angle (degrees from horizontal) to consider rotated
+    rotation_max_angle: float = 65.0  # Maximum angle (degrees from horizontal) to consider rotated
+
     # Summary generation (PHASE 2 integration)
     generate_summaries: bool = True  # Generate document/section summaries
     summary_model: Optional[str] = None  # Uses SummarizationConfig default when None
@@ -294,16 +299,21 @@ class ExtractionConfig:
         Environment Variables:
             OCR_LANGUAGE: Comma-separated language codes (default: "ces,eng")
             ENABLE_SMART_HIERARCHY: Enable font-size based hierarchy (default: "true")
+            FILTER_ROTATED_TEXT: Enable removal of rotated watermark text (default: "true")
+            ROTATION_MIN_ANGLE: Minimum diagonal angle in degrees (default: "25.0")
+            ROTATION_MAX_ANGLE: Maximum diagonal angle in degrees (default: "65.0")
 
         Returns:
             ExtractionConfig instance loaded from environment
         """
         ocr_lang_str = os.getenv("OCR_LANGUAGE", "ces,eng")
         ocr_languages = [lang.strip() for lang in ocr_lang_str.split(",")]
-
         return cls(
             ocr_language=ocr_languages,
             enable_smart_hierarchy=os.getenv("ENABLE_SMART_HIERARCHY", "true").lower() == "true",
+            filter_rotated_text=os.getenv("FILTER_ROTATED_TEXT", "true").lower() == "true",
+            rotation_min_angle=float(os.getenv("ROTATION_MIN_ANGLE", "25.0")),
+            rotation_max_angle=float(os.getenv("ROTATION_MAX_ANGLE", "65.0")),
         )
 
 

@@ -11,6 +11,7 @@ This module provides high-precision extraction with:
 """
 
 import logging
+import math
 import unicodedata
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -371,6 +372,118 @@ class DoclingExtractorV2:
 
         return converter
 
+    def _filter_rotated_text_cells(self, docling_doc: DoclingDocument) -> None:
+        """
+        Remove text cells with tall bounding boxes that may indicate diagonal watermarks.
+
+        Uses bounding box aspect ratio to compute diagonal angle via atan2(height, width).
+        Text cells with diagonal angles between rotation_min_angle and rotation_max_angle
+        degrees are removed by blanking their text content.
+
+        Note: This heuristic measures bounding box shape, not actual text orientation.
+        It may produce false positives (tall narrow horizontal text) and false negatives
+        (wide diagonal text). Residual tokens are handled by _remove_residual_watermark_tokens().
+
+        Args:
+            docling_doc: DoclingDocument containing text cells with provenance metadata
+        """
+        config = self.config
+        if not getattr(config, "filter_rotated_text", False):
+            return
+
+        text_items = getattr(docling_doc, "texts", None)
+        if not text_items:
+            return
+
+        min_angle = getattr(config, "rotation_min_angle", 25.0)
+        max_angle = getattr(config, "rotation_max_angle", 65.0)
+        if min_angle < 0 or max_angle < 0 or min_angle > max_angle:
+            logger.warning(
+                "Invalid rotation angle bounds (min=%s, max=%s). Skipping rotated text filtering.",
+                min_angle,
+                max_angle,
+            )
+            return
+
+        removed_items = 0
+        for text_item in text_items:
+            text_value = getattr(text_item, "text", "")
+            if not text_value:
+                continue
+
+            prov = getattr(text_item, "prov", None)
+            if not prov:
+                continue
+
+            bbox = getattr(prov[0], "bbox", None) if hasattr(prov[0], "bbox") else prov[0].get("bbox") if isinstance(prov[0], dict) else None
+            if not bbox:
+                continue
+
+            if isinstance(bbox, dict):
+                left = bbox.get("l", 0.0)
+                right = bbox.get("r", left)
+                top = bbox.get("t", 0.0)
+                bottom = bbox.get("b", top)
+            else:
+                left = getattr(bbox, "l", getattr(bbox, "left", 0.0))
+                right = getattr(bbox, "r", getattr(bbox, "right", left))
+                top = getattr(bbox, "t", getattr(bbox, "top", 0.0))
+                bottom = getattr(bbox, "b", getattr(bbox, "bottom", top))
+
+            width = max(abs(right - left), 1e-6)
+            height = max(abs(top - bottom), 0.0)
+
+            # Skip degenerate bounding boxes (though width is always >= 1e-6)
+            if width < 1e-6 and height < 1e-6:
+                continue
+
+            # Safe: width is always >= 1e-6, atan2(0, positive) = 0° for horizontal text
+            angle = math.degrees(math.atan2(height, width))
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Text item debug: angle=%.2f width=%.2f height=%.2f text=%r",
+                    angle,
+                    width,
+                    height,
+                    text_value.strip(),
+                )
+
+            if angle < min_angle or angle > max_angle:
+                continue
+
+            try:
+                text_item.text = ""
+            except Exception:
+                continue
+
+            if hasattr(text_item, "orig"):
+                try:
+                    text_item.orig = ""
+                except Exception:
+                    pass
+
+            if hasattr(text_item, "normalized_text"):
+                try:
+                    text_item.normalized_text = ""
+                except Exception:
+                    pass
+
+            removed_items += 1
+
+        if removed_items:
+            logger.info(
+                "Filtered %s rotated text items (angle between %.1f° and %.1f°)",
+                removed_items,
+                min_angle,
+                max_angle,
+            )
+            if logger.isEnabledFor(logging.DEBUG):
+                remaining = sum(
+                    1 for item in text_items if "NEPLATN" in getattr(item, "text", "").upper()
+                )
+                logger.debug("Remaining watermark candidates after filtering: %s", remaining)
+
     def extract(
         self, source: Union[str, Path], document_id: Optional[str] = None
     ) -> ExtractedDocument:
@@ -411,6 +524,29 @@ class DoclingExtractorV2:
         result = self.converter.convert(str(source_path))
         docling_doc: DoclingDocument = result.document
 
+        if logger.isEnabledFor(logging.DEBUG):
+            try:
+                sample_page = None
+                if hasattr(docling_doc, "pages"):
+                    pages_attr = docling_doc.pages
+                    if isinstance(pages_attr, list) and pages_attr:
+                        sample_page = type(pages_attr[0])
+                    elif hasattr(pages_attr, "__iter__"):
+                        try:
+                            sample_page = next(iter(pages_attr))
+                        except StopIteration:
+                            sample_page = None
+                logger.debug(
+                    "Docling document page attr type=%s sample=%s",
+                    type(getattr(docling_doc, "pages", None)),
+                    sample_page,
+                )
+            except Exception:
+                logger.debug("Unable to introspect docling_doc.pages")
+
+        # Remove diagonal watermark cells before further processing
+        self._filter_rotated_text_cells(docling_doc)
+
         # Extract content with Unicode normalization (fixes Czech diacritics)
         full_text = normalize_unicode(docling_doc.export_to_text())
         markdown = (
@@ -422,6 +558,7 @@ class DoclingExtractorV2:
 
         # PHASE 1: Extract hierarchical structure
         sections = self._extract_hierarchical_sections(docling_doc)
+        sections = self._remove_residual_watermark_tokens(sections)
 
         # PHASE 2: Generate DOCUMENT summary only (NOT section summaries!)
         # Section summaries will be generated in PHASE 3B from chunk contexts
@@ -482,6 +619,9 @@ class DoclingExtractorV2:
                 "enable_smart_hierarchy": self.config.enable_smart_hierarchy,
                 "generate_summaries": self.config.generate_summaries,
                 "ocr_language": self.config.ocr_language,
+                "filter_rotated_text": getattr(self.config, "filter_rotated_text", False),
+                "rotation_min_angle": getattr(self.config, "rotation_min_angle", None),
+                "rotation_max_angle": getattr(self.config, "rotation_max_angle", None),
             },
         )
 
@@ -595,6 +735,48 @@ class DoclingExtractorV2:
                     if parent.section_id == section.parent_id:
                         parent.children_ids.append(section.section_id)
                         break
+
+        return sections
+
+    def _remove_residual_watermark_tokens(
+        self, sections: List[DocumentSection], token: str = "NEPLATNÉ"
+    ) -> List[DocumentSection]:
+        """
+        Remove leftover watermark tokens that may remain after angle-based filtering.
+
+        OCR occasionally injects the watermark token inline with legitimate text after the
+        diagonal text nodes have been stripped. This pass removes standalone occurrences
+        of the token without disturbing surrounding content.
+        """
+        if not sections or not token:
+            return sections
+
+        token_upper = token.upper()
+
+        def _strip_token(text: Optional[str]) -> str:
+            if not text:
+                return ""
+            cleaned = text.replace(token_upper, "")
+            cleaned = cleaned.replace(token_upper.capitalize(), "")
+            return " ".join(cleaned.split())
+
+        for section in sections:
+            original_content = section.content
+
+            section.title = _strip_token(section.title)
+            section.path = _strip_token(section.path)
+            section.content = _strip_token(section.content)
+
+            section.content_length = len(section.content)
+            section.char_end = section.char_start + section.content_length
+
+            if logger.isEnabledFor(logging.DEBUG):
+                if token_upper in (original_content or "").upper():
+                    logger.debug(
+                        "Removed residual token from section %s on page %s",
+                        section.section_id,
+                        section.page_number,
+                    )
 
         return sections
 

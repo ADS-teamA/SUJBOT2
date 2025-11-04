@@ -11,9 +11,16 @@ Usage:
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 from datetime import datetime
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logging.getLogger().handlers[0].setLevel(30)
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
@@ -47,9 +54,12 @@ def test_phase1_jsonl(pdf_path: Path, output_dir: Path = None):
         enable_smart_hierarchy=True,
         generate_summaries=False,  # PHASE 1 only, no summaries
         extract_tables=True,
-    )
+        ocr_engine="rapidocr"
+        )
 
     # Extract document
+    print("Extraction Configuration:")
+    print(config)
     print(f"Extracting: {pdf_path.name}")
     print()
 

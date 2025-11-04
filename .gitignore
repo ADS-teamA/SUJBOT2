@@ -2,7 +2,7 @@
 .env
 .env.local
 .env.*.local
-
+output/
 # Python
 __pycache__/
 *.py[cod]
