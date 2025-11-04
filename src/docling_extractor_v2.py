@@ -14,7 +14,7 @@ import logging
 import math
 import unicodedata
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -40,11 +40,6 @@ from docling.datamodel.layout_model_specs import (
 )
 from docling_core.types.doc import DoclingDocument, SectionHeaderItem
 from docling_core.transforms.chunker import HierarchicalChunker
-
-try:
-    from docling_core.types.cell import TextCell
-except ImportError:
-    TextCell = None  # type: ignore
 
 # Import configuration (centralized)
 try:
@@ -379,11 +374,18 @@ class DoclingExtractorV2:
 
     def _filter_rotated_text_cells(self, docling_doc: DoclingDocument) -> None:
         """
-        Remove diagonally oriented watermark text using bounding-box aspect ratio.
+        Remove text cells with tall bounding boxes that may indicate diagonal watermarks.
 
-        Approximates rotation angle from the ratio of bounding box height to width.
-        Diagonal watermarks have a significantly larger height than regular lines,
-        producing angles near 45°. Horizontal text results in angles close to 0°.
+        Uses bounding box aspect ratio to compute diagonal angle via atan2(height, width).
+        Text cells with diagonal angles between rotation_min_angle and rotation_max_angle
+        degrees are removed by blanking their text content.
+
+        Note: This heuristic measures bounding box shape, not actual text orientation.
+        It may produce false positives (tall narrow horizontal text) and false negatives
+        (wide diagonal text). Residual tokens are handled by _remove_residual_watermark_tokens().
+
+        Args:
+            docling_doc: DoclingDocument containing text cells with provenance metadata
         """
         config = self.config
         if not getattr(config, "filter_rotated_text", False):
@@ -393,8 +395,8 @@ class DoclingExtractorV2:
         if not text_items:
             return
 
-        min_angle = getattr(config, "rotation_min_angle", 44.0)
-        max_angle = getattr(config, "rotation_max_angle", 46.0)
+        min_angle = getattr(config, "rotation_min_angle", 25.0)
+        max_angle = getattr(config, "rotation_max_angle", 65.0)
         if min_angle < 0 or max_angle < 0 or min_angle > max_angle:
             logger.warning(
                 "Invalid rotation angle bounds (min=%s, max=%s). Skipping rotated text filtering.",
@@ -430,6 +432,12 @@ class DoclingExtractorV2:
 
             width = max(abs(right - left), 1e-6)
             height = max(abs(top - bottom), 0.0)
+
+            # Skip degenerate bounding boxes (though width is always >= 1e-6)
+            if width < 1e-6 and height < 1e-6:
+                continue
+
+            # Safe: width is always >= 1e-6, atan2(0, positive) = 0° for horizontal text
             angle = math.degrees(math.atan2(height, width))
 
             if logger.isEnabledFor(logging.DEBUG):
@@ -475,170 +483,6 @@ class DoclingExtractorV2:
                     1 for item in text_items if "NEPLATN" in getattr(item, "text", "").upper()
                 )
                 logger.debug("Remaining watermark candidates after filtering: %s", remaining)
-
-    def _compute_cell_angle(self, cell) -> Optional[float]:
-        """
-        Returns None when orientation metadata is missing.
-        """
-        angle: Optional[float] = None
-        angle_source: Optional[str] = None
-
-        orientation = getattr(cell, "orientation", None)
-        if orientation is not None:
-            # Priority: derive angle from direction vector (most reliable)
-            vector_source = getattr(orientation, "vector", None)
-            if vector_source is None and isinstance(orientation, dict):
-                vector_source = orientation.get("vector")
-
-            dx, dy = self._extract_vector_components(vector_source)
-            if dx is None and dy is None:
-                dx, dy = self._extract_vector_components(orientation)
-
-            if dx is not None and dy is not None and (abs(dx) > 1e-6 or abs(dy) > 1e-6):
-                angle = math.degrees(math.atan2(dy, dx))
-                angle_source = "orientation_vector"
-            else:
-                # Fall back to explicit angle properties
-                angle_attr = getattr(orientation, "angle", None)
-                if angle_attr is None and isinstance(orientation, dict):
-                    angle_attr = orientation.get("angle")
-                if angle_attr is not None:
-                    angle = float(angle_attr)
-                    if abs(angle) <= math.pi + 1e-6:
-                        angle = math.degrees(angle)
-                    angle_source = "orientation_scalar"
-                else:
-                    angle_rad_attr = getattr(orientation, "angle_rad", None)
-                    if angle_rad_attr is None and isinstance(orientation, dict):
-                        angle_rad_attr = orientation.get("angle_rad")
-                    if angle_rad_attr is not None:
-                        angle = math.degrees(float(angle_rad_attr))
-                        angle_source = "orientation_scalar"
-
-                if angle is None and isinstance(orientation, (int, float)):
-                    # Orientation stored directly as scalar
-                    angle = float(orientation)
-                    if abs(angle) <= math.pi + 1e-6:
-                        angle = math.degrees(angle)
-                    angle_source = "orientation_scalar"
-
-        if angle is None or abs(angle) < 1e-3:
-            angle = self._angle_from_provenance(cell)
-            if angle is not None:
-                angle_source = "provenance"
-
-        if angle is None:
-            return None
-
-        # Normalize angle to [0, 180), then map to [0, 90]
-        normalized = abs(angle) % 180.0
-        if normalized > 90.0:
-            normalized = 180.0 - normalized
-
-        if angle_source:
-            try:
-                setattr(cell, "_rotated_angle_source", angle_source)
-            except Exception:
-                pass
-
-        return normalized
-
-    @staticmethod
-    def _extract_vector_components(vector) -> Tuple[Optional[float], Optional[float]]:
-        """Extract direction components from various vector representations."""
-        if vector is None:
-            return None, None
-
-        if isinstance(vector, dict):
-            dx = vector.get("x", vector.get("dx"))
-            dy = vector.get("y", vector.get("dy"))
-            try:
-                return (float(dx) if dx is not None else None, float(dy) if dy is not None else None)
-            except (TypeError, ValueError):
-                return None, None
-
-        if isinstance(vector, (list, tuple)) and len(vector) >= 2:
-            try:
-                return float(vector[0]), float(vector[1])
-            except (TypeError, ValueError):
-                return None, None
-
-        dx = getattr(vector, "x", getattr(vector, "dx", None))
-        dy = getattr(vector, "y", getattr(vector, "dy", None))
-        try:
-            return (
-                float(dx) if dx is not None else None,
-                float(dy) if dy is not None else None,
-            )
-        except (TypeError, ValueError):
-            return None, None
-
-    def _angle_from_provenance(self, cell) -> Optional[float]:
-        """Compute angle from OCR provenance polygons when orientation metadata is unavailable."""
-        prov_entries = getattr(cell, "prov", None)
-        if not prov_entries:
-            return None
-
-        for entry in prov_entries:
-            ocr_info = getattr(entry, "ocr", None)
-            if ocr_info is None:
-                continue
-
-            points = self._extract_points(getattr(ocr_info, "quad", None))
-            if not points:
-                points = self._extract_points(getattr(ocr_info, "polygon", None))
-
-            if not points or len(points) < 2:
-                continue
-
-            base_point = points[0]
-            for candidate in points[1:]:
-                dx = candidate[0] - base_point[0]
-                dy = candidate[1] - base_point[1]
-                if abs(dx) <= 1e-6 and abs(dy) <= 1e-6:
-                    continue
-                angle = math.degrees(math.atan2(dy, dx))
-                return angle
-
-        return None
-
-    @staticmethod
-    def _extract_points(raw_points) -> Optional[List[Tuple[float, float]]]:
-        """Normalize provenance point structures into a list of (x, y) tuples."""
-        if not raw_points:
-            return None
-
-        points: List[Tuple[float, float]] = []
-
-        if isinstance(raw_points, dict):
-            raw_points = raw_points.get("points") or raw_points.get("vertices") or []
-
-        if isinstance(raw_points, (list, tuple)):
-            if raw_points and isinstance(raw_points[0], (int, float)):
-                # Flat list like [x1, y1, x2, y2, ...]
-                iterator = iter(raw_points)
-                for x, y in zip(iterator, iterator):
-                    try:
-                        points.append((float(x), float(y)))
-                    except (TypeError, ValueError):
-                        continue
-            else:
-                for item in raw_points:
-                    if isinstance(item, (list, tuple)) and len(item) >= 2:
-                        try:
-                            points.append((float(item[0]), float(item[1])))
-                        except (TypeError, ValueError):
-                            continue
-                    else:
-                        x = getattr(item, "x", getattr(item, "dx", None))
-                        y = getattr(item, "y", getattr(item, "dy", None))
-                        if x is not None and y is not None:
-                            try:
-                                points.append((float(x), float(y)))
-                            except (TypeError, ValueError):
-                                continue
-
-        return points or None
 
     def extract(
         self, source: Union[str, Path], document_id: Optional[str] = None
