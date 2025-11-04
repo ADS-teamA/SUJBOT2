@@ -313,6 +313,33 @@ class GraphSearchTool(BaseTool):
 
         return None
 
+    def _get_entity_not_found_error(self, entity_value: str, entity_type: Optional[str] = None) -> str:
+        """Generate helpful error message when entity is not found."""
+        import re
+
+        # Check if entity_value looks like a document ID (e.g., Sb_1997_18, BZ_VR1)
+        doc_id_pattern = r'^[A-Z][a-z]?_\d{4}_\d+.*$|^[A-Z]{2,}_[A-Z0-9]+.*$'
+        is_likely_doc_id = bool(re.match(doc_id_pattern, entity_value))
+
+        error_msg = f"Entity '{entity_value}' not found in knowledge graph"
+        if entity_type:
+            error_msg += f" with type '{entity_type}'"
+
+        if is_likely_doc_id:
+            error_msg += (
+                f". NOTE: '{entity_value}' looks like a document ID. "
+                "graph_search expects entity names (e.g., 'GRI 306', 'GSSB', 'zákon č. 18/1997 Sb.'), "
+                "not document IDs. Try using get_document_info() or search() instead."
+            )
+        else:
+            # Suggest browsing entities to find correct name
+            error_msg += (
+                ". Use browse_entities() to list available entities, "
+                "or try a different entity name/type."
+            )
+
+        return error_msg
+
     def _entity_mentions_search(
         self,
         entity_value: str,
@@ -330,8 +357,7 @@ class GraphSearchTool(BaseTool):
             return ToolResult(
                 success=False,
                 data=None,
-                error=f"Entity '{entity_value}' not found in knowledge graph"
-                + (f" with type '{entity_type}'" if entity_type else ""),
+                error=self._get_entity_not_found_error(entity_value, entity_type),
                 metadata={"entity_value": entity_value, "entity_type": entity_type},
             )
 
@@ -409,8 +435,7 @@ class GraphSearchTool(BaseTool):
             return ToolResult(
                 success=False,
                 data=None,
-                error=f"Entity '{entity_value}' not found in knowledge graph"
-                + (f" with type '{entity_type}'" if entity_type else ""),
+                error=self._get_entity_not_found_error(entity_value, entity_type),
                 metadata={"entity_value": entity_value, "entity_type": entity_type},
             )
 
@@ -499,8 +524,7 @@ class GraphSearchTool(BaseTool):
             return ToolResult(
                 success=False,
                 data=None,
-                error=f"Entity '{entity_value}' not found in knowledge graph"
-                + (f" with type '{entity_type}'" if entity_type else ""),
+                error=self._get_entity_not_found_error(entity_value, entity_type),
                 metadata={"entity_value": entity_value, "entity_type": entity_type},
             )
 

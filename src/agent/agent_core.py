@@ -212,14 +212,22 @@ class AgentCore:
             init_message = doc_list_text
             init_message += "\n(These are the documents available in the system. Use your tools to search and analyze them.)"
 
-            # Add as first message in conversation history
-            self.conversation_history.append({"role": "user", "content": init_message})
+            # Add as first message in conversation history (Anthropic format: content as list)
+            self.conversation_history.append({
+                "role": "user",
+                "content": [{"type": "text", "text": init_message}]
+            })
 
-            # Add simple acknowledgment from assistant
+            # Add simple acknowledgment from assistant (Anthropic format: content as list)
             self.conversation_history.append(
                 {
                     "role": "assistant",
-                    "content": "I understand. I have access to these documents and will use the appropriate tools to search and analyze them.",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "I understand. I have access to these documents and will use the appropriate tools to search and analyze them.",
+                        }
+                    ],
                 }
             )
 
@@ -550,8 +558,11 @@ class AgentCore:
                 f"Maximum length is {MAX_QUERY_LENGTH} characters."
             )
 
-        # Add user message to history
-        self.conversation_history.append({"role": "user", "content": user_message})
+        # Add user message to history (Anthropic format: content as list)
+        self.conversation_history.append({
+            "role": "user",
+            "content": [{"type": "text", "text": user_message}]
+        })
 
         # Prune tool results from old messages (keep only Q&A text)
         self._prune_tool_results(keep_last_n=self.config.context_management_keep)

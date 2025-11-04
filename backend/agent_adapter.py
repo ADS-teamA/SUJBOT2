@@ -326,44 +326,28 @@ class AgentAdapter:
             # Get streaming generator from AgentCore
             text_stream = self.agent.process_message(query, stream=True)
 
-            # Stream text chunks and detect tool calls
+            # Stream text chunks (including markers for inline tool display)
+            # DO NOT send separate tool_call events during streaming
+            # Reasons:
+            # 1. Tool IDs are not known yet (Anthropic assigns them after execution)
+            # 2. Frontend expects markers in text for inline rendering
+            # 3. Sending both causes duplicate display (nahoře + inline)
+
             for chunk in text_stream:
-                # Debug: Log chunk content (first 100 chars)
-                logger.debug(f"Chunk received: {repr(chunk[:100])}")
+                # Strip ANSI color codes only
+                clean_chunk = re.sub(r'\033\[[0-9;]+m', '', chunk)
 
-                # Detect tool call notification: [Using TOOL_NAME...]
-                # Pattern: [Using <tool_name>...]
-                tool_call_match = re.search(r'\[Using\s+([a-z_]+)\.{3}\]', chunk)
-
-                if tool_call_match:
-                    # Extract tool name
-                    tool_name = tool_call_match.group(1)
-                    logger.info(f"🔧 Tool call detected: {tool_name}")
-
-                    # Send tool_call event immediately
+                if clean_chunk:  # Only send non-empty chunks
+                    # Send ALL text including [Using tool...] markers
+                    # Frontend will parse markers and render tools inline
                     yield {
-                        "event": "tool_call",
+                        "event": "text_delta",
                         "data": {
-                            "tool_name": tool_name,
-                            "tool_input": {},  # Input not available yet (streamed before execution)
-                            "call_id": f"tool_{tool_name}"  # Placeholder ID
+                            "content": clean_chunk
                         }
                     }
-                    # Yield control to event loop
+                    # Yield control to event loop (allows concurrent requests)
                     await asyncio.sleep(0)
-                else:
-                    # Regular text content - strip ANSI color codes
-                    clean_chunk = re.sub(r'\033\[[0-9;]+m', '', chunk)
-
-                    if clean_chunk:  # Only send non-empty chunks
-                        yield {
-                            "event": "text_delta",
-                            "data": {
-                                "content": clean_chunk
-                            }
-                        }
-                        # Yield control to event loop (allows concurrent requests)
-                        await asyncio.sleep(0)
 
             # Extract tool calls from conversation history
             # Tool calls are stored in assistant message content blocks (Anthropic format)
@@ -456,14 +440,63 @@ class AgentAdapter:
                         result_data = tool_results_map[tool_id]
                         tool_call["result"] = result_data.get("result")
 
-                        # Defensive: Get metadata with fallback to empty dict
-                        metadata = result_data.get("metadata", {})
-                        tool_call["executionTimeMs"] = metadata.get("execution_time_ms", 0)
-                        tool_call["success"] = metadata.get("success", True)
-                        tool_call["error"] = metadata.get("error")
-                        tool_call["explicitParams"] = metadata.get("explicit_params", [])
+                        # Metadata is no longer in API responses (removed for API compliance)
+                        # Will be enriched from tool_call_history in Pass 4
+                        tool_call["executionTimeMs"] = 0  # Placeholder, will be updated in Pass 4
+                        tool_call["success"] = True  # Default assumption
+                        tool_call["error"] = None
+                        tool_call["explicitParams"] = []
 
-            # Send tool calls summary if any
+                # Pass 4: Enrich with execution metadata from tool_call_history
+                # tool_call_history contains execution_time_ms, success, error, etc.
+                # Match by tool name and use counters to handle multiple calls to same tool
+                if self.agent.tool_call_history:
+                    # Build mapping: tool_name -> list of execution records (in order)
+                    tool_history_by_name = {}
+                    for record in self.agent.tool_call_history:
+                        tool_name = record.get("tool_name", "")
+                        if tool_name not in tool_history_by_name:
+                            tool_history_by_name[tool_name] = []
+                        tool_history_by_name[tool_name].append(record)
+
+                    # Track how many times we've matched each tool name (for multiple calls)
+                    tool_name_counters = {}
+
+                    # Enrich tool_calls_info with execution metadata
+                    for tool_call in tool_calls_info:
+                        tool_name = tool_call.get("name", "")
+
+                        # Get current index for this tool name
+                        current_index = tool_name_counters.get(tool_name, 0)
+                        tool_name_counters[tool_name] = current_index + 1
+
+                        # Find matching execution record
+                        if tool_name in tool_history_by_name:
+                            history_records = tool_history_by_name[tool_name]
+
+                            # Use most recent N calls (in reverse order to match recent conversation)
+                            # We want the Nth-most-recent call for this tool
+                            if current_index < len(history_records):
+                                # Match from the end (most recent first)
+                                record_index = len(history_records) - 1 - current_index
+                                if record_index >= 0:
+                                    record = history_records[record_index]
+
+                                    # Enrich with execution metadata
+                                    tool_call["executionTimeMs"] = record.get("execution_time_ms", 0)
+                                    tool_call["success"] = record.get("success", True)
+                                    # Only include error if present
+                                    if "error" in record:
+                                        tool_call["error"] = record.get("error")
+                                    # Include RAG confidence if available
+                                    if "rag_confidence" in record:
+                                        tool_call["ragConfidence"] = record.get("rag_confidence")
+
+                    logger.info(f"Enriched {len(tool_calls_info)} tool calls with execution metadata from tool_call_history")
+
+            # Send tool_calls_summary with all tool results
+            # Frontend uses this for inline rendering (matches markers in text)
+            # No need for individual tool_result events - summary has everything
             if tool_calls_info:
                 logger.info(f"Extracted {len(tool_calls_info)} tool calls from conversation history")
                 yield {
