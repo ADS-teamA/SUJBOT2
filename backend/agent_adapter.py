@@ -338,6 +338,9 @@ class AgentAdapter:
                 clean_chunk = re.sub(r'\033\[[0-9;]+m', '', chunk)
 
                 if clean_chunk:  # Only send non-empty chunks
+                    # DEBUG: Log chunk yielding to diagnose streaming issues
+                    logger.info(f"🔄 STREAMING: Yielding chunk ({len(clean_chunk)} chars): {clean_chunk[:50]}...")
+
                     # Send ALL text including [Using tool...] markers
                     # Frontend will parse markers and render tools inline
                     yield {
@@ -474,23 +477,22 @@ class AgentAdapter:
                         if tool_name in tool_history_by_name:
                             history_records = tool_history_by_name[tool_name]
 
-                            # Use most recent N calls (in reverse order to match recent conversation)
-                            # We want the Nth-most-recent call for this tool
+                            # Match in chronological order (FIFO)
+                            # Both tool_call_history and tool_calls_info are in chronological order
                             if current_index < len(history_records):
-                                # Match from the end (most recent first)
-                                record_index = len(history_records) - 1 - current_index
-                                if record_index >= 0:
-                                    record = history_records[record_index]
+                                # Match forward: first call -> first execution, second -> second, etc.
+                                record_index = current_index
+                                record = history_records[record_index]
 
-                                    # Enrich with execution metadata
-                                    tool_call["executionTimeMs"] = record.get("execution_time_ms", 0)
-                                    tool_call["success"] = record.get("success", True)
-                                    # Only include error if present
-                                    if "error" in record:
-                                        tool_call["error"] = record.get("error")
-                                    # Include RAG confidence if available
-                                    if "rag_confidence" in record:
-                                        tool_call["ragConfidence"] = record.get("rag_confidence")
+                                # Enrich with execution metadata
+                                tool_call["executionTimeMs"] = record.get("execution_time_ms", 0)
+                                tool_call["success"] = record.get("success", True)
+                                # Only include error if present
+                                if "error" in record:
+                                    tool_call["error"] = record.get("error")
+                                # Include RAG confidence if available
+                                if "rag_confidence" in record:
+                                    tool_call["ragConfidence"] = record.get("rag_confidence")
 
                     logger.info(f"Enriched {len(tool_calls_info)} tool calls with execution metadata from tool_call_history")
 

@@ -669,8 +669,8 @@ class AgentCore:
                                 elif event.content_block.type == "tool_use":
                                     # Stream tool call notification immediately
                                     tool_name = event.content_block.name
-                                    if self.config.cli_config.show_tool_calls:
-                                        yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
+                                    # Always send marker for web interface inline display
+                                    yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
 
                             elif event.type == "content_block_delta":
                                 if event.delta.type == "text_delta":
@@ -782,8 +782,8 @@ class AgentCore:
                                 tool_name = part.function_call.name
                                 if tool_name not in announced_tools:
                                     announced_tools.add(tool_name)
-                                    if self.config.cli_config.show_tool_calls:
-                                        yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
+                                    # Always send marker for web interface inline display
+                                    yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
 
                                 # Extract arguments with error handling (consistent with OpenAI path)
                                 tool_input = {}
@@ -915,8 +915,8 @@ class AgentCore:
                                         # Stream tool call notification immediately (once per tool)
                                         if tool_name and tool_name not in announced_tools:
                                             announced_tools.add(tool_name)
-                                            if self.config.cli_config.show_tool_calls:
-                                                yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
+                                            # Always send marker for web interface inline display
+                                            yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
 
                                     if tool_call.function.arguments:
                                         tool_calls_buffer[idx][
@@ -1074,13 +1074,13 @@ class AgentCore:
                                 conf_interp = "Unknown"
 
                             # Show confidence in blue (tool notification color)
-                            if self.config.cli_config.show_tool_calls:
-                                emoji = "⚠️" if should_review else "✓"
-                                try:
-                                    yield f"{COLOR_BLUE}[{emoji} RAG Confidence: {conf_interp} ({conf_score:.2f})]{COLOR_RESET}\n"
-                                except (ValueError, TypeError) as e:
-                                    logger.error(f"Failed to format confidence display: {e}")
-                                    yield f"{COLOR_BLUE}[⚠️ RAG Confidence: {conf_interp} (unavailable)]{COLOR_RESET}\n"
+                            # Always send for web interface display
+                            emoji = "⚠️" if should_review else "✓"
+                            try:
+                                yield f"{COLOR_BLUE}[{emoji} RAG Confidence: {conf_interp} ({conf_score:.2f})]{COLOR_RESET}\n"
+                            except (ValueError, TypeError) as e:
+                                logger.error(f"Failed to format confidence display: {e}")
+                                yield f"{COLOR_BLUE}[⚠️ RAG Confidence: {conf_interp} (unavailable)]{COLOR_RESET}\n"
 
                         # Check for tool failure and alert user
                         if not result.success:
@@ -1088,9 +1088,8 @@ class AgentCore:
                                 f"Tool '{tool_name}' failed: {result.error}",
                                 extra={"tool_input": tool_input, "metadata": result.metadata},
                             )
-                            # Alert user in streaming mode if show_tool_calls is enabled (in blue)
-                            if self.config.cli_config.show_tool_calls:
-                                yield f"{COLOR_BLUE}[⚠️  Tool '{tool_name}' failed: {result.error}]{COLOR_RESET}\n"
+                            # Alert user in streaming mode (always send for web interface)
+                            yield f"{COLOR_BLUE}[⚠️  Tool '{tool_name}' failed: {result.error}]{COLOR_RESET}\n"
 
                         # Track in history (including RAG confidence if available)
                         tool_call_record = {

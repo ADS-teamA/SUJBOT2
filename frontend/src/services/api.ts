@@ -115,6 +115,12 @@ export class ApiService {
         for (const line of lines) {
           if (!line.trim()) continue;
 
+          // Skip SSE comments (ping/keepalive) - they start with ":"
+          // Example: ": ping - 2025-11-04 10:14:29.063439+00:00"
+          if (line.trim().startsWith(':')) {
+            continue;
+          }
+
           // Parse SSE format:
           // event: text_delta
           // data: {"content": "Hello"}
