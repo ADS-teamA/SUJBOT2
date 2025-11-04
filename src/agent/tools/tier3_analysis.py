@@ -165,7 +165,6 @@ class SummarizeSectionTool(BaseTool):
             results = self.vector_store.hierarchical_search(
                 query_text=f"{doc_id} {section_id}",
                 query_embedding=None,
-                k_layer2=1,
                 k_layer3=100,
             )
 

@@ -212,14 +212,22 @@ class AgentCore:
             init_message = doc_list_text
             init_message += "\n(These are the documents available in the system. Use your tools to search and analyze them.)"
 
-            # Add as first message in conversation history
-            self.conversation_history.append({"role": "user", "content": init_message})
+            # Add as first message in conversation history (Anthropic format: content as list)
+            self.conversation_history.append({
+                "role": "user",
+                "content": [{"type": "text", "text": init_message}]
+            })
 
-            # Add simple acknowledgment from assistant
+            # Add simple acknowledgment from assistant (Anthropic format: content as list)
             self.conversation_history.append(
                 {
                     "role": "assistant",
-                    "content": "I understand. I have access to these documents and will use the appropriate tools to search and analyze them.",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "I understand. I have access to these documents and will use the appropriate tools to search and analyze them.",
+                        }
+                    ],
                 }
             )
 
@@ -227,16 +235,23 @@ class AgentCore:
             logger.info(f"Initialized conversation with {count} documents")
 
         except (FileNotFoundError, PermissionError) as e:
-            logger.warning(f"Document initialization failed - file access issue: {e}")
-            # Expected - vector store may be empty or permissions issue
+            logger.warning(f"Document initialization failed - vector store empty or permissions issue: {e}")
+            # This is expected when vector_db/ doesn't exist yet
         except KeyError as e:
             logger.error(f"Invalid metadata structure during initialization: {e}")
-            # This indicates a data corruption issue - log as error
+            # Data corruption - re-index recommended
+        except (ImportError, ModuleNotFoundError) as e:
+            logger.error(f"Missing dependencies for document initialization: {e}")
+            # Should fail fast - agent cannot work without document list
+            raise RuntimeError(f"Cannot initialize agent without get_document_list tool: {e}") from e
         except Exception as e:
-            logger.error(
-                f"Unexpected error initializing documents: {sanitize_error(e)}", exc_info=True
+            # Truly unexpected errors
+            logger.critical(
+                f"UNEXPECTED ERROR initializing documents: {type(e).__name__}: {sanitize_error(e)}",
+                exc_info=True
             )
-            # Log as error for unexpected issues, but don't crash - continue without initialization
+            # Surface to user - don't silently continue with degraded functionality
+            raise RuntimeError(f"Agent initialization failed: {sanitize_error(e)}") from e
 
     def reset_conversation(self):
         """Reset conversation history and reinitialize with documents."""
@@ -550,8 +565,11 @@ class AgentCore:
                 f"Maximum length is {MAX_QUERY_LENGTH} characters."
             )
 
-        # Add user message to history
-        self.conversation_history.append({"role": "user", "content": user_message})
+        # Add user message to history (Anthropic format: content as list)
+        self.conversation_history.append({
+            "role": "user",
+            "content": [{"type": "text", "text": user_message}]
+        })
 
         # Prune tool results from old messages (keep only Q&A text)
         self._prune_tool_results(keep_last_n=self.config.context_management_keep)
@@ -658,8 +676,8 @@ class AgentCore:
                                 elif event.content_block.type == "tool_use":
                                     # Stream tool call notification immediately
                                     tool_name = event.content_block.name
-                                    if self.config.cli_config.show_tool_calls:
-                                        yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
+                                    # Always send marker for web interface inline display
+                                    yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
 
                             elif event.type == "content_block_delta":
                                 if event.delta.type == "text_delta":
@@ -771,8 +789,8 @@ class AgentCore:
                                 tool_name = part.function_call.name
                                 if tool_name not in announced_tools:
                                     announced_tools.add(tool_name)
-                                    if self.config.cli_config.show_tool_calls:
-                                        yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
+                                    # Always send marker for web interface inline display
+                                    yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
 
                                 # Extract arguments with error handling (consistent with OpenAI path)
                                 tool_input = {}
@@ -785,10 +803,11 @@ class AgentCore:
                                     except (TypeError, ValueError) as e:
                                         logger.error(
                                             f"Failed to convert tool arguments for {part.function_call.name}: {e}. "
-                                            f"Args type: {type(part.function_call.args)}"
+                                            f"Args type: {type(part.function_call.args)}. Skipping tool execution."
                                         )
-                                        tool_input = {}
-                                        yield f"\n[⚠️  Warning: Malformed tool arguments from API - tool may fail]\n"
+                                        # DON'T execute tool with empty input - skip it entirely
+                                        yield f"\n[❌ Error: Gemini returned malformed tool call for '{part.function_call.name}' - skipping execution]\n"
+                                        continue  # Skip this tool_use, don't add to tool_uses list
 
                                 # Create dynamic ToolUse class instance (consistent with OpenAI path at line 841)
                                 # Required for attribute access in tool execution loop (line 902: tool_use.name, tool_use.input)
@@ -904,8 +923,8 @@ class AgentCore:
                                         # Stream tool call notification immediately (once per tool)
                                         if tool_name and tool_name not in announced_tools:
                                             announced_tools.add(tool_name)
-                                            if self.config.cli_config.show_tool_calls:
-                                                yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
+                                            # Always send marker for web interface inline display
+                                            yield f"\n{COLOR_BLUE}[Using {tool_name}...]{COLOR_RESET}\n"
 
                                     if tool_call.function.arguments:
                                         tool_calls_buffer[idx][
@@ -927,12 +946,11 @@ class AgentCore:
                             except json.JSONDecodeError as e:
                                 logger.error(
                                     f"Failed to parse tool arguments for {tool_call_data['name']}: {e}. "
-                                    f"Raw arguments: {tool_call_data['arguments'][:200]}"
+                                    f"Raw arguments: {tool_call_data['arguments'][:200]}. Skipping tool execution."
                                 )
-                                # Use empty dict as fallback (tool will fail gracefully)
-                                parsed_input = {}
-                                # Notify user
-                                yield f"\n[⚠️  Warning: Malformed tool call from API - tool may fail]\n"
+                                # DON'T execute tool with empty input - skip it entirely
+                                yield f"\n[❌ Error: OpenAI returned malformed tool call for '{tool_call_data['name']}' - skipping execution]\n"
+                                continue  # Skip this tool_call, don't add to tool_uses list
 
                             tool_uses.append(
                                 type(
@@ -1038,38 +1056,40 @@ class AgentCore:
                                     f"Invalid confidence data type: {type(confidence)}. "
                                     f"Expected dict from RAGConfidenceScore.to_dict()."
                                 )
-                                confidence = {}
+                                # Show error to user instead of fake data
+                                yield f"{COLOR_BLUE}[⚠️ RAG Confidence data malformed - skipping display]{COLOR_RESET}\n"
+                                confidence = None  # Mark as unavailable
 
-                            # Extract with defaults
-                            conf_score = confidence.get("overall_confidence", None)
-                            conf_interp = confidence.get("interpretation", "Unknown")
-                            should_review = confidence.get("should_flag_for_review", False)
+                            if confidence:  # Only proceed if validation passed
+                                # Extract with defaults
+                                conf_score = confidence.get("overall_confidence", None)
+                                conf_interp = confidence.get("interpretation", "Unknown")
+                                should_review = confidence.get("should_flag_for_review", False)
 
-                            # Validate confidence score is numeric and finite
-                            if conf_score is None or (
-                                isinstance(conf_score, float)
-                                and (np.isnan(conf_score) or np.isinf(conf_score))
-                            ):
-                                logger.error(
-                                    f"Invalid confidence score: {conf_score}. Using 0.0 (unknown confidence)."
-                                )
-                                conf_score = 0.0
+                                # Validate confidence score is numeric and finite
+                                if conf_score is None or (
+                                    isinstance(conf_score, float)
+                                    and (np.isnan(conf_score) or np.isinf(conf_score))
+                                ):
+                                    logger.error(f"Invalid confidence score: {conf_score}. Cannot display.")
+                                    # Don't show fake "0.0" - show nothing
+                                    yield f"{COLOR_BLUE}[⚠️ RAG Confidence score invalid - skipping display]{COLOR_RESET}\n"
+                                else:
+                                    # Validate interpretation is string
+                                    if not isinstance(conf_interp, str):
+                                        logger.warning(
+                                            f"Invalid interpretation type: {type(conf_interp)}. Using 'Unknown'."
+                                        )
+                                        conf_interp = "Unknown"
 
-                            # Validate interpretation is string
-                            if not isinstance(conf_interp, str):
-                                logger.warning(
-                                    f"Invalid interpretation type: {type(conf_interp)}. Using 'Unknown'."
-                                )
-                                conf_interp = "Unknown"
-
-                            # Show confidence in blue (tool notification color)
-                            if self.config.cli_config.show_tool_calls:
-                                emoji = "⚠️" if should_review else "✓"
-                                try:
-                                    yield f"{COLOR_BLUE}[{emoji} RAG Confidence: {conf_interp} ({conf_score:.2f})]{COLOR_RESET}\n"
-                                except (ValueError, TypeError) as e:
-                                    logger.error(f"Failed to format confidence display: {e}")
-                                    yield f"{COLOR_BLUE}[⚠️ RAG Confidence: {conf_interp} (unavailable)]{COLOR_RESET}\n"
+                                    # Show confidence in blue (tool notification color)
+                                    # Always send for web interface display
+                                    emoji = "⚠️" if should_review else "✓"
+                                    try:
+                                        yield f"{COLOR_BLUE}[{emoji} RAG Confidence: {conf_interp} ({conf_score:.2f})]{COLOR_RESET}\n"
+                                    except (ValueError, TypeError) as e:
+                                        logger.error(f"Failed to format confidence display: {e}")
+                                        yield f"{COLOR_BLUE}[⚠️ RAG Confidence: {conf_interp} (unavailable)]{COLOR_RESET}\n"
 
                         # Check for tool failure and alert user
                         if not result.success:
@@ -1077,9 +1097,8 @@ class AgentCore:
                                 f"Tool '{tool_name}' failed: {result.error}",
                                 extra={"tool_input": tool_input, "metadata": result.metadata},
                             )
-                            # Alert user in streaming mode if show_tool_calls is enabled (in blue)
-                            if self.config.cli_config.show_tool_calls:
-                                yield f"{COLOR_BLUE}[⚠️  Tool '{tool_name}' failed: {result.error}]{COLOR_RESET}\n"
+                            # Alert user in streaming mode (always send for web interface)
+                            yield f"{COLOR_BLUE}[⚠️  Tool '{tool_name}' failed: {result.error}]{COLOR_RESET}\n"
 
                         # Track in history (including RAG confidence if available)
                         tool_call_record = {

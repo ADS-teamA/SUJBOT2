@@ -206,8 +206,9 @@ async def chat_stream(request: ChatRequest):
         except asyncio.CancelledError:
             # Client disconnected - this is normal, don't log as error
             logger.info("Stream cancelled by client")
-            # Don't yield error event, just stop
-            return
+            # Re-raise to properly close ASGI response stream
+            # CRITICAL: ASGI spec requires CancelledError to propagate for clean shutdown
+            raise
         except (KeyboardInterrupt, SystemExit):
             # Don't catch these - let them propagate for clean shutdown
             raise
