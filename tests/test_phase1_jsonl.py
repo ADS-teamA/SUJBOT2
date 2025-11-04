@@ -16,6 +16,12 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logging.getLogger().handlers[0].setLevel(30)
+
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
@@ -49,9 +55,11 @@ def test_phase1_jsonl(pdf_path: Path, output_dir: Path = None):
         generate_summaries=False,  # PHASE 1 only, no summaries
         extract_tables=True,
         ocr_engine="rapidocr"
-    )
+        )
 
     # Extract document
+    print("Extraction Configuration:")
+    print(config)
     print(f"Extracting: {pdf_path.name}")
     print()
 
@@ -136,11 +144,6 @@ def test_phase1_jsonl(pdf_path: Path, output_dir: Path = None):
 
 def main():
     """Main entry point."""
-
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    )
 
     if len(sys.argv) < 2:
         print("Usage: python tests/test_phase1_jsonl.py <pdf_path>")

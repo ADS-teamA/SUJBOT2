@@ -263,7 +263,6 @@ class ExtractionConfig:
     filter_rotated_text: bool = True  # Remove diagonally oriented watermark text
     rotation_min_angle: float = 25.0  # Minimum angle (degrees from horizontal) to consider rotated
     rotation_max_angle: float = 65.0  # Maximum angle (degrees from horizontal) to consider rotated
-    watermark_keywords: List[str] = field(default_factory=list)  # Optional keyword whitelist
 
     # Summary generation (PHASE 2 integration)
     generate_summaries: bool = True  # Generate document/section summaries
@@ -286,23 +285,18 @@ class ExtractionConfig:
             FILTER_ROTATED_TEXT: Enable removal of rotated watermark text (default: "true")
             ROTATION_MIN_ANGLE: Minimum diagonal angle in degrees (default: "25.0")
             ROTATION_MAX_ANGLE: Maximum diagonal angle in degrees (default: "65.0")
-            WATERMARK_KEYWORDS: Comma-separated keywords to match (optional)
 
         Returns:
             ExtractionConfig instance loaded from environment
         """
         ocr_lang_str = os.getenv("OCR_LANGUAGE", "ces,eng")
         ocr_languages = [lang.strip() for lang in ocr_lang_str.split(",")]
-        keywords_env = os.getenv("WATERMARK_KEYWORDS", "")
-        watermark_keywords = [kw.strip() for kw in keywords_env.split(",") if kw.strip()]
-
         return cls(
             ocr_language=ocr_languages,
             enable_smart_hierarchy=os.getenv("ENABLE_SMART_HIERARCHY", "true").lower() == "true",
             filter_rotated_text=os.getenv("FILTER_ROTATED_TEXT", "true").lower() == "true",
             rotation_min_angle=float(os.getenv("ROTATION_MIN_ANGLE", "25.0")),
             rotation_max_angle=float(os.getenv("ROTATION_MAX_ANGLE", "65.0")),
-            watermark_keywords=watermark_keywords,
         )
 
 

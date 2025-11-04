@@ -386,22 +386,22 @@ class DoclingExtractorV2:
 
     def _filter_rotated_text_cells(self, docling_doc: DoclingDocument) -> None:
         """
-        Remove diagonally oriented watermark cells before hierarchy extraction.
+        Remove diagonally oriented watermark text using bounding-box aspect ratio.
 
-        Filters text cells whose orientation falls within the configured angle band.
-        If watermark keywords are provided, only cells containing those keywords
-        (case-insensitive) are removed.
+        Approximates rotation angle from the ratio of bounding box height to width.
+        Diagonal watermarks have a significantly larger height than regular lines,
+        producing angles near 45°. Horizontal text results in angles close to 0°.
         """
         config = self.config
         if not getattr(config, "filter_rotated_text", False):
             return
 
-        pages = getattr(docling_doc, "pages", None)
-        if not pages:
+        text_items = getattr(docling_doc, "texts", None)
+        if not text_items:
             return
 
-        min_angle = getattr(config, "rotation_min_angle", 15.0)
-        max_angle = getattr(config, "rotation_max_angle", 75.0)
+        min_angle = getattr(config, "rotation_min_angle", 44.0)
+        max_angle = getattr(config, "rotation_max_angle", 46.0)
         if min_angle < 0 or max_angle < 0 or min_angle > max_angle:
             logger.warning(
                 "Invalid rotation angle bounds (min=%s, max=%s). Skipping rotated text filtering.",
@@ -410,126 +410,129 @@ class DoclingExtractorV2:
             )
             return
 
-        keywords = [
-            kw.lower()
-            for kw in getattr(config, "watermark_keywords", [])  # type: ignore[arg-type]
-            if isinstance(kw, str) and kw.strip()
-        ]
-
-        removed_cells = 0
-        for page in pages:
-            cells = getattr(page, "cells", None)
-            if not cells:
+        removed_items = 0
+        for text_item in text_items:
+            text_value = getattr(text_item, "text", "")
+            if not text_value:
                 continue
 
-            to_remove: List[int] = []
-            for idx, cell in enumerate(list(cells)):
-                cell_text = getattr(cell, "text", "")
-                if not cell_text or not isinstance(cell_text, str):
-                    continue
-
-                if TextCell is not None and not isinstance(cell, TextCell):
-                    continue
-
-                angle = self._compute_cell_angle(cell)
-                if logger.isEnabledFor(logging.DEBUG):
-                    lowered_debug = cell_text.lower()
-                    if "neplatné" in lowered_debug or "watermark" in lowered_debug:
-                        logger.debug(
-                            "Rotated text debug: text=%r angle=%.2f orientation=%r bbox=%r",
-                            cell_text.strip(),
-                            angle if angle is not None else float("nan"),
-                            getattr(cell, "orientation", None),
-                            getattr(cell, "bbox", None),
-                        )
-                if angle is None or angle < min_angle or angle > max_angle:
-                    continue
-                if keywords:
-                    lowered = cell_text.lower()
-                    if not any(keyword in lowered for keyword in keywords):
-                        continue
-                to_remove.append(idx)
-
-            if not to_remove:
+            prov = getattr(text_item, "prov", None)
+            if not prov:
                 continue
 
-            removed_cells += len(to_remove)
-            # Try to remove cells from page. If this fails, blank out text fallback.
-            removed_successfully = False
+            bbox = getattr(prov[0], "bbox", None) if hasattr(prov[0], "bbox") else prov[0].get("bbox") if isinstance(prov[0], dict) else None
+            if not bbox:
+                continue
+
+            if isinstance(bbox, dict):
+                left = bbox.get("l", 0.0)
+                right = bbox.get("r", left)
+                top = bbox.get("t", 0.0)
+                bottom = bbox.get("b", top)
+            else:
+                left = getattr(bbox, "l", getattr(bbox, "left", 0.0))
+                right = getattr(bbox, "r", getattr(bbox, "right", left))
+                top = getattr(bbox, "t", getattr(bbox, "top", 0.0))
+                bottom = getattr(bbox, "b", getattr(bbox, "bottom", top))
+
+            width = max(abs(right - left), 1e-6)
+            height = max(abs(top - bottom), 0.0)
+            angle = math.degrees(math.atan2(height, width))
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Text item debug: angle=%.2f width=%.2f height=%.2f text=%r",
+                    angle,
+                    width,
+                    height,
+                    text_value.strip(),
+                )
+
+            if angle < min_angle or angle > max_angle:
+                continue
+
             try:
-                # Remove in reverse order to keep indexes valid
-                for idx in sorted(to_remove, reverse=True):
-                    del cells[idx]
-                removed_successfully = True
+                text_item.text = ""
             except Exception:
-                removed_successfully = False
+                continue
 
-            if not removed_successfully:
-                for idx in to_remove:
-                    cell = cells[idx]
-                    try:
-                        setattr(cell, "text", "")
-                        # Some TextCell instances store normalized text separately
-                        if hasattr(cell, "normalized_text"):
-                            setattr(cell, "normalized_text", "")
-                    except Exception:
-                        continue
-            if hasattr(page, "invalidate_cache"):
+            if hasattr(text_item, "orig"):
                 try:
-                    page.invalidate_cache()
+                    text_item.orig = ""
                 except Exception:
                     pass
 
-        if removed_cells:
+            if hasattr(text_item, "normalized_text"):
+                try:
+                    text_item.normalized_text = ""
+                except Exception:
+                    pass
+
+            removed_items += 1
+
+        if removed_items:
             logger.info(
-                "Filtered %s rotated text cells (angle between %.1f° and %.1f°)",
-                removed_cells,
+                "Filtered %s rotated text items (angle between %.1f° and %.1f°)",
+                removed_items,
                 min_angle,
                 max_angle,
             )
+            if logger.isEnabledFor(logging.DEBUG):
+                remaining = sum(
+                    1 for item in text_items if "NEPLATN" in getattr(item, "text", "").upper()
+                )
+                logger.debug("Remaining watermark candidates after filtering: %s", remaining)
 
     def _compute_cell_angle(self, cell) -> Optional[float]:
         """
         Returns None when orientation metadata is missing.
         """
-        orientation = getattr(cell, "orientation", None)
-        if orientation is None:
-            return None
-
         angle: Optional[float] = None
+        angle_source: Optional[str] = None
 
-        # Priority: derive angle from direction vector (most reliable)
-        vector_source = getattr(orientation, "vector", None)
-        if vector_source is None and isinstance(orientation, dict):
-            vector_source = orientation.get("vector")
+        orientation = getattr(cell, "orientation", None)
+        if orientation is not None:
+            # Priority: derive angle from direction vector (most reliable)
+            vector_source = getattr(orientation, "vector", None)
+            if vector_source is None and isinstance(orientation, dict):
+                vector_source = orientation.get("vector")
 
-        dx, dy = self._extract_vector_components(vector_source)
-        if dx is None and dy is None:
-            dx, dy = self._extract_vector_components(orientation)
+            dx, dy = self._extract_vector_components(vector_source)
+            if dx is None and dy is None:
+                dx, dy = self._extract_vector_components(orientation)
 
-        if dx is not None and dy is not None and (abs(dx) > 1e-6 or abs(dy) > 1e-6):
-            angle = math.degrees(math.atan2(dy, dx))
-        else:
-            # Fall back to explicit angle properties
-            angle_attr = getattr(orientation, "angle", None)
-            if angle_attr is None and isinstance(orientation, dict):
-                angle_attr = orientation.get("angle")
-            if angle_attr is not None:
-                angle = float(angle_attr)
-                if abs(angle) <= math.pi + 1e-6:
-                    angle = math.degrees(angle)
+            if dx is not None and dy is not None and (abs(dx) > 1e-6 or abs(dy) > 1e-6):
+                angle = math.degrees(math.atan2(dy, dx))
+                angle_source = "orientation_vector"
             else:
-                angle_rad_attr = getattr(orientation, "angle_rad", None)
-                if angle_rad_attr is None and isinstance(orientation, dict):
-                    angle_rad_attr = orientation.get("angle_rad")
-                if angle_rad_attr is not None:
-                    angle = math.degrees(float(angle_rad_attr))
+                # Fall back to explicit angle properties
+                angle_attr = getattr(orientation, "angle", None)
+                if angle_attr is None and isinstance(orientation, dict):
+                    angle_attr = orientation.get("angle")
+                if angle_attr is not None:
+                    angle = float(angle_attr)
+                    if abs(angle) <= math.pi + 1e-6:
+                        angle = math.degrees(angle)
+                    angle_source = "orientation_scalar"
+                else:
+                    angle_rad_attr = getattr(orientation, "angle_rad", None)
+                    if angle_rad_attr is None and isinstance(orientation, dict):
+                        angle_rad_attr = orientation.get("angle_rad")
+                    if angle_rad_attr is not None:
+                        angle = math.degrees(float(angle_rad_attr))
+                        angle_source = "orientation_scalar"
 
-            if angle is None and isinstance(orientation, (int, float)):
-                # Orientation stored directly as scalar
-                angle = float(orientation)
-                if abs(angle) <= math.pi + 1e-6:
-                    angle = math.degrees(angle)
+                if angle is None and isinstance(orientation, (int, float)):
+                    # Orientation stored directly as scalar
+                    angle = float(orientation)
+                    if abs(angle) <= math.pi + 1e-6:
+                        angle = math.degrees(angle)
+                    angle_source = "orientation_scalar"
+
+        if angle is None or abs(angle) < 1e-3:
+            angle = self._angle_from_provenance(cell)
+            if angle is not None:
+                angle_source = "provenance"
 
         if angle is None:
             return None
@@ -538,6 +541,13 @@ class DoclingExtractorV2:
         normalized = abs(angle) % 180.0
         if normalized > 90.0:
             normalized = 180.0 - normalized
+
+        if angle_source:
+            try:
+                setattr(cell, "_rotated_angle_source", angle_source)
+            except Exception:
+                pass
+
         return normalized
 
     @staticmethod
@@ -569,6 +579,73 @@ class DoclingExtractorV2:
             )
         except (TypeError, ValueError):
             return None, None
+
+    def _angle_from_provenance(self, cell) -> Optional[float]:
+        """Compute angle from OCR provenance polygons when orientation metadata is unavailable."""
+        prov_entries = getattr(cell, "prov", None)
+        if not prov_entries:
+            return None
+
+        for entry in prov_entries:
+            ocr_info = getattr(entry, "ocr", None)
+            if ocr_info is None:
+                continue
+
+            points = self._extract_points(getattr(ocr_info, "quad", None))
+            if not points:
+                points = self._extract_points(getattr(ocr_info, "polygon", None))
+
+            if not points or len(points) < 2:
+                continue
+
+            base_point = points[0]
+            for candidate in points[1:]:
+                dx = candidate[0] - base_point[0]
+                dy = candidate[1] - base_point[1]
+                if abs(dx) <= 1e-6 and abs(dy) <= 1e-6:
+                    continue
+                angle = math.degrees(math.atan2(dy, dx))
+                return angle
+
+        return None
+
+    @staticmethod
+    def _extract_points(raw_points) -> Optional[List[Tuple[float, float]]]:
+        """Normalize provenance point structures into a list of (x, y) tuples."""
+        if not raw_points:
+            return None
+
+        points: List[Tuple[float, float]] = []
+
+        if isinstance(raw_points, dict):
+            raw_points = raw_points.get("points") or raw_points.get("vertices") or []
+
+        if isinstance(raw_points, (list, tuple)):
+            if raw_points and isinstance(raw_points[0], (int, float)):
+                # Flat list like [x1, y1, x2, y2, ...]
+                iterator = iter(raw_points)
+                for x, y in zip(iterator, iterator):
+                    try:
+                        points.append((float(x), float(y)))
+                    except (TypeError, ValueError):
+                        continue
+            else:
+                for item in raw_points:
+                    if isinstance(item, (list, tuple)) and len(item) >= 2:
+                        try:
+                            points.append((float(item[0]), float(item[1])))
+                        except (TypeError, ValueError):
+                            continue
+                    else:
+                        x = getattr(item, "x", getattr(item, "dx", None))
+                        y = getattr(item, "y", getattr(item, "dy", None))
+                        if x is not None and y is not None:
+                            try:
+                                points.append((float(x), float(y)))
+                            except (TypeError, ValueError):
+                                continue
+
+        return points or None
 
     def extract(
         self, source: Union[str, Path], document_id: Optional[str] = None
@@ -610,6 +687,26 @@ class DoclingExtractorV2:
         result = self.converter.convert(str(source_path))
         docling_doc: DoclingDocument = result.document
 
+        if logger.isEnabledFor(logging.DEBUG):
+            try:
+                sample_page = None
+                if hasattr(docling_doc, "pages"):
+                    pages_attr = docling_doc.pages
+                    if isinstance(pages_attr, list) and pages_attr:
+                        sample_page = type(pages_attr[0])
+                    elif hasattr(pages_attr, "__iter__"):
+                        try:
+                            sample_page = next(iter(pages_attr))
+                        except StopIteration:
+                            sample_page = None
+                logger.debug(
+                    "Docling document page attr type=%s sample=%s",
+                    type(getattr(docling_doc, "pages", None)),
+                    sample_page,
+                )
+            except Exception:
+                logger.debug("Unable to introspect docling_doc.pages")
+
         # Remove diagonal watermark cells before further processing
         self._filter_rotated_text_cells(docling_doc)
 
@@ -624,6 +721,7 @@ class DoclingExtractorV2:
 
         # PHASE 1: Extract hierarchical structure
         sections = self._extract_hierarchical_sections(docling_doc)
+        sections = self._remove_residual_watermark_tokens(sections)
 
         # PHASE 2: Generate summaries (if enabled)
         if self.config.generate_summaries:
@@ -681,7 +779,6 @@ class DoclingExtractorV2:
                 "filter_rotated_text": getattr(self.config, "filter_rotated_text", False),
                 "rotation_min_angle": getattr(self.config, "rotation_min_angle", None),
                 "rotation_max_angle": getattr(self.config, "rotation_max_angle", None),
-                "watermark_keywords": getattr(self.config, "watermark_keywords", []),
             },
         )
 
@@ -795,6 +892,48 @@ class DoclingExtractorV2:
                     if parent.section_id == section.parent_id:
                         parent.children_ids.append(section.section_id)
                         break
+
+        return sections
+
+    def _remove_residual_watermark_tokens(
+        self, sections: List[DocumentSection], token: str = "NEPLATNÉ"
+    ) -> List[DocumentSection]:
+        """
+        Remove leftover watermark tokens that may remain after angle-based filtering.
+
+        OCR occasionally injects the watermark token inline with legitimate text after the
+        diagonal text nodes have been stripped. This pass removes standalone occurrences
+        of the token without disturbing surrounding content.
+        """
+        if not sections or not token:
+            return sections
+
+        token_upper = token.upper()
+
+        def _strip_token(text: Optional[str]) -> str:
+            if not text:
+                return ""
+            cleaned = text.replace(token_upper, "")
+            cleaned = cleaned.replace(token_upper.capitalize(), "")
+            return " ".join(cleaned.split())
+
+        for section in sections:
+            original_content = section.content
+
+            section.title = _strip_token(section.title)
+            section.path = _strip_token(section.path)
+            section.content = _strip_token(section.content)
+
+            section.content_length = len(section.content)
+            section.char_end = section.char_start + section.content_length
+
+            if logger.isEnabledFor(logging.DEBUG):
+                if token_upper in (original_content or "").upper():
+                    logger.debug(
+                        "Removed residual token from section %s on page %s",
+                        section.section_id,
+                        section.page_number,
+                    )
 
         return sections
 
