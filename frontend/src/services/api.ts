@@ -61,7 +61,15 @@ export class ApiService {
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('No response body');
+      // Yield error event instead of throwing (consistent with other error handling)
+      yield {
+        event: 'error',
+        data: {
+          error: 'Backend response has no body. This may indicate a server configuration issue.',
+          type: 'NoResponseBody'
+        }
+      };
+      return;
     }
 
     const decoder = new TextDecoder();

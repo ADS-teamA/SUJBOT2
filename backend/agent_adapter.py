@@ -329,9 +329,9 @@ class AgentAdapter:
             # Stream text chunks (including markers for inline tool display)
             # DO NOT send separate tool_call events during streaming
             # Reasons:
-            # 1. Tool IDs are not known yet (Anthropic assigns them after execution)
-            # 2. Frontend expects markers in text for inline rendering
-            # 3. Sending both causes duplicate display (nahoře + inline)
+            # 1. Frontend expects markers in text for inline rendering
+            # 2. Sending both causes duplicate display (at top + inline)
+            # 3. Tool IDs available but execution metadata (timing, success) isn't until after execution
 
             for chunk in text_stream:
                 # Strip ANSI color codes only
@@ -356,10 +356,12 @@ class AgentAdapter:
             # Tool calls are stored in assistant message content blocks (Anthropic format)
             # Tool results are in subsequent user messages with metadata
             #
-            # Three-pass extraction is required because:
+            # Four-pass extraction is required because:
             # 1. Tool calls (tool_use) are in assistant messages with role="assistant"
             # 2. Tool results (tool_result) are in user messages with role="user"
             # 3. They must be joined by tool_use_id to create complete tool call objects
+            # 4. Execution metadata (timing, success) must be enriched from tool_call_history
+            #    (metadata was removed from API responses for Anthropic API compliance)
             #
             # Performance optimization: Scan last 10 messages only (not entire history)
             # Rationale: In tool-heavy conversations, each turn can generate 2-5 messages:
@@ -380,9 +382,20 @@ class AgentAdapter:
                         # Validate content is a list (defensive programming)
                         if not isinstance(content, list):
                             logger.error(
-                                f"Invalid message content format: expected list, got {type(content).__name__}. "
-                                f"Message role={message.get('role')}, content preview={str(content)[:100]}"
+                                f"CRITICAL: Invalid message content format in conversation history: "
+                                f"expected list, got {type(content).__name__}. "
+                                f"Message role={message.get('role')}, content preview={str(content)[:100]}. "
+                                f"This indicates data corruption - tool calls may be missing from UI."
                             )
+                            # Surface to user via error event
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "error": "Internal error: conversation history corruption detected. Some tool results may be missing.",
+                                    "type": "DataCorruptionError",
+                                    "severity": "high"
+                                }
+                            }
                             continue
 
                         for content_block in content:
@@ -414,9 +427,20 @@ class AgentAdapter:
                         # Validate content is a list
                         if not isinstance(content, list):
                             logger.error(
-                                f"Invalid message content format: expected list, got {type(content).__name__}. "
-                                f"Message role={message.get('role')}"
+                                f"CRITICAL: Invalid message content format in conversation history: "
+                                f"expected list, got {type(content).__name__}. "
+                                f"Message role={message.get('role')}. "
+                                f"This indicates data corruption - tool results may be missing from UI."
                             )
+                            # Surface to user via error event
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "error": "Internal error: conversation history corruption detected. Some tool results may be missing.",
+                                    "type": "DataCorruptionError",
+                                    "severity": "high"
+                                }
+                            }
                             continue
 
                         for content_block in content:
@@ -493,6 +517,16 @@ class AgentAdapter:
                                 # Include RAG confidence if available
                                 if "rag_confidence" in record:
                                     tool_call["ragConfidence"] = record.get("rag_confidence")
+                            else:
+                                # Metadata missing - log and flag for UI
+                                logger.error(
+                                    f"Tool call metadata missing: tool_name={tool_name}, call_index={current_index}, "
+                                    f"history_length={len(history_records)}. This indicates execution tracking failure."
+                                )
+                                tool_call["executionTimeMs"] = None  # Explicitly mark as missing
+                                tool_call["success"] = None  # Don't default to True
+                                tool_call["error"] = "Execution metadata unavailable"
+                                tool_call["metadataMissing"] = True  # Flag for UI
 
                     logger.info(f"Enriched {len(tool_calls_info)} tool calls with execution metadata from tool_call_history")
 
