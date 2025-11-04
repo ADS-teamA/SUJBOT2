@@ -11,6 +11,7 @@ Usage:
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -47,6 +48,7 @@ def test_phase1_jsonl(pdf_path: Path, output_dir: Path = None):
         enable_smart_hierarchy=True,
         generate_summaries=False,  # PHASE 1 only, no summaries
         extract_tables=True,
+        ocr_engine="rapidocr"
     )
 
     # Extract document
@@ -134,6 +136,11 @@ def test_phase1_jsonl(pdf_path: Path, output_dir: Path = None):
 
 def main():
     """Main entry point."""
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
 
     if len(sys.argv) < 2:
         print("Usage: python tests/test_phase1_jsonl.py <pdf_path>")
