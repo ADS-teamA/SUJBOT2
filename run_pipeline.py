@@ -241,8 +241,21 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
             # Check if we can load existing store
             can_load_existing = False
             if merge_target.exists():
-                # Check if directory has required vector store files
-                required_files = ["faiss_metadata.json"]  # Minimal file check
+                # Check if directory has ALL required vector store files
+                required_files = [
+                    "faiss_metadata.json",
+                    "faiss_arrays.pkl",
+                    "faiss_layer1.index",
+                    "faiss_layer2.index",
+                    "faiss_layer3.index",
+                    "bm25_layer1_arrays.pkl",
+                    "bm25_layer1_config.json",
+                    "bm25_layer2_arrays.pkl",
+                    "bm25_layer2_config.json",
+                    "bm25_layer3_arrays.pkl",
+                    "bm25_layer3_config.json",
+                    "hybrid_config.json",
+                ]
                 can_load_existing = all((merge_target / f).exists() for f in required_files)
 
             if not can_load_existing:
@@ -293,6 +306,25 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                               f"{merged_stats['documents']} documents")
                     print_info(f"Added: {faiss_merge_stats['added']} vectors, "
                               f"Skipped: {faiss_merge_stats['skipped']} duplicates")
+
+                except FileNotFoundError as e:
+                    print()
+                    print_info(f"[ERROR] Vector store files missing: {e}")
+                    logger.error(f"Vector store merge failed - files missing: {e}", exc_info=True)
+                    print_info(f"Vector store merge skipped - new store will be created instead")
+                except (PermissionError, OSError) as e:
+                    print()
+                    print_info(f"[ERROR] Cannot write to vector store: {e}")
+                    logger.error(f"Vector store merge failed - IO error: {e}", exc_info=True)
+                    print_info(f"Vector store merge skipped - keeping separate stores")
+                except Exception as e:
+                    print()
+                    print_info(f"[ERROR] Unexpected error during vector store merge: {e}")
+                    logger.error(f"Vector store merge failed - unexpected error: {e}", exc_info=True)
+                    print_info(f"Vector store merge skipped")
+
+                # Knowledge graph merging
+                try:
 
                     # Merge Knowledge Graphs with cross-document relationships
                     if knowledge_graph and config.enable_knowledge_graph:

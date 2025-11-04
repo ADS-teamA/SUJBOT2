@@ -328,9 +328,20 @@ class Neo4jDeduplicator:
                 CASE WHEN chunk IN acc THEN acc ELSE acc + [chunk] END),
               e.confidence = CASE WHEN entity.confidence > e.confidence THEN entity.confidence ELSE e.confidence END,
               e.merged_from = CASE WHEN NOT entity.id IN e.merged_from THEN e.merged_from + [entity.id] ELSE e.merged_from END,
-              e.metadata = entity.metadata,
+              e.metadata = CASE
+                WHEN entity.metadata IS NOT NULL AND e.metadata IS NOT NULL
+                THEN entity.metadata
+                WHEN entity.metadata IS NOT NULL
+                THEN entity.metadata
+                ELSE e.metadata
+              END,
               e.updated_at = datetime(),
-              e._is_new = false
+              e._is_new = false,
+              e._metadata_merge_warning = CASE
+                WHEN entity.metadata IS NOT NULL AND e.metadata IS NOT NULL
+                THEN "Pure Cypher mode: metadata replaced, not merged. Use APOC for full metadata merging."
+                ELSE null
+              END
             RETURN
               SUM(CASE WHEN e._is_new THEN 1 ELSE 0 END) as created_count,
               SUM(CASE WHEN NOT e._is_new THEN 1 ELSE 0 END) as merged_count
@@ -360,7 +371,14 @@ class Neo4jDeduplicator:
         """
         # Serialize metadata to JSON string for Neo4j compatibility
         # Neo4j doesn't support nested objects/maps as property values
-        metadata_json = json.dumps(entity.metadata or {}) if entity.metadata else "{}"
+        try:
+            metadata_json = json.dumps(entity.metadata or {}) if entity.metadata else "{}"
+        except (TypeError, ValueError) as e:
+            logger.warning(
+                f"Failed to serialize metadata for entity {entity.id}: {e}. "
+                f"Using empty metadata instead."
+            )
+            metadata_json = "{}"
 
         return {
             "id": entity.id,
