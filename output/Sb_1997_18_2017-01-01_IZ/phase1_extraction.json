@@ -1,6 +1,6 @@
 {
   "document_id": "Sb_1997_18_2017-01-01_IZ",
-  "source_path": "/Users/michalprusek/PycharmProjects/MY_SUJBOT/data_test/Sb_1997_18_2017-01-01_IZ.pdf",
+  "source_path": "data/Sb_1997_18_2017-01-01_IZ.pdf",
   "num_sections": 25,
   "hierarchy_depth": 3,
   "num_roots": 25,
@@ -9,227 +9,252 @@
     {
       "section_id": "sec_1",
       "title": "Untitled",
+      "content": "<unknown>",
       "level": 0,
       "depth": 0,
       "path": "Untitled",
       "page_number": 1,
-      "content_length": 0
+      "content_length": 9
     },
     {
       "section_id": "sec_2",
       "title": "Untitled",
+      "content": "18",
       "level": 0,
       "depth": 0,
       "path": "Untitled",
       "page_number": 1,
-      "content_length": 0
+      "content_length": 2
     },
     {
       "section_id": "sec_3",
       "title": "ZÁKON ze dne 24. ledna 1997",
+      "content": "o mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů",
       "level": 1,
       "depth": 1,
       "path": "ZÁKON ze dne 24. ledna 1997",
       "page_number": 1,
-      "content_length": 0
+      "content_length": 111
     },
     {
       "section_id": "sec_4",
       "title": "ZÁKON ze dne 24. ledna 1997",
+      "content": "Parlament se usnesl na tomto zákoně České republiky:",
       "level": 1,
       "depth": 1,
       "path": "ZÁKON ze dne 24. ledna 1997",
       "page_number": 1,
-      "content_length": 0
+      "content_length": 52
     },
     {
       "section_id": "sec_5",
       "title": "§ 32",
+      "content": "- (1) Pro  účely  občanskoprávní  odpovědnosti  za  jaderné  škody  se  použijí  ustanovení  mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.\n- (2) Ustanovení občanského zákoníku se použijí jen tehdy, nestanoví-li mezinárodní smlouva 26 ) nebo tento zákon jinak.",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 32",
       "page_number": 1,
-      "content_length": 0
+      "content_length": 273
     },
     {
       "section_id": "sec_6",
       "title": "§ 33",
+      "content": "- (1) Držitel povolení k provozu jaderného zařízení 29 ) nebo k jakékoliv činnosti spojené s užíváním ja­ derného zařízení nebo držitel povolení k přepravě jaderných materiálů 30 ) je provozovatelem 31 ) od­ povědným za jadernou škodu 32 ) podle mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.\n- (2) Pokud jedna osoba je držitelem povolení k více jaderným zařízením nacházejícím se na území, pro něž byl schválen společný vnitřní havarijní plán, jsou tato zařízení považována pro účely odpověd­ nosti za jaderné škody za jedno jaderné zařízení. Za jedno jaderné zařízení ve vztahu k odpovědnos­ ti  za  jaderné  škody  však  nelze  považovat  více  jaderných  zařízení,  ke  kterým  mají  povolení  různé osoby, i když tato zařízení na sebe přímo navazují.",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 33",
       "page_number": 1,
-      "content_length": 0
+      "content_length": 768
     },
     {
       "section_id": "sec_7",
       "title": "§ 34",
+      "content": "- (1) Při stanovení rozsahu a způsobu náhrady jaderné škody se použijí ustanovení občanského zákoní­ ku. Pro stanovení výše škody se použijí předpisy platné v době vzniku jaderné události, 33 )  která jadernou škodu způsobila.",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 34",
       "page_number": 1,
-      "content_length": 0
+      "content_length": 226
     },
     {
       "section_id": "sec_8",
       "title": "§ 34",
+      "content": "- (2) Jadernou škodou je také škoda vzniklá vynaložením nákladů na nezbytná opatření k odvrácení ne­ bo snížení ozáření nebo k obnovení původního nebo obdobného stavu životního prostředí, po­ kud byla tato opatření vyvolána v důsledku jaderné události a povaha škody to umožňuje.\n- (3) Státní  úřad  pro  jadernou  bezpečnost  (dále  jen  'Úřad')  stanoví  vyhláškou  limity  koncentrace a množství jaderného materiálu, na které se ustanovení o jaderných škodách v souladu s meziná­ rodní smlouvou 34 ) nevztahují.",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 34",
       "page_number": 2,
-      "content_length": 0
+      "content_length": 514
     },
     {
       "section_id": "sec_9",
       "title": "§ 35",
+      "content": "Odpovědnost držitele povolení za jadernou škodu způsobenou každou jednotlivou jadernou událostí je omezena v případě",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 35",
       "page_number": 2,
-      "content_length": 0
+      "content_length": 116
     },
     {
       "section_id": "sec_10",
       "title": "§ 35",
+      "content": "- b) ostatních jaderných zařízení a přeprav na částku 2 mld. Kč.\n- a) jaderných zařízení pro energetické účely, 35 ) skladů a úložišť vyhořelého jaderného paliva, určené­ ho pro tato zařízení, nebo jaderných materiálů, vzniklých zpracováním tohoto paliva, na částku 8 mld. Kč,",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 35",
       "page_number": 2,
-      "content_length": 0
+      "content_length": 276
     },
     {
       "section_id": "sec_11",
       "title": "§ 36",
+      "content": "- (1) Držitel povolení podle § 33 je povinen sjednat pojištění své vzniku povinnosti k náhradě jaderné škody s pojistitelem oprávněným podle zvláštního zákona, 36 ) pokud není stanoveno jiné finanční zajištění pro případ vzniku povinnosti k náhradě jaderné škody.\n- (2) Ministerstvo financí v dohodě s Úřadem a Ministerstvem průmyslu a obchodu stanoví formou rozhodnutí o výjimce z odstavce 1 v zájmu hospodárného vynakládání státních prostředků, u kte­ rého držitele povolení se namísto pojištění vyžaduje jiné finanční zajištění pro případ vzniku po­ vinnosti k náhradě jaderné škody.\n- (3) Limit pojistného plnění v případech podle § 35 písm. a) nesmí být nižší než 2 mld. Kč, v přípa­ dech podle § 35 písm. b) nižší než 300 mil. Kč.\n- (4) Pojištění se uzavírá nebo jiné finanční zajištění se stanoví zvlášť pro každé jaderné zařízení nebo přepravu jaderných materiálů ve smyslu § 33 odst. 2.\n- (5) Bližší podmínky jiného finančního zajištění stanoví Ministerstvo financí.",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 36",
       "page_number": 2,
-      "content_length": 0
+      "content_length": 975
     },
     {
       "section_id": "sec_12",
       "title": "§ 37",
+      "content": "- (1) Stát poskytuje záruku za uspokojení přiznaných nároků na náhradu jaderné škody, pokud nejsou uhrazeny z povinného pojištění nebo jiného stanoveného finančního zajištění, a to do částky\n- b) 2 mld. Kč po vyčerpání plnění pojistitele v rozsahu 300 mil. Kč v případech zařízení podle § 35 písm. b).\n- a) 8 mld. Kč po vyčerpání plnění pojistitele v rozsahu 2 mld. Kč v případech zařízení podle § 35 písm. a),\n- (2) Právo státu jako ručitele na postih za uspokojení přiznaných nároků na náhradu jaderné škody vůči držiteli povolení není dotčeno.",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 37",
       "page_number": 2,
-      "content_length": 0
+      "content_length": 546
     },
     {
       "section_id": "sec_13",
       "title": "§ 38",
+      "content": "- (1) Právo na náhradu jaderné škody se promlčí, jestliže nárok na její náhradu nebyl uplatněn ve lhůtě tří let ode dne, kdy se poškozený o události, která vedla k jaderné škodě, a o tom, kdo za ni odpoví­ dá, dozvěděl nebo mohl dozvědět, nejpozději však ve lhůtě deseti let ode dne vzniku takové událos­ ti; v případě pojištění začínají tyto lhůty běžet uplynutím jednoho roku ode dne vzniku pojistné události.\n- (2) Držitel povolení je v případě, kdy u něj dojde ke vzniku jaderné události, povinen písemně ozná­ mit v oblasti ovlivněné touto událostí podle zjištění Úřadu na základě činnosti celostátní radiační monitorovací sítě, že má povinnost k náhradě jaderné škody způsobené touto událostí. Toto pí­ semné oznámení musí být veřejně přístupné u držitele povolení a na příslušném krajském úřadu a na všech obecních úřadech v této oblasti.",
       "level": 2,
       "depth": 2,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 38",
       "page_number": 3,
-      "content_length": 0
+      "content_length": 845
     },
     {
       "section_id": "sec_14",
       "title": "§ 45",
+      "content": "Zákon České národní rady č. 586/1992 Sb., o daních z příjmů, ve znění zákona České národní rady č.  35/1993  Sb.,  zákona  č.  96/1993  Sb.,  zákona  č.  157/1993  Sb.,  zákona  č.  196/1993  Sb.,  zákona  č. 323/1993  Sb.,  zákona  č.  42/1994  Sb.,  zákona  č.  85/1994  Sb.,  zákona  č.  114/1994  Sb.,  zákona  č. 259/1994  Sb.,  zákona  č.  32/1995  Sb.,  zákona  č.  87/1995  Sb.,  zákona  č.  118/1995  Sb.,  zákona  č. 149/1995 Sb., zákona č. 248/1995 Sb. a zákona č. 316/1996 Sb., se doplňuje takto:",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
       "page_number": 3,
-      "content_length": 0
+      "content_length": 508
     },
     {
       "section_id": "sec_15",
       "title": "§ 45",
+      "content": "V § 18 odst. 2 písm. b) se tečka nahrazuje čárkou a vkládá se nové písmeno c), které včetně poznámky č. 19e) zní:",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
       "page_number": 3,
-      "content_length": 0
+      "content_length": 113
     },
     {
       "section_id": "sec_16",
       "title": "§ 45",
+      "content": "- 'c) příjmy z vlastní činnosti Správy úložišť radioaktivních odpadů 19e ) s výjimkou příjmů podlé­ hajících zvláštní sazbě daně vybírané srážkou podle § 36 tohoto zákona.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
       "page_number": 3,
-      "content_length": 0
+      "content_length": 171
     },
     {
       "section_id": "sec_17",
       "title": "§ 45",
+      "content": "19e ) § 26 odst. 8 zákona č. 18/1997 Sb., o mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů.'.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
       "page_number": 3,
-      "content_length": 0
+      "content_length": 156
     },
     {
       "section_id": "sec_18",
       "title": "Závěrečná ustanovení",
+      "content": "1. Zákon č. 287/1993 Sb., o působnosti Státního úřadu pro jadernou bezpečnost, ve znění zákona č. 85/1995 Sb.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 3,
-      "content_length": 0
+      "content_length": 109
     },
     {
       "section_id": "sec_19",
       "title": "Závěrečná ustanovení",
+      "content": "2. Zákon č. 28/1984 Sb., o státním dozoru nad jadernou bezpečností jaderných zařízení.\n4. Vyhláška  Československé  komise  pro  atomovou  energii  č.  28/1977  Sb.,  o  evidenci  a  kontrole jaderných materiálů, ve znění vyhlášky č. 100/1989 Sb.\n3. Vyhláška  Ministerstva  zdravotnictví  České  socialistické  republiky  č.  59/1972  Sb.,  o  ochraně zdraví před ionizujícím zářením.\n5. Vyhláška  Československé  komise  pro  atomovou  energii  č.  67/1987  Sb.,  o  zajištění  jaderné bezpečnosti při zacházení s radioaktivními odpady.\n7. Vyhláška  Československé  komise  pro  atomovou  energii  č.  191/1989  Sb.,  kterou  se  stanoví způsob,  lhůty  a  podmínky  ověřování  zvláštní  odborné  způsobilosti  vybraných  pracovníků jaderných zařízení.\n6. Vyhláška Československé komise pro atomovou energii č. 100/1989 Sb., o bezpečnostní ochraně jaderných zařízení a jaderných materiálů.\n8. Vyhláška  Československé  komise  pro  atomovou  energii  č.  436/1990  Sb.,  o  zajištění  jakosti vybraných zařízení z hlediska jaderné bezpečnosti jaderných zařízení.\n10. Výnos Československé komise pro atomovou energii č. 2/1978 o zajištění jaderné bezpečnosti při navrhování,  povolování  a  provádění  staveb  s  jaderně  energetickým  zařízením  (registrován v částce 28/1978 Sb.).\n9. Vyhláška Ministerstva zdravotnictví České  republiky č. 76/1991  Sb., o požadavcích na omezování ozáření z radonu a dalších přírodních radionuklidů.\n11. Výnos Československé komise pro atomovou energii č. 4/1979 o obecných kritériích zajištění jaderné bezpečnosti při umisťování staveb s jaderně energetickým zařízením (registrován v částce 9/1979 Sb.).\n13. Výnos Československé komise pro atomovou energii č. 8/1981 o zkoušení zařízení pro přepravu a ukládání radioaktivních materiálů (registrován v částce 20/1981 Sb.).\n12. Výnos Československé komise pro atomovou energii č. 6/1980 o zajištění jaderné bezpečnosti při spouštění a provozu jaderně energetických zařízení (registrován v částce 13/1980 Sb.).\n14. Výnos Československé komise pro atomovou energii č. 9/1985 o zajištění jaderné bezpečnosti výzkumných jaderných zařízení (registrován v částce 11/1985 Sb.).",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 4,
-      "content_length": 0
+      "content_length": 2154
     },
     {
       "section_id": "sec_20",
       "title": "Závěrečná ustanovení",
+      "content": "§ 50",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 4,
-      "content_length": 0
+      "content_length": 4
     },
     {
       "section_id": "sec_21",
       "title": "Závěrečná ustanovení",
+      "content": "Tento  zákon  nabývá  účinnosti  dnem  1.  července  1997,  s  výjimkou  hlavy  čtvrté  a  páté  a  §  48,  které nabývají účinnosti dnem vyhlášení.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 4,
-      "content_length": 0
+      "content_length": 148
     },
     {
       "section_id": "sec_22",
       "title": "Závěrečná ustanovení",
+      "content": "Zeman v. r.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 4,
-      "content_length": 0
+      "content_length": 11
     },
     {
       "section_id": "sec_23",
       "title": "Závěrečná ustanovení",
+      "content": "Klaus v. r.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 4,
-      "content_length": 0
+      "content_length": 11
     },
     {
       "section_id": "sec_24",
       "title": "Závěrečná ustanovení",
+      "content": "Havel v. r.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 4,
-      "content_length": 0
+      "content_length": 11
     },
     {
       "section_id": "sec_25",
       "title": "Závěrečná ustanovení",
+      "content": "- 2b ) § 11 zákona č. 22/1997 Sb., ve znění pozdějších předpisů.\n- 3b ) Zákon č. 164/2001 Sb., o přírodních léčivých zdrojích, zdrojích přírodních minerálních vod, přírodních léčivých lázních a lázeňských místech a o změně některých souvisejících zákonů (lázeňský zákon).\n- 26 ) Vídeňská úmluva o občanskoprávní odpovědnosti za jaderné škody a Společný protokol týkající se aplikace Vídeňské úmluvy a Pařížské úmluvy, vyhlášené pod č. 133/1994 Sb.\n- 27 ) Zákon č. 40/1964 Sb., ve znění pozdějších předpisů.\n- 28 ) § 5 odst. 2 zákona ČNR č. 425/1990 Sb., o okresních úřadech, úpravě jejich působnosti a o některých dalších opatřeních s tím souvisejících, ve znění zákona č. 254/1994 Sb.\n- 29 ) Čl. I bod 1 písm. j) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 30 ) Čl. I bod 1 písm. h) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 31 ) Čl. I bod 1 písm. c) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 32 ) Čl. I bod 1 písm. k) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 33 ) Čl. I bod 1 písm. l) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 34 ) Čl. I bod 2 Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 35 ) Zákon č. 222/1994 Sb.\n- 36 ) Zákon ČNR č. 185/1991 Sb., o pojišťovnictví, ve znění pozdějších předpisů.\n- 38a ) Zákon č. 133/2000 Sb., o evidenci obyvatel a rodných číslech a o změně některých zákonů (zákon o evidenci obyvatel), ve znění pozdějších předpisů.\n- 38b ) § 1 zákona č. 133/2000 Sb., ve znění zákona č. 53/2004 Sb.\n- 38c ) Zákon č. 40/1993 Sb., o nabývání a pozbývání státního občanství České republiky, ve znění pozdějších předpisů.\n- 42 ) Čl. 81 Smlouvy o založení Evropského společenství pro atomovou energii.",
       "level": 3,
       "depth": 3,
       "path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
       "page_number": 5,
-      "content_length": 0
+      "content_length": 1759
     }
   ]
 }

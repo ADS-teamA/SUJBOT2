@@ -675,6 +675,16 @@ class Neo4jGraphBuilder(GraphBuilder):
 
     def _node_to_entity(self, node) -> Entity:
         """Convert Neo4j node to Entity object."""
+        # Deserialize metadata from JSON string if present
+        metadata_json = node.get("metadata", "{}")
+        try:
+            metadata = json.loads(metadata_json) if metadata_json else {}
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(
+                f"Failed to deserialize metadata for entity {node.get('id')}: {metadata_json}"
+            )
+            metadata = {}
+
         return Entity(
             id=node["id"],
             type=EntityType(node["type"]),
@@ -685,7 +695,7 @@ class Neo4jGraphBuilder(GraphBuilder):
             first_mention_chunk_id=node.get("first_mention_chunk_id"),
             document_id=node.get("document_id"),
             section_path=node.get("section_path"),
-            metadata={},
+            metadata=metadata,
             extraction_method=node.get("extraction_method", "unknown"),
         )
 

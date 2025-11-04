@@ -72,6 +72,26 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _make_relative_path(path: Path) -> str:
+    """
+    Convert path to relative path from current working directory.
+
+    Ensures portability across different machines/environments.
+
+    Args:
+        path: Path object (can be absolute or relative)
+
+    Returns:
+        String representation of relative path
+    """
+    try:
+        # Try to make path relative to current working directory
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        # Path is not under current working directory, return as-is
+        return str(path)
+
+
 def check_existing_components(document_id: str, vector_db_path: str = "vector_db") -> Dict:
     """
     Check what components already exist in vector_db for this document.
@@ -862,7 +882,7 @@ class IndexingPipeline:
             "knowledge_graph": knowledge_graph,
             "stats": {
                 "document_id": result.document_id,
-                "source_path": str(document_path),
+                "source_path": _make_relative_path(document_path),
                 "vector_store": store_stats,
                 "chunking": chunking_stats,
                 "hybrid_enabled": self.config.enable_hybrid_search,
@@ -1039,7 +1059,7 @@ class IndexingPipeline:
         phase1_path = output_dir / "phase1_extraction.json"
         phase1_export = {
             "document_id": result.document_id,
-            "source_path": str(result.source_path),
+            "source_path": _make_relative_path(Path(result.source_path)),
             "num_sections": result.num_sections,
             "hierarchy_depth": result.hierarchy_depth,
             "num_roots": result.num_roots,
@@ -1048,6 +1068,7 @@ class IndexingPipeline:
                 {
                     "section_id": s.section_id,
                     "title": s.title,
+                    "content": s.content,
                     "level": s.level,
                     "depth": s.depth,
                     "path": s.path,
@@ -1079,7 +1100,7 @@ class IndexingPipeline:
         phase3_path = output_dir / "phase3_chunks.json"
         phase3_export = {
             "document_id": result.document_id,
-            "source_path": str(result.source_path),
+            "source_path": _make_relative_path(Path(result.source_path)),
             "chunking_stats": chunking_stats,
             "layer1": [c.to_dict() for c in chunks["layer1"]],
             "layer2": [c.to_dict() for c in chunks["layer2"]],

@@ -1,7 +1,7 @@
 {
   "dimensions": 3072,
-  "layer1_count": 3,
-  "layer2_count": 1456,
-  "layer3_count": 2870,
+  "layer1_count": 1,
+  "layer2_count": 25,
+  "layer3_count": 40,
   "format_version": "1.0"
 }

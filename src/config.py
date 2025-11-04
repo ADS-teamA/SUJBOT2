@@ -71,6 +71,9 @@ def load_env():
                     if line and not line.startswith("#") and "=" in line:
                         try:
                             key, value = line.split("=", 1)
+                            # Strip inline comments (text after #)
+                            if "#" in value:
+                                value = value.split("#")[0]
                             os.environ[key.strip()] = value.strip()
                         except ValueError as e:
                             logger.warning(f"Skipping malformed line {line_num} in {path}: {line}")
@@ -140,23 +143,31 @@ class ModelConfig:
         Load configuration from environment variables.
 
         Environment Variables:
-            LLM_PROVIDER: "claude" or "openai" (default: "claude")
             LLM_MODEL: Model name (default: "claude-sonnet-4-5-20250929")
+            EMBEDDING_MODEL: Model name (default: "bge-m3")
 
-            EMBEDDING_PROVIDER: "voyage", "openai", or "huggingface" (default: "voyage")
-            EMBEDDING_MODEL: Model name (default: "kanon-2")
+            LLM_PROVIDER: Optional override (auto-detected from LLM_MODEL if not set)
+            EMBEDDING_PROVIDER: Optional override (auto-detected from EMBEDDING_MODEL if not set)
 
             ANTHROPIC_API_KEY: Claude API key
             OPENAI_API_KEY: OpenAI API key
             VOYAGE_API_KEY: Voyage AI API key
         """
+        # Load models first
+        llm_model = os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929")
+        embedding_model = os.getenv("EMBEDDING_MODEL", "bge-m3")
+
+        # Auto-detect providers from model names (unless explicitly set)
+        llm_provider = os.getenv("LLM_PROVIDER") or ModelRegistry.get_provider(llm_model, "llm")
+        embedding_provider = os.getenv("EMBEDDING_PROVIDER") or ModelRegistry.get_provider(embedding_model, "embedding")
+
         return cls(
             # LLM Configuration
-            llm_provider=os.getenv("LLM_PROVIDER", "claude"),
-            llm_model=os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929"),
+            llm_provider=llm_provider,
+            llm_model=llm_model,
             # Embedding Configuration
-            embedding_provider=os.getenv("EMBEDDING_PROVIDER", "huggingface"),
-            embedding_model=os.getenv("EMBEDDING_MODEL", "bge-m3"),
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
             # API Keys
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
@@ -165,7 +176,7 @@ class ModelConfig:
 
     def get_llm_config(self) -> dict:
         """Get LLM configuration for SummaryGenerator."""
-        if self.llm_provider == "claude":
+        if self.llm_provider in ("claude", "anthropic"):
             return {
                 "provider": "claude",
                 "model": self.llm_model,
@@ -266,6 +277,12 @@ class ExtractionConfig:
 
     # Summary generation (PHASE 2 integration)
     generate_summaries: bool = True  # Generate document/section summaries
+    summary_model: Optional[str] = None  # Uses SummarizationConfig default when None
+    summary_max_chars: int = 150  # Generic summary target length
+    summary_style: str = "generic"  # Maintain parity with SummarizationConfig default
+    use_batch_api: bool = True  # Mirror SummarizationConfig default behaviour
+    batch_api_poll_interval: int = 5  # Seconds between batch status checks
+    batch_api_timeout: int = 43200  # Max wait for batch completion (12h)
 
     # Output formats
     generate_markdown: bool = True
@@ -417,8 +434,10 @@ class ContextGenerationConfig:
 
         # Load API key from .env based on provider
         if self.api_key is None:
-            if self.provider == "anthropic" or self.provider == "claude":
+            if self.provider in ("anthropic", "claude"):
                 self.api_key = os.getenv("ANTHROPIC_API_KEY")
+                # Normalize provider to "anthropic" (contextual_retrieval.py expects "anthropic", not "claude")
+                self.provider = "anthropic"
                 if not self.api_key:
                     logger.warning(
                         "ANTHROPIC_API_KEY not set in environment. "
@@ -431,6 +450,26 @@ class ContextGenerationConfig:
                         "OPENAI_API_KEY not set in environment. "
                         "Contextual retrieval will fail unless API key is provided during initialization."
                     )
+
+    @classmethod
+    def from_env(cls, **overrides) -> "ContextGenerationConfig":
+        """
+        Load configuration from environment variables.
+
+        Environment Variables:
+            LLM_PROVIDER: LLM provider (from ModelConfig)
+            LLM_MODEL: Model name (from ModelConfig)
+            SPEED_MODE: "fast" or "eco" (affects use_batch_api)
+
+        Args:
+            **overrides: Override specific fields
+
+        Returns:
+            ContextGenerationConfig instance loaded from environment
+        """
+        speed_mode = os.getenv("SPEED_MODE", "fast")
+        config = cls(use_batch_api=(speed_mode == "eco"), **overrides)
+        return config
 
 
 @dataclass
@@ -453,6 +492,7 @@ class ChunkingConfig:
     def __post_init__(self):
         """Initialize context_config if not provided."""
         if self.context_config is None and self.enable_contextual:
+            # Default to standard config if not loading from environment
             self.context_config = ContextGenerationConfig()
 
     @classmethod
@@ -463,13 +503,22 @@ class ChunkingConfig:
         Environment Variables:
             CHUNK_SIZE: Chunk size in characters (default: 500)
             ENABLE_SAC: Enable Summary-Augmented Chunking (default: "true")
+            SPEED_MODE: "fast" or "eco" (affects context generation - passed to ContextGenerationConfig)
 
         Returns:
             ChunkingConfig instance loaded from environment
         """
+        enable_contextual = os.getenv("ENABLE_SAC", "true").lower() == "true"
+
+        # Create context_config from environment if contextual is enabled
+        context_config = None
+        if enable_contextual:
+            context_config = ContextGenerationConfig.from_env()
+
         return cls(
             chunk_size=int(os.getenv("CHUNK_SIZE", "500")),
-            enable_contextual=os.getenv("ENABLE_SAC", "true").lower() == "true",
+            enable_contextual=enable_contextual,
+            context_config=context_config,
         )
 
 

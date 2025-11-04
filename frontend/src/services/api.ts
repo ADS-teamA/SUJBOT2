@@ -61,7 +61,15 @@ export class ApiService {
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('No response body');
+      // Yield error event instead of throwing (consistent with other error handling)
+      yield {
+        event: 'error',
+        data: {
+          error: 'Backend response has no body. This may indicate a server configuration issue.',
+          type: 'NoResponseBody'
+        }
+      };
+      return;
     }
 
     const decoder = new TextDecoder();
@@ -114,6 +122,12 @@ export class ApiService {
 
         for (const line of lines) {
           if (!line.trim()) continue;
+
+          // Skip SSE comments (ping/keepalive) - they start with ":"
+          // Example: ": ping - 2025-11-04 10:14:29.063439+00:00"
+          if (line.trim().startsWith(':')) {
+            continue;
+          }
 
           // Parse SSE format:
           // event: text_delta

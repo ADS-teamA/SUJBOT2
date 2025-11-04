@@ -5,8 +5,23 @@ Provides incremental deduplication during entity insertion into Neo4j.
 Uses APOC procedures when available, falls back to pure Cypher.
 """
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+try:
+    from neo4j.exceptions import (
+        ClientError,
+        ConstraintError,
+        Neo4jError,
+        ServiceUnavailable,
+    )
+except ImportError:
+    # Fallback if neo4j package not available (should not happen in production)
+    ClientError = Exception
+    ConstraintError = Exception
+    Neo4jError = Exception
+    ServiceUnavailable = Exception
 
 if TYPE_CHECKING:
     from .config import EntityDeduplicationConfig
@@ -23,9 +38,16 @@ class Neo4jDeduplicator:
     Features:
     - APOC optimization when available
     - Pure Cypher fallback (compatible with all Neo4j versions)
-    - Property merging (confidence MAX, chunks UNION)
+    - Property merging (confidence MAX, chunks UNION, metadata REPLACE)
     - Document provenance tracking
     - Uniqueness constraints
+
+    IMPORTANT - Metadata Handling:
+    - Metadata is REPLACED (not merged) on entity deduplication
+    - Rationale: Metadata is serialized to JSON string for Neo4j compatibility
+    - Merging JSON strings would require deserialize → merge → re-serialize (expensive)
+    - We assume metadata is consistent across duplicate entities (same entity = same metadata)
+    - If metadata differs, last-write-wins (acceptable for most use cases)
 
     Performance:
     - APOC: ~10-20ms per 1000 entities
@@ -197,14 +219,75 @@ class Neo4jDeduplicator:
             else:
                 return self._cypher_batch_merge(batch)
 
-        except Exception as e:
-            # If APOC fails, try Cypher fallback
-            if self.apoc_available and "apoc" in str(e).lower():
-                logger.warning(f"APOC merge failed: {e}, falling back to Cypher")
-                self.apoc_available = False  # Disable APOC for future batches
+        except ServiceUnavailable as e:
+            # Network/connection errors - should not retry with fallback
+            logger.error(
+                f"Neo4j service unavailable: {e}",
+                exc_info=True,
+                extra={"error_id": "NEO4J_SERVICE_UNAVAILABLE", "batch_size": len(batch)},
+            )
+            raise RuntimeError(
+                f"Cannot connect to Neo4j. Check that Neo4j is running and URI is correct."
+            ) from e
+
+        except ConstraintError as e:
+            # Constraint violations indicate data integrity issues
+            logger.error(
+                f"Neo4j constraint violation during entity merge: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "NEO4J_CONSTRAINT_VIOLATION",
+                    "batch_size": len(batch),
+                    "entity_types": [e.type.value for e in batch],
+                },
+            )
+            raise RuntimeError(
+                f"Entity merge violated Neo4j uniqueness constraint. "
+                f"This indicates duplicate entities with same (type, normalized_value). "
+                f"Check entity extraction logic."
+            ) from e
+
+        except ClientError as e:
+            # APOC-specific errors (function not found, syntax error)
+            if self.apoc_available and ("apoc" in str(e).lower() or "function" in str(e).lower()):
+                logger.warning(
+                    f"APOC procedure failed or unavailable: {e}. Falling back to pure Cypher.",
+                    extra={"error_id": "APOC_FALLBACK", "batch_size": len(batch)},
+                )
+                self.apoc_available = False
                 return self._cypher_batch_merge(batch)
             else:
+                # Other client errors (syntax error, invalid query)
+                logger.error(
+                    f"Neo4j query error: {e}",
+                    exc_info=True,
+                    extra={"error_id": "NEO4J_QUERY_ERROR", "batch_size": len(batch)},
+                )
                 raise
+
+        except (TypeError, ValueError) as e:
+            # Serialization errors from _entity_to_dict()
+            logger.error(
+                f"Failed to serialize entity batch for Neo4j: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "ENTITY_SERIALIZATION_FAILED",
+                    "batch_size": len(batch),
+                    "first_entity_id": batch[0].id if batch else None,
+                },
+            )
+            raise RuntimeError(
+                f"Entity serialization failed. Check entity metadata for non-JSON-serializable objects."
+            ) from e
+
+        except Exception as e:
+            # Truly unexpected errors
+            logger.error(
+                f"Unexpected error during Neo4j batch merge: {e}",
+                exc_info=True,
+                extra={"error_id": "NEO4J_MERGE_UNEXPECTED", "batch_size": len(batch)},
+            )
+            raise
 
     def _apoc_batch_merge(self, batch: List["Entity"]) -> Dict[str, Any]:
         """
@@ -245,11 +328,7 @@ class Neo4jDeduplicator:
               e.source_chunk_ids = apoc.coll.union(e.source_chunk_ids, entity.source_chunk_ids),
               e.confidence = CASE WHEN entity.confidence > e.confidence THEN entity.confidence ELSE e.confidence END,
               e.merged_from = apoc.coll.union(e.merged_from, [entity.id]),
-              e.metadata = CASE
-                WHEN entity.metadata IS NOT NULL
-                THEN apoc.map.merge(e.metadata, entity.metadata)
-                ELSE e.metadata
-              END,
+              e.metadata = entity.metadata,
               e.updated_at = datetime(),
               e._is_new = false
             RETURN
@@ -331,7 +410,7 @@ class Neo4jDeduplicator:
                 CASE WHEN chunk IN acc THEN acc ELSE acc + [chunk] END),
               e.confidence = CASE WHEN entity.confidence > e.confidence THEN entity.confidence ELSE e.confidence END,
               e.merged_from = CASE WHEN NOT entity.id IN e.merged_from THEN e.merged_from + [entity.id] ELSE e.merged_from END,
-              e.metadata = coalesce(e.metadata, {}) + coalesce(entity.metadata, {}),
+              e.metadata = entity.metadata,
               e.updated_at = datetime(),
               e._is_new = false
             RETURN
@@ -352,12 +431,39 @@ class Neo4jDeduplicator:
         """
         Convert Entity to dict for Neo4j.
 
+        Neo4j only supports primitive types and arrays of primitives.
+        Complex metadata is serialized to JSON string for storage.
+
+        IMPORTANT NOTES:
+        1. Metadata is stored as JSON STRING, not as Neo4j Map property
+        2. Querying metadata fields in Cypher requires JSON string parsing:
+           - ❌ WRONG: WHERE e.metadata.author = "Smith"
+           - ✅ RIGHT: WHERE apoc.convert.fromJsonMap(e.metadata).author = "Smith"
+        3. When reading entities back from Neo4j, YOU MUST deserialize manually:
+           - metadata_dict = json.loads(entity_node["metadata"])
+        4. Empty metadata is stored as "{}" (JSON empty object), not None
+
         Args:
             entity: Entity object
 
         Returns:
-            Dict with all entity properties
+            Dict with all entity properties (metadata serialized to JSON string)
+
+        See Also:
+            - Neo4j property type limitations: https://neo4j.com/docs/cypher-manual/current/values-and-types/
+            - APOC JSON functions: https://neo4j.com/docs/apoc/current/overview/apoc.convert/
         """
+        # Serialize metadata to JSON string for Neo4j compatibility
+        # Neo4j doesn't support nested objects/maps as property values
+        try:
+            metadata_json = json.dumps(entity.metadata or {}) if entity.metadata else "{}"
+        except (TypeError, ValueError) as e:
+            logger.warning(
+                f"Failed to serialize metadata for entity {entity.id}: {e}. "
+                f"Using empty metadata instead."
+            )
+            metadata_json = "{}"
+
         return {
             "id": entity.id,
             "type": entity.type.value,
@@ -369,7 +475,7 @@ class Neo4jDeduplicator:
             "document_id": entity.document_id,
             "section_path": entity.section_path,
             "extraction_method": entity.extraction_method,
-            "metadata": entity.metadata or {},
+            "metadata": metadata_json,  # Serialized as JSON string
         }
 
     def _check_apoc(self) -> bool:
