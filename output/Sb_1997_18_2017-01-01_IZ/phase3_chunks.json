@@ -1,0 +1,1340 @@
+{
+  "document_id": "Sb_1997_18_2017-01-01_IZ",
+  "source_path": "data/Sb_1997_18_2017-01-01_IZ.pdf",
+  "chunking_stats": {
+    "layer1_count": 1,
+    "layer2_count": 25,
+    "layer3_count": 40,
+    "total_chunks": 66,
+    "layer3_avg_size": 246.35,
+    "layer3_min_size": 2,
+    "layer3_max_size": 474,
+    "context_avg_overhead": 446.275
+  },
+  "layer1": [
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+      "content": "Czech law on peaceful nuclear energy use, liability for nuclear damage, and insurance requirements for nuclear operators.",
+      "raw_content": "Czech law on peaceful nuclear energy use, liability for nuclear damage, and insurance requirements for nuclear operators.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "layer": 1,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": "Sb_1997_18_2017-01-01_IZ",
+        "section_id": null,
+        "parent_chunk_id": null,
+        "page_number": 0,
+        "char_start": 0,
+        "char_end": 121,
+        "section_title": null,
+        "section_path": null,
+        "section_level": 0,
+        "section_depth": 0
+      }
+    }
+  ],
+  "layer2": [
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_1",
+      "content": "The section outlines the legal framework for nuclear energy in the Czech Republic, focusing on liability and insurance for nuclear operators.",
+      "raw_content": "<unknown>",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_1",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_1",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 1,
+        "char_start": 0,
+        "char_end": 9,
+        "section_title": "Untitled",
+        "section_path": "Untitled",
+        "section_level": 0,
+        "section_depth": 0
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_2",
+      "content": "The section discusses Czech law on nuclear energy, focusing on liability for nuclear damage and insurance obligations for operators.",
+      "raw_content": "18",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_2",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_2",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 1,
+        "char_start": 9,
+        "char_end": 11,
+        "section_title": "Untitled",
+        "section_path": "Untitled",
+        "section_level": 0,
+        "section_depth": 0
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_3",
+      "content": "Czech law from January 24, 1997, regulates nuclear energy use, liability for nuclear damage, and operators' insurance obligations.",
+      "raw_content": "o mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_3",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_3",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 1,
+        "char_start": 11,
+        "char_end": 122,
+        "section_title": "ZÁKON ze dne 24. ledna 1997",
+        "section_path": "ZÁKON ze dne 24. ledna 1997",
+        "section_level": 1,
+        "section_depth": 1
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_4",
+      "content": "The law from January 24, 1997, regulates peaceful nuclear energy, liability for nuclear damage, and insurance for operators in the Czech Republic.",
+      "raw_content": "Parlament se usnesl na tomto zákoně České republiky:",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_4",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_4",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 1,
+        "char_start": 122,
+        "char_end": 174,
+        "section_title": "ZÁKON ze dne 24. ledna 1997",
+        "section_path": "ZÁKON ze dne 24. ledna 1997",
+        "section_level": 1,
+        "section_depth": 1
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_5",
+      "content": "Section 32 of Czech law addresses nuclear liability, stating civil code provisions apply only if not overridden by international treaties.",
+      "raw_content": "- (1) Pro  účely  občanskoprávní  odpovědnosti  za  jaderné  škody  se  použijí  ustanovení  mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.\n- (2) Ustanovení občanského zákoníku se použijí jen tehdy, nestanoví-li mezinárodní smlouva 26 ) nebo tento zákon jinak.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_5",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_5",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 1,
+        "char_start": 174,
+        "char_end": 447,
+        "section_title": "§ 32",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 32",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_6",
+      "content": "Czech law assigns nuclear damage liability to operating license holders, treating multiple facilities under one operator as a single entity for accountability.",
+      "raw_content": "- (1) Držitel povolení k provozu jaderného zařízení 29 ) nebo k jakékoliv činnosti spojené s užíváním ja­ derného zařízení nebo držitel povolení k přepravě jaderných materiálů 30 ) je provozovatelem 31 ) od­ povědným za jadernou škodu 32 ) podle mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.\n- (2) Pokud jedna osoba je držitelem povolení k více jaderným zařízením nacházejícím se na území, pro něž byl schválen společný vnitřní havarijní plán, jsou tato zařízení považována pro účely odpověd­ nosti za jaderné škody za jedno jaderné zařízení. Za jedno jaderné zařízení ve vztahu k odpovědnos­ ti  za  jaderné  škody  však  nelze  považovat  více  jaderných  zařízení,  ke  kterým  mají  povolení  různé osoby, i když tato zařízení na sebe přímo navazují.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_6",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_6",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 1,
+        "char_start": 447,
+        "char_end": 1215,
+        "section_title": "§ 33",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 33",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_7",
+      "content": "§ 34 outlines that compensation for nuclear damage in Czech law follows the Civil Code and regulations in effect at the time of the incident.",
+      "raw_content": "- (1) Při stanovení rozsahu a způsobu náhrady jaderné škody se použijí ustanovení občanského zákoní­ ku. Pro stanovení výše škody se použijí předpisy platné v době vzniku jaderné události, 33 )  která jadernou škodu způsobila.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_7",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_7",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 1,
+        "char_start": 1215,
+        "char_end": 1441,
+        "section_title": "§ 34",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 34",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_8",
+      "content": "§ 34 defines \"nuclear damage\" in Czech law, detailing prevention costs and the State Office for Nuclear Safety's regulatory role.",
+      "raw_content": "- (2) Jadernou škodou je také škoda vzniklá vynaložením nákladů na nezbytná opatření k odvrácení ne­ bo snížení ozáření nebo k obnovení původního nebo obdobného stavu životního prostředí, po­ kud byla tato opatření vyvolána v důsledku jaderné události a povaha škody to umožňuje.\n- (3) Státní  úřad  pro  jadernou  bezpečnost  (dále  jen  'Úřad')  stanoví  vyhláškou  limity  koncentrace a množství jaderného materiálu, na které se ustanovení o jaderných škodách v souladu s meziná­ rodní smlouvou 34 ) nevztahují.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_8",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_8",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 2,
+        "char_start": 1441,
+        "char_end": 1955,
+        "section_title": "§ 34",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 34",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_9",
+      "content": "Section 35 of Czech law defines nuclear operators' liability limits for damages from nuclear incidents, outlining their legal responsibilities.",
+      "raw_content": "Odpovědnost držitele povolení za jadernou škodu způsobenou každou jednotlivou jadernou událostí je omezena v případě",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_9",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_9",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 2,
+        "char_start": 1955,
+        "char_end": 2071,
+        "section_title": "§ 35",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 35",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_10",
+      "content": "Section 35 sets liability limits for nuclear operators: 8 billion CZK for energy facilities and 2 billion CZK for others and transport.",
+      "raw_content": "- b) ostatních jaderných zařízení a přeprav na částku 2 mld. Kč.\n- a) jaderných zařízení pro energetické účely, 35 ) skladů a úložišť vyhořelého jaderného paliva, určené­ ho pro tato zařízení, nebo jaderných materiálů, vzniklých zpracováním tohoto paliva, na částku 8 mld. Kč,",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_10",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_10",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 2,
+        "char_start": 2071,
+        "char_end": 2347,
+        "section_title": "§ 35",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 35",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_11",
+      "content": "Nuclear operators in Czechia must secure liability insurance or financial guarantees for nuclear damage, with specific conditions set by authorities.",
+      "raw_content": "- (1) Držitel povolení podle § 33 je povinen sjednat pojištění své vzniku povinnosti k náhradě jaderné škody s pojistitelem oprávněným podle zvláštního zákona, 36 ) pokud není stanoveno jiné finanční zajištění pro případ vzniku povinnosti k náhradě jaderné škody.\n- (2) Ministerstvo financí v dohodě s Úřadem a Ministerstvem průmyslu a obchodu stanoví formou rozhodnutí o výjimce z odstavce 1 v zájmu hospodárného vynakládání státních prostředků, u kte­ rého držitele povolení se namísto pojištění vyžaduje jiné finanční zajištění pro případ vzniku po­ vinnosti k náhradě jaderné škody.\n- (3) Limit pojistného plnění v případech podle § 35 písm. a) nesmí být nižší než 2 mld. Kč, v přípa­ dech podle § 35 písm. b) nižší než 300 mil. Kč.\n- (4) Pojištění se uzavírá nebo jiné finanční zajištění se stanoví zvlášť pro každé jaderné zařízení nebo přepravu jaderných materiálů ve smyslu § 33 odst. 2.\n- (5) Bližší podmínky jiného finančního zajištění stanoví Ministerstvo financí.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_11",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_11",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 2,
+        "char_start": 2347,
+        "char_end": 3322,
+        "section_title": "§ 36",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 36",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_12",
+      "content": "The state guarantees compensation for nuclear damage claims not covered by insurance, retaining rights to seek reimbursement from license holders.",
+      "raw_content": "- (1) Stát poskytuje záruku za uspokojení přiznaných nároků na náhradu jaderné škody, pokud nejsou uhrazeny z povinného pojištění nebo jiného stanoveného finančního zajištění, a to do částky\n- b) 2 mld. Kč po vyčerpání plnění pojistitele v rozsahu 300 mil. Kč v případech zařízení podle § 35 písm. b).\n- a) 8 mld. Kč po vyčerpání plnění pojistitele v rozsahu 2 mld. Kč v případech zařízení podle § 35 písm. a),\n- (2) Právo státu jako ručitele na postih za uspokojení přiznaných nároků na náhradu jaderné škody vůči držiteli povolení není dotčeno.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_12",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_12",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 2,
+        "char_start": 3322,
+        "char_end": 3868,
+        "section_title": "§ 37",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 37",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_13",
+      "content": "Czech law sets a 3-year claim limit for nuclear damage, with a 10-year max, and requires license holders to notify affected areas.",
+      "raw_content": "- (1) Právo na náhradu jaderné škody se promlčí, jestliže nárok na její náhradu nebyl uplatněn ve lhůtě tří let ode dne, kdy se poškozený o události, která vedla k jaderné škodě, a o tom, kdo za ni odpoví­ dá, dozvěděl nebo mohl dozvědět, nejpozději však ve lhůtě deseti let ode dne vzniku takové událos­ ti; v případě pojištění začínají tyto lhůty běžet uplynutím jednoho roku ode dne vzniku pojistné události.\n- (2) Držitel povolení je v případě, kdy u něj dojde ke vzniku jaderné události, povinen písemně ozná­ mit v oblasti ovlivněné touto událostí podle zjištění Úřadu na základě činnosti celostátní radiační monitorovací sítě, že má povinnost k náhradě jaderné škody způsobené touto událostí. Toto pí­ semné oznámení musí být veřejně přístupné u držitele povolení a na příslušném krajském úřadu a na všech obecních úřadech v této oblasti.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_13",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_13",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 3,
+        "char_start": 3868,
+        "char_end": 4713,
+        "section_title": "§ 38",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 38",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_14",
+      "content": "Section § 45 addresses amendments to Czech income tax law regarding nuclear operators' liability and insurance for nuclear damage.",
+      "raw_content": "Zákon České národní rady č. 586/1992 Sb., o daních z příjmů, ve znění zákona České národní rady č.  35/1993  Sb.,  zákona  č.  96/1993  Sb.,  zákona  č.  157/1993  Sb.,  zákona  č.  196/1993  Sb.,  zákona  č. 323/1993  Sb.,  zákona  č.  42/1994  Sb.,  zákona  č.  85/1994  Sb.,  zákona  č.  114/1994  Sb.,  zákona  č. 259/1994  Sb.,  zákona  č.  32/1995  Sb.,  zákona  č.  87/1995  Sb.,  zákona  č.  118/1995  Sb.,  zákona  č. 149/1995 Sb., zákona č. 248/1995 Sb. a zákona č. 316/1996 Sb., se doplňuje takto:",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_14",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_14",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 3,
+        "char_start": 4713,
+        "char_end": 5221,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_15",
+      "content": "Section 45 amends Czech law on civil liability for nuclear damage, clarifying nuclear operators' responsibilities and insurance requirements.",
+      "raw_content": "V § 18 odst. 2 písm. b) se tečka nahrazuje čárkou a vkládá se nové písmeno c), které včetně poznámky č. 19e) zní:",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_15",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_15",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 3,
+        "char_start": 5221,
+        "char_end": 5334,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_16",
+      "content": "Section 45 outlines financial provisions for nuclear energy in Czech law, addressing income from radioactive waste storage and tax exemptions.",
+      "raw_content": "- 'c) příjmy z vlastní činnosti Správy úložišť radioaktivních odpadů 19e ) s výjimkou příjmů podlé­ hajících zvláštní sazbě daně vybírané srážkou podle § 36 tohoto zákona.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_16",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_16",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 3,
+        "char_start": 5334,
+        "char_end": 5505,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_17",
+      "content": "§ 45 discusses § 26(8) of the Czech Atomic Act, highlighting nuclear energy use regulations and operators' legal liabilities.",
+      "raw_content": "19e ) § 26 odst. 8 zákona č. 18/1997 Sb., o mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů.'.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_17",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_17",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 3,
+        "char_start": 5505,
+        "char_end": 5661,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_18",
+      "content": "The section cites Law No. 287/1993 Coll. on the State Office for Nuclear Safety, addressing civil liability for nuclear damage in Czech legislation.",
+      "raw_content": "1. Zákon č. 287/1993 Sb., o působnosti Státního úřadu pro jadernou bezpečnost, ve znění zákona č. 85/1995 Sb.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_18",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_18",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 3,
+        "char_start": 5661,
+        "char_end": 5770,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+      "content": "The section outlines Czech nuclear safety laws, regulations on radioactive waste, and health protections against radiation exposure.",
+      "raw_content": "2. Zákon č. 28/1984 Sb., o státním dozoru nad jadernou bezpečností jaderných zařízení.\n4. Vyhláška  Československé  komise  pro  atomovou  energii  č.  28/1977  Sb.,  o  evidenci  a  kontrole jaderných materiálů, ve znění vyhlášky č. 100/1989 Sb.\n3. Vyhláška  Ministerstva  zdravotnictví  České  socialistické  republiky  č.  59/1972  Sb.,  o  ochraně zdraví před ionizujícím zářením.\n5. Vyhláška  Československé  komise  pro  atomovou  energii  č.  67/1987  Sb.,  o  zajištění  jaderné bezpečnosti při zacházení s radioaktivními odpady.\n7. Vyhláška  Československé  komise  pro  atomovou  energii  č.  191/1989  Sb.,  kterou  se  stanoví způsob,  lhůty  a  podmínky  ověřování  zvláštní  odborné  způsobilosti  vybraných  pracovníků jaderných zařízení.\n6. Vyhláška Československé komise pro atomovou energii č. 100/1989 Sb., o bezpečnostní ochraně jaderných zařízení a jaderných materiálů.\n8. Vyhláška  Československé  komise  pro  atomovou  energii  č.  436/1990  Sb.,  o  zajištění  jakosti vybraných zařízení z hlediska jaderné bezpečnosti jaderných zařízení.\n10. Výnos Československé komise pro atomovou energii č. 2/1978 o zajištění jaderné bezpečnosti při navrhování,  povolování  a  provádění  staveb  s  jaderně  energetickým  zařízením  (registrován v částce 28/1978 Sb.).\n9. Vyhláška Ministerstva zdravotnictví České  republiky č. 76/1991  Sb., o požadavcích na omezování ozáření z radonu a dalších přírodních radionuklidů.\n11. Výnos Československé komise pro atomovou energii č. 4/1979 o obecných kritériích zajištění jaderné bezpečnosti při umisťování staveb s jaderně energetickým zařízením (registrován v částce 9/1979 Sb.).\n13. Výnos Československé komise pro atomovou energii č. 8/1981 o zkoušení zařízení pro přepravu a ukládání radioaktivních materiálů (registrován v částce 20/1981 Sb.).\n12. Výnos Československé komise pro atomovou energii č. 6/1980 o zajištění jaderné bezpečnosti při spouštění a provozu jaderně energetických zařízení (registrován v částce 13/1980 Sb.).\n14. Výnos Československé komise pro atomovou energii č. 9/1985 o zajištění jaderné bezpečnosti výzkumných jaderných zařízení (registrován v částce 11/1985 Sb.).",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_19",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 4,
+        "char_start": 5770,
+        "char_end": 7924,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_20",
+      "content": "Section § 50 details civil liability for nuclear damage, outlining operator responsibilities and insurance in Czech nuclear energy law.",
+      "raw_content": "§ 50",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_20",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_20",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 4,
+        "char_start": 7924,
+        "char_end": 7928,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_21",
+      "content": "The law on civil liability for nuclear damage takes effect on July 1, 1997, with some sections effective upon announcement.",
+      "raw_content": "Tento  zákon  nabývá  účinnosti  dnem  1.  července  1997,  s  výjimkou  hlavy  čtvrté  a  páté  a  §  48,  které nabývají účinnosti dnem vyhlášení.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_21",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_21",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 4,
+        "char_start": 7928,
+        "char_end": 8076,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_22",
+      "content": "The \"Závěrečná ustanovení\" section includes final provisions and the official endorsement, confirming the document's legal validity.",
+      "raw_content": "Zeman v. r.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_22",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_22",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 4,
+        "char_start": 8076,
+        "char_end": 8087,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_23",
+      "content": "The section \"Klaus v. r.\" marks the official endorsement of Czech law on civil liability for nuclear damage and insurance for operators.",
+      "raw_content": "Klaus v. r.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_23",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_23",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 4,
+        "char_start": 8087,
+        "char_end": 8098,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_24",
+      "content": "The section includes formal endorsements affirming Czech law on civil liability for nuclear damage, regulating nuclear energy and operator insurance.",
+      "raw_content": "Havel v. r.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_24",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_24",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 4,
+        "char_start": 8098,
+        "char_end": 8109,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_25",
+      "content": "The section outlines Czech laws and the Vienna Convention on civil liability for nuclear damage, detailing operator responsibilities and insurance.",
+      "raw_content": "- 2b ) § 11 zákona č. 22/1997 Sb., ve znění pozdějších předpisů.\n- 3b ) Zákon č. 164/2001 Sb., o přírodních léčivých zdrojích, zdrojích přírodních minerálních vod, přírodních léčivých lázních a lázeňských místech a o změně některých souvisejících zákonů (lázeňský zákon).\n- 26 ) Vídeňská úmluva o občanskoprávní odpovědnosti za jaderné škody a Společný protokol týkající se aplikace Vídeňské úmluvy a Pařížské úmluvy, vyhlášené pod č. 133/1994 Sb.\n- 27 ) Zákon č. 40/1964 Sb., ve znění pozdějších předpisů.\n- 28 ) § 5 odst. 2 zákona ČNR č. 425/1990 Sb., o okresních úřadech, úpravě jejich působnosti a o některých dalších opatřeních s tím souvisejících, ve znění zákona č. 254/1994 Sb.\n- 29 ) Čl. I bod 1 písm. j) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 30 ) Čl. I bod 1 písm. h) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 31 ) Čl. I bod 1 písm. c) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 32 ) Čl. I bod 1 písm. k) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 33 ) Čl. I bod 1 písm. l) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 34 ) Čl. I bod 2 Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 35 ) Zákon č. 222/1994 Sb.\n- 36 ) Zákon ČNR č. 185/1991 Sb., o pojišťovnictví, ve znění pozdějších předpisů.\n- 38a ) Zákon č. 133/2000 Sb., o evidenci obyvatel a rodných číslech a o změně některých zákonů (zákon o evidenci obyvatel), ve znění pozdějších předpisů.\n- 38b ) § 1 zákona č. 133/2000 Sb., ve znění zákona č. 53/2004 Sb.\n- 38c ) Zákon č. 40/1993 Sb., o nabývání a pozbývání státního občanství České republiky, ve znění pozdějších předpisů.\n- 42 ) Čl. 81 Smlouvy o založení Evropského společenství pro atomovou energii.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_25",
+        "layer": 2,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_25",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L1",
+        "page_number": 5,
+        "char_start": 8109,
+        "char_end": 9868,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    }
+  ],
+  "layer3": [
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_1_chunk_0",
+      "content": "This chunk pertains to the legal framework governing the use of peaceful nuclear energy in the Czech Republic, specifically addressing the liability for nuclear damage and the insurance obligations imposed on nuclear operators. It is part of a broader discussion on regulatory measures aimed at ensuring safety and accountability in the nuclear energy sector.\n\n<unknown>",
+      "raw_content": "<unknown>",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_1_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_1",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_1",
+        "page_number": 1,
+        "char_start": 0,
+        "char_end": 9,
+        "section_title": "Untitled",
+        "section_path": "Untitled",
+        "section_level": 0,
+        "section_depth": 0
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_2_chunk_0",
+      "content": "This chunk appears to be a reference or identifier related to the Czech law governing the peaceful use of nuclear energy, specifically addressing aspects of liability for nuclear damage and the insurance obligations imposed on nuclear operators. It likely pertains to a specific section or article within the broader legal framework outlined in the document.\n\n18",
+      "raw_content": "18",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_2_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_2",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_2",
+        "page_number": 1,
+        "char_start": 9,
+        "char_end": 11,
+        "section_title": "Untitled",
+        "section_path": "Untitled",
+        "section_level": 0,
+        "section_depth": 0
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_3_chunk_0",
+      "content": "The chunk pertains to the Czech law established on January 24, 1997, which governs the peaceful use of nuclear energy and ionizing radiation, commonly referred to as the atomic law. This legislation outlines the framework for nuclear energy utilization, liability for nuclear damage, and the insurance obligations of nuclear operators, ensuring safety and regulatory compliance in the nuclear sector.\n\no mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů",
+      "raw_content": "o mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_3_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_3",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_3",
+        "page_number": 1,
+        "char_start": 11,
+        "char_end": 122,
+        "section_title": "ZÁKON ze dne 24. ledna 1997",
+        "section_path": "ZÁKON ze dne 24. ledna 1997",
+        "section_level": 1,
+        "section_depth": 1
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_4_chunk_0",
+      "content": "The chunk \"Parlament se usnesl na tomto zákoně České republiky:\" introduces the legislative decision made by the Czech Parliament regarding the law enacted on January 24, 1997. This law addresses the use of peaceful nuclear energy, establishes liability for nuclear damage, and outlines insurance requirements for nuclear operators, forming a crucial framework for nuclear energy regulation in the Czech Republic.\n\nParlament se usnesl na tomto zákoně České republiky:",
+      "raw_content": "Parlament se usnesl na tomto zákoně České republiky:",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_4_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_4",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_4",
+        "page_number": 1,
+        "char_start": 122,
+        "char_end": 174,
+        "section_title": "ZÁKON ze dne 24. ledna 1997",
+        "section_path": "ZÁKON ze dne 24. ledna 1997",
+        "section_level": 1,
+        "section_depth": 1
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_5_chunk_0",
+      "content": "This chunk is part of Section 32 of the fifth chapter of Czech law, which addresses civil liability for nuclear damages. It outlines the applicability of international treaties binding the Czech Republic in relation to nuclear liability, indicating that the provisions of the civil code will only apply if not otherwise specified by these treaties or the law itself.\n\n- (1) Pro  účely  občanskoprávní  odpovědnosti  za  jaderné  škody  se  použijí  ustanovení  mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.\n- (2) Ustanovení občanského zákoníku se použijí jen tehdy, nestanoví-li mezinárodní smlouva 26 ) nebo tento zákon jinak.",
+      "raw_content": "- (1) Pro  účely  občanskoprávní  odpovědnosti  za  jaderné  škody  se  použijí  ustanovení  mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.\n- (2) Ustanovení občanského zákoníku se použijí jen tehdy, nestanoví-li mezinárodní smlouva 26 ) nebo tento zákon jinak.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_5_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_5",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_5",
+        "page_number": 1,
+        "char_start": 174,
+        "char_end": 447,
+        "section_title": "§ 32",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 32",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_6_chunk_0",
+      "content": "This chunk is part of the section addressing civil liability for nuclear damage under Czech law. It specifies that the holder of an operating license for a nuclear facility or related activities, as well as the holder of a license for the transport of nuclear materials, is considered the operator responsible for nuclear damage in accordance with international treaties binding the Czech Republic. This establishes the legal accountability framework for nuclear operators in the context of nuclear safety and liability.\n\n- (1) Držitel povolení k provozu jaderného zařízení 29 ) nebo k jakékoliv činnosti spojené s užíváním ja­ derného zařízení nebo držitel povolení k přepravě jaderných materiálů 30 ) je provozovatelem 31 ) od­ povědným za jadernou škodu 32 ) podle mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.",
+      "raw_content": "- (1) Držitel povolení k provozu jaderného zařízení 29 ) nebo k jakékoliv činnosti spojené s užíváním ja­ derného zařízení nebo držitel povolení k přepravě jaderných materiálů 30 ) je provozovatelem 31 ) od­ povědným za jadernou škodu 32 ) podle mezinárodní smlouvy, 26 ) kterou je Česká republika vázána.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_6_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_6",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_6",
+        "page_number": 1,
+        "char_start": 447,
+        "char_end": 1215,
+        "section_title": "§ 33",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 33",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_6_chunk_1",
+      "content": "This chunk outlines the liability framework for nuclear damage in the context of multiple nuclear facilities operated under a shared emergency plan. It specifies that if one operator holds permits for several nuclear facilities, these are treated as a single entity for liability purposes. However, facilities operated by different entities, even if interconnected, are not considered a single unit in terms of liability for nuclear damages. This is part of the broader legal framework governing nuclear energy operations in the Czech Republic.\n\n- (2) Pokud jedna osoba je držitelem povolení k více jaderným zařízením nacházejícím se na území, pro něž byl schválen společný vnitřní havarijní plán, jsou tato zařízení považována pro účely odpověd­ nosti za jaderné škody za jedno jaderné zařízení. Za jedno jaderné zařízení ve vztahu k odpovědnos­ ti  za  jaderné  škody  však  nelze  považovat  více  jaderných  zařízení,  ke  kterým  mají  povolení  různé osoby, i když tato zařízení na sebe přímo navazují.",
+      "raw_content": "- (2) Pokud jedna osoba je držitelem povolení k více jaderným zařízením nacházejícím se na území, pro něž byl schválen společný vnitřní havarijní plán, jsou tato zařízení považována pro účely odpověd­ nosti za jaderné škody za jedno jaderné zařízení. Za jedno jaderné zařízení ve vztahu k odpovědnos­ ti  za  jaderné  škody  však  nelze  považovat  více  jaderných  zařízení,  ke  kterým  mají  povolení  různé osoby, i když tato zařízení na sebe přímo navazují.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_6_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_6",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_6",
+        "page_number": 1,
+        "char_start": 447,
+        "char_end": 1215,
+        "section_title": "§ 33",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 33",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_7_chunk_0",
+      "content": "This chunk is part of the section addressing civil liability for nuclear damage under Czech law. It specifies that the determination of the extent and method of compensation for nuclear damage will adhere to the provisions of the Civil Code, and that the regulations applicable at the time of the nuclear incident causing the damage will be used to assess the amount of damage.\n\n- (1) Při stanovení rozsahu a způsobu náhrady jaderné škody se použijí ustanovení občanského zákoní­ ku. Pro stanovení výše škody se použijí předpisy platné v době vzniku jaderné události, 33 )  která jadernou škodu způsobila.",
+      "raw_content": "- (1) Při stanovení rozsahu a způsobu náhrady jaderné škody se použijí ustanovení občanského zákoní­ ku. Pro stanovení výše škody se použijí předpisy platné v době vzniku jaderné události, 33 )  která jadernou škodu způsobila.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_7_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_7",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_7",
+        "page_number": 1,
+        "char_start": 1215,
+        "char_end": 1441,
+        "section_title": "§ 34",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 34",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_8_chunk_0",
+      "content": "This chunk defines \"nuclear damage\" under Czech law, specifying that it includes costs incurred for necessary measures to prevent or reduce radiation or to restore the original or similar state of the environment, provided these measures are prompted by a nuclear event. It is part of the broader legal framework addressing liability for nuclear damages and the responsibilities of nuclear operators.\n\n- (2) Jadernou škodou je také škoda vzniklá vynaložením nákladů na nezbytná opatření k odvrácení ne­ bo snížení ozáření nebo k obnovení původního nebo obdobného stavu životního prostředí, po­ kud byla tato opatření vyvolána v důsledku jaderné události a povaha škody to umožňuje.",
+      "raw_content": "- (2) Jadernou škodou je také škoda vzniklá vynaložením nákladů na nezbytná opatření k odvrácení ne­ bo snížení ozáření nebo k obnovení původního nebo obdobného stavu životního prostředí, po­ kud byla tato opatření vyvolána v důsledku jaderné události a povaha škody to umožňuje.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_8_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_8",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_8",
+        "page_number": 2,
+        "char_start": 1441,
+        "char_end": 1955,
+        "section_title": "§ 34",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 34",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_8_chunk_1",
+      "content": "This chunk is part of the Czech legal framework governing liability for nuclear damage, specifically detailing the role of the State Office for Nuclear Safety in establishing regulations. It follows a section defining nuclear damage and outlines the authority's responsibility to set limits on the concentration and quantity of nuclear material exempt from liability provisions, ensuring compliance with international agreements.\n\n- (3) Státní  úřad  pro  jadernou  bezpečnost  (dále  jen  'Úřad')  stanoví  vyhláškou  limity  koncentrace a množství jaderného materiálu, na které se ustanovení o jaderných škodách v souladu s meziná­ rodní smlouvou 34 ) nevztahují.",
+      "raw_content": "- (3) Státní  úřad  pro  jadernou  bezpečnost  (dále  jen  'Úřad')  stanoví  vyhláškou  limity  koncentrace a množství jaderného materiálu, na které se ustanovení o jaderných škodách v souladu s meziná­ rodní smlouvou 34 ) nevztahují.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_8_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_8",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_8",
+        "page_number": 2,
+        "char_start": 1441,
+        "char_end": 1955,
+        "section_title": "§ 34",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 34",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_9_chunk_0",
+      "content": "The chunk pertains to Section 35 of the Czech law on civil liability for nuclear damage, which outlines the responsibilities of nuclear operators in the event of nuclear incidents. Specifically, it addresses the limitations on liability for damages caused by individual nuclear events, establishing the framework for how operators are held accountable under the law. This section is crucial for understanding the legal and financial implications of nuclear energy operations in the Czech Republic.\n\nOdpovědnost držitele povolení za jadernou škodu způsobenou každou jednotlivou jadernou událostí je omezena v případě",
+      "raw_content": "Odpovědnost držitele povolení za jadernou škodu způsobenou každou jednotlivou jadernou událostí je omezena v případě",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_9_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_9",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_9",
+        "page_number": 2,
+        "char_start": 1955,
+        "char_end": 2071,
+        "section_title": "§ 35",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 35",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_10_chunk_0",
+      "content": "This chunk is part of Section 35 of the Czech law concerning civil liability for nuclear damage. It outlines the financial limits of liability for nuclear operators, specifying amounts for different types of nuclear facilities and the transport of nuclear materials. The specified amounts are 8 billion CZK for energy-related nuclear facilities and spent fuel storage, and 2 billion CZK for other nuclear facilities and transport.\n\n- b) ostatních jaderných zařízení a přeprav na částku 2 mld. Kč.\n- a) jaderných zařízení pro energetické účely, 35 ) skladů a úložišť vyhořelého jaderného paliva, určené­ ho pro tato zařízení, nebo jaderných materiálů, vzniklých zpracováním tohoto paliva, na částku 8 mld. Kč,",
+      "raw_content": "- b) ostatních jaderných zařízení a přeprav na částku 2 mld. Kč.\n- a) jaderných zařízení pro energetické účely, 35 ) skladů a úložišť vyhořelého jaderného paliva, určené­ ho pro tato zařízení, nebo jaderných materiálů, vzniklých zpracováním tohoto paliva, na částku 8 mld. Kč,",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_10_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_10",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_10",
+        "page_number": 2,
+        "char_start": 2071,
+        "char_end": 2347,
+        "section_title": "§ 35",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 35",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_11_chunk_0",
+      "content": "This chunk outlines the obligation of nuclear operators, as defined in § 33, to obtain insurance for liability related to nuclear damage. It specifies that this insurance must be with a licensed insurer unless alternative financial security is established. This provision is part of the broader legal framework governing liability for nuclear damage and insurance requirements in Czech law, as detailed in the section on civil liability for nuclear damages.\n\n- (1) Držitel povolení podle § 33 je povinen sjednat pojištění své vzniku povinnosti k náhradě jaderné škody s pojistitelem oprávněným podle zvláštního zákona, 36 ) pokud není stanoveno jiné finanční zajištění pro případ vzniku povinnosti k náhradě jaderné škody.",
+      "raw_content": "- (1) Držitel povolení podle § 33 je povinen sjednat pojištění své vzniku povinnosti k náhradě jaderné škody s pojistitelem oprávněným podle zvláštního zákona, 36 ) pokud není stanoveno jiné finanční zajištění pro případ vzniku povinnosti k náhradě jaderné škody.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_11_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_11",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_11",
+        "page_number": 2,
+        "char_start": 2347,
+        "char_end": 3322,
+        "section_title": "§ 36",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 36",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_11_chunk_1",
+      "content": "This chunk is part of the Czech law governing liability for nuclear damage and insurance requirements for nuclear operators. It specifies the conditions under which the Ministry of Finance, in coordination with relevant authorities, can grant exceptions to the insurance requirement, allowing alternative financial guarantees. Additionally, it outlines minimum insurance payout limits based on specific scenarios defined in the law, ensuring adequate financial protection against nuclear damage.\n\n- (2) Ministerstvo financí v dohodě s Úřadem a Ministerstvem průmyslu a obchodu stanoví formou rozhodnutí o výjimce z odstavce 1 v zájmu hospodárného vynakládání státních prostředků, u kte­ rého držitele povolení se namísto pojištění vyžaduje jiné finanční zajištění pro případ vzniku po­ vinnosti k náhradě jaderné škody.\n- (3) Limit pojistného plnění v případech podle § 35 písm. a) nesmí být nižší než 2 mld. Kč, v přípa­ dech podle § 35 písm. b) nižší než 300 mil. Kč.",
+      "raw_content": "- (2) Ministerstvo financí v dohodě s Úřadem a Ministerstvem průmyslu a obchodu stanoví formou rozhodnutí o výjimce z odstavce 1 v zájmu hospodárného vynakládání státních prostředků, u kte­ rého držitele povolení se namísto pojištění vyžaduje jiné finanční zajištění pro případ vzniku po­ vinnosti k náhradě jaderné škody.\n- (3) Limit pojistného plnění v případech podle § 35 písm. a) nesmí být nižší než 2 mld. Kč, v přípa­ dech podle § 35 písm. b) nižší než 300 mil. Kč.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_11_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_11",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_11",
+        "page_number": 2,
+        "char_start": 2347,
+        "char_end": 3322,
+        "section_title": "§ 36",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 36",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_11_chunk_2",
+      "content": "This chunk outlines specific provisions regarding the insurance and financial guarantees required for nuclear facilities and the transport of nuclear materials under Czech law. It follows regulations on liability for nuclear damage and establishes that insurance or alternative financial security must be tailored to each nuclear installation or transport operation, with further conditions to be defined by the Ministry of Finance.\n\n- (4) Pojištění se uzavírá nebo jiné finanční zajištění se stanoví zvlášť pro každé jaderné zařízení nebo přepravu jaderných materiálů ve smyslu § 33 odst. 2.\n- (5) Bližší podmínky jiného finančního zajištění stanoví Ministerstvo financí.",
+      "raw_content": "- (4) Pojištění se uzavírá nebo jiné finanční zajištění se stanoví zvlášť pro každé jaderné zařízení nebo přepravu jaderných materiálů ve smyslu § 33 odst. 2.\n- (5) Bližší podmínky jiného finančního zajištění stanoví Ministerstvo financí.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_11_chunk_2",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_11",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_11",
+        "page_number": 2,
+        "char_start": 2347,
+        "char_end": 3322,
+        "section_title": "§ 36",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 36",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_12_chunk_0",
+      "content": "This chunk outlines the state's guarantee for compensating claims related to nuclear damage when such claims are not covered by mandatory insurance or other financial security. It specifies the financial limits of this guarantee based on the type of nuclear facility, as detailed in § 35, and is part of the broader legal framework addressing liability and insurance requirements for nuclear operators under Czech law.\n\n- (1) Stát poskytuje záruku za uspokojení přiznaných nároků na náhradu jaderné škody, pokud nejsou uhrazeny z povinného pojištění nebo jiného stanoveného finančního zajištění, a to do částky\n- b) 2 mld. Kč po vyčerpání plnění pojistitele v rozsahu 300 mil. Kč v případech zařízení podle § 35 písm. b).\n- a) 8 mld. Kč po vyčerpání plnění pojistitele v rozsahu 2 mld. Kč v případech zařízení podle § 35 písm. a),",
+      "raw_content": "- (1) Stát poskytuje záruku za uspokojení přiznaných nároků na náhradu jaderné škody, pokud nejsou uhrazeny z povinného pojištění nebo jiného stanoveného finančního zajištění, a to do částky\n- b) 2 mld. Kč po vyčerpání plnění pojistitele v rozsahu 300 mil. Kč v případech zařízení podle § 35 písm. b).\n- a) 8 mld. Kč po vyčerpání plnění pojistitele v rozsahu 2 mld. Kč v případech zařízení podle § 35 písm. a),",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_12_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_12",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_12",
+        "page_number": 2,
+        "char_start": 3322,
+        "char_end": 3868,
+        "section_title": "§ 37",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 37",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_12_chunk_1",
+      "content": "This chunk is part of the section addressing the liability for nuclear damage under Czech law. It clarifies that the state's right to seek compensation from the license holder for satisfying claims related to nuclear damage remains intact, even after the state provides guarantees for compensation. This provision is crucial for understanding the financial responsibilities and legal recourse available in the event of nuclear incidents.\n\n- (2) Právo státu jako ručitele na postih za uspokojení přiznaných nároků na náhradu jaderné škody vůči držiteli povolení není dotčeno.",
+      "raw_content": "- (2) Právo státu jako ručitele na postih za uspokojení přiznaných nároků na náhradu jaderné škody vůči držiteli povolení není dotčeno.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_12_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_12",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_12",
+        "page_number": 2,
+        "char_start": 3322,
+        "char_end": 3868,
+        "section_title": "§ 37",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 37",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_13_chunk_0",
+      "content": "This chunk outlines the statute of limitations for claims related to nuclear damage under Czech law. It specifies that the right to compensation for nuclear damage expires if not claimed within three years of the affected party's awareness of the event and the liable party, with a maximum limit of ten years from the event's occurrence. Additionally, it notes that for insured events, these timeframes commence one year after the insurance incident. This section is part of the broader legal framework governing liability and compensation for nuclear incidents.\n\n- (1) Právo na náhradu jaderné škody se promlčí, jestliže nárok na její náhradu nebyl uplatněn ve lhůtě tří let ode dne, kdy se poškozený o události, která vedla k jaderné škodě, a o tom, kdo za ni odpoví­ dá, dozvěděl nebo mohl dozvědět, nejpozději však ve lhůtě deseti let ode dne vzniku takové událos­ ti; v případě pojištění začínají tyto lhůty běžet uplynutím jednoho roku ode dne vzniku pojistné události.",
+      "raw_content": "- (1) Právo na náhradu jaderné škody se promlčí, jestliže nárok na její náhradu nebyl uplatněn ve lhůtě tří let ode dne, kdy se poškozený o události, která vedla k jaderné škodě, a o tom, kdo za ni odpoví­ dá, dozvěděl nebo mohl dozvědět, nejpozději však ve lhůtě deseti let ode dne vzniku takové událos­ ti; v případě pojištění začínají tyto lhůty běžet uplynutím jednoho roku ode dne vzniku pojistné události.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_13_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_13",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_13",
+        "page_number": 3,
+        "char_start": 3868,
+        "char_end": 4713,
+        "section_title": "§ 38",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 38",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_13_chunk_1",
+      "content": "This chunk outlines the obligations of the license holder in the event of a nuclear incident, specifically the requirement to notify affected areas about their liability for nuclear damage. It is part of a broader legal framework addressing civil liability for nuclear damages, including the time limits for claims and the responsibilities of nuclear operators to inform the public and authorities.\n\n- (2) Držitel povolení je v případě, kdy u něj dojde ke vzniku jaderné události, povinen písemně ozná­ mit v oblasti ovlivněné touto událostí podle zjištění Úřadu na základě činnosti celostátní radiační monitorovací sítě, že má povinnost k náhradě jaderné škody způsobené touto událostí. Toto pí­ semné oznámení musí být veřejně přístupné u držitele povolení a na příslušném krajském úřadu a na všech obecních úřadech v této oblasti.",
+      "raw_content": "- (2) Držitel povolení je v případě, kdy u něj dojde ke vzniku jaderné události, povinen písemně ozná­ mit v oblasti ovlivněné touto událostí podle zjištění Úřadu na základě činnosti celostátní radiační monitorovací sítě, že má povinnost k náhradě jaderné škody způsobené touto událostí. Toto pí­ semné oznámení musí být veřejně přístupné u držitele povolení a na příslušném krajském úřadu a na všech obecních úřadech v této oblasti.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_13_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_13",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_13",
+        "page_number": 3,
+        "char_start": 3868,
+        "char_end": 4713,
+        "section_title": "§ 38",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > § 38",
+        "section_level": 2,
+        "section_depth": 2
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_14_chunk_0",
+      "content": "The chunk is part of the legal framework concerning the taxation of income in the Czech Republic, specifically referencing the amendments to the original law on income taxes (Č. 586/1992 Sb.) as it pertains to nuclear energy operators. It is situated within a section addressing civil liability for nuclear damage, indicating the importance of financial regulations and insurance requirements for those involved in the nuclear sector.\n\nZákon České národní rady č. 586/1992 Sb., o daních z příjmů, ve znění zákona České národní rady č.  35/1993  Sb.,  zákona  č.  96/1993  Sb.,  zákona  č.  157/1993  Sb.,  zákona  č.  196/1993  Sb.,  zákona  č. 323/1993  Sb.,  zákona  č.  42/1994  Sb.,  zákona  č.  85/1994  Sb.,  zákona  č.  114/1994  Sb.,  zákona  č. 259/1994  Sb.,  zákona  č.  32/1995  Sb.,  zákona  č.  87/1995  Sb.,  zákona  č.  118/1995  Sb.,  zákona  č. 149/1995 Sb., zákona č. 248/1995 Sb. a zákona č",
+      "raw_content": "Zákon České národní rady č. 586/1992 Sb., o daních z příjmů, ve znění zákona České národní rady č.  35/1993  Sb.,  zákona  č.  96/1993  Sb.,  zákona  č.  157/1993  Sb.,  zákona  č.  196/1993  Sb.,  zákona  č. 323/1993  Sb.,  zákona  č.  42/1994  Sb.,  zákona  č.  85/1994  Sb.,  zákona  č.  114/1994  Sb.,  zákona  č. 259/1994  Sb.,  zákona  č.  32/1995  Sb.,  zákona  č.  87/1995  Sb.,  zákona  č.  118/1995  Sb.,  zákona  č. 149/1995 Sb., zákona č. 248/1995 Sb. a zákona č",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_14_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_14",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_14",
+        "page_number": 3,
+        "char_start": 4713,
+        "char_end": 5221,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_14_chunk_1",
+      "content": "This chunk is part of the amendments to Czech law regarding the liability for nuclear damage and insurance requirements for nuclear operators, specifically within the framework of the Czech National Council Act No. 586/1992 on income taxes. It indicates an addition to the existing legislation, highlighting ongoing updates and legal adjustments related to nuclear energy regulation in the Czech Republic.\n\n. 316/1996 Sb., se doplňuje takto:",
+      "raw_content": ". 316/1996 Sb., se doplňuje takto:",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_14_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_14",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_14",
+        "page_number": 3,
+        "char_start": 4713,
+        "char_end": 5221,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_15_chunk_0",
+      "content": "This chunk is part of the legislative amendments within the Czech law concerning civil liability for nuclear damage. Specifically, it refers to changes in Section 18, which outlines provisions related to the responsibilities and obligations of nuclear operators. The addition of a new subsection aims to clarify or expand upon existing regulations, contributing to the overall framework of liability and insurance requirements for the safe use of nuclear energy in the Czech Republic.\n\nV § 18 odst. 2 písm. b) se tečka nahrazuje čárkou a vkládá se nové písmeno c), které včetně poznámky č. 19e) zní:",
+      "raw_content": "V § 18 odst. 2 písm. b) se tečka nahrazuje čárkou a vkládá se nové písmeno c), které včetně poznámky č. 19e) zní:",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_15_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_15",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_15",
+        "page_number": 3,
+        "char_start": 5221,
+        "char_end": 5334,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_16_chunk_0",
+      "content": "The chunk pertains to the financial provisions outlined in the Czech law regarding nuclear energy, specifically addressing the income generated by the Administration of Radioactive Waste Storage. It is part of the broader legal framework that defines liability for nuclear damage and the insurance obligations of nuclear operators, as detailed in Section 45 of the amended Income Tax Act. This section clarifies exemptions related to specific tax rates applicable to certain types of income.\n\n- 'c) příjmy z vlastní činnosti Správy úložišť radioaktivních odpadů 19e ) s výjimkou příjmů podlé­ hajících zvláštní sazbě daně vybírané srážkou podle § 36 tohoto zákona.",
+      "raw_content": "- 'c) příjmy z vlastní činnosti Správy úložišť radioaktivních odpadů 19e ) s výjimkou příjmů podlé­ hajících zvláštní sazbě daně vybírané srážkou podle § 36 tohoto zákona.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_16_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_16",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_16",
+        "page_number": 3,
+        "char_start": 5334,
+        "char_end": 5505,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_17_chunk_0",
+      "content": "The chunk refers to a specific provision (§ 26, paragraph 8) of the Czech Atomic Act (zákon č. 18/1997 Sb.) concerning the peaceful use of nuclear energy and ionizing radiation. It is situated within the broader context of the Czech legal framework governing liability for nuclear damage and the insurance obligations of nuclear operators, as outlined in the fifth chapter of the document. This section emphasizes the regulatory requirements for nuclear energy use and the associated legal responsibilities.\n\n19e ) § 26 odst. 8 zákona č. 18/1997 Sb., o mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů.'.",
+      "raw_content": "19e ) § 26 odst. 8 zákona č. 18/1997 Sb., o mírovém využívání jaderné energie a ionizujícího záření (atomový zákon) a o změně a doplnění některých zákonů.'.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_17_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_17",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_17",
+        "page_number": 3,
+        "char_start": 5505,
+        "char_end": 5661,
+        "section_title": "§ 45",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > DOPLNĚNÍ ZÁKONA ČESKÉ NÁRODNÍ RADY Č. 586/1992 SB., O DANÍCH Z PŘÍJMŮ, VE ZNĚNÍ POZDĚJŠÍCH PŘEDPISŮ > § 45",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_18_chunk_0",
+      "content": "The chunk references Law No. 287/1993 Coll., which pertains to the authority of the State Office for Nuclear Safety in the context of Czech legislation on nuclear energy. It is situated within the final provisions of the section addressing civil liability for nuclear damage, highlighting the regulatory framework that governs the safe and responsible use of nuclear energy in the Czech Republic.\n\n1. Zákon č. 287/1993 Sb., o působnosti Státního úřadu pro jadernou bezpečnost, ve znění zákona č. 85/1995 Sb.",
+      "raw_content": "1. Zákon č. 287/1993 Sb., o působnosti Státního úřadu pro jadernou bezpečnost, ve znění zákona č. 85/1995 Sb.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_18_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_18",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_18",
+        "page_number": 3,
+        "char_start": 5661,
+        "char_end": 5770,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_0",
+      "content": "This chunk contains references to various laws and regulations related to nuclear safety and health protection in the Czech Republic. It includes the State Supervision Act on Nuclear Safety and regulations concerning the management and control of nuclear materials, as well as health protection against ionizing radiation. These provisions are essential for ensuring compliance with nuclear safety standards and protecting public health in the context of nuclear energy use.\n\n2. Zákon č. 28/1984 Sb., o státním dozoru nad jadernou bezpečností jaderných zařízení.\n4. Vyhláška  Československé  komise  pro  atomovou  energii  č.  28/1977  Sb.,  o  evidenci  a  kontrole jaderných materiálů, ve znění vyhlášky č. 100/1989 Sb.\n3. Vyhláška  Ministerstva  zdravotnictví  České  socialistické  republiky  č.  59/1972  Sb.,  o  ochraně zdraví před ionizujícím zářením.",
+      "raw_content": "2. Zákon č. 28/1984 Sb., o státním dozoru nad jadernou bezpečností jaderných zařízení.\n4. Vyhláška  Československé  komise  pro  atomovou  energii  č.  28/1977  Sb.,  o  evidenci  a  kontrole jaderných materiálů, ve znění vyhlášky č. 100/1989 Sb.\n3. Vyhláška  Ministerstva  zdravotnictví  České  socialistické  republiky  č.  59/1972  Sb.,  o  ochraně zdraví před ionizujícím zářením.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_19",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+        "page_number": 4,
+        "char_start": 5770,
+        "char_end": 7924,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_1",
+      "content": "This chunk is part of the legal framework governing nuclear safety and liability in the Czech Republic. It includes regulations from the Czechoslovak Atomic Energy Commission concerning the safety of handling radioactive waste and the qualifications required for personnel in nuclear facilities. This section is situated between provisions related to nuclear damage liability and other safety regulations, highlighting the comprehensive approach to nuclear energy management and safety oversight.\n\n5. Vyhláška  Československé  komise  pro  atomovou  energii  č.  67/1987  Sb.,  o  zajištění  jaderné bezpečnosti při zacházení s radioaktivními odpady.\n7. Vyhláška  Československé  komise  pro  atomovou  energii  č.  191/1989  Sb.,  kterou  se  stanoví způsob,  lhůty  a  podmínky  ověřování  zvláštní  odborné  způsobilosti  vybraných  pracovníků jaderných zařízení.",
+      "raw_content": "5. Vyhláška  Československé  komise  pro  atomovou  energii  č.  67/1987  Sb.,  o  zajištění  jaderné bezpečnosti při zacházení s radioaktivními odpady.\n7. Vyhláška  Československé  komise  pro  atomovou  energii  č.  191/1989  Sb.,  kterou  se  stanoví způsob,  lhůty  a  podmínky  ověřování  zvláštní  odborné  způsobilosti  vybraných  pracovníků jaderných zařízení.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_19",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+        "page_number": 4,
+        "char_start": 5770,
+        "char_end": 7924,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_2",
+      "content": "This chunk includes regulations issued by the Czechoslovak Commission for Atomic Energy concerning the safety protection of nuclear facilities and materials, as well as quality assurance for selected equipment in relation to nuclear safety. It is positioned within a broader legislative framework addressing civil liability for nuclear damage and insurance requirements for nuclear operators, highlighting the importance of safety and quality in the nuclear energy sector.\n\n6. Vyhláška Československé komise pro atomovou energii č. 100/1989 Sb., o bezpečnostní ochraně jaderných zařízení a jaderných materiálů.\n8. Vyhláška  Československé  komise  pro  atomovou  energii  č.  436/1990  Sb.,  o  zajištění  jakosti vybraných zařízení z hlediska jaderné bezpečnosti jaderných zařízení.",
+      "raw_content": "6. Vyhláška Československé komise pro atomovou energii č. 100/1989 Sb., o bezpečnostní ochraně jaderných zařízení a jaderných materiálů.\n8. Vyhláška  Československé  komise  pro  atomovou  energii  č.  436/1990  Sb.,  o  zajištění  jakosti vybraných zařízení z hlediska jaderné bezpečnosti jaderných zařízení.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_2",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_19",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+        "page_number": 4,
+        "char_start": 5770,
+        "char_end": 7924,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_3",
+      "content": "This chunk contains regulations issued by the Czechoslovak Commission for Atomic Energy regarding nuclear safety measures during the design, approval, and construction of nuclear energy facilities, as well as health regulations concerning radiation exposure from natural radionuclides. It is situated within a broader legal framework addressing liability for nuclear damage and insurance requirements for nuclear operators, highlighting the importance of safety and health standards in the nuclear energy sector.\n\n10. Výnos Československé komise pro atomovou energii č. 2/1978 o zajištění jaderné bezpečnosti při navrhování,  povolování  a  provádění  staveb  s  jaderně  energetickým  zařízením  (registrován v částce 28/1978 Sb.).\n9. Vyhláška Ministerstva zdravotnictví České  republiky č. 76/1991  Sb., o požadavcích na omezování ozáření z radonu a dalších přírodních radionuklidů.",
+      "raw_content": "10. Výnos Československé komise pro atomovou energii č. 2/1978 o zajištění jaderné bezpečnosti při navrhování,  povolování  a  provádění  staveb  s  jaderně  energetickým  zařízením  (registrován v částce 28/1978 Sb.).\n9. Vyhláška Ministerstva zdravotnictví České  republiky č. 76/1991  Sb., o požadavcích na omezování ozáření z radonu a dalších přírodních radionuklidů.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_3",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_19",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+        "page_number": 4,
+        "char_start": 5770,
+        "char_end": 7924,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_4",
+      "content": "This chunk contains two decrees from the Czechoslovak Commission for Atomic Energy, focusing on nuclear safety criteria for the placement of nuclear energy facilities and testing equipment for the transport and storage of radioactive materials. It is positioned between regulations on nuclear safety from 1978 and 1980, highlighting the ongoing development of safety protocols in the context of peaceful nuclear energy use and liability for nuclear damage.\n\n11. Výnos Československé komise pro atomovou energii č. 4/1979 o obecných kritériích zajištění jaderné bezpečnosti při umisťování staveb s jaderně energetickým zařízením (registrován v částce 9/1979 Sb.).\n13. Výnos Československé komise pro atomovou energii č. 8/1981 o zkoušení zařízení pro přepravu a ukládání radioaktivních materiálů (registrován v částce 20/1981 Sb.).",
+      "raw_content": "11. Výnos Československé komise pro atomovou energii č. 4/1979 o obecných kritériích zajištění jaderné bezpečnosti při umisťování staveb s jaderně energetickým zařízením (registrován v částce 9/1979 Sb.).\n13. Výnos Československé komise pro atomovou energii č. 8/1981 o zkoušení zařízení pro přepravu a ukládání radioaktivních materiálů (registrován v částce 20/1981 Sb.).",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_4",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_19",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+        "page_number": 4,
+        "char_start": 5770,
+        "char_end": 7924,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_5",
+      "content": "This chunk is part of a series of regulations issued by the Czechoslovak Commission for Atomic Energy, focusing on safety measures for nuclear energy operations. It specifically addresses the safety protocols required during the commissioning and operation of nuclear facilities, fitting within the broader legal framework on nuclear liability and insurance requirements outlined in the document's section on civil liability for nuclear damage.\n\n12. Výnos Československé komise pro atomovou energii č. 6/1980 o zajištění jaderné bezpečnosti při spouštění a provozu jaderně energetických zařízení (registrován v částce 13/1980 Sb.).\n14. Výnos Československé komise pro atomovou energii č. 9/1985 o zajištění jaderné bezpečnosti výzkumných jaderných zařízení (registrován v částce 11/1985 Sb.).",
+      "raw_content": "12. Výnos Československé komise pro atomovou energii č. 6/1980 o zajištění jaderné bezpečnosti při spouštění a provozu jaderně energetických zařízení (registrován v částce 13/1980 Sb.).\n14. Výnos Československé komise pro atomovou energii č. 9/1985 o zajištění jaderné bezpečnosti výzkumných jaderných zařízení (registrován v částce 11/1985 Sb.).",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_19_chunk_5",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_19",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_19",
+        "page_number": 4,
+        "char_start": 5770,
+        "char_end": 7924,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_20_chunk_0",
+      "content": "The chunk § 50 is part of the concluding provisions within the section addressing civil liability for nuclear damage in Czech law. This section outlines the legal framework governing the use of peaceful nuclear energy, including the responsibilities and insurance requirements for nuclear operators. The concluding provisions serve to finalize and clarify the application of the laws and regulations established in the preceding sections.\n\n§ 50",
+      "raw_content": "§ 50",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_20_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_20",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_20",
+        "page_number": 4,
+        "char_start": 7924,
+        "char_end": 7928,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_21_chunk_0",
+      "content": "The chunk is part of the concluding provisions of the Czech law on civil liability for nuclear damage, specifically detailing the effective date of the law. It states that the law comes into effect on July 1, 1997, except for certain sections, including chapters four and five, and § 48, which take effect upon announcement. This context is crucial for understanding the implementation timeline of the legal framework governing nuclear energy use and liability.\n\nTento  zákon  nabývá  účinnosti  dnem  1.  července  1997,  s  výjimkou  hlavy  čtvrté  a  páté  a  §  48,  které nabývají účinnosti dnem vyhlášení.",
+      "raw_content": "Tento  zákon  nabývá  účinnosti  dnem  1.  července  1997,  s  výjimkou  hlavy  čtvrté  a  páté  a  §  48,  které nabývají účinnosti dnem vyhlášení.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_21_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_21",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_21",
+        "page_number": 4,
+        "char_start": 7928,
+        "char_end": 8076,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_22_chunk_0",
+      "content": "The chunk \"Zeman v. r.\" appears at the end of the document, specifically within the section titled \"Závěrečná ustanovení\" of the Czech law concerning civil liability for nuclear damage. This section includes final provisions and formalities, indicating the official endorsement or signature of the document, likely by a government official or representative, thus marking its completion and legal validity.\n\nZeman v. r.",
+      "raw_content": "Zeman v. r.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_22_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_22",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_22",
+        "page_number": 4,
+        "char_start": 8076,
+        "char_end": 8087,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_23_chunk_0",
+      "content": "The chunk \"Klaus v. r.\" appears in the concluding provisions of the Czech law concerning civil liability for nuclear damage and the insurance requirements for nuclear operators. This section, part of the broader framework outlined in the fifth chapter of the document, signifies the official endorsement or signature of the law, indicating its finalization and readiness for implementation.\n\nKlaus v. r.",
+      "raw_content": "Klaus v. r.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_23_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_23",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_23",
+        "page_number": 4,
+        "char_start": 8087,
+        "char_end": 8098,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_24_chunk_0",
+      "content": "The chunk \"Havel v. r.\" appears in the concluding provisions of the Czech law concerning civil liability for nuclear damage. This section likely includes formal endorsements or signatures affirming the legal text, indicating its official approval and enactment. It is situated within the broader context of regulations governing the use of nuclear energy, liability frameworks, and insurance obligations for nuclear operators in the Czech Republic.\n\nHavel v. r.",
+      "raw_content": "Havel v. r.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_24_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_24",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_24",
+        "page_number": 4,
+        "char_start": 8098,
+        "char_end": 8109,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_0",
+      "content": "This chunk contains references to various laws and international agreements related to nuclear liability and natural resources, situated within the section on civil liability for nuclear damage in Czech law. It specifically cites provisions from Czech legislation and the Vienna Convention on civil liability for nuclear damage, contributing to the legal framework governing nuclear energy use and operator responsibilities.\n\n- 2b ) § 11 zákona č. 22/1997 Sb., ve znění pozdějších předpisů.\n- 3b ) Zákon č. 164/2001 Sb., o přírodních léčivých zdrojích, zdrojích přírodních minerálních vod, přírodních léčivých lázních a lázeňských místech a o změně některých souvisejících zákonů (lázeňský zákon).\n- 26 ) Vídeňská úmluva o občanskoprávní odpovědnosti za jaderné škody a Společný protokol týkající se aplikace Vídeňské úmluvy a Pařížské úmluvy, vyhlášené pod č. 133/1994 Sb.",
+      "raw_content": "- 2b ) § 11 zákona č. 22/1997 Sb., ve znění pozdějších předpisů.\n- 3b ) Zákon č. 164/2001 Sb., o přírodních léčivých zdrojích, zdrojích přírodních minerálních vod, přírodních léčivých lázních a lázeňských místech a o změně některých souvisejících zákonů (lázeňský zákon).\n- 26 ) Vídeňská úmluva o občanskoprávní odpovědnosti za jaderné škody a Společný protokol týkající se aplikace Vídeňské úmluvy a Pařížské úmluvy, vyhlášené pod č. 133/1994 Sb.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_0",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_25",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_25",
+        "page_number": 5,
+        "char_start": 8109,
+        "char_end": 9868,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_1",
+      "content": "This chunk contains references to specific laws and articles related to the Vienna Convention on Civil Liability for Nuclear Damage, which are part of the broader legal framework governing liability and insurance for nuclear operators in the Czech Republic. It is situated within the concluding provisions of the section addressing civil liability for nuclear damage, following other legal references and preceding additional articles of the Vienna Convention.\n\n- 27 ) Zákon č. 40/1964 Sb., ve znění pozdějších předpisů.\n- 28 ) § 5 odst. 2 zákona ČNR č. 425/1990 Sb., o okresních úřadech, úpravě jejich působnosti a o některých dalších opatřeních s tím souvisejících, ve znění zákona č. 254/1994 Sb.\n- 29 ) Čl. I bod 1 písm. j) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 30 ) Čl. I bod 1 písm. h) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.",
+      "raw_content": "- 27 ) Zákon č. 40/1964 Sb., ve znění pozdějších předpisů.\n- 28 ) § 5 odst. 2 zákona ČNR č. 425/1990 Sb., o okresních úřadech, úpravě jejich působnosti a o některých dalších opatřeních s tím souvisejících, ve znění zákona č. 254/1994 Sb.\n- 29 ) Čl. I bod 1 písm. j) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 30 ) Čl. I bod 1 písm. h) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_1",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_25",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_25",
+        "page_number": 5,
+        "char_start": 8109,
+        "char_end": 9868,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_2",
+      "content": "This chunk contains references to specific articles of the Vienna Convention on Civil Liability for Nuclear Damage, alongside Czech laws related to nuclear liability and insurance. It is situated within the section discussing civil liability for nuclear damages, specifically in the concluding provisions of the legal framework governing the use of nuclear energy in the Czech Republic. This context is crucial for understanding the legal obligations and frameworks that nuclear operators must adhere to.\n\n- 31 ) Čl. I bod 1 písm. c) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 32 ) Čl. I bod 1 písm. k) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 33 ) Čl. I bod 1 písm. l) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 34 ) Čl. I bod 2 Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 35 ) Zákon č. 222/1994 Sb.\n- 36 ) Zákon ČNR č. 185/1991 Sb., o pojišťovnictví, ve znění pozdějších předpisů.",
+      "raw_content": "- 31 ) Čl. I bod 1 písm. c) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 32 ) Čl. I bod 1 písm. k) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 33 ) Čl. I bod 1 písm. l) Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 34 ) Čl. I bod 2 Vídeňské úmluvy o občanskoprávní odpovědnosti za jaderné škody.\n- 35 ) Zákon č. 222/1994 Sb.\n- 36 ) Zákon ČNR č. 185/1991 Sb., o pojišťovnictví, ve znění pozdějších předpisů.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_2",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_25",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_25",
+        "page_number": 5,
+        "char_start": 8109,
+        "char_end": 9868,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    },
+    {
+      "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_3",
+      "content": "This chunk contains references to various Czech laws related to population registration, citizenship, and European treaties, which are relevant to the broader context of liability and insurance for nuclear operators under Czech law. It follows the preceding legal references and contributes to the final provisions of the section addressing civil liability for nuclear damages.\n\n- 38a ) Zákon č. 133/2000 Sb., o evidenci obyvatel a rodných číslech a o změně některých zákonů (zákon o evidenci obyvatel), ve znění pozdějších předpisů.\n- 38b ) § 1 zákona č. 133/2000 Sb., ve znění zákona č. 53/2004 Sb.\n- 38c ) Zákon č. 40/1993 Sb., o nabývání a pozbývání státního občanství České republiky, ve znění pozdějších předpisů.\n- 42 ) Čl. 81 Smlouvy o založení Evropského společenství pro atomovou energii.",
+      "raw_content": "- 38a ) Zákon č. 133/2000 Sb., o evidenci obyvatel a rodných číslech a o změně některých zákonů (zákon o evidenci obyvatel), ve znění pozdějších předpisů.\n- 38b ) § 1 zákona č. 133/2000 Sb., ve znění zákona č. 53/2004 Sb.\n- 38c ) Zákon č. 40/1993 Sb., o nabývání a pozbývání státního občanství České republiky, ve znění pozdějších předpisů.\n- 42 ) Čl. 81 Smlouvy o založení Evropského společenství pro atomovou energii.",
+      "metadata": {
+        "chunk_id": "Sb_1997_18_2017-01-01_IZ_L3_sec_25_chunk_3",
+        "layer": 3,
+        "document_id": "Sb_1997_18_2017-01-01_IZ",
+        "title": null,
+        "section_id": "sec_25",
+        "parent_chunk_id": "Sb_1997_18_2017-01-01_IZ_L2_sec_25",
+        "page_number": 5,
+        "char_start": 8109,
+        "char_end": 9868,
+        "section_title": "Závěrečná ustanovení",
+        "section_path": "HLAVA PÁTÁ OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY > ČÁST V USTANOVENÍ SPOLEČNÁ, PŘECHODNÁ A ZÁVĚREČNÁ > Závěrečná ustanovení",
+        "section_level": 3,
+        "section_depth": 3
+      }
+    }
+  ]
+}
