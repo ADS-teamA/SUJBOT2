@@ -5,6 +5,7 @@ Provides incremental deduplication during entity insertion into Neo4j.
 Uses APOC procedures when available, falls back to pure Cypher.
 """
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -245,11 +246,7 @@ class Neo4jDeduplicator:
               e.source_chunk_ids = apoc.coll.union(e.source_chunk_ids, entity.source_chunk_ids),
               e.confidence = CASE WHEN entity.confidence > e.confidence THEN entity.confidence ELSE e.confidence END,
               e.merged_from = apoc.coll.union(e.merged_from, [entity.id]),
-              e.metadata = CASE
-                WHEN entity.metadata IS NOT NULL
-                THEN apoc.map.merge(coalesce(e.metadata, {}), entity.metadata)
-                ELSE e.metadata
-              END,
+              e.metadata = entity.metadata,
               e.updated_at = datetime(),
               e._is_new = false
             RETURN
@@ -331,20 +328,9 @@ class Neo4jDeduplicator:
                 CASE WHEN chunk IN acc THEN acc ELSE acc + [chunk] END),
               e.confidence = CASE WHEN entity.confidence > e.confidence THEN entity.confidence ELSE e.confidence END,
               e.merged_from = CASE WHEN NOT entity.id IN e.merged_from THEN e.merged_from + [entity.id] ELSE e.merged_from END,
-              e.metadata = CASE
-                WHEN entity.metadata IS NOT NULL AND e.metadata IS NOT NULL
-                THEN entity.metadata
-                WHEN entity.metadata IS NOT NULL
-                THEN entity.metadata
-                ELSE e.metadata
-              END,
+              e.metadata = entity.metadata,
               e.updated_at = datetime(),
-              e._is_new = false,
-              e._metadata_merge_warning = CASE
-                WHEN entity.metadata IS NOT NULL AND e.metadata IS NOT NULL
-                THEN "Pure Cypher mode: metadata replaced, not merged. Use APOC for full metadata merging."
-                ELSE null
-              END
+              e._is_new = false
             RETURN
               SUM(CASE WHEN e._is_new THEN 1 ELSE 0 END) as created_count,
               SUM(CASE WHEN NOT e._is_new THEN 1 ELSE 0 END) as merged_count
@@ -363,12 +349,19 @@ class Neo4jDeduplicator:
         """
         Convert Entity to dict for Neo4j.
 
+        Neo4j only supports primitive types and arrays of primitives.
+        Complex metadata is serialized to JSON string.
+
         Args:
             entity: Entity object
 
         Returns:
-            Dict with all entity properties
+            Dict with all entity properties (metadata serialized to JSON string)
         """
+        # Serialize metadata to JSON string for Neo4j compatibility
+        # Neo4j doesn't support nested objects/maps as property values
+        metadata_json = json.dumps(entity.metadata or {}) if entity.metadata else "{}"
+
         return {
             "id": entity.id,
             "type": entity.type.value,
@@ -380,7 +373,7 @@ class Neo4jDeduplicator:
             "document_id": entity.document_id,
             "section_path": entity.section_path,
             "extraction_method": entity.extraction_method,
-            "metadata": entity.metadata or {},
+            "metadata": metadata_json,  # Serialized as JSON string
         }
 
     def _check_apoc(self) -> bool:

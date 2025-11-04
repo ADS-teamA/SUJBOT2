@@ -234,9 +234,21 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
         if merge_target:
             merge_target = Path(merge_target)
 
-            if not merge_target.exists():
+            # Try to load existing vector store, or initialize new one if empty/corrupt
+            from src.hybrid_search import HybridVectorStore
+            from src.faiss_vector_store import FAISSVectorStore
+
+            # Check if we can load existing store
+            can_load_existing = False
+            if merge_target.exists():
+                # Check if directory has required vector store files
+                required_files = ["faiss_metadata.json"]  # Minimal file check
+                can_load_existing = all((merge_target / f).exists() for f in required_files)
+
+            if not can_load_existing:
+                # Initialize new vector store (directory doesn't exist or is empty/incomplete)
                 print()
-                print_info(f"Creating new vector store at: {merge_target}")
+                print_info(f"Initializing new vector store at: {merge_target}")
                 merge_target.mkdir(parents=True, exist_ok=True)
                 # Copy new store to merge target
                 for item in vs_path.iterdir():
@@ -246,15 +258,12 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                         shutil.copytree(item, merge_target / item.name, dirs_exist_ok=True)
                 print_success(f"Initialized vector store at: {merge_target}")
             else:
+                # Load and merge with existing store
                 print()
                 print_header("MERGING WITH EXISTING VECTOR STORE")
                 print_info(f"Target: {merge_target}")
 
                 try:
-                    # Load existing vector store
-                    from src.hybrid_search import HybridVectorStore
-                    from src.faiss_vector_store import FAISSVectorStore
-
                     print_info("Loading existing vector store...")
                     existing_store = HybridVectorStore.load(merge_target)
                     existing_stats_before = existing_store.get_stats()
