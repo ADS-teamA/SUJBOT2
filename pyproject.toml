@@ -13,6 +13,9 @@ dependencies = [
     "pypdf2>=3.0.0",
     "pymupdf>=1.23.0",  # Advanced PDF processing (duplicate detection, text extraction)
 
+    # Unstructured.io - Multi-format document extraction (PDF, DOCX, PPTX, HTML, TXT, LaTeX)
+    "unstructured[all-docs]>=0.10.0",  # All format support (including detectron2 for PDF)
+
     # IBM Docling - Advanced document structure extraction
     "docling>=2.57.0",
     "docling-core>=2.48.0",

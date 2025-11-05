@@ -15,8 +15,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from config import ExtractionConfig
-from docling_extractor_v2 import DoclingExtractorV2
+from unstructured_extractor import UnstructuredExtractor, ExtractionConfig
 
 
 def test_phase1_only(pdf_path: Path, output_dir: Path):
@@ -28,12 +27,13 @@ def test_phase1_only(pdf_path: Path, output_dir: Path):
     print()
 
     config = ExtractionConfig(
-        enable_smart_hierarchy=True,
+        strategy="hi_res",  # Use hi_res strategy for accuracy
+        model="detectron2_mask_rcnn",  # Most accurate model
         generate_summaries=False,  # Disable PHASE 2
         extract_tables=True,
     )
 
-    extractor = DoclingExtractorV2(config)
+    extractor = UnstructuredExtractor(config)
 
     print(f"Extracting: {pdf_path.name}")
     result = extractor.extract(pdf_path)
@@ -75,7 +75,8 @@ def test_phase1_phase2(pdf_path: Path, output_dir: Path):
     print()
 
     config = ExtractionConfig(
-        enable_smart_hierarchy=True,
+        strategy="hi_res",  # Use hi_res strategy for accuracy
+        model="detectron2_mask_rcnn",  # Most accurate model
         generate_summaries=True,  # Enable PHASE 2
         summary_model="gpt-4o-mini",
         summary_max_chars=150,
@@ -85,7 +86,7 @@ def test_phase1_phase2(pdf_path: Path, output_dir: Path):
 
     # NOTE: Requires OPENAI_API_KEY environment variable
     try:
-        extractor = DoclingExtractorV2(config)
+        extractor = UnstructuredExtractor(config)
     except ValueError as e:
         print(f"⚠️  Skipping PHASE 2 test: {e}")
         print("   Set OPENAI_API_KEY environment variable to enable summary generation")

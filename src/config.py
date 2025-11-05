@@ -474,11 +474,15 @@ class ContextGenerationConfig:
 
 @dataclass
 class ChunkingConfig:
-    """Configuration for chunking (PHASE 3)."""
+    """
+    Configuration for token-aware chunking (PHASE 3).
 
-    method: str = "RecursiveCharacterTextSplitter"
-    chunk_size: int = 500
-    chunk_overlap: int = 0
+    BREAKING CHANGE: Uses HybridChunker with token limits (not character limits).
+    """
+
+    # Token-aware chunking (IMMUTABLE - research-backed)
+    max_tokens: int = 512  # ≈ 500 chars for CS/EN text (LegalBench-RAG equivalent)
+    tokenizer_model: str = "text-embedding-3-large"  # Must match EMBEDDING_MODEL
 
     # Chunking strategy
     enable_contextual: bool = True  # Contextual Retrieval (RECOMMENDED)
@@ -487,13 +491,40 @@ class ChunkingConfig:
     # Context generation config
     context_config: Optional["ContextGenerationConfig"] = None
 
-    separators: List[str] = field(default_factory=lambda: ["\n\n", "\n", ". ", "; ", ", ", " ", ""])
+    # DEPRECATED: Maintained for backward compatibility (ignored by HybridChunker)
+    chunk_size: Optional[int] = None  # DEPRECATED: Use max_tokens instead
+    chunk_overlap: Optional[int] = None  # DEPRECATED: Ignored (hierarchical chunking handles naturally)
+    method: Optional[str] = None  # DEPRECATED: Ignored (uses HybridChunker)
+    separators: Optional[List[str]] = None  # DEPRECATED: Ignored (uses document hierarchy)
 
     def __post_init__(self):
-        """Initialize context_config if not provided."""
+        """Initialize context_config and warn about deprecated parameters."""
         if self.context_config is None and self.enable_contextual:
             # Default to standard config if not loading from environment
             self.context_config = ContextGenerationConfig()
+
+        # Warn about deprecated parameters
+        if self.chunk_size is not None:
+            logger.warning(
+                f"chunk_size={self.chunk_size} is DEPRECATED. "
+                f"Now using max_tokens={self.max_tokens} instead. "
+                "Update your .env to use MAX_TOKENS for token-aware chunking."
+            )
+        if self.chunk_overlap is not None:
+            logger.warning(
+                f"chunk_overlap={self.chunk_overlap} is DEPRECATED and IGNORED. "
+                "Hierarchical chunking (HybridChunker) naturally handles overlap via document structure."
+            )
+        if self.method is not None:
+            logger.warning(
+                f"method='{self.method}' is DEPRECATED and IGNORED. "
+                "Now using HybridChunker exclusively for token-aware hierarchical chunking."
+            )
+        if self.separators is not None:
+            logger.warning(
+                "separators parameter is DEPRECATED and IGNORED. "
+                "HybridChunker uses document hierarchy instead of text separators."
+            )
 
     @classmethod
     def from_env(cls) -> "ChunkingConfig":
@@ -501,9 +532,10 @@ class ChunkingConfig:
         Load configuration from environment variables.
 
         Environment Variables:
-            CHUNK_SIZE: Chunk size in characters (default: 500)
+            MAX_TOKENS: Max tokens per chunk (default: 512)
+            TOKENIZER_MODEL: Tokenizer model name (default: "text-embedding-3-large")
             ENABLE_SAC: Enable Summary-Augmented Chunking (default: "true")
-            SPEED_MODE: "fast" or "eco" (affects context generation - passed to ContextGenerationConfig)
+            SPEED_MODE: "fast" or "eco" (affects context generation)
 
         Returns:
             ChunkingConfig instance loaded from environment
@@ -516,7 +548,8 @@ class ChunkingConfig:
             context_config = ContextGenerationConfig.from_env()
 
         return cls(
-            chunk_size=int(os.getenv("CHUNK_SIZE", "500")),
+            max_tokens=int(os.getenv("MAX_TOKENS", "512")),
+            tokenizer_model=os.getenv("TOKENIZER_MODEL", "text-embedding-3-large"),
             enable_contextual=enable_contextual,
             context_config=context_config,
         )

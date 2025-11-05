@@ -39,7 +39,7 @@ class PhaseLoaders:
             Returns minimal object - enough for phase detection.
             Full content not needed since we skip to later phases.
         """
-        from src.docling_extractor_v2 import ExtractedDocument, DocumentSection
+        from src.unstructured_extractor import ExtractedDocument, DocumentSection
 
         logger.info(f"Loading Phase 1 from {json_path}")
 

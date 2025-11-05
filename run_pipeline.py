@@ -81,7 +81,7 @@ def get_supported_documents(directory: Path) -> list:
     Returns:
         List of document paths
     """
-    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm"]
+    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".txt", ".tex", ".latex"]
     documents = []
 
     for ext in supported_formats:
@@ -161,7 +161,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
     document_path = Path(document_path)
 
     # Validate format
-    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm"]
+    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".txt", ".tex", ".latex"]
     if document_path.suffix.lower() not in supported_formats:
         print(f"✗ Error: Unsupported format: {document_path.suffix}")
         print(f"  Supported formats: {', '.join(supported_formats)}")
@@ -187,7 +187,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
     # Print active configuration
     print_info(f"LLM Model: {config.summarization_config.model}")
     print_info(f"Embedding Model: {config.embedding_config.model}")
-    print_info(f"Chunk Size: {config.chunking_config.chunk_size} chars")
+    print_info(f"Max Tokens: {config.chunking_config.max_tokens} tokens (HybridChunker)")
     print_info(f"SAC (Contextual Retrieval): {'ON' if config.chunking_config.enable_contextual else 'OFF'}")
     print_info(f"Hybrid Search (BM25+Dense): {'ON ✅' if config.enable_hybrid_search else 'OFF'}")
     print_info(f"Knowledge Graph: {'ON ✅' if config.enable_knowledge_graph else 'OFF'}")
