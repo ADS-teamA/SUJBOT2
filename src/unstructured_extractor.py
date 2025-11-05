@@ -1070,9 +1070,25 @@ class UnstructuredExtractor:
             text = str(elem)
 
             # Extract title from element
-            if feat["type_name"] in ["Document Title", "Major Heading", "Paragraph", "Title"]:
+            # Use element category directly - more reliable than type_name
+            elem_category = elem.category if hasattr(elem, 'category') else None
+
+            if elem_category in ["Title", "ListItem"]:
+                # Title or ListItem - use as section title
+                title = text.strip()
+            elif elem_category == "UncategorizedText" and (
+                # Check if it looks like a structural heading
+                re.match(r'^§\s*\d+', text) or  # § paragraph
+                re.match(r'^(ČÁST|HLAVA|ČLÁNEK|CHAPTER|ARTICLE)\s+[IVX\d]+', text, re.IGNORECASE) or  # Major heading
+                re.match(r'^\(\d+\)', text)  # Subsection (1), (2), etc.
+            ):
+                # UncategorizedText that looks structural - use as title
+                title = text.strip()
+            elif feat["type_name"] in ["Document Title", "Major Heading", "Paragraph"]:
+                # Fallback: check type_name for custom-detected types
                 title = text.strip()
             else:
+                # NarrativeText and other content - no title, only content
                 title = ""
 
             # Find parent
