@@ -491,13 +491,40 @@ class ChunkingConfig:
     # Context generation config
     context_config: Optional["ContextGenerationConfig"] = None
 
-    # REMOVED: chunk_size, chunk_overlap, method, separators (deprecated by HybridChunker)
+    # DEPRECATED: Maintained for backward compatibility (ignored by HybridChunker)
+    chunk_size: Optional[int] = None  # DEPRECATED: Use max_tokens instead
+    chunk_overlap: Optional[int] = None  # DEPRECATED: Ignored (hierarchical chunking handles naturally)
+    method: Optional[str] = None  # DEPRECATED: Ignored (uses HybridChunker)
+    separators: Optional[List[str]] = None  # DEPRECATED: Ignored (uses document hierarchy)
 
     def __post_init__(self):
-        """Initialize context_config if not provided."""
+        """Initialize context_config and warn about deprecated parameters."""
         if self.context_config is None and self.enable_contextual:
             # Default to standard config if not loading from environment
             self.context_config = ContextGenerationConfig()
+
+        # Warn about deprecated parameters
+        if self.chunk_size is not None:
+            logger.warning(
+                f"chunk_size={self.chunk_size} is DEPRECATED. "
+                f"Now using max_tokens={self.max_tokens} instead. "
+                "Update your .env to use MAX_TOKENS for token-aware chunking."
+            )
+        if self.chunk_overlap is not None:
+            logger.warning(
+                f"chunk_overlap={self.chunk_overlap} is DEPRECATED and IGNORED. "
+                "Hierarchical chunking (HybridChunker) naturally handles overlap via document structure."
+            )
+        if self.method is not None:
+            logger.warning(
+                f"method='{self.method}' is DEPRECATED and IGNORED. "
+                "Now using HybridChunker exclusively for token-aware hierarchical chunking."
+            )
+        if self.separators is not None:
+            logger.warning(
+                "separators parameter is DEPRECATED and IGNORED. "
+                "HybridChunker uses document hierarchy instead of text separators."
+            )
 
     @classmethod
     def from_env(cls) -> "ChunkingConfig":

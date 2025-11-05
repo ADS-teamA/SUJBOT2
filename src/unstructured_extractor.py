@@ -1,28 +1,46 @@
 """
 PHASE 1: Document Extraction using Unstructured.io
 
-Multi-format document extraction with Unstructured.io.
+Multi-format document extraction replacing Docling (v1.x → v2.x).
 
-Supported Formats:
-- PDF (.pdf) - detectron2 backend (most accurate hi_res model)
-- PowerPoint (.pptx, .ppt) - presentation structure and text
-- Word (.docx, .doc) - document structure and formatting
-- HTML (.html, .htm) - web content with semantic structure
+Supported Formats (tested):
+- PDF (.pdf) - detectron2_mask_rcnn (Mask R-CNN X_101_32x8d_FPN_3x - most accurate)
+- PowerPoint (.pptx, .ppt) - presentation structure and speaker notes
+- Word (.docx, .doc) - document structure and track changes
+- HTML (.html, .htm) - web content with semantic tags
 - Plain text (.txt) - basic text files
-- LaTeX (.tex, .latex) - scientific documents
+- LaTeX (.tex, .latex) - scientific documents with math
+
+Additional formats supported via partition_auto() fallback - see Unstructured.io docs.
+
+Migration from Docling:
+- Reason: Improved § paragraph detection in legal documents (10/10 vs 0/10 on test doc Sb_1997_18)
+- Breaking changes: Configuration env vars, data structure fields extended
+- See README.md "Migration Guide" for upgrade instructions
 
 Features:
-- Format auto-detection based on file extension
-- Per-element language detection
-- Bbox orientation analysis for rotated text filtering (PDF)
-- Generic hierarchy detection (not language-specific)
-- Backward compatible with existing pipeline
-- Fallback to universal partitioner for unsupported formats
+- Explicit hierarchy via parent_id relationships (not font-size inference)
+- Rotated text filtering (25-65° diagonal watermarks)
+- Per-element language detection (Czech/English)
+- Fallback to universal partitioner for unknown formats
+- PHASE 2: Hierarchical document summary from section summaries
 
-Based on research:
-- Unstructured.io: 100% § paragraph detection (vs 0% Docling)
-- Parent ID relationships for explicit hierarchy
-- Element categorization (Title, ListItem, NarrativeText)
+Architecture:
+- Element types: Title, ListItem, NarrativeText, Table, Header, Footer
+- Hierarchy detection: parent_id chains + page break continuity
+- Table detection: ✅ Tables found, ⚠️ Cell structure not yet parsed (TODO)
+
+Known Limitations:
+- Tables: Detected but cell data not parsed (num_rows=0, data=[])
+- Deep nesting: >10 levels may indicate detection errors
+- Czech-specific: Legal keywords ("ZÁKON", "§") hardcoded in type scoring
+- Memory: Large PDFs (>100 pages) may require >4GB RAM
+- Paragraph detection: 100% on test document (Sb_1997_18), not validated on larger corpus yet
+
+See Also:
+- .env.example: Configuration options and defaults
+- CLAUDE.md: Integration with 7-phase pipeline
+- tests/test_unstructured_*.py: Test suite for extraction validation
 """
 
 import logging
@@ -57,16 +75,20 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# DATA STRUCTURES (Backward Compatible with Docling)
+# DATA STRUCTURES (Previously compatible with Docling, now standalone)
 # ============================================================================
 
 
 @dataclass
 class DocumentSection:
     """
-    Hierarchical document section.
+    Hierarchical document section for multi-layer chunking.
 
-    Backward compatible with Docling's DocumentSection.
+    Data structure used throughout the indexing pipeline (Phases 1-7).
+    Designed for compatibility with downstream chunking and embedding tools.
+
+    Previously used with Docling (v1.x), now populated by Unstructured.io (v2.x).
+    Field structure remains stable to preserve existing vector stores and tests.
     """
 
     section_id: str
@@ -146,7 +168,10 @@ class ExtractedDocument:
     """
     Complete extracted document with hierarchical sections.
 
-    Backward compatible with Docling's ExtractedDocument.
+    Output of PHASE 1+2: Document extraction and summary generation.
+    Used as input for PHASE 3 (multi-layer chunking) and downstream pipeline.
+
+    Previously populated by Docling (v1.x), now by Unstructured.io (v2.x).
     """
 
     # Identification
@@ -249,42 +274,82 @@ class ExtractionConfig:
     generate_markdown: bool = True
     generate_json: bool = True
 
+    # PHASE 2: Summary generation
+    generate_summaries: bool = False
+    summary_model: str = "gpt-4o-mini"
+    summary_max_chars: int = 150
+    summary_style: str = "generic"
+    extract_tables: bool = True
+
     @classmethod
     def from_env(cls) -> "ExtractionConfig":
-        """Load configuration from environment variables."""
+        """Load configuration from environment variables with validation."""
         import os
+
+        def get_float_env(key: str, default: float) -> float:
+            """Get float from env with validation."""
+            try:
+                value = os.getenv(key)
+                return float(value) if value else default
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid environment variable {key}='{value}': must be a number. "
+                    f"Example: {key}={default}"
+                ) from e
+
+        def get_int_env(key: str, default: int) -> int:
+            """Get int from env with validation."""
+            try:
+                value = os.getenv(key)
+                return int(value) if value else default
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid environment variable {key}='{value}': must be an integer. "
+                    f"Example: {key}={default}"
+                ) from e
+
+        def get_bool_env(key: str, default: bool) -> bool:
+            """Get bool from env with validation."""
+            value = os.getenv(key, str(default)).lower()
+            if value not in {"true", "false"}:
+                raise ValueError(
+                    f"Invalid environment variable {key}='{value}': must be 'true' or 'false'"
+                )
+            return value == "true"
+
+        # Load and validate config values
+        min_angle = get_float_env("ROTATION_MIN_ANGLE", 25.0)
+        max_angle = get_float_env("ROTATION_MAX_ANGLE", 65.0)
+
+        # Validate relationships
+        if min_angle >= max_angle:
+            raise ValueError(
+                f"ROTATION_MIN_ANGLE ({min_angle}) must be < ROTATION_MAX_ANGLE ({max_angle})"
+            )
+        if min_angle < 0 or max_angle > 90:
+            raise ValueError(
+                f"Rotation angles must be in range [0, 90]. Got min={min_angle}, max={max_angle}"
+            )
 
         return cls(
             strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
             model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),
             languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),
-            detect_language_per_element=os.getenv(
-                "UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT", "true"
-            ).lower() == "true",
-            infer_table_structure=os.getenv(
-                "UNSTRUCTURED_INFER_TABLE_STRUCTURE", "true"
-            ).lower() == "true",
-            extract_images=os.getenv(
-                "UNSTRUCTURED_EXTRACT_IMAGES", "false"
-            ).lower() == "true",
-            filter_rotated_text=os.getenv(
-                "FILTER_ROTATED_TEXT", "true"
-            ).lower() == "true",
+            detect_language_per_element=get_bool_env("UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT", True),
+            infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", True),
+            extract_images=get_bool_env("UNSTRUCTURED_EXTRACT_IMAGES", False),
+            filter_rotated_text=get_bool_env("FILTER_ROTATED_TEXT", True),
             rotation_method=os.getenv("ROTATION_METHOD", "bbox_orientation"),
-            rotation_min_angle=float(os.getenv("ROTATION_MIN_ANGLE", "25.0")),
-            rotation_max_angle=float(os.getenv("ROTATION_MAX_ANGLE", "65.0")),
-            enable_generic_hierarchy=os.getenv(
-                "ENABLE_GENERIC_HIERARCHY", "true"
-            ).lower() == "true",
+            rotation_min_angle=min_angle,
+            rotation_max_angle=max_angle,
+            enable_generic_hierarchy=get_bool_env("ENABLE_GENERIC_HIERARCHY", True),
             hierarchy_signals=os.getenv(
                 "HIERARCHY_SIGNALS", "type,font_size,spacing,numbering,parent_id"
             ).split(","),
-            hierarchy_clustering_eps=float(os.getenv("HIERARCHY_CLUSTERING_EPS", "0.15")),
-            hierarchy_clustering_min_samples=int(
-                os.getenv("HIERARCHY_CLUSTERING_MIN_SAMPLES", "2")
-            ),
-            generate_markdown=os.getenv("GENERATE_MARKDOWN", "true").lower() == "true",
-            generate_json=os.getenv("GENERATE_JSON", "true").lower() == "true",
+            hierarchy_clustering_eps=get_float_env("HIERARCHY_CLUSTERING_EPS", 0.15),
+            hierarchy_clustering_min_samples=get_int_env("HIERARCHY_CLUSTERING_MIN_SAMPLES", 2),
+            generate_markdown=get_bool_env("GENERATE_MARKDOWN", True),
+            generate_json=get_bool_env("GENERATE_JSON", True),
         )
 
 
@@ -681,13 +746,28 @@ class UnstructuredExtractor:
         # Extract with Unstructured
         elements = self._partition_document(file_path)
 
-        # Filter rotated text
+        # Filter rotated text (watermark removal)
         if self.config.filter_rotated_text:
+            before_count = len(elements)
             elements = filter_rotated_elements(
                 elements,
                 self.config.rotation_min_angle,
                 self.config.rotation_max_angle
             )
+            after_count = len(elements)
+            removed = before_count - after_count
+
+            if removed == 0:
+                logger.warning(
+                    f"Rotated text filtering enabled but removed 0/{before_count} elements. "
+                    f"Document may not have bbox metadata or all text is horizontal/vertical. "
+                    f"Rotation thresholds: [{self.config.rotation_min_angle}°, {self.config.rotation_max_angle}°]"
+                )
+            else:
+                logger.info(
+                    f"Filtered {removed}/{before_count} rotated text elements "
+                    f"(angle range: [{self.config.rotation_min_angle}°, {self.config.rotation_max_angle}°])"
+                )
 
         # Detect hierarchy
         if self.config.enable_generic_hierarchy:
@@ -709,6 +789,50 @@ class UnstructuredExtractor:
 
         # Extract tables
         tables = self._extract_tables(elements)
+
+        # PHASE 2: Generate summaries (hierarchical document summary from section summaries)
+        if self.config.generate_summaries:
+            from summary_generator import SummaryGenerator
+            from config import SummarizationConfig
+
+            # Create summarization config
+            summary_config = SummarizationConfig(
+                model=self.config.summary_model,
+                max_chars=self.config.summary_max_chars,
+                style=self.config.summary_style,
+            )
+
+            summary_gen = SummaryGenerator(config=summary_config)
+
+            # Generate section summaries
+            section_summaries = []
+            for section in sections:
+                if section.content and len(section.content.strip()) > 50:  # Min length threshold
+                    try:
+                        section.summary = summary_gen.generate_section_summary(
+                            section.content, section.title or ""
+                        )
+                        section_summaries.append(section.summary)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to generate summary for section '{section.title}': {e}"
+                        )
+                        section.summary = None
+
+            # Generate hierarchical document summary from section summaries (NOT full text)
+            # This follows CLAUDE.md constraint: "ALWAYS generate from section summaries"
+            if section_summaries:
+                try:
+                    document_summary = summary_gen.generate_document_summary(
+                        section_summaries=section_summaries
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to generate document summary: {e}")
+                    document_summary = "(Document summary unavailable)"
+            else:
+                document_summary = "(No section summaries available)"
+        else:
+            document_summary = None
 
         # Generate outputs
         full_text = "\n\n".join(str(elem) for elem in elements if hasattr(elem, '__str__'))
@@ -735,6 +859,7 @@ class UnstructuredExtractor:
             num_tables=len(tables),
             total_chars=len(full_text),
             title=self._extract_title(sections),
+            document_summary=document_summary,  # PHASE 2: Hierarchical summary
             extraction_method=f"unstructured_{self.config.model}",
             config=self.config.__dict__,
         )
@@ -886,16 +1011,44 @@ class UnstructuredExtractor:
             logger.info(f"Partitioned {file_suffix} document into {len(elements)} elements")
             return elements
 
-        except Exception as e:
-            logger.error(f"Failed to partition {file_suffix} document: {e}")
-            logger.info("Attempting fallback with universal partitioner")
+        except FileNotFoundError as e:
+            # User-fixable error - fail fast with clear message
+            raise RuntimeError(
+                f"Cannot access file {file_path}: file not found. "
+                "Check the file path is correct."
+            ) from e
+
+        except PermissionError as e:
+            # User-fixable error - fail fast with clear message
+            raise RuntimeError(
+                f"Cannot access file {file_path}: permission denied. "
+                "Check you have read permissions for this file."
+            ) from e
+
+        except (ImportError, RuntimeError) as e:
+            # Expected errors - fallback to universal partitioner
+            logger.warning(f"Format-specific partition failed: {e}")
+            logger.info("Attempting fallback with universal partitioner (may have lower quality)")
             try:
                 elements = partition(filename=str(file_path))
                 logger.info(f"Fallback successful: {len(elements)} elements extracted")
+                logger.warning(
+                    "Used universal partitioner fallback. Results may have degraded quality "
+                    "(e.g., no hierarchy detection, simplified text extraction). "
+                    f"Consider fixing the error: {e}"
+                )
                 return elements
             except Exception as fallback_error:
                 logger.error(f"Fallback also failed: {fallback_error}")
-                raise RuntimeError(f"Could not partition document {file_path.name}: {fallback_error}") from fallback_error
+                raise RuntimeError(
+                    f"Could not partition document {file_path.name}. "
+                    f"Format-specific error: {e}. Fallback error: {fallback_error}"
+                ) from fallback_error
+
+        except Exception as e:
+            # Unexpected error - log and re-raise
+            logger.error(f"Unexpected error during partition: {e}", exc_info=True)
+            raise
 
     def _partition_pdf(self, pdf_path: Path) -> List[Element]:
         """

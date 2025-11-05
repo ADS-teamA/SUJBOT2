@@ -144,8 +144,9 @@ class SummaryGenerator:
         # Mode 2: Direct summarization (FALLBACK)
         if document_text:
             logger.warning("Using direct summarization (limited to first 5000 chars)")
-            # Truncate to first 5000 chars for efficiency
-            text_preview = document_text[:30000]
+            # Truncate to first 5000 chars to comply with CLAUDE.md constraint
+            # NEVER pass full document text to LLM (violates hierarchical summary constraint)
+            text_preview = document_text[:5000]
 
             prompt = f"""You are an expert document summarizer.
 

@@ -106,9 +106,9 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 - `src/config.py` - Shared configs
 
 **7 Phases:**
-1. `src/docling_extractor_v2.py` - Hierarchy extraction (Layout model: **HERON** - 78% mAP, +23.9% improvement)
-2. `src/summary_generator.py` - Document summaries
-3. `src/multi_layer_chunker.py` - Chunking + SAC + section summaries
+1. `src/unstructured_extractor.py` - Multi-format extraction with Unstructured.io (Layout model: **detectron2_mask_rcnn** - Mask R-CNN X_101_32x8d_FPN_3x, most accurate)
+2. `src/summary_generator.py` - Document summaries (hierarchical from section summaries)
+3. `src/multi_layer_chunker.py` - Token-aware chunking + SAC + section summaries
 4. `src/embedding_generator.py`, `src/faiss_vector_store.py` - Embeddings + FAISS
 5. `src/hybrid_search.py`, `src/graph/`, `src/reranker.py` - Advanced retrieval
 6. `src/context_assembly.py` - Context prep
