@@ -22,9 +22,7 @@ import logging
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
-# Import HybridChunker and tokenizer (PHASE 3 modernization)
-from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
-from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
+# Token-aware chunking (no Docling dependency)
 import tiktoken
 
 # Import contextual retrieval
@@ -322,120 +320,128 @@ class MultiLayerChunker:
 
         return chunks
 
-    def _create_hybrid_chunker(self) -> HybridChunker:
+    def _token_aware_split(self, text: str, max_tokens: int = 512) -> List[str]:
         """
-        Create HybridChunker with OpenAI tokenizer (tiktoken).
+        Split text into token-aware chunks using tiktoken directly.
 
         Uses max_tokens=512 (≈ 500 chars for CS/EN text).
         Preserves LegalBench-RAG research constraint.
 
+        Args:
+            text: Text to split
+            max_tokens: Maximum tokens per chunk (default: 512)
+
         Returns:
-            HybridChunker with tiktoken tokenizer
+            List of text chunks, each <= max_tokens
         """
-        encoding = tiktoken.encoding_for_model("text-embedding-3-large")
-        tokenizer = OpenAITokenizer(
-            tokenizer=encoding,
-            max_tokens=512,  # Research-compatible limit (≈ 500 chars)
-        )
-        return HybridChunker(tokenizer=tokenizer)
+        if not text.strip():
+            return []
 
-    def _create_layer3_hybrid(self, extracted_doc) -> List[Chunk]:
+        # Get tiktoken encoding
+        encoding = tiktoken.encoding_for_model(self.config.tokenizer_model)
+
+        # Encode text to tokens
+        tokens = encoding.encode(text)
+
+        # Split into chunks of max_tokens
+        chunks = []
+        for i in range(0, len(tokens), max_tokens):
+            chunk_tokens = tokens[i:i + max_tokens]
+            chunk_text = encoding.decode(chunk_tokens)
+            chunks.append(chunk_text)
+
+        return chunks
+
+    def _create_layer3_token_aware(self, extracted_doc) -> List[Chunk]:
         """
-        Layer 3: Token-aware chunking with HybridChunker.
+        Layer 3: Token-aware chunking using tiktoken directly.
 
-        Replaces RCTS character-based chunking.
+        Replaces HybridChunker (Docling dependency).
         Guarantees chunks fit within embedding model token limits.
 
         Args:
-            extracted_doc: ExtractedDocument with docling_doc field
+            extracted_doc: ExtractedDocument from UnstructuredExtractor
 
         Returns:
             List of Chunk objects with token-aware boundaries
         """
         chunks = []
-        hybrid_chunker = self._create_hybrid_chunker()
-
-        # Get DoclingDocument from PHASE 1
-        docling_doc = extracted_doc.docling_doc
-        if not docling_doc:
-            raise ValueError(
-                "docling_doc missing from ExtractedDocument. "
-                "Update DoclingExtractorV2 to preserve docling_doc field."
-            )
-
-        # Generate hybrid chunks
-        hybrid_chunks = list(hybrid_chunker.chunk(docling_doc))
-        logger.info(f"HybridChunker: {len(hybrid_chunks)} token-aware chunks generated")
-
-        # Convert to Chunk objects
         chunk_counter = 0
-        for hybrid_chunk in hybrid_chunks:
-            chunk_counter += 1
 
-            # Extract hierarchy metadata
-            headings = hybrid_chunk.meta.headings or []
-            section_title = headings[-1] if headings else "Untitled"
-            section_path = " > ".join(headings) if headings else section_title
+        # Iterate through sections and split into token-aware chunks
+        for section in extracted_doc.sections:
+            # Skip empty sections
+            if not section.content.strip():
+                continue
 
-            # Find corresponding DocumentSection
-            section = next(
-                (s for s in extracted_doc.sections if s.title == section_title),
-                None
+            # Split section content into token-aware chunks
+            section_chunks = self._token_aware_split(
+                section.content,
+                max_tokens=self.config.max_tokens
             )
 
-            # Create Chunk
-            raw_content = hybrid_chunk.text
-            chunk_id = f"{extracted_doc.document_id}_L3_{chunk_counter}"
+            if not section_chunks:
+                continue
 
-            chunk = Chunk(
-                chunk_id=chunk_id,
-                content=raw_content,  # Will be augmented with context if enabled
-                raw_content=raw_content,
-                metadata=ChunkMetadata(
+            # Create Chunk objects for each split
+            for chunk_idx, chunk_text in enumerate(section_chunks):
+                chunk_counter += 1
+                chunk_id = f"{extracted_doc.document_id}_L3_{chunk_counter}"
+
+                # Calculate character positions within section
+                # This is approximate since we're working with token boundaries
+                char_start = section.char_start
+                char_end = section.char_start + len(chunk_text)
+
+                chunk = Chunk(
                     chunk_id=chunk_id,
-                    layer=3,
-                    document_id=extracted_doc.document_id,
-                    section_id=section.section_id if section else None,
-                    parent_chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}" if section else None,
-                    page_number=section.page_number if section else 0,
-                    char_start=section.char_start if section else 0,
-                    char_end=section.char_end if section else len(raw_content),
-                    section_title=section_title,
-                    section_path=section_path,
-                    section_level=section.level if section else 1,
-                    section_depth=section.depth if section else 1,
-                ),
-            )
-            chunks.append(chunk)
+                    content=chunk_text,  # Will be augmented with context if enabled
+                    raw_content=chunk_text,
+                    metadata=ChunkMetadata(
+                        chunk_id=chunk_id,
+                        layer=3,
+                        document_id=extracted_doc.document_id,
+                        section_id=section.section_id,
+                        parent_chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
+                        page_number=section.page_number,
+                        char_start=char_start,
+                        char_end=char_end,
+                        section_title=section.title,
+                        section_path=section.path,
+                        section_level=section.level,
+                        section_depth=section.depth,
+                    ),
+                )
+                chunks.append(chunk)
 
-        logger.info(f"Layer 3: {len(chunks)} hybrid chunks created")
+        logger.info(f"Layer 3: {len(chunks)} token-aware chunks created (tiktoken)")
         return chunks
 
     def _create_layer3_chunks(self, extracted_doc) -> List[Chunk]:
         """
-        Layer 3: Token-aware chunking with HybridChunker.
+        Layer 3: Token-aware chunking with tiktoken directly.
 
-        BREAKING CHANGE: Replaces RCTS character-based chunking.
+        BREAKING CHANGE: Replaces Docling HybridChunker with direct tiktoken.
         Uses max_tokens=512 (≈ 500 chars) to preserve research intent.
 
         Process:
-        1. HybridChunker with tiktoken (token-aware splitting)
+        1. Token-aware splitting with tiktoken (direct implementation)
         2. Contextual Retrieval augmentation (if enabled)
         3. Prepend context for embedding
 
         Based on:
-        - Docling HybridChunker: Token-aware, hierarchy-preserving
         - Anthropic, 2024: Contextual Retrieval reduces failures by 67%
         - LegalBench-RAG: Small chunks optimal (512 tokens ≈ 500 chars)
+        - Unstructured.io: Hierarchy-preserving extraction
         """
-        logger.info("PHASE 3A: Layer 3 chunking with HybridChunker")
+        logger.info("PHASE 3A: Layer 3 chunking with tiktoken (direct)")
 
-        # Generate hybrid chunks
-        chunks = self._create_layer3_hybrid(extracted_doc)
+        # Generate token-aware chunks
+        chunks = self._create_layer3_token_aware(extracted_doc)
 
         # Apply Contextual Retrieval augmentation
         if self.enable_contextual and self.context_generator:
-            logger.info("Applying Contextual Retrieval augmentation to hybrid chunks...")
+            logger.info("Applying Contextual Retrieval augmentation to token-aware chunks...")
             chunks = self._apply_contextual_augmentation_to_hybrid_chunks(chunks, extracted_doc)
 
         logger.info(f"Layer 3: {len(chunks)} token-aware chunks with context")
@@ -738,17 +744,23 @@ class MultiLayerChunker:
 
 # Example usage
 if __name__ == "__main__":
-    # This would be used after DoclingExtractorV2
-    from config import ExtractionConfig, ChunkingConfig
-    from docling_extractor_v2 import DoclingExtractorV2
+    # This would be used after UnstructuredExtractor
+    from pathlib import Path
+    from config import ChunkingConfig
+    from unstructured_extractor import UnstructuredExtractor, ExtractionConfig
 
     # Extract document
     extraction_config = ExtractionConfig(
-        enable_smart_hierarchy=True, generate_summaries=True  # Required for Layer 1 and Layer 2
+        strategy="hi_res",
+        model="detectron2_mask_rcnn",
+        languages=["ces", "eng"],
+        detect_language_per_element=True,
+        filter_rotated_text=True,
     )
 
-    extractor = DoclingExtractorV2(extraction_config)
-    result = extractor.extract("document.pdf")
+    extractor = UnstructuredExtractor(extraction_config)
+    pdf_path = Path("data/document.pdf")
+    result = extractor.extract(pdf_path)
 
     # Create multi-layer chunks with Contextual Retrieval
     chunking_config = ChunkingConfig(

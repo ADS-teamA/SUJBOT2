@@ -1,15 +1,15 @@
 """
-Docling-based document extraction module.
+Unstructured.io-based document extraction module.
 
-This module provides advanced document structure extraction using IBM Docling,
+This module provides advanced document structure extraction using Unstructured.io,
 with specialized support for legal and technical documents.
 """
 
 # Configuration (centralized)
 from .config import ExtractionConfig, RAGConfig
 
-# V2 extractor with smart hierarchy and summaries
-from .docling_extractor_v2 import DoclingExtractorV2
+# Unstructured extractor with hierarchy detection and summaries
+from .unstructured_extractor import UnstructuredExtractor
 from .summary_generator import SummaryGenerator
 
 # PHASE 3: Multi-layer chunking with SAC
@@ -25,7 +25,7 @@ __all__ = [
     "ExtractionConfig",
     "RAGConfig",
     # Extraction
-    "DoclingExtractorV2",
+    "UnstructuredExtractor",
     "SummaryGenerator",
     # Chunking
     "MultiLayerChunker",

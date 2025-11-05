@@ -48,7 +48,7 @@ from src.config import (
     ChunkingConfig,
     EmbeddingConfig,
 )
-from src.docling_extractor_v2 import DoclingExtractorV2
+from src.unstructured_extractor import UnstructuredExtractor
 from src.multi_layer_chunker import MultiLayerChunker
 from src.embedding_generator import EmbeddingGenerator
 from src.faiss_vector_store import FAISSVectorStore
@@ -346,7 +346,7 @@ class IndexingPipeline:
         logger.info("Initializing IndexingPipeline...")
 
         # Initialize PHASE 1: Extraction (uses nested config)
-        self.extractor = DoclingExtractorV2(self.config.extraction_config)
+        self.extractor = UnstructuredExtractor(self.config.extraction_config)
 
         # Initialize PHASE 3: Chunking (uses nested config)
         self.chunker = MultiLayerChunker(config=self.config.chunking_config)
@@ -1115,23 +1115,7 @@ class IndexingPipeline:
 if __name__ == "__main__":
     # Initialize pipeline with research-optimal settings
     # Knowledge Graph is now enabled by default (PHASE 5A)
-    config = IndexingConfig(
-        # PHASE 1-2
-        enable_smart_hierarchy=True,
-        generate_summaries=True,
-        summary_model="gpt-4o-mini",
-        # PHASE 3
-        max_tokens=512,
-        enable_sac=True,
-        # PHASE 4
-        embedding_model="text-embedding-3-large",
-        normalize_embeddings=True,
-        # PHASE 5A: Knowledge Graph (enabled by default)
-        # enable_knowledge_graph=True,  # ✅ No need to set - default is True
-        kg_llm_provider="openai",
-        kg_llm_model="gpt-4o-mini",
-        kg_backend="simple",  # simple, neo4j, or networkx
-    )
+    config = IndexingConfig.from_env()
 
     pipeline = IndexingPipeline(config)
 
