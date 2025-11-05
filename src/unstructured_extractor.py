@@ -1,14 +1,23 @@
 """
 PHASE 1: Document Extraction using Unstructured.io
 
-Replaces Docling with Unstructured.io for document extraction.
+Multi-format document extraction with Unstructured.io.
+
+Supported Formats:
+- PDF (.pdf) - detectron2 backend (most accurate hi_res model)
+- PowerPoint (.pptx, .ppt) - presentation structure and text
+- Word (.docx, .doc) - document structure and formatting
+- HTML (.html, .htm) - web content with semantic structure
+- Plain text (.txt) - basic text files
+- LaTeX (.tex, .latex) - scientific documents
 
 Features:
-- detectron2 backend (most accurate hi_res model)
+- Format auto-detection based on file extension
 - Per-element language detection
-- Bbox orientation analysis for rotated text filtering
+- Bbox orientation analysis for rotated text filtering (PDF)
 - Generic hierarchy detection (not language-specific)
 - Backward compatible with existing pipeline
+- Fallback to universal partitioner for unsupported formats
 
 Based on research:
 - Unstructured.io: 100% § paragraph detection (vs 0% Docling)
@@ -27,7 +36,12 @@ import math
 import numpy as np
 
 # Unstructured imports
+from unstructured.partition.auto import partition  # Universal partitioner
 from unstructured.partition.pdf import partition_pdf
+from unstructured.partition.pptx import partition_pptx
+from unstructured.partition.docx import partition_docx
+from unstructured.partition.html import partition_html
+from unstructured.partition.text import partition_text
 from unstructured.documents.elements import (
     Element,
     Title,
@@ -495,11 +509,21 @@ def detect_hierarchy_generic(elements: List[Element], config: ExtractionConfig) 
     current_page = None
 
     for i, elem in enumerate(elements):
-        # Get element's unique ID (Unstructured provides elem.id)
-        element_id = elem.id if hasattr(elem, 'id') else f"elem_{i}"
+        # Get element's unique ID (Unstructured provides elem.id, or elem.element_id for custom)
+        element_id = None
+        if hasattr(elem, 'id') and elem.id:
+            element_id = elem.id
+        elif hasattr(elem, 'element_id') and elem.element_id:
+            element_id = elem.element_id
+        else:
+            element_id = f"elem_{i}"
 
         # Get parent_id from metadata
         parent_id = getattr(elem.metadata, 'parent_id', None) if hasattr(elem, 'metadata') else None
+
+        # Check for pre-computed level/depth from custom parsers (e.g., LaTeX)
+        preset_level = getattr(elem.metadata, 'section_level', None) if hasattr(elem, 'metadata') else None
+        preset_depth = getattr(elem.metadata, 'section_depth', None) if hasattr(elem, 'metadata') else None
 
         # Track page number
         page_number = getattr(elem.metadata, 'page_number', None) if hasattr(elem, 'metadata') else None
@@ -532,14 +556,15 @@ def detect_hierarchy_generic(elements: List[Element], config: ExtractionConfig) 
             "parent_id": parent_id,
             "type_name": type_name,
             "type_score": type_score,
-            "level": None,  # Will be computed in second pass
+            "level": preset_level,  # Use preset if available, otherwise compute in second pass
+            "depth": preset_depth,  # Use preset if available
             "page_number": page_number,
         })
 
         # Build lookup: element ID -> index
         id_to_index[element_id] = i
 
-    # Second pass: Calculate level based on parent hierarchy
+    # Second pass: Calculate level and depth based on parent hierarchy (skip if preset)
     def get_level(feat_index: int, visited: set = None) -> int:
         """
         Recursively calculate level based on parent chain.
@@ -562,7 +587,7 @@ def detect_hierarchy_generic(elements: List[Element], config: ExtractionConfig) 
         visited.add(feat_index)
         feat = features[feat_index]
 
-        # If level already computed, return it (memoization)
+        # If level already computed or preset, return it (memoization)
         if feat["level"] is not None:
             return feat["level"]
 
@@ -609,9 +634,17 @@ def detect_hierarchy_generic(elements: List[Element], config: ExtractionConfig) 
 
 class UnstructuredExtractor:
     """
-    Document extractor using Unstructured.io.
+    Multi-format document extractor using Unstructured.io.
 
+    Supports: PDF, PPTX, DOCX, HTML, TXT, LaTeX
     Replaces DoclingExtractorV2 with backward-compatible interface.
+
+    Example:
+        >>> config = ExtractionConfig.from_env()
+        >>> extractor = UnstructuredExtractor(config)
+        >>> doc = extractor.extract(Path("document.pdf"))
+        >>> doc = extractor.extract(Path("presentation.pptx"))
+        >>> doc = extractor.extract(Path("report.docx"))
     """
 
     def __init__(self, config: Optional[ExtractionConfig] = None):
@@ -624,21 +657,29 @@ class UnstructuredExtractor:
         self.config = config or ExtractionConfig.from_env()
         logger.info(f"UnstructuredExtractor initialized: model={self.config.model}, strategy={self.config.strategy}")
 
-    def extract(self, pdf_path: Path) -> ExtractedDocument:
+    def extract(self, file_path: Path) -> ExtractedDocument:
         """
-        Extract document structure from PDF.
+        Extract document structure from any supported file format.
+
+        Supported formats:
+        - PDF (.pdf) - with optional hi_res OCR models
+        - PowerPoint (.pptx, .ppt)
+        - Word (.docx, .doc)
+        - HTML (.html, .htm)
+        - Plain text (.txt)
+        - LaTeX (.tex, .latex)
 
         Args:
-            pdf_path: Path to PDF file
+            file_path: Path to document file
 
         Returns:
             ExtractedDocument with hierarchical sections
         """
-        logger.info(f"Starting extraction of {pdf_path.name}")
+        logger.info(f"Starting extraction of {file_path.name} ({file_path.suffix})")
         start_time = time.time()
 
         # Extract with Unstructured
-        elements = self._partition_pdf(pdf_path)
+        elements = self._partition_document(file_path)
 
         # Filter rotated text
         if self.config.filter_rotated_text:
@@ -677,10 +718,10 @@ class UnstructuredExtractor:
         extraction_time = time.time() - start_time
 
         # Build ExtractedDocument
-        document_id = pdf_path.stem
+        document_id = file_path.stem
         extracted_doc = ExtractedDocument(
             document_id=document_id,
-            source_path=str(pdf_path),
+            source_path=str(file_path),
             extraction_time=extraction_time,
             full_text=full_text,
             markdown=markdown,
@@ -706,27 +747,164 @@ class UnstructuredExtractor:
 
         return extracted_doc
 
+    def _partition_document(self, file_path: Path) -> List[Element]:
+        """
+        Run Unstructured partition on any supported document format.
+
+        Supported formats:
+        - PDF (.pdf)
+        - PowerPoint (.pptx, .ppt)
+        - Word (.docx, .doc)
+        - HTML (.html, .htm)
+        - Plain text (.txt)
+        - LaTeX (.tex, .latex)
+
+        Args:
+            file_path: Path to document file
+
+        Returns:
+            List of Unstructured elements
+        """
+        file_suffix = file_path.suffix.lower()
+        logger.info(f"Partitioning {file_suffix} document with strategy={self.config.strategy}")
+
+        # Common parameters for all formats
+        common_params = {
+            "filename": str(file_path),
+            "languages": self.config.languages if hasattr(self.config, 'languages') else ["ces", "eng"],
+            "include_page_breaks": self.config.include_page_breaks if hasattr(self.config, 'include_page_breaks') else True,
+        }
+
+        try:
+            # PDF - use specialized function with hi_res models
+            if file_suffix == ".pdf":
+                logger.info(f"Using partition_pdf with model={self.config.model}")
+                # Available Unstructured models:
+                # - "yolox" (default, fast)
+                # - "detectron2_onnx" (Faster R-CNN R_50_FPN_3x)
+                # - "detectron2_mask_rcnn" (Mask R-CNN X_101_32x8d_FPN_3x, MOST ACCURATE)
+                # - "detectron2_quantized" (quantized for speed)
+                elements = partition_pdf(
+                    **common_params,
+                    strategy=self.config.strategy,
+                    hi_res_model_name=self.config.model if self.config.strategy == "hi_res" else None,
+                    infer_table_structure=self.config.infer_table_structure,
+                    extract_images_in_pdf=self.config.extract_images,
+                )
+
+            # PowerPoint - use specialized function
+            elif file_suffix in [".pptx", ".ppt"]:
+                logger.info("Using partition_pptx")
+                elements = partition_pptx(
+                    **common_params,
+                    infer_table_structure=self.config.infer_table_structure if hasattr(self.config, 'infer_table_structure') else True,
+                )
+
+            # Word - use specialized function
+            elif file_suffix in [".docx", ".doc"]:
+                logger.info("Using partition_docx")
+                elements = partition_docx(
+                    **common_params,
+                    infer_table_structure=self.config.infer_table_structure if hasattr(self.config, 'infer_table_structure') else True,
+                )
+
+            # HTML - use specialized function
+            elif file_suffix in [".html", ".htm"]:
+                logger.info("Using partition_html")
+                # HTML doesn't support all common params
+                elements = partition_html(
+                    filename=str(file_path),
+                    include_page_breaks=False,  # HTML doesn't have pages
+                )
+
+            # Plain text - use text partitioner
+            elif file_suffix == ".txt":
+                logger.info("Using partition_text")
+                # Text partitioner has minimal parameters
+                elements = partition_text(
+                    filename=str(file_path),
+                    languages=common_params["languages"],
+                )
+
+            # LaTeX - use custom parser for better hierarchy
+            elif file_suffix in [".tex", ".latex"]:
+                logger.info("Using custom LaTeX parser for better hierarchy")
+                try:
+                    from src.latex_parser import parse_latex_document, clean_latex_text
+                    from unstructured.documents.elements import Title as UnstrTitle, NarrativeText
+
+                    latex_data = parse_latex_document(file_path)
+
+                    if latex_data:
+                        # Convert parsed sections to Unstructured elements
+                        elements = []
+                        for section in latex_data['sections']:
+                            # Create Title element for section heading
+                            title_elem = UnstrTitle(section['title_clean'])
+                            if hasattr(title_elem, 'metadata'):
+                                title_elem.metadata.page_number = 1  # LaTeX doesn't have pages
+                                # Store hierarchy info in metadata
+                                title_elem.metadata.parent_id = section.get('parent_id')
+                                title_elem.metadata.section_level = section['level']
+                                title_elem.metadata.section_depth = section['depth']
+                            # Store section_id as element_id for hierarchy tracking
+                            title_elem.element_id = section['section_id']
+                            elements.append(title_elem)
+
+                            # Create NarrativeText for content
+                            if section['content_clean'].strip():
+                                content_elem = NarrativeText(section['content_clean'])
+                                if hasattr(content_elem, 'metadata'):
+                                    content_elem.metadata.page_number = 1
+                                    content_elem.metadata.parent_id = section['section_id']
+                                content_elem.element_id = f"{section['section_id']}_content"
+                                elements.append(content_elem)
+
+                        logger.info(f"LaTeX parser created {len(elements)} elements with proper hierarchy")
+                    else:
+                        # Fallback to text partitioner
+                        logger.warning("LaTeX parser returned no sections, falling back to partition_text")
+                        elements = partition_text(
+                            filename=str(file_path),
+                            languages=common_params["languages"],
+                        )
+                except Exception as latex_error:
+                    logger.warning(f"LaTeX parser failed: {latex_error}, falling back to partition_text")
+                    elements = partition_text(
+                        filename=str(file_path),
+                        languages=common_params["languages"],
+                    )
+
+            # Unsupported format - try universal partitioner
+            else:
+                logger.warning(f"Unknown file format {file_suffix}, trying universal partitioner")
+                elements = partition(
+                    **common_params,
+                    strategy=self.config.strategy if file_suffix == ".pdf" else "auto",
+                )
+
+            logger.info(f"Partitioned {file_suffix} document into {len(elements)} elements")
+            return elements
+
+        except Exception as e:
+            logger.error(f"Failed to partition {file_suffix} document: {e}")
+            logger.info("Attempting fallback with universal partitioner")
+            try:
+                elements = partition(filename=str(file_path))
+                logger.info(f"Fallback successful: {len(elements)} elements extracted")
+                return elements
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                raise RuntimeError(f"Could not partition document {file_path.name}: {fallback_error}") from fallback_error
+
     def _partition_pdf(self, pdf_path: Path) -> List[Element]:
-        """Run Unstructured partition_pdf."""
-        logger.info(f"Partitioning PDF with strategy={self.config.strategy}")
+        """
+        Run Unstructured partition_pdf (deprecated - use _partition_document instead).
 
-        # Available Unstructured models:
-        # - "yolox" (default, fast)
-        # - "detectron2_onnx" (Faster R-CNN R_50_FPN_3x)
-        # - "detectron2_mask_rcnn" (Mask R-CNN X_101_32x8d_FPN_3x, MOST ACCURATE)
-        # - "detectron2_quantized" (quantized for speed)
-        elements = partition_pdf(
-            filename=str(pdf_path),
-            strategy=self.config.strategy,
-            hi_res_model_name=self.config.model if self.config.strategy == "hi_res" else None,
-            languages=self.config.languages,
-            infer_table_structure=self.config.infer_table_structure,
-            extract_images_in_pdf=self.config.extract_images,
-            include_page_breaks=self.config.include_page_breaks,
-        )
-
-        logger.info(f"Partitioned PDF into {len(elements)} elements")
-        return elements
+        Kept for backward compatibility.
+        """
+        logger.warning("_partition_pdf is deprecated, use _partition_document instead")
+        return self._partition_document(pdf_path)
 
     def _build_sections(self, hierarchy_features: List[Dict]) -> List[DocumentSection]:
         """Build DocumentSection objects from hierarchy features."""

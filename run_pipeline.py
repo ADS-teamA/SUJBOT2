@@ -81,7 +81,7 @@ def get_supported_documents(directory: Path) -> list:
     Returns:
         List of document paths
     """
-    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm"]
+    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".txt", ".tex", ".latex"]
     documents = []
 
     for ext in supported_formats:
@@ -161,7 +161,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
     document_path = Path(document_path)
 
     # Validate format
-    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm"]
+    supported_formats = [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".txt", ".tex", ".latex"]
     if document_path.suffix.lower() not in supported_formats:
         print(f"✗ Error: Unsupported format: {document_path.suffix}")
         print(f"  Supported formats: {', '.join(supported_formats)}")
