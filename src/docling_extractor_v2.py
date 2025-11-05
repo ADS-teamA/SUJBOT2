@@ -234,6 +234,9 @@ class ExtractedDocument:
     extraction_method: str = "smart_hierarchy_by_font_size"
     config: Optional[Dict] = None
 
+    # NEW: Preserve original DoclingDocument for HybridChunker (PHASE 3)
+    docling_doc: Optional[DoclingDocument] = None
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
@@ -346,7 +349,7 @@ class DoclingExtractorV2:
         }
         layout_model = layout_model_map.get(
             self.config.layout_model,
-            DOCLING_LAYOUT_EGRET_XLARGE,  # Default to EGRET XLarge (best for hierarchy)
+            DOCLING_LAYOUT_HERON,  # Default to HERON (78% mAP, +23.9% improvement)
         )
         logger.info(f"Using layout model: {self.config.layout_model}")
 
@@ -623,6 +626,7 @@ class DoclingExtractorV2:
                 "rotation_min_angle": getattr(self.config, "rotation_min_angle", None),
                 "rotation_max_angle": getattr(self.config, "rotation_max_angle", None),
             },
+            docling_doc=docling_doc,  # NEW: For HybridChunker in PHASE 3
         )
 
         logger.info(

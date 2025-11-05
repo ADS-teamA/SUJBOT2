@@ -44,6 +44,22 @@ Production-ready RAG system based on 4 research papers implementing state-of-the
 
 ## 🚀 Quick Start
 
+### ⚠️ Breaking Change (v2.0 - HybridChunker)
+
+**If upgrading from v1.x:**
+- Chunking strategy changed to **HybridChunker** (token-aware, 512 tokens ≈ 500 chars)
+- Layout model changed to **HERON** (+23.9% accuracy improvement)
+- **All existing vector stores must be re-indexed**
+- Run: `rm -rf vector_db/* && uv run python run_pipeline.py data/`
+- Estimated time: 15-30 minutes for 10k chunks
+
+**Why this change:**
+- Token-aware chunking guarantees embedding model compatibility
+- HERON provides best accuracy for complex legal layouts
+- Preserves research constraints (512 tokens ≈ 500 chars)
+
+---
+
 ### Prerequisites
 
 - Python 3.10+

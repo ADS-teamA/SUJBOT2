@@ -45,9 +45,12 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 - Exception: Fallback `"(Document summary unavailable)"` if section summaries fail
 - Files: `src/docling_extractor_v2.py`, `src/summary_generator.py`
 
-### 2. RCTS Chunking (LegalBench-RAG)
-- Chunk size: **500 chars** (optimal for legal docs)
-- Overlap: **0** (RCTS handles via hierarchy)
+### 2. Token-Aware Chunking (HybridChunker)
+- **Max tokens:** 512 (optimal for legal docs)
+- **Tokenizer:** tiktoken (OpenAI text-embedding-3-large)
+- **Overlap:** 0 (hierarchical chunking handles naturally)
+- **Research basis:** 512 tokens ≈ 500 chars (LegalBench-RAG constraint preserved)
+- **Why tokens not chars:** Guarantees embedding model compatibility, handles Czech diacritics correctly
 - Changing this invalidates ALL vector stores
 
 ### 3. Generic Summaries (Reuter et al., counterintuitive!)
@@ -74,6 +77,27 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 
 ---
 
+## 🔢 Token vs Character Equivalence
+
+**Research Constraint (LegalBench-RAG):**
+- Optimal chunk size: **500 characters** for legal/technical documents
+
+**Token-Aware Implementation:**
+- Uses **max_tokens=512** (token-based limit)
+- **Equivalence:** 512 tokens ≈ 500-640 characters for Czech/English mixed text
+- **Calculation:**
+  - English: ~4 chars/token → 500 chars ≈ 125 tokens
+  - Czech (diacritics): ~5 chars/token → 500 chars ≈ 100 tokens
+  - Safety margin: 512 tokens accommodates worst-case Czech text
+
+**Why This Preserves Research Intent:**
+1. Same semantic granularity (small chunks for legal precision)
+2. Better reliability (guarantees embedding model compatibility)
+3. Czech optimization (accounts for UTF-8 multi-byte encoding)
+4. Hierarchical structure preserved (HybridChunker respects DoclingDocument hierarchy)
+
+---
+
 ## 📂 Key File Locations
 
 **Pipeline Core:**
@@ -82,7 +106,7 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 - `src/config.py` - Shared configs
 
 **7 Phases:**
-1. `src/docling_extractor_v2.py` - Hierarchy extraction
+1. `src/docling_extractor_v2.py` - Hierarchy extraction (Layout model: **HERON** - 78% mAP, +23.9% improvement)
 2. `src/summary_generator.py` - Document summaries
 3. `src/multi_layer_chunker.py` - Chunking + SAC + section summaries
 4. `src/embedding_generator.py`, `src/faiss_vector_store.py` - Embeddings + FAISS

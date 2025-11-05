@@ -1121,7 +1121,7 @@ if __name__ == "__main__":
         generate_summaries=True,
         summary_model="gpt-4o-mini",
         # PHASE 3
-        chunk_size=500,
+        max_tokens=512,
         enable_sac=True,
         # PHASE 4
         embedding_model="text-embedding-3-large",

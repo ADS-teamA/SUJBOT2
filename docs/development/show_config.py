@@ -132,9 +132,8 @@ def display_config():
     display_separator("🔪 PHASE 3: CHUNKING + CONTEXTUAL RETRIEVAL")
     chunk_config = full_config.chunking
 
-    print(f"\n  Method:             {chunk_config.method}")
-    print(f"  Chunk Size:         {chunk_config.chunk_size} chars (RCTS optimal)")
-    print(f"  Chunk Overlap:      {chunk_config.chunk_overlap}")
+    print(f"\n  Max Tokens:         {chunk_config.max_tokens} tokens (HybridChunker)")
+    print(f"  Tokenizer Model:    {chunk_config.tokenizer_model}")
     print(f"  Enable Contextual:  {chunk_config.enable_contextual}")
     print(f"  Enable Multi-Layer: {chunk_config.enable_multi_layer}")
 

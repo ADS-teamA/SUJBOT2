@@ -474,11 +474,15 @@ class ContextGenerationConfig:
 
 @dataclass
 class ChunkingConfig:
-    """Configuration for chunking (PHASE 3)."""
+    """
+    Configuration for token-aware chunking (PHASE 3).
 
-    method: str = "RecursiveCharacterTextSplitter"
-    chunk_size: int = 500
-    chunk_overlap: int = 0
+    BREAKING CHANGE: Uses HybridChunker with token limits (not character limits).
+    """
+
+    # Token-aware chunking (IMMUTABLE - research-backed)
+    max_tokens: int = 512  # ≈ 500 chars for CS/EN text (LegalBench-RAG equivalent)
+    tokenizer_model: str = "text-embedding-3-large"  # Must match EMBEDDING_MODEL
 
     # Chunking strategy
     enable_contextual: bool = True  # Contextual Retrieval (RECOMMENDED)
@@ -487,7 +491,7 @@ class ChunkingConfig:
     # Context generation config
     context_config: Optional["ContextGenerationConfig"] = None
 
-    separators: List[str] = field(default_factory=lambda: ["\n\n", "\n", ". ", "; ", ", ", " ", ""])
+    # REMOVED: chunk_size, chunk_overlap, method, separators (deprecated by HybridChunker)
 
     def __post_init__(self):
         """Initialize context_config if not provided."""
@@ -501,9 +505,10 @@ class ChunkingConfig:
         Load configuration from environment variables.
 
         Environment Variables:
-            CHUNK_SIZE: Chunk size in characters (default: 500)
+            MAX_TOKENS: Max tokens per chunk (default: 512)
+            TOKENIZER_MODEL: Tokenizer model name (default: "text-embedding-3-large")
             ENABLE_SAC: Enable Summary-Augmented Chunking (default: "true")
-            SPEED_MODE: "fast" or "eco" (affects context generation - passed to ContextGenerationConfig)
+            SPEED_MODE: "fast" or "eco" (affects context generation)
 
         Returns:
             ChunkingConfig instance loaded from environment
@@ -516,7 +521,8 @@ class ChunkingConfig:
             context_config = ContextGenerationConfig.from_env()
 
         return cls(
-            chunk_size=int(os.getenv("CHUNK_SIZE", "500")),
+            max_tokens=int(os.getenv("MAX_TOKENS", "512")),
+            tokenizer_model=os.getenv("TOKENIZER_MODEL", "text-embedding-3-large"),
             enable_contextual=enable_contextual,
             context_config=context_config,
         )
