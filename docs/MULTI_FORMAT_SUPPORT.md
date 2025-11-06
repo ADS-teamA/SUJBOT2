@@ -80,7 +80,7 @@ Most configuration parameters in `.env` apply to all formats. Format-specific be
 ```bash
 # Only applies to PDF
 UNSTRUCTURED_STRATEGY=hi_res  # "hi_res", "fast", "ocr_only"
-UNSTRUCTURED_MODEL=detectron2_mask_rcnn  # OCR model
+UNSTRUCTURED_MODEL=yolox  # OCR model (best results from testing on legal documents)
 UNSTRUCTURED_EXTRACT_IMAGES=false  # Extract embedded images
 ```
 

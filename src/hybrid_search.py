@@ -102,6 +102,11 @@ class BM25Index:
             tokens = self._tokenize(chunk.content)
             self.tokenized_corpus.append(tokens)
 
+            # Build hierarchical path: document_id > section_path
+            hierarchical_path = chunk.metadata.document_id
+            if chunk.metadata.section_path:
+                hierarchical_path = f"{chunk.metadata.document_id} > {chunk.metadata.section_path}"
+
             # Store metadata (same structure as FAISSVectorStore)
             meta = {
                 "chunk_id": chunk.chunk_id,
@@ -109,6 +114,7 @@ class BM25Index:
                 "section_id": chunk.metadata.section_id,
                 "section_title": chunk.metadata.section_title,
                 "section_path": chunk.metadata.section_path,
+                "hierarchical_path": hierarchical_path,  # NEW: Full path for breadcrumb navigation
                 "page_number": chunk.metadata.page_number,
                 "layer": chunk.metadata.layer,
                 "content": chunk.raw_content,  # Store without context for generation
