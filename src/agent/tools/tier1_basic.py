@@ -13,7 +13,7 @@ from pydantic import Field
 
 from .base import BaseTool, ToolInput, ToolResult
 from .registry import register_tool
-from .utils import format_chunk_result, validate_k_parameter
+from .utils import format_chunk_result, generate_citation, validate_k_parameter
 
 logger = logging.getLogger(__name__)
 
@@ -473,10 +473,8 @@ class SearchTool(BaseTool):
         formatted = [format_chunk_result(c) for c in chunks]
         final_count = len(formatted)
 
-        # Generate citations with breadcrumb path
-        citations = [
-            f"[{i+1}] {c.get('breadcrumb', c['document_id'])}" for i, c in enumerate(formatted)
-        ]
+        # Generate citations with breadcrumb path (uses generate_citation for consistency)
+        citations = [generate_citation(c, i + 1, format="inline") for i, c in enumerate(formatted)]
 
         # === STEP 6: RAG Confidence Scoring ===
         try:
@@ -1272,9 +1270,8 @@ class ExactMatchSearchTool(BaseTool):
                 )
 
             formatted = [format_chunk_result(c) for c in results]
-            citations = [
-                f"[{i+1}] {c.get('breadcrumb', c['document_id'])}" for i, c in enumerate(formatted)
-            ]
+            # Generate citations with breadcrumb path (uses generate_citation for consistency)
+            citations = [generate_citation(c, i + 1, format="inline") for i, c in enumerate(formatted)]
 
             # === RAG Confidence Scoring ===
             try:
