@@ -74,7 +74,17 @@ def format_chunk_result(
 
     # Ensure content is always a string (handles None values)
     if not isinstance(content, str):
-        content = str(content) if content is not None else ""
+        if content is not None:
+            # Log warning when type coercion occurs to detect data quality issues
+            logger.warning(
+                f"Content field has unexpected type {type(content).__name__} for chunk "
+                f"{chunk.get('chunk_id', 'unknown')}. Converting to string. "
+                f"This may indicate a data structure issue in the indexing pipeline. "
+                f"Content preview: {str(content)[:100]}"
+            )
+            content = str(content)
+        else:
+            content = ""
 
     # Determine truncation strategy
     if max_content_length is not None:
@@ -144,7 +154,8 @@ def format_chunk_result(
             result["breadcrumb"] = hierarchical_path
 
         # Extract section_title from breadcrumb if empty
-        if not section_title or not section_title.strip():
+        # Add type safety to prevent AttributeError on non-string section_title
+        if not section_title or (not isinstance(section_title, str)) or (not section_title.strip()):
             # Format: "doc_id > section1 > section2 > ..."
             # Extract last part as section_title
             parts = hierarchical_path.split(" > ")
