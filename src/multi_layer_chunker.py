@@ -752,7 +752,7 @@ if __name__ == "__main__":
     # Extract document
     extraction_config = ExtractionConfig(
         strategy="hi_res",
-        model="detectron2_mask_rcnn",
+        model="yolox",  # Best results from testing on legal documents
         languages=["ces", "eng"],
         detect_language_per_element=True,
         filter_rotated_text=True,

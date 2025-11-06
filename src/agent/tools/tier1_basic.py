@@ -473,9 +473,9 @@ class SearchTool(BaseTool):
         formatted = [format_chunk_result(c) for c in chunks]
         final_count = len(formatted)
 
-        # Generate citations
+        # Generate citations with breadcrumb path
         citations = [
-            f"[{i+1}] {c['document_id']}: {c['section_title']}" for i, c in enumerate(formatted)
+            f"[{i+1}] {c.get('breadcrumb', c['document_id'])}" for i, c in enumerate(formatted)
         ]
 
         # === STEP 6: RAG Confidence Scoring ===
@@ -1273,7 +1273,7 @@ class ExactMatchSearchTool(BaseTool):
 
             formatted = [format_chunk_result(c) for c in results]
             citations = [
-                f"[{i+1}] {c['document_id']}: {c['section_title']}" for i, c in enumerate(formatted)
+                f"[{i+1}] {c.get('breadcrumb', c['document_id'])}" for i, c in enumerate(formatted)
             ]
 
             # === RAG Confidence Scoring ===

@@ -70,7 +70,11 @@ def format_chunk_result(
         Formatted dict with 'content', 'document_id', 'section_title', 'chunk_id',
         optionally 'score', 'page', 'truncated'
     """
-    content = chunk.get("content", chunk.get("raw_content", ""))
+    content = chunk.get("content") or chunk.get("raw_content") or ""
+
+    # Ensure content is always a string (handles None values)
+    if not isinstance(content, str):
+        content = str(content) if content is not None else ""
 
     # Determine truncation strategy
     if max_content_length is not None:
@@ -116,12 +120,63 @@ def format_chunk_result(
         was_truncated = False
 
     # Build result
+    section_title = chunk.get("section_title", "")
+
     result = {
         "content": content,
         "document_id": chunk.get("document_id", "unknown"),
-        "section_title": chunk.get("section_title", ""),
+        "section_title": section_title,
         "chunk_id": chunk.get("chunk_id", ""),
     }
+
+    # Add hierarchical breadcrumb path for better navigation
+    hierarchical_path = chunk.get("hierarchical_path")
+    if hierarchical_path and isinstance(hierarchical_path, str):
+        # Clean up "Untitled" from breadcrumb
+        if " > Untitled" in hierarchical_path:
+            # Replace "doc_id > Untitled" with just "doc_id" or add page info
+            page_num = chunk.get("page_number")
+            if page_num:
+                result["breadcrumb"] = hierarchical_path.replace(" > Untitled", f" (page {page_num})")
+            else:
+                result["breadcrumb"] = hierarchical_path.replace(" > Untitled", "")
+        else:
+            result["breadcrumb"] = hierarchical_path
+
+        # Extract section_title from breadcrumb if empty
+        if not section_title or not section_title.strip():
+            # Format: "doc_id > section1 > section2 > ..."
+            # Extract last part as section_title
+            parts = hierarchical_path.split(" > ")
+            if len(parts) > 1:
+                last_part = parts[-1].strip()
+                # Don't use "Untitled" as section_title
+                if last_part and last_part != "Untitled":
+                    result["section_title"] = last_part
+                else:
+                    # Use page number as fallback
+                    page_num = chunk.get("page_number")
+                    if page_num:
+                        result["section_title"] = f"Page {page_num}"
+    else:
+        # Fallback: construct from document_id + section_path or section_title
+        doc_id = chunk.get("document_id", "unknown")
+        section_path = chunk.get("section_path")
+
+        if section_path and isinstance(section_path, str) and section_path != "Untitled":
+            result["breadcrumb"] = f"{doc_id} > {section_path}"
+            # Extract section_title from section_path if empty
+            if not section_title or not section_title.strip():
+                result["section_title"] = section_path.strip()
+        elif section_title and isinstance(section_title, str):
+            result["breadcrumb"] = f"{doc_id} > {section_title}"
+        else:
+            # Ultimate fallback: use page number
+            page_num = chunk.get("page_number")
+            if page_num:
+                result["breadcrumb"] = f"{doc_id} (page {page_num})"
+                if not section_title or not section_title.strip():
+                    result["section_title"] = f"Page {page_num}"
 
     if include_score:
         # Prefer rerank_score, fall back to boosted_score, then rrf_score, then score
@@ -147,7 +202,7 @@ def format_chunk_result(
 
 def generate_citation(chunk: Dict[str, Any], chunk_number: int, format: str = "inline") -> str:
     """
-    Generate citation string for a chunk.
+    Generate citation string for a chunk with hierarchical breadcrumb path.
 
     Args:
         chunk: Chunk dict
@@ -155,28 +210,51 @@ def generate_citation(chunk: Dict[str, Any], chunk_number: int, format: str = "i
         format: "inline", "detailed", or "footnote"
 
     Returns:
-        Citation string
+        Citation string with breadcrumb path for better navigation
     """
-    doc_name = chunk.get("document_name") or chunk.get("document_id", "unknown")
-    section = chunk.get("section_title", "")
+    # Prefer hierarchical_path (full breadcrumb), fallback to document_id
+    breadcrumb = chunk.get("hierarchical_path") or chunk.get("breadcrumb")
+
+    if not breadcrumb:
+        # Fallback: construct breadcrumb from available metadata
+        doc_name = chunk.get("document_name") or chunk.get("document_id", "unknown")
+        section_path = chunk.get("section_path")
+        section_title = chunk.get("section_title", "")
+
+        if section_path:
+            breadcrumb = f"{doc_name} > {section_path}"
+        elif section_title:
+            breadcrumb = f"{doc_name} > {section_title}"
+        else:
+            breadcrumb = doc_name
+
+    # Clean up "Untitled" from breadcrumb (same logic as format_chunk_result)
+    if breadcrumb and " > Untitled" in breadcrumb:
+        page_num = chunk.get("page_number")
+        if page_num:
+            breadcrumb = breadcrumb.replace(" > Untitled", f" (page {page_num})")
+        else:
+            breadcrumb = breadcrumb.replace(" > Untitled", "")
+
     page = chunk.get("page_number")
 
     if format == "inline":
-        return f"[Chunk {chunk_number}]"
+        return f"[{chunk_number}] {breadcrumb}"
 
     elif format == "detailed":
-        parts = [f"Doc: {doc_name}"]
-        if section:
-            parts.append(f"Section: {section}")
+        citation = f"[{chunk_number}] {breadcrumb}"
         if page:
-            parts.append(f"Page: {page}")
-        return f"[{', '.join(parts)}]"
+            citation += f" (Page {page})"
+        return citation
 
     elif format == "footnote":
-        return f"[{chunk_number}] {doc_name}" + (f", {section}" if section else "")
+        citation = f"[{chunk_number}] {breadcrumb}"
+        if page:
+            citation += f", p. {page}"
+        return citation
 
     else:
-        return f"[{chunk_number}]"
+        return f"[{chunk_number}] {breadcrumb}"
 
 
 def create_error_result(error_message: str, tool_name: str = None) -> Dict[str, Any]:
