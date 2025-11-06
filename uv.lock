@@ -2463,6 +2463,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.5.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "neo4j", specifier = ">=5.25.0" },
+    { name = "neo4j", specifier = ">=6.0.2" },
     { name = "neo4j", marker = "extra == 'all'", specifier = ">=5.0.0" },
     { name = "neo4j", marker = "extra == 'knowledge-graph'", specifier = ">=5.25.0" },
     { name = "networkx", specifier = ">=3.0" },
