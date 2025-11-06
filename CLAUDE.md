@@ -106,7 +106,7 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 - `src/config.py` - Shared configs
 
 **7 Phases:**
-1. `src/unstructured_extractor.py` - Multi-format extraction with Unstructured.io (Layout model: **detectron2_mask_rcnn** - Mask R-CNN X_101_32x8d_FPN_3x, most accurate)
+1. `src/unstructured_extractor.py` - Multi-format extraction with Unstructured.io (Layout model: **yolox** - best results from testing on legal documents)
 2. `src/summary_generator.py` - Document summaries (hierarchical from section summaries)
 3. `src/multi_layer_chunker.py` - Token-aware chunking + SAC + section summaries
 4. `src/embedding_generator.py`, `src/faiss_vector_store.py` - Embeddings + FAISS
