@@ -232,8 +232,12 @@ class DuplicateDetector:
         if self._vector_store is None and self.vector_store_path:
             from .hybrid_search import HybridVectorStore
 
-            self._vector_store = HybridVectorStore.load(self.vector_store_path)
-            logger.info(f"Loaded vector store from {self.vector_store_path}")
+            try:
+                self._vector_store = HybridVectorStore.load(self.vector_store_path)
+                logger.info(f"Loaded vector store from {self.vector_store_path}")
+            except (FileNotFoundError, ValueError) as e:
+                logger.debug(f"Vector store not available at {self.vector_store_path}: {e}")
+                return None
 
         return self._vector_store
 

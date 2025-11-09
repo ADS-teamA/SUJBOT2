@@ -255,19 +255,53 @@ class BenchmarkRunner:
     def _initialize_tool_registry(self, components: Dict[str, Any], tool_config: Any) -> None:
         """Initialize tool registry with pipeline components."""
         from ..agent.tools.registry import get_registry
+        from ..graph.models import KnowledgeGraph
+        from ..agent.graph_adapter import SimpleGraphAdapter
 
         logger.info("Initializing tool registry...")
+
+        # Try to load knowledge graph if available
+        knowledge_graph = None
+        kg_path = Path(self.config.vector_store_path).parent / "unified_kg.json"
+        if kg_path.exists():
+            try:
+                logger.info(f"Loading knowledge graph from {kg_path}")
+                kg = KnowledgeGraph.load_json(str(kg_path))
+                # Wrap in SimpleGraphAdapter for tools compatibility
+                knowledge_graph = SimpleGraphAdapter(kg)
+                logger.info(
+                    f"✓ KG loaded: {len(kg.entities)} entities, "
+                    f"{len(kg.relationships)} relationships"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load knowledge graph: {e}")
+                knowledge_graph = None
+        else:
+            logger.info(f"No knowledge graph found at {kg_path} (optional)")
+
         registry = get_registry()
         registry.initialize_tools(
             vector_store=self.vector_store,
             embedder=components["embedder"],
             reranker=components["reranker"],
-            graph_retriever=None,  # No graph for benchmark
-            knowledge_graph=None,  # No graph for benchmark
+            graph_retriever=None,  # No graph retriever for benchmark
+            knowledge_graph=knowledge_graph,
             context_assembler=components["context_assembler"],
             config=tool_config,
         )
-        logger.info(f"Tool registry initialized: {len(registry)} tools available")
+
+        # Count available vs unavailable tools
+        total_tools = len(registry)
+        unavailable = registry.get_unavailable_tools() if hasattr(registry, 'get_unavailable_tools') else []
+        available = total_tools - len(unavailable)
+
+        if unavailable:
+            logger.info(
+                f"Tool registry initialized: {available}/{total_tools} tools available"
+            )
+            logger.info(f"Unavailable tools: {unavailable}")
+        else:
+            logger.info(f"Tool registry initialized: {total_tools} tools available")
 
     def _evaluate_query(self, query_example: QueryExample) -> QueryResult:
         """

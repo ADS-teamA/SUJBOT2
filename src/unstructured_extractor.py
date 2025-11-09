@@ -790,7 +790,17 @@ class UnstructuredExtractor:
             config: Extraction configuration (defaults to env vars)
         """
         self.config = config or ExtractionConfig.from_env()
-        logger.info(f"UnstructuredExtractor initialized: model={self.config.model}, strategy={self.config.strategy}")
+
+        # Handle both ExtractionConfig types (Unstructured.io vs Pipeline)
+        # Unstructured.io config: has 'model', 'strategy' attributes
+        # Pipeline config: has 'ocr_engine', 'extract_hierarchy' attributes
+        self._is_unstructured_config = hasattr(self.config, 'model')
+
+        # Log config attributes
+        if self._is_unstructured_config:
+            logger.info(f"UnstructuredExtractor initialized: model={self.config.model}, strategy={self.config.strategy}")
+        else:
+            logger.info(f"UnstructuredExtractor initialized: ocr_engine={getattr(self.config, 'ocr_engine', 'tesseract')}")
 
     def extract(self, file_path: Path) -> ExtractedDocument:
         """
@@ -840,7 +850,7 @@ class UnstructuredExtractor:
                 )
 
         # Detect hierarchy
-        if self.config.enable_generic_hierarchy:
+        if getattr(self.config, 'enable_generic_hierarchy', True):
             hierarchy_features = detect_hierarchy_generic(elements, self.config)
         else:
             # Fallback: simple type-based hierarchy
@@ -862,8 +872,8 @@ class UnstructuredExtractor:
 
         # PHASE 2: Generate summaries (hierarchical document summary from section summaries)
         if self.config.generate_summaries:
-            from summary_generator import SummaryGenerator
-            from config import SummarizationConfig
+            from src.summary_generator import SummaryGenerator
+            from src.config import SummarizationConfig
 
             # Create summarization config
             summary_config = SummarizationConfig(
@@ -930,8 +940,8 @@ class UnstructuredExtractor:
             total_chars=len(full_text),
             title=self._extract_title(sections),
             document_summary=document_summary,  # PHASE 2: Hierarchical summary
-            extraction_method=f"unstructured_{self.config.model}",
-            config=self.config.__dict__,
+            extraction_method=f"unstructured_{getattr(self.config, 'model', 'yolox')}",
+            config=self.config.__dict__ if hasattr(self.config, '__dict__') else {},
         )
 
         logger.info(
@@ -961,19 +971,28 @@ class UnstructuredExtractor:
             List of Unstructured elements
         """
         file_suffix = file_path.suffix.lower()
-        logger.info(f"Partitioning {file_suffix} document with strategy={self.config.strategy}")
+
+        # Get config values with fallbacks for both config types
+        strategy = getattr(self.config, 'strategy', 'hi_res')
+        model = getattr(self.config, 'model', 'yolox')
+        languages = getattr(self.config, 'languages', ['ces', 'eng'])
+        include_page_breaks = getattr(self.config, 'include_page_breaks', True)
+        infer_table_structure = getattr(self.config, 'infer_table_structure', True)
+        extract_images = getattr(self.config, 'extract_images', False)
+
+        logger.info(f"Partitioning {file_suffix} document with strategy={strategy}")
 
         # Common parameters for all formats
         common_params = {
             "filename": str(file_path),
-            "languages": self.config.languages if hasattr(self.config, 'languages') else ["ces", "eng"],
-            "include_page_breaks": self.config.include_page_breaks if hasattr(self.config, 'include_page_breaks') else True,
+            "languages": languages,
+            "include_page_breaks": include_page_breaks,
         }
 
         try:
             # PDF - use specialized function with hi_res models
             if file_suffix == ".pdf":
-                logger.info(f"Using partition_pdf with model={self.config.model}")
+                logger.info(f"Using partition_pdf with model={model}")
                 # Available Unstructured models:
                 # - "yolox" (default, fast)
                 # - "detectron2_onnx" (Faster R-CNN R_50_FPN_3x)
@@ -981,10 +1000,10 @@ class UnstructuredExtractor:
                 # - "detectron2_quantized" (quantized for speed)
                 elements = partition_pdf(
                     **common_params,
-                    strategy=self.config.strategy,
-                    hi_res_model_name=self.config.model if self.config.strategy == "hi_res" else None,
-                    infer_table_structure=self.config.infer_table_structure,
-                    extract_images_in_pdf=self.config.extract_images,
+                    strategy=strategy,
+                    hi_res_model_name=model if strategy == "hi_res" else None,
+                    infer_table_structure=infer_table_structure,
+                    extract_images_in_pdf=extract_images,
                 )
 
             # PowerPoint - use specialized function

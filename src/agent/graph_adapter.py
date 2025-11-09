@@ -11,7 +11,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from src.graph import Neo4jGraphBuilder, GraphStorageConfig, GraphBackend, Neo4jConfig
-from src.graph.models import Entity, Relationship
+from src.graph.models import Entity, Relationship, KnowledgeGraph
 
 logger = logging.getLogger(__name__)
 
@@ -244,3 +244,146 @@ class GraphAdapter:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - cleanup."""
         self.close()
+
+
+class SimpleGraphAdapter:
+    """
+    Adapter for simple (in-memory) KnowledgeGraph backend.
+
+    Provides the same dict-like interface as GraphAdapter (Neo4j),
+    allowing tools to work with both backends transparently.
+
+    Example:
+        kg = KnowledgeGraph.load_json("unified_kg.json")
+        adapter = SimpleGraphAdapter(kg)
+
+        # Tools can now use dict interface
+        for entity in adapter.entities.values():
+            ...
+    """
+
+    def __init__(self, knowledge_graph: KnowledgeGraph):
+        """
+        Initialize adapter with KnowledgeGraph.
+
+        Args:
+            knowledge_graph: KnowledgeGraph object (simple backend)
+        """
+        self._kg = knowledge_graph
+
+    @property
+    def entities(self) -> Dict[str, Entity]:
+        """
+        Get all entities as dict.
+
+        Returns:
+            Dict mapping entity_id -> Entity
+        """
+        return {e.id: e for e in self._kg.entities}
+
+    @property
+    def relationships(self) -> List[Relationship]:
+        """
+        Get all relationships as list.
+
+        Returns:
+            List of Relationship objects
+        """
+        return self._kg.relationships
+
+    def get_entity(self, entity_id: str) -> Optional[Entity]:
+        """
+        Get single entity by ID.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            Entity object or None if not found
+        """
+        for entity in self._kg.entities:
+            if entity.id == entity_id:
+                return entity
+        return None
+
+    def get_relationships_for_entity(self, entity_id: str) -> List[Relationship]:
+        """
+        Get relationships for specific entity.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of relationships where entity is source or target
+        """
+        return [
+            r for r in self._kg.relationships
+            if r.source_entity_id == entity_id or r.target_entity_id == entity_id
+        ]
+
+    def get_outgoing_relationships(self, entity_id: str) -> List[Relationship]:
+        """
+        Get outgoing relationships where entity is the source.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of relationships where entity is the source
+        """
+        return [r for r in self._kg.relationships if r.source_entity_id == entity_id]
+
+    def get_incoming_relationships(self, entity_id: str) -> List[Relationship]:
+        """
+        Get incoming relationships where entity is the target.
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of relationships where entity is the target
+        """
+        return [r for r in self._kg.relationships if r.target_entity_id == entity_id]
+
+    def find_entities(
+        self,
+        entity_type: Optional[str] = None,
+        min_confidence: float = 0.0,
+        value_contains: Optional[str] = None,
+    ) -> List[Entity]:
+        """
+        Find entities matching criteria.
+
+        Args:
+            entity_type: Filter by entity type (e.g., 'standard', 'organization')
+            min_confidence: Minimum confidence score
+            value_contains: Substring to search in entity value
+
+        Returns:
+            List of matching entities
+        """
+        results = []
+
+        for entity in self._kg.entities:
+            # Check confidence
+            if entity.confidence < min_confidence:
+                continue
+
+            # Check type
+            if entity_type:
+                entity_type_value = entity.type.value if hasattr(entity.type, 'value') else entity.type
+                if entity_type_value != entity_type:
+                    continue
+
+            # Check value contains
+            if value_contains:
+                value_lower = value_contains.lower()
+                entity_value = (entity.value or "").lower()
+                entity_norm = (entity.normalized_value or "").lower()
+
+                if value_lower not in entity_value and value_lower not in entity_norm:
+                    continue
+
+            results.append(entity)
+
+        return results
