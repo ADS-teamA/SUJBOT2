@@ -1,9 +1,9 @@
 {
-  "total_cost_usd": 0.00070447,
+  "total_cost_usd": 0.030343119999999998,
   "cost_breakdown": {
-    "openai": 0.00070447
+    "openai": 0.030343119999999998
   },
-  "total_tokens": 5419,
+  "total_tokens": 133159,
   "document_count": 7,
-  "cost_per_document_usd": 0.00010063857142857143
+  "cost_per_document_usd": 0.004334731428571428
 }
