@@ -46,6 +46,7 @@ See Also:
 import logging
 import re
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -354,6 +355,75 @@ class ExtractionConfig:
 
 
 # ============================================================================
+# TEXT NORMALIZATION UTILITIES
+# ============================================================================
+
+
+def _normalize_text_diacritics(text: str) -> str:
+    """
+    Normalize Czech/Slovak diacritics in extracted text.
+
+    Fixes common OCR/extraction issues from Unstructured.io:
+    1. Combining diacritical marks → precomposed characters (Unicode NFC)
+    2. Standalone caron (ˇ U+02C7) before letters → correct diacritics
+    3. Common typos: "mimiřádná" → "mimořádná"
+
+    Args:
+        text: Raw text from Unstructured.io element
+
+    Returns:
+        Normalized text with correct Czech/Slovak diacritics
+
+    Examples:
+        >>> _normalize_text_diacritics("zaˇrízení")  # ˇ before r
+        "zařízení"
+        >>> _normalize_text_diacritics("mimiřádná událost")
+        "mimořádná událost"
+
+    Note:
+        Applied automatically in _build_sections() and detect_element_type_score()
+        to ensure consistent text quality throughout the extraction pipeline.
+    """
+    # 1. NFC normalization (combining marks → precomposed)
+    text = unicodedata.normalize('NFC', text)
+
+    # 2. Standalone caron (U+02C7) - reconstruct diacritics
+    # Pattern: [letter]ˇ OR ˇ[letter] → letter with caron
+    # Háček může být před NEBO za písmenem
+    caron_map = {
+        # Háček ZA písmenem (méně časté)
+        'rˇ': 'ř', 'Rˇ': 'Ř',
+        'cˇ': 'č', 'Cˇ': 'Č',
+        'sˇ': 'š', 'Sˇ': 'Š',
+        'zˇ': 'ž', 'Zˇ': 'Ž',
+        'eˇ': 'ě', 'Eˇ': 'Ě',
+        'nˇ': 'ň', 'Nˇ': 'Ň',
+        'dˇ': 'ď', 'Dˇ': 'Ď',
+        'tˇ': 'ť', 'Tˇ': 'Ť',
+        # Háček PŘED písmenem (časté v BZ_VR1)
+        'ˇr': 'ř', 'ˇR': 'Ř',
+        'ˇc': 'č', 'ˇC': 'Č',
+        'ˇs': 'š', 'ˇS': 'Š',
+        'ˇz': 'ž', 'ˇZ': 'Ž',
+        'ˇe': 'ě', 'ˇE': 'Ě',
+        'ˇn': 'ň', 'ˇN': 'Ň',
+        'ˇd': 'ď', 'ˇD': 'Ď',
+        'ˇt': 'ť', 'ˇT': 'Ť',
+    }
+    for wrong, correct in caron_map.items():
+        text = text.replace(wrong, correct)
+
+    # Remove orphaned carons (likely OCR errors)
+    text = text.replace('\u02c7', '')
+
+    # 3. Common OCR typos in Czech legal documents
+    text = text.replace('mimiřád', 'mimořád')  # mimořádná (extraordinary)
+    text = text.replace('Mimiřád', 'Mimořád')
+
+    return text
+
+
+# ============================================================================
 # BBOX ORIENTATION ANALYSIS
 # ============================================================================
 
@@ -505,7 +575,7 @@ def detect_element_type_score(element: Element) -> Tuple[str, float]:
         - score: 0.0 (low hierarchy) to 1.0 (high hierarchy)
     """
     category = element.category if hasattr(element, 'category') else 'Unknown'
-    text = str(element).strip()
+    text = _normalize_text_diacritics(str(element)).strip()
 
     # Title elements are high priority
     if category == "Title":
@@ -1067,7 +1137,7 @@ class UnstructuredExtractor:
         # Build parent-child relationships
         for i, feat in enumerate(hierarchy_features):
             elem = feat["element"]
-            text = str(elem)
+            text = _normalize_text_diacritics(str(elem))
 
             # Extract title from element
             # Use element category directly - more reliable than type_name
