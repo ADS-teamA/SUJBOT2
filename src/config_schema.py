@@ -12,7 +12,7 @@ Migration from .env to config.json (2025-11-10):
 """
 
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationError, ConfigDict
 from pathlib import Path
 import json
 
@@ -125,13 +125,13 @@ class ExtractionConfig(BaseModel):
     summary_model: Optional[str] = Field(None, description="Override summary model (uses llm_model if None)")
     summary_max_chars: int = Field(
         ...,
-        description="Summary length target (IMMUTABLE: 150 chars, research-optimal)",
+        description="Summary length target (research-optimal: 150 chars, valid range: 50-300)",
         ge=50,
         le=300
     )
     summary_style: Literal["generic", "expert"] = Field(
         ...,
-        description="Summary style (IMMUTABLE: 'generic' proven better)"
+        description="Summary style (research-optimal: 'generic', proven better for legal docs)"
     )
     use_batch_api: bool = Field(..., description="Use OpenAI Batch API for summaries (50% cheaper)")
     batch_api_poll_interval: int = Field(
@@ -295,7 +295,7 @@ class ChunkingConfig(BaseModel):
 
     max_tokens: int = Field(
         ...,
-        description="Max tokens per chunk (IMMUTABLE: 512, research-optimal)",
+        description="Max tokens per chunk (research-optimal: 512 for legal docs, valid range: 100-8192)",
         ge=100,
         le=8192
     )
@@ -328,7 +328,7 @@ class EmbeddingConfig(BaseModel):
     )
     normalize: bool = Field(
         ...,
-        description="Normalize embeddings for cosine similarity (IMMUTABLE: must be true for FAISS)"
+        description="Normalize embeddings for cosine similarity (REQUIRED: must be true for FAISS indexing)"
     )
 
 
@@ -733,7 +733,19 @@ class PipelineConfig(BaseModel):
 
 
 class RootConfig(BaseModel):
-    """Root configuration - ALL sections REQUIRED."""
+    """
+    Root configuration - ALL sections REQUIRED.
+
+    Strict validation enabled:
+    - No automatic type coercion ("512" will not be converted to 512)
+    - Unknown fields are rejected
+    - All types must match exactly
+    """
+
+    model_config = ConfigDict(
+        strict=True,  # Disable automatic type coercion
+        extra="forbid",  # Reject unknown fields
+    )
 
     api_keys: APIKeysConfig
     models: ModelsConfig
@@ -757,51 +769,95 @@ class RootConfig(BaseModel):
     cli: CLIConfig
     pipeline: PipelineConfig
 
+    def _is_placeholder(self, value: Optional[str]) -> bool:
+        """
+        Check if API key is a placeholder value from config.json.example.
+
+        Args:
+            value: API key value to check
+
+        Returns:
+            True if value is empty, None, or contains placeholder text
+        """
+        if not value:
+            return True
+
+        # Common placeholder patterns
+        PLACEHOLDER_PATTERNS = [
+            "REQUIRED_IF",
+            "YOUR_API_KEY",
+            "YOUR_AURA_PASSWORD",
+            "YOUR_INSTANCE_ID",
+            "sk-placeholder",
+            "example",
+            "INSERT",
+            "TODO",
+            "CHANGEME",
+        ]
+
+        return any(pattern in value.upper() for pattern in PLACEHOLDER_PATTERNS)
+
     def validate_api_keys(self):
         """
         Validate that at least one API key is provided and matches model selection.
+        Also checks for placeholder values from config.json.example.
 
         Raises:
-            ValueError: If required API keys are missing
+            ValueError: If required API keys are missing or contain placeholder values
         """
         # Check LLM API keys
         if self.models.llm_model.startswith("claude-"):
-            if not self.api_keys.anthropic_api_key:
+            if self._is_placeholder(self.api_keys.anthropic_api_key):
                 raise ValueError(
-                    f"ANTHROPIC_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'"
+                    f"ANTHROPIC_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"
+                    f"Found placeholder value: '{self.api_keys.anthropic_api_key}'\n"
+                    f"Please set a valid Anthropic API key in config.json (api_keys.anthropic_api_key)"
                 )
         elif self.models.llm_model.startswith(("gpt-", "o1-", "o3-", "gpt-5")):
-            if not self.api_keys.openai_api_key:
+            if self._is_placeholder(self.api_keys.openai_api_key):
                 raise ValueError(
-                    f"OPENAI_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'"
+                    f"OPENAI_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"
+                    f"Found placeholder value: '{self.api_keys.openai_api_key}'\n"
+                    f"Please set a valid OpenAI API key in config.json (api_keys.openai_api_key)"
                 )
         elif self.models.llm_model.startswith("gemini-"):
-            if not self.api_keys.google_api_key:
+            if self._is_placeholder(self.api_keys.google_api_key):
                 raise ValueError(
-                    f"GOOGLE_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'"
+                    f"GOOGLE_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"
+                    f"Found placeholder value: '{self.api_keys.google_api_key}'\n"
+                    f"Please set a valid Google API key in config.json (api_keys.google_api_key)"
                 )
 
         # Check embedding API keys
         if self.models.embedding_provider == "openai":
-            if not self.api_keys.openai_api_key:
+            if self._is_placeholder(self.api_keys.openai_api_key):
                 raise ValueError(
-                    f"OPENAI_API_KEY is REQUIRED for EMBEDDING_PROVIDER 'openai'"
+                    f"OPENAI_API_KEY is REQUIRED for EMBEDDING_PROVIDER 'openai'.\n"
+                    f"Found placeholder value: '{self.api_keys.openai_api_key}'\n"
+                    f"Please set a valid OpenAI API key in config.json (api_keys.openai_api_key)"
                 )
         elif self.models.embedding_provider == "voyage":
-            if not self.api_keys.voyage_api_key:
+            if self._is_placeholder(self.api_keys.voyage_api_key):
                 raise ValueError(
-                    f"VOYAGE_API_KEY is REQUIRED for EMBEDDING_PROVIDER 'voyage'"
+                    f"VOYAGE_API_KEY is REQUIRED for EMBEDDING_PROVIDER 'voyage'.\n"
+                    f"Found placeholder value: '{self.api_keys.voyage_api_key}'\n"
+                    f"Please set a valid Voyage API key in config.json (api_keys.voyage_api_key)"
                 )
 
-        # Validate at least one API key is set
-        if not any([
-            self.api_keys.anthropic_api_key,
-            self.api_keys.openai_api_key,
-            self.api_keys.voyage_api_key,
-            self.api_keys.google_api_key
-        ]):
+        # Validate at least one API key is set (not placeholder)
+        valid_keys = [
+            k for k in [
+                self.api_keys.anthropic_api_key,
+                self.api_keys.openai_api_key,
+                self.api_keys.voyage_api_key,
+                self.api_keys.google_api_key
+            ] if not self._is_placeholder(k)
+        ]
+
+        if not valid_keys:
             raise ValueError(
-                "At least ONE API key must be set in config.json (api_keys section)"
+                "At least ONE valid API key must be set in config.json (api_keys section).\n"
+                "Found only placeholder values. Please replace with actual API keys."
             )
 
     @classmethod
@@ -847,12 +903,26 @@ class RootConfig(BaseModel):
             # Run additional validation
             config.validate_api_keys()
             return config
-        except Exception as e:
+        except ValidationError as e:
+            # Pydantic validation errors - user config issues
             raise ValueError(
                 f"Configuration validation failed:\n{e}\n\n"
                 f"Please check config.json matches the required schema.\n"
                 f"See config.json.example for reference."
             ) from e
+        except ValueError as e:
+            # API key validation errors or other value errors
+            raise
+        except (TypeError, AttributeError) as e:
+            # Code bugs - don't hide these
+            import logging
+            logging.error(f"Internal validation error (this is a bug): {e}", exc_info=True)
+            raise RuntimeError(
+                f"Internal validation error. This is a bug in the validation code.\n"
+                f"Please report this issue at https://github.com/ADS-teamA/SUJBOT2/issues\n"
+                f"Include your config.json file (remove API keys) in the report."
+            ) from e
+        # DO NOT catch Exception - let unexpected errors propagate with full traceback
 
 
 def load_config(config_path: Optional[Path] = None) -> RootConfig:
