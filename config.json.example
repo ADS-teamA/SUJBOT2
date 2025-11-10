@@ -1,11 +1,5 @@
 {
-  "_comment": "Copy this file to config.json and fill in your values",
-  "api_keys": {
-    "anthropic_api_key": "REQUIRED_IF_USING_CLAUDE_MODELS",
-    "openai_api_key": "REQUIRED_IF_USING_GPT_OR_OPENAI_EMBEDDINGS",
-    "voyage_api_key": null,
-    "google_api_key": null
-  },
+  "_comment": "Copy this file to config.json and fill in your values. API keys are loaded from .env file (see .env.example)",
   "models": {
     "llm_model": "gpt-4o-mini",
     "llm_provider": null,

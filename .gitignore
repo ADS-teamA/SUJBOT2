@@ -1,8 +1,7 @@
-# Environment variables and config (contains API keys!)
+# Environment variables (contains API keys!)
 .env
 .env.local
 .env.*.local
-config.json
 output/
 # Python
 __pycache__/
@@ -47,7 +46,6 @@ env/
 
 # Output directories (large files)
 # Allow GRI 306 example output
-!output/GRI_306__Effluents_and_Waste_2016/
 phase1_output/
 phase3_output/
 

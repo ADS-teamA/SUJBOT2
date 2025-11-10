@@ -12,38 +12,51 @@ Migration from .env to config.json (2025-11-10):
 """
 
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field, field_validator, ValidationError, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ValidationError, ConfigDict, model_validator
 from pathlib import Path
 import json
+import os
+from dotenv import load_dotenv
 
 
 class APIKeysConfig(BaseModel):
-    """API Keys configuration - at least ONE key must be provided."""
+    """
+    API Keys configuration - loaded from .env file.
+
+    API keys are NEVER stored in config.json for security.
+    Instead, they are loaded from environment variables.
+    """
 
     anthropic_api_key: Optional[str] = Field(
-        None,
-        description="Anthropic Claude API key (REQUIRED if using Claude models)"
+        default=None,
+        description="Anthropic Claude API key (loaded from ANTHROPIC_API_KEY env var)"
     )
     openai_api_key: Optional[str] = Field(
-        None,
-        description="OpenAI API key (REQUIRED if using GPT models or OpenAI embeddings)"
+        default=None,
+        description="OpenAI API key (loaded from OPENAI_API_KEY env var)"
     )
     voyage_api_key: Optional[str] = Field(
-        None,
-        description="Voyage AI API key (REQUIRED if using Voyage embeddings)"
+        default=None,
+        description="Voyage AI API key (loaded from VOYAGE_API_KEY env var)"
     )
     google_api_key: Optional[str] = Field(
-        None,
-        description="Google Gemini API key (REQUIRED if using Gemini models)"
+        default=None,
+        description="Google Gemini API key (loaded from GOOGLE_API_KEY env var)"
     )
 
-    @field_validator("*", mode="before")
-    @classmethod
-    def empty_string_to_none(cls, v):
-        """Convert empty strings to None."""
-        if v == "":
-            return None
-        return v
+    @model_validator(mode="after")
+    def load_from_env(self):
+        """Load API keys from environment variables (.env file)."""
+        # Load .env file if it exists
+        load_dotenv()
+
+        # Load API keys from environment, overriding any values from JSON
+        self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY") or self.anthropic_api_key
+        self.openai_api_key = os.getenv("OPENAI_API_KEY") or self.openai_api_key
+        self.voyage_api_key = os.getenv("VOYAGE_API_KEY") or self.voyage_api_key
+        self.google_api_key = os.getenv("GOOGLE_API_KEY") or self.google_api_key
+
+        return self
 
 
 class ModelsConfig(BaseModel):
@@ -747,7 +760,7 @@ class RootConfig(BaseModel):
         extra="forbid",  # Reject unknown fields
     )
 
-    api_keys: APIKeysConfig
+    api_keys: APIKeysConfig = Field(default_factory=APIKeysConfig)
     models: ModelsConfig
     extraction: ExtractionConfig
     unstructured: UnstructuredConfig
@@ -800,32 +813,32 @@ class RootConfig(BaseModel):
     def validate_api_keys(self):
         """
         Validate that at least one API key is provided and matches model selection.
-        Also checks for placeholder values from config.json.example.
+        API keys are loaded from .env file - this validation runs after loading.
 
         Raises:
-            ValueError: If required API keys are missing or contain placeholder values
+            ValueError: If required API keys are missing
         """
         # Check LLM API keys
         if self.models.llm_model.startswith("claude-"):
             if self._is_placeholder(self.api_keys.anthropic_api_key):
                 raise ValueError(
                     f"ANTHROPIC_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"
-                    f"Found placeholder value: '{self.api_keys.anthropic_api_key}'\n"
-                    f"Please set a valid Anthropic API key in config.json (api_keys.anthropic_api_key)"
+                    f"Please set ANTHROPIC_API_KEY in your .env file.\n"
+                    f"Example: ANTHROPIC_API_KEY=sk-ant-..."
                 )
         elif self.models.llm_model.startswith(("gpt-", "o1-", "o3-", "gpt-5")):
             if self._is_placeholder(self.api_keys.openai_api_key):
                 raise ValueError(
                     f"OPENAI_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"
-                    f"Found placeholder value: '{self.api_keys.openai_api_key}'\n"
-                    f"Please set a valid OpenAI API key in config.json (api_keys.openai_api_key)"
+                    f"Please set OPENAI_API_KEY in your .env file.\n"
+                    f"Example: OPENAI_API_KEY=sk-proj-..."
                 )
         elif self.models.llm_model.startswith("gemini-"):
             if self._is_placeholder(self.api_keys.google_api_key):
                 raise ValueError(
                     f"GOOGLE_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"
-                    f"Found placeholder value: '{self.api_keys.google_api_key}'\n"
-                    f"Please set a valid Google API key in config.json (api_keys.google_api_key)"
+                    f"Please set GOOGLE_API_KEY in your .env file.\n"
+                    f"Example: GOOGLE_API_KEY=..."
                 )
 
         # Check embedding API keys
@@ -833,15 +846,15 @@ class RootConfig(BaseModel):
             if self._is_placeholder(self.api_keys.openai_api_key):
                 raise ValueError(
                     f"OPENAI_API_KEY is REQUIRED for EMBEDDING_PROVIDER 'openai'.\n"
-                    f"Found placeholder value: '{self.api_keys.openai_api_key}'\n"
-                    f"Please set a valid OpenAI API key in config.json (api_keys.openai_api_key)"
+                    f"Please set OPENAI_API_KEY in your .env file.\n"
+                    f"Example: OPENAI_API_KEY=sk-proj-..."
                 )
         elif self.models.embedding_provider == "voyage":
             if self._is_placeholder(self.api_keys.voyage_api_key):
                 raise ValueError(
                     f"VOYAGE_API_KEY is REQUIRED for EMBEDDING_PROVIDER 'voyage'.\n"
-                    f"Found placeholder value: '{self.api_keys.voyage_api_key}'\n"
-                    f"Please set a valid Voyage API key in config.json (api_keys.voyage_api_key)"
+                    f"Please set VOYAGE_API_KEY in your .env file.\n"
+                    f"Example: VOYAGE_API_KEY=..."
                 )
 
         # Validate at least one API key is set (not placeholder)
@@ -856,8 +869,9 @@ class RootConfig(BaseModel):
 
         if not valid_keys:
             raise ValueError(
-                "At least ONE valid API key must be set in config.json (api_keys section).\n"
-                "Found only placeholder values. Please replace with actual API keys."
+                "At least ONE valid API key must be set in your .env file.\n"
+                "Please set ANTHROPIC_API_KEY, OPENAI_API_KEY, VOYAGE_API_KEY, or GOOGLE_API_KEY.\n"
+                "See .env.example for template."
             )
 
     @classmethod
