@@ -90,6 +90,11 @@ class DocumentSection:
 
     Previously used with Docling (v1.x), now populated by Unstructured.io (v2.x).
     Field structure remains stable to preserve existing vector stores and tests.
+
+    Note on level vs depth:
+    - level: Semantic hierarchy (0=document, 1=chapter, 2=section, 3=subsection)
+    - depth: Tree position (depth = parent.depth + 1)
+    - They are NOT equivalent: documents with skipped levels break depth = level + 1
     """
 
     section_id: str
@@ -99,16 +104,14 @@ class DocumentSection:
     depth: int  # Depth in hierarchy tree (1=root, 2=child of root, etc.)
     parent_id: Optional[str]
     children_ids: List[str]
-    ancestors: List[str]  # List of parent titles
+    ancestors: List[str]  # List of parent titles (used by chunker for context)
     path: str  # Full path: "Chapter 1 > Section 1.1 > Subsection 1.1.1"
     page_number: int
     char_start: int
     char_end: int
     content_length: int
 
-    # Unstructured.io element tracking
-    element_id: Optional[str] = None  # Original element.id from Unstructured
-    unstructured_parent_id: Optional[str] = None  # Original parent_id from Unstructured
+    # Unstructured.io metadata (used for type-based filtering)
     element_type: Optional[str] = None  # Element type: Title, NarrativeText, ListItem, etc.
     element_category: Optional[str] = None  # Element category from Unstructured
 
@@ -131,8 +134,6 @@ class DocumentSection:
             "char_start": self.char_start,
             "char_end": self.char_end,
             "content_length": self.content_length,
-            "element_id": self.element_id,
-            "unstructured_parent_id": self.unstructured_parent_id,
             "element_type": self.element_type,
             "element_category": self.element_category,
             "summary": self.summary,
@@ -255,7 +256,7 @@ class ExtractionConfig:
     # Table extraction
     infer_table_structure: bool = True
     extract_images: bool = False
-    include_page_breaks: bool = True
+    include_page_breaks: bool = False  # PageBreaks don't contain structural content
 
     # Rotated text filtering
     filter_rotated_text: bool = True
@@ -608,8 +609,8 @@ def detect_element_type_score(element: Element) -> Tuple[str, float]:
     if category == "NarrativeText":
         return ("Narrative Text", 0.2)
 
-    # Headers/footers are outside hierarchy
-    if category in ["Header", "Footer", "PageBreak"]:
+    # Headers/footers are outside hierarchy (PageBreaks removed - not structural)
+    if category in ["Header", "Footer"]:
         return (category, 0.0)
 
     # Tables
@@ -1145,6 +1146,90 @@ class UnstructuredExtractor:
         logger.warning("_partition_pdf is deprecated, use _partition_document instead")
         return self._partition_document(pdf_path)
 
+    def _validate_page_boundary_hierarchy(self, sections: List[DocumentSection]) -> None:
+        """
+        Validate parent-child relationships across page boundaries.
+
+        Checks that page breaks don't break the document hierarchy structure.
+        Logs warnings for suspicious patterns (e.g., child on page N+2 but parent on page N).
+
+        Args:
+            sections: List of DocumentSection objects
+
+        Raises:
+            Warning logs if hierarchy inconsistencies detected
+        """
+        broken_relationships = []
+        suspicious_gaps = []
+
+        # Build section lookup
+        section_by_id = {s.section_id: s for s in sections}
+
+        for section in sections:
+            if not section.parent_id:
+                continue  # Root sections have no parent
+
+            parent = section_by_id.get(section.parent_id)
+            if not parent:
+                broken_relationships.append({
+                    "child": section.section_id,
+                    "child_page": section.page_number,
+                    "parent_id": section.parent_id,
+                    "error": "Parent not found"
+                })
+                continue
+
+            # Check page gap between parent and child
+            page_gap = abs(section.page_number - parent.page_number)
+
+            # Warning: Child is more than 1 page away from parent (suspicious)
+            # Exception: Multi-page chapters are OK if level difference >= 2
+            level_diff = section.level - parent.level
+            if page_gap > 1 and level_diff < 2:
+                suspicious_gaps.append({
+                    "child": section.section_id,
+                    "child_page": section.page_number,
+                    "parent": parent.section_id,
+                    "parent_page": parent.page_number,
+                    "page_gap": page_gap,
+                    "level_diff": level_diff,
+                })
+
+        # Log warnings
+        if broken_relationships:
+            logger.warning(
+                f"Found {len(broken_relationships)} sections with missing parents:\n" +
+                "\n".join(
+                    f"  - Section {rel['child']} (page {rel['child_page']}) → "
+                    f"parent {rel['parent_id']} not found"
+                    for rel in broken_relationships[:5]  # Show first 5
+                )
+            )
+
+        if suspicious_gaps:
+            logger.warning(
+                f"Found {len(suspicious_gaps)} suspicious parent-child page gaps:\n" +
+                "\n".join(
+                    f"  - Section {gap['child']} (page {gap['child_page']}) → "
+                    f"parent {gap['parent']} (page {gap['parent_page']}), "
+                    f"gap={gap['page_gap']} pages, level_diff={gap['level_diff']}"
+                    for gap in suspicious_gaps[:5]  # Show first 5
+                )
+            )
+
+        # Log summary
+        total_cross_page = sum(
+            1 for s in sections
+            if s.parent_id and section_by_id.get(s.parent_id)
+            and s.page_number != section_by_id[s.parent_id].page_number
+        )
+
+        if total_cross_page > 0:
+            logger.info(
+                f"Hierarchy validation complete: {total_cross_page} parent-child relationships "
+                f"cross page boundaries (OK if validated)"
+            )
+
     def _build_sections(self, hierarchy_features: List[Dict]) -> List[DocumentSection]:
         """Build DocumentSection objects from hierarchy features."""
         sections = []
@@ -1199,8 +1284,8 @@ class UnstructuredExtractor:
 
                         # Only add if this is at a higher level (lower number) than previous
                         if elem_k_level < prev_level:
-                            # Skip Headers, Footers, PageBreaks - they're not structural content
-                            if elem_k_category not in ["Header", "Footer", "PageBreak"]:
+                            # Skip Headers, Footers - they're not structural content
+                            if elem_k_category not in ["Header", "Footer"]:
                                 ancestor_title = str(elem_k).strip()[:100]
                                 if ancestor_title:  # Only add non-empty titles
                                     ancestors.insert(0, ancestor_title)
@@ -1232,8 +1317,6 @@ class UnstructuredExtractor:
                 char_start=char_offset,
                 char_end=char_offset + len(text),
                 content_length=len(text),
-                element_id=feat.get("element_id"),  # Track Unstructured element ID
-                unstructured_parent_id=feat.get("parent_id"),  # Track original parent_id
                 element_type=type(elem).__name__,  # e.g., "Title", "NarrativeText", "ListItem"
                 element_category=elem.category if hasattr(elem, 'category') else None,
             )
@@ -1247,6 +1330,9 @@ class UnstructuredExtractor:
                 parent_idx = int(section.parent_id.split("_")[1]) - 1
                 if 0 <= parent_idx < len(sections):
                     sections[parent_idx].children_ids.append(section.section_id)
+
+        # VALIDATION: Check parent-child relationships across page boundaries
+        self._validate_page_boundary_hierarchy(sections)
 
         return sections
 
