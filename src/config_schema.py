@@ -162,12 +162,6 @@ class ExtractionConfig(BaseModel):
     generate_markdown: bool = Field(..., description="Generate markdown output")
     generate_json: bool = Field(..., description="Generate JSON output")
 
-    # Layout model
-    layout_model: Literal["HERON", "EGRET_LARGE", "EGRET_XLARGE"] = Field(
-        ...,
-        description="Docling layout model (EGRET_XLARGE recommended)"
-    )
-
 
 class UnstructuredConfig(BaseModel):
     """Unstructured.io extraction configuration."""
