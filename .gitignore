@@ -1,7 +1,8 @@
-# Environment variables (contains API keys!)
+# Environment variables and config (contains API keys!)
 .env
 .env.local
 .env.*.local
+config.json
 output/
 # Python
 __pycache__/
