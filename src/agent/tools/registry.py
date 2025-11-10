@@ -73,7 +73,9 @@ class ToolRegistry:
             if tool_class.requires_kg and not knowledge_graph:
                 reason = "Requires knowledge graph (use --kg option)"
                 logger.warning(
-                    f"Tool '{tool_name}' requires knowledge graph but none provided. Skipping."
+                    f"Tool '{tool_name}' requires knowledge graph but none provided. Skipping. "
+                    f"Run indexing with ENABLE_KNOWLEDGE_GRAPH=true to generate: "
+                    f"uv run python run_pipeline.py data/your_docs/"
                 )
                 self._unavailable_tools[tool_name] = reason
                 continue

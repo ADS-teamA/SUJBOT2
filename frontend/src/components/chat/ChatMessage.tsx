@@ -186,18 +186,58 @@ export function ChatMessage({
           </div>
         ) : (
           <>
-            {/* Tool calls display (if any) */}
-            {message.toolCalls && message.toolCalls.length > 0 && (
-              <div className="space-y-2 mb-3">
-                {message.toolCalls.map((toolCall) => (
-                  <ToolCallDisplay key={toolCall.id} toolCall={toolCall} />
-                ))}
-              </div>
-            )}
-
             {/* Message content */}
             <div className="prose dark:prose-invert prose-sm max-w-none">
               {(() => {
+              // Display strategy:
+              // - If text contains [Using ...] markers → inline rendering (tools shown inline with text)
+              // - If NO markers but toolCalls exist → fallback rendering (tools shown at top)
+              // This prevents duplicate display (tools at top + inline)
+
+              const hasMarkers = /\[Using\s+[^\]]+\.\.\.\]/.test(message.content);
+              const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
+
+              // Fallback: Show tools at top if no markers (backward compatibility)
+              if (!hasMarkers && hasToolCalls) {
+                return (
+                  <>
+                    {/* Tool calls without inline markers - show at top */}
+                    <div className="space-y-2 mb-3">
+                      {message.toolCalls!.map((toolCall) => (
+                        <ToolCallDisplay key={toolCall.id} toolCall={toolCall} />
+                      ))}
+                    </div>
+                    {/* Regular markdown content */}
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeHighlight]}
+                      components={{
+                        code({ node, inline, className, children, ...props }: any) {
+                          return inline ? (
+                            <code
+                              className={cn(
+                                'px-1 py-0.5 rounded text-sm',
+                                'bg-accent-100 dark:bg-accent-800'
+                              )}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          ) : (
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </>
+                );
+              }
+
+              // Primary path: Inline rendering with markers
               // Inline tool call display with content parsing
               //
               // Edge case handling:
@@ -208,8 +248,6 @@ export function ChatMessage({
               //    - Content + tools: Response with tool usage (most common)
               //    - Tools only: Tool-only response (valid, no error)
               //    - Neither: Error state (LLM bug or streaming failure)
-
-              const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
 
               // Check if content has substance (after removing [Using ...] markers)
               // Remove markers and collapse all whitespace (including Unicode nbsp, zero-width)

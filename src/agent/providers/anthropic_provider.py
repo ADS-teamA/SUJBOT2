@@ -93,7 +93,9 @@ class AnthropicProvider(BaseProvider):
         )
 
         return ProviderResponse(
-            content=response.content,
+            content=[
+                block.model_dump() for block in response.content
+            ],  # Convert Pydantic models to dicts
             stop_reason=response.stop_reason,
             usage={
                 "input_tokens": response.usage.input_tokens,
@@ -186,7 +188,12 @@ class AnthropicProvider(BaseProvider):
         Raises:
             ValueError: If model is not a Claude model
         """
-        if "claude" not in model.lower() and "haiku" not in model.lower() and "sonnet" not in model.lower() and "opus" not in model.lower():
+        if (
+            "claude" not in model.lower()
+            and "haiku" not in model.lower()
+            and "sonnet" not in model.lower()
+            and "opus" not in model.lower()
+        ):
             raise ValueError(f"Invalid Claude model: {model}")
 
         old_model = self.model

@@ -108,14 +108,14 @@ Fast, frequently-used tools for common retrieval tasks:
 
 Quality tools for complex retrieval scenarios:
 
-- **multi_hop_search** - Multi-hop graph traversal (requires KG)
+- **graph_search** - Unified graph search with 4 modes: entity_mentions, entity_details, relationships, multi_hop (requires KG)
 - **compare_documents** - Compare two documents for similarities/differences
-- **find_related_chunks** - Find semantically related chunks
-- **temporal_search** - Search with date/time filters
-- **hybrid_search_with_filters** - Hybrid search + metadata filtering
-- **cross_reference_search** - Find cross-references to clauses/articles
+- **explain_search_results** - Explain search scores and retrieval methods
+- **filtered_search** - Advanced search with 3 methods (hybrid/bm25_only/dense_only) + 5 filter types
+- **similarity_search** - Find semantically similar chunks (within/across documents)
+- **expand_context** - Expand chunk context with section/similarity/hybrid strategies
 
-**Use when:** Complex queries, document comparison, temporal analysis, cross-referencing
+**Use when:** Complex queries, document comparison, graph traversal, filtered/targeted search
 
 ### Tier 3: Analysis Tools (5 tools, ~1-3s)
 
@@ -207,10 +207,11 @@ The agent includes several advanced features that are built into the tool system
 
 **Automatic:** If knowledge graph exists in vector store, it's automatically loaded.
 
-**What it does:** Enables entity-aware search and relationship queries through specialized tools:
-- `explain_entity` - Get comprehensive entity information
-- `multi_hop_search` - Multi-hop graph traversal
-- `get_entity_relationships` - Query entity relationships
+**What it does:** Enables entity-aware search and relationship queries through the graph_search tool:
+- `graph_search` mode='entity_mentions' - Find chunks mentioning specific entities
+- `graph_search` mode='entity_details' - Get comprehensive entity information with relationships
+- `graph_search` mode='relationships' - Query entity relationships with filtering
+- `graph_search` mode='multi_hop' - Multi-hop BFS traversal for complex reasoning
 
 ### Tool-Based Optimization
 
@@ -320,9 +321,9 @@ The agent includes several advanced features that are built into the tool system
 ├─────────────────────────────────────────────────────────────┤
 │  Tool System (tools/)                                       │
 │  ├─ Base tool abstraction                                   │
-│  ├─ Tool registry (16 tools)                                │
-│  │   ├─ Tier 1: Basic (6 tools)                            │
-│  │   ├─ Tier 2: Advanced (7 tools)                         │
+│  ├─ Tool registry (14 tools)                                │
+│  │   ├─ Tier 1: Basic (5 tools)                            │
+│  │   ├─ Tier 2: Advanced (6 tools)                         │
 │  │   └─ Tier 3: Analysis (3 tools)                         │
 │  └─ Utility functions                                       │
 ├─────────────────────────────────────────────────────────────┤
@@ -376,8 +377,8 @@ python run_pipeline.py data/your_documents/
    ```
 
 3. **Use non-KG alternatives:**
-   - Instead of `explain_entity` → use `entity_search`
-   - Instead of `multi_hop_search` → use `simple_search`
+   - Instead of `graph_search` → use `filtered_search` or `similarity_search`
+   - The agent will automatically use non-graph tools when KG is not available
 
 ### "Reranker model download slow"
 
@@ -614,7 +615,7 @@ Debug mode runs comprehensive validation on startup:
 # ✅ Knowledge graph (if enabled)
 # ✅ Embedding compatibility
 # ✅ Claude model access
-# ✅ Tool registry (all 16 tools registered)
+# ✅ Tool registry (all 14 tools registered)
 ```
 
 ### Integration Test
@@ -730,7 +731,7 @@ STARTING COMPREHENSIVE VALIDATION
 ✅ Dependency: faiss - Vector search - installed
 ✅ API Key: ANTHROPIC - Anthropic API key present (format valid)
 ✅ Vector Store - Vector store loaded successfully (12,453 vectors)
-✅ Tool Registry - All 16 tools registered
+✅ Tool Registry - All 14 tools registered
 
 ================================================================================
 VALIDATION SUMMARY: 15/15 checks passed
@@ -742,7 +743,7 @@ VALIDATION SUMMARY: 15/15 checks passed
 Loading vector store...
 Initializing embedder...
 Loading reranker...
-✅ 16 tools initialized
+✅ 14 tools initialized
 
 ✅ Agent ready!
 

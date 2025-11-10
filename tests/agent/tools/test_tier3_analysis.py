@@ -16,12 +16,12 @@ from datetime import datetime
 from collections import Counter
 
 from src.agent.tools.tier3_analysis import (
-    ExplainEntityTool,
-    GetEntityRelationshipsTool,
+    # ExplainEntityTool,  # REMOVED - functionality moved to GraphSearchTool (tier 2)
+    # GetEntityRelationshipsTool,  # REMOVED - functionality moved to GraphSearchTool (tier 2)
     TimelineViewTool,
     SummarizeSectionTool,
-    GetStatisticsTool,
-    GetIndexStatisticsTool,
+    GetStatsTool,  # Was GetStatisticsTool
+    # GetIndexStatisticsTool,  # TODO: Check if this exists
 )
 from src.agent.tools.base import ToolResult
 

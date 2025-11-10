@@ -102,6 +102,11 @@ class BM25Index:
             tokens = self._tokenize(chunk.content)
             self.tokenized_corpus.append(tokens)
 
+            # Build hierarchical path: document_id > section_path
+            hierarchical_path = chunk.metadata.document_id
+            if chunk.metadata.section_path:
+                hierarchical_path = f"{chunk.metadata.document_id} > {chunk.metadata.section_path}"
+
             # Store metadata (same structure as FAISSVectorStore)
             meta = {
                 "chunk_id": chunk.chunk_id,
@@ -109,6 +114,7 @@ class BM25Index:
                 "section_id": chunk.metadata.section_id,
                 "section_title": chunk.metadata.section_title,
                 "section_path": chunk.metadata.section_path,
+                "hierarchical_path": hierarchical_path,  # NEW: Full path for breadcrumb navigation
                 "page_number": chunk.metadata.page_number,
                 "layer": chunk.metadata.layer,
                 "content": chunk.raw_content,  # Store without context for generation
@@ -296,7 +302,13 @@ class BM25Index:
 
         # Rebuild BM25 index and tokenized corpus
         index.tokenized_corpus = [index._tokenize(doc) for doc in index.corpus]
-        index.bm25 = BM25Okapi(index.tokenized_corpus)
+
+        # Handle empty corpus (skip BM25 initialization to avoid division by zero)
+        if index.tokenized_corpus:
+            index.bm25 = BM25Okapi(index.tokenized_corpus)
+        else:
+            index.bm25 = None
+            logger.warning("Loaded empty BM25 index (0 documents) - BM25 model not initialized")
 
         logger.info(f"BM25 index loaded: {len(index.corpus)} documents")
 
@@ -747,6 +759,26 @@ class HybridVectorStore:
         logger.info("Hybrid store loaded")
 
         return cls(faiss_store=faiss_store, bm25_store=bm25_store, fusion_k=config["fusion_k"])
+
+    def get_chunk_by_id(self, chunk_id: str) -> Optional[Dict]:
+        """
+        Retrieve a chunk by its ID from metadata_layer3.
+
+        Used by graph_search tool for entity_mentions mode.
+
+        Args:
+            chunk_id: The chunk ID to retrieve
+
+        Returns:
+            Dict with chunk metadata and content, or None if not found
+        """
+        # Search in FAISS metadata_layer3
+        for meta in self.faiss_store.metadata_layer3:
+            if meta.get("chunk_id") == chunk_id:
+                return meta
+
+        # Not found
+        return None
 
     def get_stats(self) -> Dict:
         """

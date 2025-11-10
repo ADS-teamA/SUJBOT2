@@ -324,7 +324,7 @@
     <div class="container">
         <a href="index.html" class="back-button">Back to Home</a>
         <h1>💬 SUJBOT2 User Search Pipeline</h1>
-        <p class="subtitle">Phase 7: Od user query k AI odpovědi (Claude SDK Agent + 16 Tools)</p>
+        <p class="subtitle">Phase 7: Od user query k AI odpovědi (Claude SDK Agent + 14 Tools)</p>
 
         <div class="pipeline">
             <!-- STEP 1: User Input -->
@@ -427,7 +427,7 @@ $ ./run_cli.sh --debug
                 </div>
                 <div class="step-content">
                     <div class="step-description">
-                        <strong>Úkol:</strong> Agent core zpracuje query, vytvoří system prompt, registruje 16 tools a odešle request do Claude/OpenAI API.<br>
+                        <strong>Úkol:</strong> Agent core zpracuje query, vytvoří system prompt, registruje 14 tools a odešle request do Claude/OpenAI API.<br>
                         <strong>Model (default):</strong> Claude 4.5 Haiku (rychlý & levný)<br>
                         <strong>Přepínatelné:</strong> Claude 4.5 Sonnet, GPT-5 Mini, GPT-5 Nano (via <code>/model</code> command)
                     </div>
@@ -447,8 +447,8 @@ messages = [
     }
 ]
 
-<span class="code-comment"># Tools registry (16 tools)</span>
-tools = registry.get_claude_sdk_tools()  <span class="code-comment"># → 16 tool definitions</span>
+<span class="code-comment"># Tools registry (14 tools)</span>
+tools = registry.get_claude_sdk_tools()  <span class="code-comment"># → 14 tool definitions</span>
 
 <span class="code-comment"># Call Claude/OpenAI API s streaming</span>
 response = client.messages.stream(
@@ -469,7 +469,7 @@ response = client.messages.stream(
                             <strong>Pro dotaz "Jaká je sankce za porušení GDPR?":</strong><br>
                             → Agent pravděpodobně použije <code>search</code> (unified hybrid search) s <code>num_expands=1</code><br>
                             → Pokud chce víc kontextu: <code>expand_context</code><br>
-                            → Pokud selhává: <code>exact_match_search</code> (BM25 keyword)<br>
+                            → Pokud selhává: <code>filtered_search</code> s <code>search_method="bm25_only"</code> (BM25 keyword)<br>
                             <br>
                             <strong>Implementace:</strong> <code>src/agent/agent_core.py</code>
                         </div>
@@ -646,7 +646,7 @@ spolupráci s úřadem...
 
         <!-- Tools Section -->
         <div class="tools-section">
-            <div class="section-title">🛠️ 17 Agent Tools (3 Tiers)</div>
+            <div class="section-title">🛠️ 14 Agent Tools (3 Tiers)</div>
 
             <!-- TIER 1 -->
             <div class="tier-section">
@@ -699,7 +699,7 @@ spolupráci s úřadem...
                     <div class="tool-card">
                         <div class="tool-name">list_available_tools</div>
                         <div class="tool-description">
-                            List all 16 tools grouped by tier with availability status (requires KG/reranker).
+                            List all 14 tools grouped by tier with availability status (requires KG/reranker).
                         </div>
                         <div class="tool-meta">
                             <span class="tool-badge speed">~30ms</span>
@@ -718,16 +718,6 @@ spolupráci s úřadem...
                         </div>
                     </div>
 
-                    <div class="tool-card">
-                        <div class="tool-name">exact_match_search</div>
-                        <div class="tool-description">
-                            Fast BM25 keyword search for exact matches, acronyms, specific terms. No semantic search.
-                        </div>
-                        <div class="tool-meta">
-                            <span class="tool-badge speed">~100ms</span>
-                            <span class="tool-badge">BM25 only</span>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -741,16 +731,17 @@ spolupráci s úřadem...
 
                 <div class="tools-grid">
                     <div class="tool-card">
-                        <div class="tool-name">multi_hop_search</div>
+                        <div class="tool-name">graph_search</div>
                         <div class="tool-description">
-                            Multi-hop search via knowledge graph traversal. Finds documents connected through intermediate entities/relationships.
+                            Unified knowledge graph search with 4 modes: entity_mentions (find chunks), entity_details (full info), relationships (query connections), multi_hop (BFS traversal).
                             <br><br>
-                            <strong>Use case:</strong> "Find all regulations related to GDPR through data protection laws"
+                            <strong>Use case:</strong> "What topics are covered by standards issued by GSSB?" (multi_hop)
+                            <br><strong>Replaces:</strong> multi_hop_search + entity_tool
                         </div>
                         <div class="tool-meta">
-                            <span class="tool-badge speed">~500-1000ms</span>
+                            <span class="tool-badge speed">~300ms-2s</span>
                             <span class="tool-badge requires">Requires KG</span>
-                            <span class="tool-badge">max_hops: 1-3</span>
+                            <span class="tool-badge">4 modes</span>
                         </div>
                     </div>
 
@@ -781,13 +772,14 @@ spolupráci s úřadem...
                     <div class="tool-card">
                         <div class="tool-name">filtered_search</div>
                         <div class="tool-description">
-                            Hybrid search with filters: by doc_id, section_id, date range, metadata.
+                            Unified search with 3 methods (hybrid/bm25_only/dense_only) + 5 filter types (document, section, temporal, metadata, content).
                             <br><br>
-                            <strong>Use case:</strong> "Search only in Document X, Section 5"
+                            <strong>Use case:</strong> "Search only in Document X, Section 5" or fast BM25-only keyword search
+                            <br><strong>Replaces:</strong> exact_match_search (via search_method parameter)
                         </div>
                         <div class="tool-meta">
-                            <span class="tool-badge speed">~300-600ms</span>
-                            <span class="tool-badge">Filter options</span>
+                            <span class="tool-badge speed">~50ms-600ms</span>
+                            <span class="tool-badge">3 search methods</span>
                         </div>
                     </div>
 
@@ -799,17 +791,6 @@ spolupráci s úřadem...
                         <div class="tool-meta">
                             <span class="tool-badge speed">~200ms</span>
                             <span class="tool-badge">FAISS only</span>
-                        </div>
-                    </div>
-
-                    <div class="tool-card">
-                        <div class="tool-name">entity_tool</div>
-                        <div class="tool-description">
-                            Search/analyze entities in knowledge graph: persons, organizations, laws, dates, money, etc. (18 entity types)
-                        </div>
-                        <div class="tool-meta">
-                            <span class="tool-badge speed">~400ms</span>
-                            <span class="tool-badge requires">Requires KG</span>
                         </div>
                     </div>
 

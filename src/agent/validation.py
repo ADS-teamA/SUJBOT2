@@ -323,11 +323,11 @@ class AgentValidator:
             )
             return
 
-        # Check required files (FAISSVectorStore naming convention)
+        # Check required files (FAISSVectorStore naming convention - new format)
         required_files = [
-            "layer1.index",
-            "layer2.index",
-            "layer3.index",
+            "faiss_layer1.index",
+            "faiss_layer2.index",
+            "faiss_layer3.index",
         ]
 
         missing_files = []
@@ -429,15 +429,43 @@ class AgentValidator:
             )
             return
 
-        # Try loading KG
+        # Try loading KG (either single file or directory with multiple files)
         try:
             from src.graph.models import KnowledgeGraph
 
             logger.debug(f"Loading knowledge graph from {kg_path}...")
-            kg = KnowledgeGraph.load_json(str(kg_path))
 
-            entity_count = len(kg.entities)
-            rel_count = len(kg.relationships)
+            # Check if path is a directory or single file
+            if kg_path.is_dir():
+                # Load all *_kg.json files from directory
+                kg_files = sorted(kg_path.glob("*_kg.json"))
+                if not kg_files:
+                    raise FileNotFoundError(f"No knowledge graph files (*_kg.json) found in {kg_path}")
+
+                logger.debug(f"Found {len(kg_files)} knowledge graph files in directory")
+
+                # Load and merge all KG files
+                kg = None
+                entity_count = 0
+                rel_count = 0
+
+                for kg_file in kg_files:
+                    kg_single = KnowledgeGraph.load_json(str(kg_file))
+                    if kg is None:
+                        kg = kg_single
+                    else:
+                        # Merge graphs
+                        kg.entities.extend(kg_single.entities)
+                        kg.relationships.extend(kg_single.relationships)
+
+                    entity_count += len(kg_single.entities)
+                    rel_count += len(kg_single.relationships)
+                    logger.debug(f"  Loaded {kg_file.name}: {len(kg_single.entities)} entities, {len(kg_single.relationships)} relationships")
+            else:
+                # Load single file
+                kg = KnowledgeGraph.load_json(str(kg_path))
+                entity_count = len(kg.entities)
+                rel_count = len(kg.relationships)
 
             if entity_count == 0:
                 self.results.append(
@@ -547,12 +575,14 @@ class AgentValidator:
             registry = get_registry()
             tool_count = len(registry._tool_classes)
 
-            # Minimum expected tools (Tier 1: 5, Tier 2: 7, Tier 3: 3 = 15 total)
-            # Tier 1: search, get_document_list, list_available_tools, get_document_info, exact_match_search
-            # Tier 2: multi_hop_search, compare_documents, explain_search_results, filtered_search, similarity_search, get_chunk_context, expand_search_context
-            # Tier 3: timeline_view, summarize_section, get_stats
-            # Update this count when adding new tools to the registry
-            MINIMUM_TOOL_COUNT = 15
+            # Minimum expected tools (Tier 1: 5, Tier 2: 6, Tier 3: 3 = 14 total)
+            # Tier 1 (5): search, get_document_list, get_document_info, get_tool_help, list_available_tools
+            # Tier 2 (6): graph_search (4 modes), compare_documents, explain_search_results, filtered_search (3 methods), similarity_search, expand_context
+            # Tier 3 (3): timeline_view, summarize_section, get_stats
+            # Note: Tool consolidation reduced count from 16 to 14
+            # - graph_search replaces multi_hop_search + entity_tool
+            # - filtered_search replaces exact_match_search + enhanced HybridSearchWithFiltersTool
+            MINIMUM_TOOL_COUNT = 14
 
             if tool_count < MINIMUM_TOOL_COUNT:
                 self.results.append(

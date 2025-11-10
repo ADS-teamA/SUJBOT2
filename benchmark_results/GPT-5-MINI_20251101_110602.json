@@ -1,0 +1,1022 @@
+{
+  "dataset_name": "PrivacyQA",
+  "total_queries": 50,
+  "aggregate_metrics": {
+    "exact_match": 0.02,
+    "f1_score": 0.4443434320240305,
+    "precision": 0.4523748636584144,
+    "recall": 0.558852204627946,
+    "embedding_similarity": 0.6684924982488155,
+    "combined_f1": 0.43964378194337816,
+    "rag_confidence": 0.5468
+  },
+  "query_results": [
+    {
+      "query_id": 1,
+      "query": "Consider \"Fiverr\"'s privacy policy; who can see which tasks i hire workers for?",
+      "predicted_answer": "Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site. This information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.",
+      "ground_truth_answers": [
+        "  In addition, we collect information while you access, browse, view or otherwise use the Site.\nIn other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.2820512820512821,
+        "precision": 0.34375,
+        "recall": 0.2391304347826087,
+        "embedding_similarity": 0.5316225290298462,
+        "combined_f1": 0.2820512820512821
+      },
+      "retrieval_time_ms": 89806.2,
+      "cost_usd": 0.036318,
+      "rag_confidence": 0.53
+    },
+    {
+      "query_id": 2,
+      "query": "Consider \"Fiverr\"'s privacy policy; who can see the jobs that i post?",
+      "predicted_answer": "Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n  You directly provide us with most of the information we collect.\nYou do this by filling out the registration details on the Site, and by posting and sharing additional information voluntarily.",
+      "ground_truth_answers": [
+        "In other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.31818181818181823,
+        "precision": 0.2857142857142857,
+        "recall": 0.358974358974359,
+        "embedding_similarity": 0.4867476522922516,
+        "combined_f1": 0.31818181818181823
+      },
+      "retrieval_time_ms": 45886.14,
+      "cost_usd": 0.014446,
+      "rag_confidence": 0.607
+    },
+    {
+      "query_id": 3,
+      "query": "Consider \"Fiverr\"'s privacy policy; what type of identifiable information is passed between users on the platform",
+      "predicted_answer": "Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\nWe may use your information to contact you - to provide notices related to your activities, or offer you promotions and general updates, but we will not let any other person, including sellers and buyers, contact you, other than through your user profile on the Site.\nWe collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\nWe will not share information that you provide us in the process of the registration - including your contact information - except as described in this Policy.",
+      "ground_truth_answers": [
+        "  We collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\n",
+        "  Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6060606060606061,
+        "precision": 0.43478260869565216,
+        "recall": 1.0,
+        "embedding_similarity": 0.8588864803314209,
+        "combined_f1": 0.8354430379746834
+      },
+      "retrieval_time_ms": 67779.62,
+      "cost_usd": 0.019257,
+      "rag_confidence": 0.786
+    },
+    {
+      "query_id": 4,
+      "query": "Consider \"Fiverr\"'s privacy policy; how is my info protected from hackers?",
+      "predicted_answer": "We take great care in maintaining the security of the Site and your information and in preventing unauthorized access, loss, misuse, alteration, destruction or damage to it through industry standard technologies and internal procedures.\nWe contractually ensure that any third party processing your personal information equally provide for confidentiality and integrity of your data in a secure way.",
+      "ground_truth_answers": [
+        "  We take great care in maintaining the security of the Site and your information and in preventing unauthorized access, loss, misuse, alteration, destruction or damage to it through industry standard technologies and internal procedures.\nWe contractually ensure that any third party processing your personal information equally provide for confidentiality and integrity of your data in a secure way.\nThe transmission of data via the internet is not completely secure, and although we will do our best to protect your personal information, we cannot guarantee the security of your data transmitted to the Site; any transmission is at your own risk.\nOnce we have received your data, we will use strict procedures and security features to try to prevent unauthorized access.\n  Users who have registered to the Site agree to keep their password in strict confidence and not disclose such password to any third party.\n  Further information about our data security practices can be provided on request.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6811594202898552,
+        "precision": 1.0,
+        "recall": 0.5164835164835165,
+        "embedding_similarity": 0.853193461894989,
+        "combined_f1": 0.6811594202898552
+      },
+      "retrieval_time_ms": 102861.81,
+      "cost_usd": 0.031737,
+      "rag_confidence": 0.492
+    },
+    {
+      "query_id": 5,
+      "query": "Consider \"Fiverr\"'s privacy policy; who can see my information?",
+      "predicted_answer": "Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site. This information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.",
+      "ground_truth_answers": [
+        "In other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.\n",
+        "  We may provide your personal details to third parties, only in order to operate the Site, provide our services to you, fulfil obligations imposed on us by applicable laws and regulations, and prevent fraud and illegal activities, as detailed below:\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.3098591549295775,
+        "precision": 0.34375,
+        "recall": 0.28205128205128205,
+        "embedding_similarity": 0.5146638751029968,
+        "combined_f1": 0.22916666666666666
+      },
+      "retrieval_time_ms": 25490.99,
+      "cost_usd": 0.007773,
+      "rag_confidence": 0.514
+    },
+    {
+      "query_id": 6,
+      "query": "Consider \"Fiverr\"'s privacy policy; what information does the company store about me?",
+      "predicted_answer": "Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n  You directly provide us with most of the information we collect.\nYou do this by filling out the registration details on the Site, and by posting and sharing additional information voluntarily.\n\nWe collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\n  We will not share information that you provide us in the process of the registration - including your contact information - except as described in this Policy.\n\nIn other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.",
+      "ground_truth_answers": [
+        "  When you register to the Site we ask you to provide certain personal information, including a valid email address, location, facebook or google account log in details and username.\nWe may collect additional information such as physical address, telephone number or other contact details and additional authentication information, to provide you with the services you need (such as payment or withdrawal of funds, sending physical goods), or to ensure the marketplace integrity (for example, prevention of fraud).\n  In addition, we collect information while you access, browse, view or otherwise use the Site.\nIn other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.\nWe use that information to enhance user experience, personalize your browsing experience as well as monitor the Site for preventing fraud and inappropriate content or behaviour.\nWe may also collect supplemental information obtained from third parties such as demographic and navigation data.\n  Additionally, in order to improve your online experience at Fiverr, we have implemented impression reporting.\nWhile you view our ads, we may gather user Global Unique Identifier, HTTP request data like, user agent, IP, host, url, country/continent from which request made, browser info, device/operating system/operating system version.\n  Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n",
+        "We also collect technical information indirectly and automatically through our systems.\nThis information may include logging your Internet Protocol (IP) address, software configuration, operating system and use of cookies (cookies are small files sent from us to your computer and sometimes back).\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.5896414342629481,
+        "precision": 0.7184466019417476,
+        "recall": 0.5,
+        "embedding_similarity": 0.7725611925125122,
+        "combined_f1": 0.587360594795539
+      },
+      "retrieval_time_ms": 55322.35,
+      "cost_usd": 0.015259,
+      "rag_confidence": 0.553
+    },
+    {
+      "query_id": 7,
+      "query": "Consider \"Fiverr\"'s privacy policy; what information can other people see?",
+      "predicted_answer": "Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site. This information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\nThis can include information about sellers and their Gigs, User's location, sharing of portfolio, ratings and feedbacks by buyers and anything you choose to add to your user profile.",
+      "ground_truth_answers": [
+        "  We collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\n",
+        "  Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.8205128205128205,
+        "precision": 0.6956521739130435,
+        "recall": 1.0,
+        "embedding_similarity": 0.9380871057510376,
+        "combined_f1": 0.6071428571428571
+      },
+      "retrieval_time_ms": 51998.03,
+      "cost_usd": 0.017313,
+      "rag_confidence": 0.419
+    },
+    {
+      "query_id": 8,
+      "query": "Consider \"Fiverr\"'s privacy policy; how does fiverr protect freelancers' personal information?",
+      "predicted_answer": "We take great care in maintaining the security of the Site and your information and in preventing unauthorized access, loss, misuse, alteration, destruction or damage to it through industry standard technologies and internal procedures. We contractually ensure that any third party processing your personal information equally provide for confidentiality and integrity of your data in a secure way.\n\nThe transmission of data via the internet is not completely secure, and although we will do our best to protect your personal information, we cannot guarantee the security of your data transmitted to the Site; any transmission is at your own risk. Once we have received your data, we will use strict procedures and security features to try to prevent unauthorized access.\n\nUsers who have registered to the Site agree to keep their password in strict confidence and not disclose such password to any third party.  Further information about our data security practices can be provided on request.",
+      "ground_truth_answers": [
+        "  We take great care in maintaining the security of the Site and your information and in preventing unauthorized access, loss, misuse, alteration, destruction or damage to it through industry standard technologies and internal procedures.\nWe contractually ensure that any third party processing your personal information equally provide for confidentiality and integrity of your data in a secure way.\nThe transmission of data via the internet is not completely secure, and although we will do our best to protect your personal information, we cannot guarantee the security of your data transmitted to the Site; any transmission is at your own risk.\nOnce we have received your data, we will use strict procedures and security features to try to prevent unauthorized access.\n  Users who have registered to the Site agree to keep their password in strict confidence and not disclose such password to any third party.\n  Further information about our data security practices can be provided on request.\n"
+      ],
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0000001192092896,
+        "combined_f1": 1.0
+      },
+      "retrieval_time_ms": 81403.58,
+      "cost_usd": 0.017399,
+      "rag_confidence": 0.719
+    },
+    {
+      "query_id": 9,
+      "query": "Consider \"Fiverr\"'s privacy policy; how does fiverr ensure payments to freelancers are secure?",
+      "predicted_answer": "to secure the site and protect it against fraud, unauthorized transactions (such as money laundering), claims or other liabilities.\nWe do not collect credit information; but allow our payment vendors to collect information for the purpose of collecting payments from buyers on the Site or transferring payments to sellers on the Site.",
+      "ground_truth_answers": [
+        "We do not collect credit information; but allow our payment vendors to collect information for the purpose of collecting payments from buyers on the Site or transferring payments to sellers on the Site.\nWe are not exposed to the payment information provided to our payment vendors, and this information is subject to the privacy policy applicable to the payment vendor; and\n",
+        "  We take great care in maintaining the security of the Site and your information and in preventing unauthorized access, loss, misuse, alteration, destruction or damage to it through industry standard technologies and internal procedures.\nWe contractually ensure that any third party processing your personal information equally provide for confidentiality and integrity of your data in a secure way.\nThe transmission of data via the internet is not completely secure, and although we will do our best to protect your personal information, we cannot guarantee the security of your data transmitted to the Site; any transmission is at your own risk.\nOnce we have received your data, we will use strict procedures and security features to try to prevent unauthorized access.\n  Users who have registered to the Site agree to keep their password in strict confidence and not disclose such password to any third party.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6842105263157895,
+        "precision": 0.65,
+        "recall": 0.7222222222222222,
+        "embedding_similarity": 0.754562258720398,
+        "combined_f1": 0.4246575342465753
+      },
+      "retrieval_time_ms": 49293.86,
+      "cost_usd": 0.013986,
+      "rag_confidence": 0.79
+    },
+    {
+      "query_id": 10,
+      "query": "Consider \"Fiverr\"'s privacy policy; is my information sold to any third parties?",
+      "predicted_answer": "We do not sell or rent your personal information to third parties for their direct marketing purposes without your explicit consent.",
+      "ground_truth_answers": [
+        "  We do not sell or rent your personal information to third parties for their marketing purposes without your explicit consent.\n  We may combine your personal information with information we collect automatically or obtain from other companies and use it to improve and personalize our services, content and advertising.\nIf you do not wish to receive marketing communications from us, you can opt-out through the link attached to each communication or by sending an email to optout@fiverr.com.\n  We may provide your personal details to third parties, only in order to operate the Site, provide our services to you, fulfil obligations imposed on us by applicable laws and regulations, and prevent fraud and illegal activities, as detailed below:\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.38,
+        "precision": 0.95,
+        "recall": 0.2375,
+        "embedding_similarity": 0.8756707906723022,
+        "combined_f1": 0.38
+      },
+      "retrieval_time_ms": 68242.44,
+      "cost_usd": 0.017155,
+      "rag_confidence": 0.79
+    },
+    {
+      "query_id": 11,
+      "query": "Consider \"Fiverr\"'s privacy policy; will my location be constantly tracked?",
+      "predicted_answer": "We collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\n  We will not share information that you provide us in the process of the registration - including your contact information - except as described in this Policy.\n\nWhen you register to the Site we ask you to provide certain personal information, including a valid email address, location, facebook or google account log in details and username.\n\nIt also allows the Site to remember choices made (like turning off use of cookies or which location you have previously selected) to provide more personal features.\n Performance cookies   Performance cookies help us to understand the behaviour of users of the Site.\nThis allows us to continuously improve the Site to provide the best information in support of our project aims.",
+      "ground_truth_answers": [
+        "In other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.3358778625954199,
+        "precision": 0.2391304347826087,
+        "recall": 0.5641025641025641,
+        "embedding_similarity": 0.6357722282409668,
+        "combined_f1": 0.3358778625954199
+      },
+      "retrieval_time_ms": 104458.45,
+      "cost_usd": 0.037081,
+      "rag_confidence": 0.245
+    },
+    {
+      "query_id": 12,
+      "query": "Consider \"Fiverr\"'s privacy policy; will potential employers be able to obtain my address?",
+      "predicted_answer": "We collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\n  We will not share information that you provide us in the process of the registration - including your contact information - except as described in this Policy.\n\nWe may use your information to contact you - to provide notices related to your activities, or offer you promotions and general updates, but we will not let any other person, including sellers and buyers, contact you, other than through your user profile on the Site.\n  Your personal information may be stored in systems based around the world, and may be processed by third party service providers acting on our behalf.\n\nInformation that you choose to publish on the Site (photos, videos, text, music, reviews, deliveries) - is no longer private, just like any information you publish online.\n  Technical information that is gathered by our systems, or third party systems, automatically may be used for Site operation, optimization, analytics, content promotion and enhancement of user experience.\n\nWe do not disclose it to others except as disclosed in this Policy or required to provide you with the services of the Site and mobile applications, meaning - to allow you to buy, sell, share the information you want to share on the Site; to contribute on the forum; pay for products; post reviews and so on; or where we have a legal obligation to do so.",
+      "ground_truth_answers": [
+        "  When you register to the Site we ask you to provide certain personal information, including a valid email address, location, facebook or google account log in details and username.\nWe may collect additional information such as physical address, telephone number or other contact details and additional authentication information, to provide you with the services you need (such as payment or withdrawal of funds, sending physical goods), or to ensure the marketplace integrity (for example, prevention of fraud).\n",
+        "  Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.2594594594594595,
+        "precision": 0.183206106870229,
+        "recall": 0.4444444444444444,
+        "embedding_similarity": 0.6503211259841919,
+        "combined_f1": 0.30097087378640774
+      },
+      "retrieval_time_ms": 67170.28,
+      "cost_usd": 0.016228,
+      "rag_confidence": 0.66
+    },
+    {
+      "query_id": 13,
+      "query": "Consider \"Fiverr\"'s privacy policy; can i control the information that is presented to potential employers?",
+      "predicted_answer": "Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site. This information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile. You can review and change your personal information by logging into the Site and visiting your account profile page.",
+      "ground_truth_answers": [
+        "  Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.8648648648648648,
+        "precision": 0.7619047619047619,
+        "recall": 1.0,
+        "embedding_similarity": 0.963098406791687,
+        "combined_f1": 0.8648648648648648
+      },
+      "retrieval_time_ms": 68120.47,
+      "cost_usd": 0.021237,
+      "rag_confidence": 0.245
+    },
+    {
+      "query_id": 14,
+      "query": "Consider \"Fiverr\"'s privacy policy; can other parties see my information",
+      "predicted_answer": "Short answer: Yes — Fiverr can share or disclose some of your information in specific circumstances, but it says it does not sell or rent personal information for third-party marketing without your explicit consent.\n\nEvidence (verbatim excerpts from the policy):\n- \"We do not sell or rent your personal information to third parties for their direct marketing purposes without your explicit consent.\" [Doc: Fiverr, Section: Fiverr (Part 1)]\n- \"We do not sell or rent your personal information to third parties for their marketing purposes without your explicit consent. We may combine your personal information with information we collect automatically or obtain from other companies and use it to improve and personalize our services, content and advertising.\" [Doc: Fiverr, Section: Fiverr (Part 3)]\n- \"We are not exposed to the payment information provided to our payment vendors, and this information is subject to the privacy policy applicable to the payment vendor; and your personal information may be disclosed if we go through a business transition such as a merger, sale, transfer of all or a portion of Fiverr's assets, acquisition, bankruptcy or similar event.\" [Doc: Fiverr, Section: Fiverr (Part 3)]\n\nRetrieval confidence: 0.686 (LOW). This answer is based on the policy excerpts found in the available document; you may want to review Fiverr's full privacy policy page for complete details.",
+      "ground_truth_answers": [
+        "In other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.\n",
+        "  Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n",
+        "  We may provide your personal details to third parties, only in order to operate the Site, provide our services to you, fulfil obligations imposed on us by applicable laws and regulations, and prevent fraud and illegal activities, as detailed below:\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.22972972972972971,
+        "precision": 0.1504424778761062,
+        "recall": 0.4857142857142857,
+        "embedding_similarity": 0.4984886348247528,
+        "combined_f1": 0.2727272727272727
+      },
+      "retrieval_time_ms": 51503.86,
+      "cost_usd": 0.010857,
+      "rag_confidence": 0.686
+    },
+    {
+      "query_id": 15,
+      "query": "Consider \"Fiverr\"'s privacy policy; can other people see my financial information",
+      "predicted_answer": "We are not exposed to the payment information provided to our payment vendors, and this information is subject to the privacy policy applicable to the payment vendor; and your personal information may be disclosed if we go through a business transition such as a merger, sale, transfer of all or a portion of Fiverr's assets, acquisition, bankruptcy or similar event. to secure the site and protect it against fraud, unauthorized transactions (such as money laundering), claims or other liabilities. We do not collect credit information; but allow our payment vendors to collect information for the purpose of collecting payments from buyers on the Site or transferring payments to sellers on the Site.",
+      "ground_truth_answers": [
+        "We do not collect credit information; but allow our payment vendors to collect information for the purpose of collecting payments from buyers on the Site or transferring payments to sellers on the Site.\nWe are not exposed to the payment information provided to our payment vendors, and this information is subject to the privacy policy applicable to the payment vendor; and\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6605504587155963,
+        "precision": 0.4931506849315068,
+        "recall": 1.0,
+        "embedding_similarity": 0.8454751372337341,
+        "combined_f1": 0.6605504587155963
+      },
+      "retrieval_time_ms": 56655.26,
+      "cost_usd": 0.017805,
+      "rag_confidence": 0.705
+    },
+    {
+      "query_id": 16,
+      "query": "Consider \"Fiverr\"'s privacy policy; what information do you collect?",
+      "predicted_answer": "We collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\nWe will not share information that you provide us in the process of the registration - including your contact information - except as described in this Policy.\n\nWe may collect additional information such as physical address, telephone number or other contact details and additional authentication information, to provide you with the services you need (such as payment or withdrawal of funds, sending physical goods), or to ensure the marketplace integrity (for example, prevention of fraud).\nIn addition, we collect information while you access, browse, view or otherwise use the Site.",
+      "ground_truth_answers": [
+        "  We collect information that you provide us or voluntarily share with other users, and also some general technical information that is automatically gathered by our systems, such as IP address, browser information and cookies to enable you to have a better user experience and a more personalized browsing experience.\n",
+        "  When you register to the Site we ask you to provide certain personal information, including a valid email address, location, facebook or google account log in details and username.\nWe may collect additional information such as physical address, telephone number or other contact details and additional authentication information, to provide you with the services you need (such as payment or withdrawal of funds, sending physical goods), or to ensure the marketplace integrity (for example, prevention of fraud).\n  In addition, we collect information while you access, browse, view or otherwise use the Site.\nIn other words, when you access the Site we are aware of your usage of the Site, and may gather, collect and record the information relating to such usage, including geo-location information, IP address, device and connection information, browser information and web-log information, and all communications recorded by Users through the Site.\nWe use that information to enhance user experience, personalize your browsing experience as well as monitor the Site for preventing fraud and inappropriate content or behaviour.\nWe may also collect supplemental information obtained from third parties such as demographic and navigation data.\n  Additionally, in order to improve your online experience at Fiverr, we have implemented impression reporting.\nWhile you view our ads, we may gather user Global Unique Identifier, HTTP request data like, user agent, IP, host, url, country/continent from which request made, browser info, device/operating system/operating system version.\n  Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\nThis information includes photos you upload, your published portfolio, Gig information, ratings, and additional information you may choose to add to your profile.\n",
+        "We also collect technical information indirectly and automatically through our systems.\nThis information may include logging your Internet Protocol (IP) address, software configuration, operating system and use of cookies (cookies are small files sent from us to your computer and sometimes back).\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6504065040650406,
+        "precision": 0.4819277108433735,
+        "recall": 1.0,
+        "embedding_similarity": 0.8312886357307434,
+        "combined_f1": 0.5891472868217055
+      },
+      "retrieval_time_ms": 44765.61,
+      "cost_usd": 0.013117,
+      "rag_confidence": 0.609
+    },
+    {
+      "query_id": 17,
+      "query": "Consider \"Fiverr\"'s privacy policy; do you sell my information to third parties?",
+      "predicted_answer": "\"We do not sell or rent your personal information to third parties for their direct marketing purposes without your explicit consent.\" [Doc: Fiverr, Section: Fiverr (Part 1)]\n\n\"We do not sell or rent your personal information to third parties for their marketing purposes without your explicit consent.\" [Doc: Fiverr, Section: Fiverr (Part 3)]\n\nRetrieval confidence: 0.675 (low) — I can fetch more sections or the full policy if you want further confirmation.",
+      "ground_truth_answers": [
+        "  We do not sell or rent your personal information to third parties for their marketing purposes without your explicit consent.\n  We may combine your personal information with information we collect automatically or obtain from other companies and use it to improve and personalize our services, content and advertising.\nIf you do not wish to receive marketing communications from us, you can opt-out through the link attached to each communication or by sending an email to optout@fiverr.com.\n  We may provide your personal details to third parties, only in order to operate the Site, provide our services to you, fulfil obligations imposed on us by applicable laws and regulations, and prevent fraud and illegal activities, as detailed below:\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.3870967741935483,
+        "precision": 0.5454545454545454,
+        "recall": 0.3,
+        "embedding_similarity": 0.8624585270881653,
+        "combined_f1": 0.3870967741935483
+      },
+      "retrieval_time_ms": 47792.9,
+      "cost_usd": 0.014263,
+      "rag_confidence": 0.675
+    },
+    {
+      "query_id": 18,
+      "query": "Consider \"Fiverr\"'s privacy policy; do you use a secure payment service?",
+      "predicted_answer": "We are not exposed to the payment information provided to our payment vendors, and this information is subject to the privacy policy applicable to the payment vendor; and\n   your personal information may be disclosed if we go through a business transition such as a merger, sale, transfer of all or a portion of Fiverr's assets, acquisition, bankruptcy or similar event.\n\nto secure the site and protect it against fraud, unauthorized transactions (such as money laundering), claims or other liabilities.\nWe do not collect credit information; but allow our payment vendors to collect information for the purpose of collecting payments from buyers on the Site or transferring payments to sellers on the Site.",
+      "ground_truth_answers": [
+        "We do not collect credit information; but allow our payment vendors to collect information for the purpose of collecting payments from buyers on the Site or transferring payments to sellers on the Site.\nWe are not exposed to the payment information provided to our payment vendors, and this information is subject to the privacy policy applicable to the payment vendor; and\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6605504587155963,
+        "precision": 0.4931506849315068,
+        "recall": 1.0,
+        "embedding_similarity": 0.8454751372337341,
+        "combined_f1": 0.6605504587155963
+      },
+      "retrieval_time_ms": 45936.13,
+      "cost_usd": 0.014731,
+      "rag_confidence": 0.705
+    },
+    {
+      "query_id": 19,
+      "query": "Consider \"Fiverr\"'s privacy policy; how is information used?",
+      "predicted_answer": "Fiverr uses personal information for multiple purposes — summarized below with citations to the policy:\n\n- To provide and secure the service (e.g., verify your identity and support transactions). [Doc: Fiverr, Section: Fiverr (Part 2)]\n- To improve, personalize and customize the site, services, content and advertising (including combining data from other sources). [Doc: Fiverr, Section: Fiverr (Part 3)]  \n- To enhance user experience and monitor the Site for fraud prevention and inappropriate content/behavior. [Doc: Fiverr, Section: Fiverr (Part 1)]\n- To contact you with notices, promotions, offers and general updates (marketing communications), with opt-out options. [Doc: Fiverr, Section: Fiverr (Part 2)]\n- For lawful bases such as your consent, performance of a contract, compliance with legal obligations, and Fiverr’s legitimate interests. [Doc: Fiverr, Section: Fiverr (Part 2)]\n- To store and process data in systems around the world and via third‑party service providers (with contractual restrictions on their use). [Doc: Fiverr, Section: Fiverr (Part 1); Doc: Fiverr, Section: Fiverr (Part 3)]\n- Fiverr states it does not sell or rent personal information for third‑party direct marketing without explicit consent. [Doc: Fiverr, Section: Fiverr (Part 1)]\n\nIf you’d like, I can copy the exact policy sentences for any of the bullets above.",
+      "ground_truth_answers": [
+        "We may collect additional information such as physical address, telephone number or other contact details and additional authentication information, to provide you with the services you need (such as payment or withdrawal of funds, sending physical goods), or to ensure the marketplace integrity (for example, prevention of fraud).\n",
+        "We use that information to enhance user experience, personalize your browsing experience as well as monitor the Site for preventing fraud and inappropriate content or behaviour.\n",
+        "   our use of your personal information is necessary to perform a contract or take steps to enter into a contract with you (e.g.\nto provide you with services which you have purchased);\n   the processing is necessary to comply with a relevant legal obligation or regulatory obligation that we have (e.g.\nfraud prevention); or\n   the processing is necessary to support our legitimate interests as a business (e.g.\nto improve our services to you or to customise your browsing experience), subject to your interests and fundamental rights and provided it is conducted at all times in a way that is proportionate.\nWe will use your personal information for the following purposes:\n   to provide you with quality service and security.\nFor example, we may use the information collected from you to verify your identity.\nWe may also use this information to establish and set up your account, verify or re-issue a password, log your activity and contact you from time to time.\nThe information helps us improve our services to you and customize your browsing experience.\nIn addition, this information helps us track any fraudulent activities and other inappropriate activities and monitor content integrity; or\n   to maintain appropriate business records, to comply with lawful requests by public authorities and to comply with applicable laws and regulations or as otherwise required by law.\nShould you ever deactivate your account with us, we will keep your information for a limited period in order to meet the above purposes.\n  We will ask for your consent before using information for a purpose other than those set out in this Policy.\nDirect marketing:\n   We may use your personal information to send you direct marketing communications about our products, services or promotions from Fiverr that may be of interest to you or our related services.\nThis may be via email, post, SMS, telephone or targeted online advertisements.\n   In most cases our processing of your personal information for marketing purposes is based on our legitimate interest, although some cases (such as where required by law) may be based on your consent.\nYou have a right to prevent direct marketing of any form at any time - this can be exercised by following the opt-out link attached to each communication or by sending an email to optout@fiverr.com.\n   We take steps to limit direct marketing to a reasonable and proportionate level, and to send you communications which we believe may be of interest or relevance to you, based on the information we have about you.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.3848797250859106,
+        "precision": 0.48695652173913045,
+        "recall": 0.3181818181818182,
+        "embedding_similarity": 0.5677669048309326,
+        "combined_f1": 0.38461538461538464
+      },
+      "retrieval_time_ms": 60600.83,
+      "cost_usd": 0.01592,
+      "rag_confidence": 0.764
+    },
+    {
+      "query_id": 20,
+      "query": "Consider \"Keep\"'s privacy policy; who has access to my workout plans?",
+      "predicted_answer": "To provide you with a better experience through improving our products, services, content, and advertising or otherwise where you have consented, we may share the personal information with our affiliate companies and with joint venture partners and third-party service providers, contractors and agents, and use it consistent with this Privacy Policy.\n\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information. You may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram. Please read the Privacy Policies of those platforms, as your activity published on those platforms will no longer be governed by this Privacy Policy.\n\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\n\nWe will never share with or sell the information gained through the use of Apple HealthKit, such as age, weight and heart rate data, to advertisers or other agencies without your authorization. We will also never use the information for marketing, advertising or similar services.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\n",
+        "You may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.34328358208955223,
+        "precision": 0.22772277227722773,
+        "recall": 0.696969696969697,
+        "embedding_similarity": 0.5744644403457642,
+        "combined_f1": 0.44755244755244755
+      },
+      "retrieval_time_ms": 77235.93,
+      "cost_usd": 0.020635
+    },
+    {
+      "query_id": 21,
+      "query": "Consider \"Keep\"'s privacy policy; will my fitness coach share my information with others?",
+      "predicted_answer": "This policy does not apply to any information you choose to provide to third parties.\n\nTo provide you with a better experience through improving our products, services, content, and advertising or otherwise where you have consented, we may share the personal information with our affiliate companies and with joint venture partners and third-party service providers, contractors and agents, and use it consistent with this Privacy Policy.\n\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.\nWe will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n",
+        "If you are a minor, you can use the service only in conjunction with your parents or guardians.\nIf we are aware that a child under 13 has provided us with personal identifiable Information, we will delete such information from our files.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.48750000000000004,
+        "precision": 0.6190476190476191,
+        "recall": 0.4020618556701031,
+        "embedding_similarity": 0.7185296416282654,
+        "combined_f1": 0.45555555555555555
+      },
+      "retrieval_time_ms": 48477.59,
+      "cost_usd": 0.010543,
+      "rag_confidence": 0.302
+    },
+    {
+      "query_id": 22,
+      "query": "Consider \"Keep\"'s privacy policy; will my progress only be posted to social media if i want it to?",
+      "predicted_answer": "Short answer: Yes — Keep will only post your progress to social media if you choose to share or connect your social account, but anything you post there is then governed by the social platform's policies and Keep can't control further use.\n\nSupporting points and sources:\n- \"You may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\" [Doc: Keep, Section: Keep (Part 2)]\n- \"In order to participate in certain features, you may have to adjust your Privacy settings and share more information.\" [Doc: Keep, Section: Keep (Part 2)]\n- \"Please read the Privacy Policies of those platforms, as your activity published on those platforms will no longer be governed by this Privacy Policy.\" [Doc: Keep, Section: Keep (Part 2)]\n- When you connect a social account Keep may access information from that account to facilitate login or features. [Doc: Keep, Section: Keep (Part 1)]\n\nConfidence: Moderate (retrieval confidence ~0.80).",
+      "ground_truth_answers": [
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.09615384615384615,
+        "precision": 0.056818181818181816,
+        "recall": 0.3125,
+        "embedding_similarity": 0.39085525274276733,
+        "combined_f1": 0.09615384615384615
+      },
+      "retrieval_time_ms": 87687.7,
+      "cost_usd": 0.02916,
+      "rag_confidence": 0.795
+    },
+    {
+      "query_id": 23,
+      "query": "Consider \"Keep\"'s privacy policy; will any photos i take be accessed by outside parties?",
+      "predicted_answer": "In addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.\n\nWe will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\n\nYou can choose whether to access such content or links, or whether to use the third partys products or services.\nHowever, we do not have control over the products or services provided by third parties.\nWe cannot control any of your personal information held by third parties.\nThe information protection issues that you use in the use of third-party products or services do not apply to the management of this policy.",
+      "ground_truth_answers": [
+        "Where the payment is processed by a third-party payment service provider, we do not collect or store such Personal Information, though we may receive summary information about transactions.\nWhere we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\n",
+        "You may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n",
+        "We will never share with or sell the information gained through the use of Apple HealthKit, such as age, weight and heart rate data, to advertisers or other agencies without your authorization.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.35658914728682173,
+        "precision": 0.27710843373493976,
+        "recall": 0.5,
+        "embedding_similarity": 0.4988943040370941,
+        "combined_f1": 0.39743589743589747
+      },
+      "retrieval_time_ms": 54736.06,
+      "cost_usd": 0.013748
+    },
+    {
+      "query_id": 24,
+      "query": "Consider \"Keep\"'s privacy policy; will my information be shared with other companies for marketing?",
+      "predicted_answer": "To provide you with a better experience through improving our products, services, content, and advertising or otherwise where you have consented, we may share the personal information with our affiliate companies and with joint venture partners and third-party service providers, contractors and agents, and use it consistent with this Privacy Policy.\n\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\n",
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.368421052631579,
+        "precision": 0.3620689655172414,
+        "recall": 0.375,
+        "embedding_similarity": 0.6629197597503662,
+        "combined_f1": 0.3941605839416058
+      },
+      "retrieval_time_ms": 50410.59,
+      "cost_usd": 0.013291
+    },
+    {
+      "query_id": 25,
+      "query": "Consider \"Keep\"'s privacy policy; will the app use my data for marketing purposes?",
+      "predicted_answer": "We will never share with or sell the information gained through the use of Apple HealthKit, such as age, weight and heart rate data, to advertisers or other agencies without your authorization.\nWe will also never use the information for marketing, advertising or similar services.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\n",
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.3116883116883117,
+        "precision": 0.3333333333333333,
+        "recall": 0.2926829268292683,
+        "embedding_similarity": 0.48535704612731934,
+        "combined_f1": 0.26086956521739135
+      },
+      "retrieval_time_ms": 73279.83,
+      "cost_usd": 0.024165,
+      "rag_confidence": 0.245
+    },
+    {
+      "query_id": 26,
+      "query": "Consider \"Keep\"'s privacy policy; does this app get access to my other apps like twitter and instagram?",
+      "predicted_answer": "You may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n\nWhen you choose to connect your third party social media account to your Keep account, we may collect certain information from your account with that social media platform  for example, to facilitate your login to Keep App with that account.\n\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.",
+      "ground_truth_answers": [
+        "To register, you may need to provide certain Personal Information, such as you name, mobile phone number, password, exercise goal and status.\n",
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.22857142857142856,
+        "precision": 0.16,
+        "recall": 0.4,
+        "embedding_similarity": 0.4067116379737854,
+        "combined_f1": 0.2891566265060241
+      },
+      "retrieval_time_ms": 58465.69,
+      "cost_usd": 0.015915,
+      "rag_confidence": 0.79
+    },
+    {
+      "query_id": 27,
+      "query": "Consider \"Keep\"'s privacy policy; how safe is my account information on this app?",
+      "predicted_answer": "We use a variety of security measures, including encryption and authentication tools, to help protect your information. All credit card information you supply is transmitted via Secure Socket Layer (SSL) technology and then encrypted within our databases. However, like other companies, we cannot guarantee 100% the security or confidentiality of the information you provide to us.",
+      "ground_truth_answers": [
+        "You can also remove or delete content from your account or entirely delete your whole Keep account.\nIf any content you cannot remove or delete by yourself, please kindly reach us via support@gotokeep.com .\nIn some cases, we retain data for limited periods when it needs to be kept for legitimate business or legal purposes or to be protected from accidental or malicious deletion, there may be delays between when you delete something and when copies are deleted from our active and backup systems.\nWe use a variety of security measures, including encryption and authentication tools, to help protect your information.\nWe use secure servers when you place orders.\nAll credit card information you supply is transmitted via Secure Socket Layer (SSL) technology and then encrypted within our databases.\nHowever, like other companies, we cannot guarantee 100% the security or confidentiality of the information you provide to us.\nWe maintain server around the world and your information may be processed on servers located outside of the country where you live.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.5875,
+        "precision": 1.0,
+        "recall": 0.415929203539823,
+        "embedding_similarity": 0.6391351222991943,
+        "combined_f1": 0.5875
+      },
+      "retrieval_time_ms": 73039.63,
+      "cost_usd": 0.018428
+    },
+    {
+      "query_id": 28,
+      "query": "Consider \"Keep\"'s privacy policy; are my statistics kept private?",
+      "predicted_answer": "When you join or use certain services, you agree to publicly share a basic amount of information, which may include your username, city location, and profile picture.\nAny information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\nWe value your every uploaded training information as it is crucial for us to better understand which training class is more helpful to you.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\n",
+        "You may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.3373493975903614,
+        "precision": 0.28,
+        "recall": 0.42424242424242425,
+        "embedding_similarity": 0.3651164770126343,
+        "combined_f1": 0.32608695652173914
+      },
+      "retrieval_time_ms": 70964.52,
+      "cost_usd": 0.020878,
+      "rag_confidence": 0.393
+    },
+    {
+      "query_id": 29,
+      "query": "Consider \"Keep\"'s privacy policy; who can see my data?",
+      "predicted_answer": "When you join or use certain services, you agree to publicly share a basic amount of information, which may include your username, city location, and profile picture.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nInformation you make available to us via your use of Keep  for example, via: a) Your sharing of your contact list with Keep in the Recommended Friends function in order to connect with other Keep users; b) Making purchases within Keep, including your credit card or bank details and information about the purchases that you make;",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\n",
+        "In order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.29166666666666663,
+        "precision": 0.208955223880597,
+        "recall": 0.4827586206896552,
+        "embedding_similarity": 0.5660604238510132,
+        "combined_f1": 0.3103448275862069
+      },
+      "retrieval_time_ms": 59047.39,
+      "cost_usd": 0.014013
+    },
+    {
+      "query_id": 30,
+      "query": "Consider \"Keep\"'s privacy policy; does the app access my contact list?",
+      "predicted_answer": "In addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nInformation you make available to us via your use of Keep  for example, via: a) Your sharing of your contact list with Keep in the Recommended Friends function in order to connect with other Keep users; b) Making purchases within Keep, including your credit card or bank details and information about the purchases that you make;",
+      "ground_truth_answers": [
+        "Information you make available to us when you open a Keep account, as set out above;\n",
+        "Where the payment is processed by a third-party payment service provider, we do not collect or store such Personal Information, though we may receive summary information about transactions.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.2424242424242424,
+        "precision": 0.1568627450980392,
+        "recall": 0.5333333333333333,
+        "embedding_similarity": 0.7213442325592041,
+        "combined_f1": 0.26666666666666666
+      },
+      "retrieval_time_ms": 42227.13,
+      "cost_usd": 0.009914,
+      "rag_confidence": 0.623
+    },
+    {
+      "query_id": 31,
+      "query": "Consider \"Keep\"'s privacy policy; is my data safe?",
+      "predicted_answer": "Short answer: The Keep policy says it uses encryption and authentication and does not sell personal information without your consent, but it also keeps data for legitimate business/legal purposes and notes there can be delays in fully deleting copies from backups — I have low confidence in coverage of all details (confidence 0.24). \n\nRelevant verbatim excerpts:\n- \"We use a variety of security measures, including encryption and authentication tools, to help protect your information.\" [Doc: Keep, Part 2]  \n- \"Other than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\" [Doc: Keep, Part 1]  \n- \"In some cases, we retain data for limited periods when it needs to be kept for legitimate business or legal purposes or to be protected from accidental or malicious deletion, there may be delays between when you delete something and when copies are deleted from our active and backup systems.\" [Doc: Keep, Part 2]\n\nConfidence and next steps:\n- Retrieval confidence: 0.24 (VERY LOW). I recommend I fetch the full Keep privacy policy sections (security, data sharing, retention, deletion) or you can contact support@gotokeep.com for authoritative confirmation. Would you like me to pull the full sections now?",
+      "ground_truth_answers": [
+        "You can also remove or delete content from your account or entirely delete your whole Keep account.\nIf any content you cannot remove or delete by yourself, please kindly reach us via support@gotokeep.com .\nIn some cases, we retain data for limited periods when it needs to be kept for legitimate business or legal purposes or to be protected from accidental or malicious deletion, there may be delays between when you delete something and when copies are deleted from our active and backup systems.\nWe use a variety of security measures, including encryption and authentication tools, to help protect your information.\nWe use secure servers when you place orders.\nAll credit card information you supply is transmitted via Secure Socket Layer (SSL) technology and then encrypted within our databases.\nHowever, like other companies, we cannot guarantee 100% the security or confidentiality of the information you provide to us.\nWe maintain server around the world and your information may be processed on servers located outside of the country where you live.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.5546218487394958,
+        "precision": 0.528,
+        "recall": 0.584070796460177,
+        "embedding_similarity": 0.686826229095459,
+        "combined_f1": 0.5546218487394958
+      },
+      "retrieval_time_ms": 83834.16,
+      "cost_usd": 0.022789,
+      "rag_confidence": 0.417
+    },
+    {
+      "query_id": 32,
+      "query": "Consider \"Keep\"'s privacy policy; are you storing any of my information?",
+      "predicted_answer": "Short answer: Yes — Keep does store certain information you provide or that it collects when you use the app (account/registration data, log/device data, and personal information for purchases processed by Keep). When payments are processed by a third-party payment provider, Keep says it does not collect or store those payment details (it may receive summary transaction information).\n\nSupporting excerpts:\n- \"Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\" [Doc: Keep, Section: Keep (Part 1)]\n- \"Location Data, Log Data and your device. Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\" [Doc: Keep, Section: Keep (Part 1)]\n- \"When you make purchases through Keep, you may need to provide certain Personal Information to complete the purchase, such as your credit card information, bank account information... Where the payment is processed by a third-party payment service provider, we do not collect or store such Personal Information, though we may receive summary information about transactions.\" [Doc: Keep, Section: Keep (Part 1)]\n- \"You must register for a Keep account in order to use Keep.\" [Doc: Keep, Section: Keep (Part 1)]\n\nRetrieval confidence: low (≈0.51). The above statements come from the Keep privacy policy sections returned by the search; if you want I can run a more targeted search (e.g., exact-match for \"store\" or \"retention\") or pull the full privacy-policy paragraphs for the clauses above.",
+      "ground_truth_answers": [
+        "We need your age, height and weight to calculate your consumption of calorie when you complete each training class.\n",
+        "For example, we may collect Personal Information with Keep via the following:\nInformation you make available to us when you open a Keep account, as set out above;\nAny information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\n",
+        "Information we collect in the course of you using Keep  such as certain location data and log data; and\nInformation you provide through your communications with our customer support team.\nPurchases via Keep.\nWhen you make purchases through Keep, you may need to provide certain Personal Information to complete the purchase, such as your credit card information, bank account information.\nWhere the payment is processed by a third-party payment service provider, we do not collect or store such Personal Information, though we may receive summary information about transactions.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.5586592178770949,
+        "precision": 0.4166666666666667,
+        "recall": 0.847457627118644,
+        "embedding_similarity": 0.8198820352554321,
+        "combined_f1": 0.5120772946859904
+      },
+      "retrieval_time_ms": 35210.94,
+      "cost_usd": 0.009646,
+      "rag_confidence": 0.508
+    },
+    {
+      "query_id": 33,
+      "query": "Consider \"Keep\"'s privacy policy; do you access any of my contact's information?",
+      "predicted_answer": "In addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.",
+      "ground_truth_answers": [
+        "Information you make available to us when you open a Keep account, as set out above;\n",
+        "Where the payment is processed by a third-party payment service provider, we do not collect or store such Personal Information, though we may receive summary information about transactions.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.2153846153846154,
+        "precision": 0.1794871794871795,
+        "recall": 0.2692307692307692,
+        "embedding_similarity": 0.5944979190826416,
+        "combined_f1": 0.2564102564102564
+      },
+      "retrieval_time_ms": 50897.36,
+      "cost_usd": 0.013153,
+      "rag_confidence": 0.23
+    },
+    {
+      "query_id": 34,
+      "query": "Consider \"Keep\"'s privacy policy; does it save any of my health data?",
+      "predicted_answer": "We need your age, height and weight to calculate your consumption of calorie when you complete each training class.\nMaintain and improve our services.\nWe use your information to ensure our services are working as intended, such as troubleshooting issues reported from you.\nDevelop new services.\nWe value your every uploaded training information as it is crucial for us to better understand which training class is more helpful to you.",
+      "ground_truth_answers": [
+        "We need your age, height and weight to calculate your consumption of calorie when you complete each training class.\n",
+        "We will share personal information if we have a good-faith belief that access, use, preservation, or disclosure of the information is reasonably necessary to a) meet any applicable law, regulation, legal process, or enforceable governmental request, or b) detect, prevent, or otherwise address fraud, security, or technical issues, or c) protect against harm to the rights, property or safety of Keep, our users, or the public as required or permitted by law.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.5373134328358209,
+        "precision": 0.3673469387755102,
+        "recall": 1.0,
+        "embedding_similarity": 0.8398988246917725,
+        "combined_f1": 0.396694214876033
+      },
+      "retrieval_time_ms": 34844.42,
+      "cost_usd": 0.01197,
+      "rag_confidence": 0.245
+    },
+    {
+      "query_id": 35,
+      "query": "Consider \"Keep\"'s privacy policy; can the app access my location?",
+      "predicted_answer": "Information you make available to us via your use of Keep  for example, via: a) Your sharing of your contact list with Keep in the Recommended Friends function in order to connect with other Keep users; b) Making purchases within Keep, including your credit card or bank details and information about the purchases that you make;\nInformation we collect in the course of you using Keep  such as certain location data and log data; and\n\nWhere we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.",
+      "ground_truth_answers": [
+        "Any information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\n",
+        "When you make purchases through Keep, you may need to provide certain Personal Information to complete the purchase, such as your credit card information, bank account information.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.32653061224489793,
+        "precision": 0.21333333333333335,
+        "recall": 0.6956521739130435,
+        "embedding_similarity": 0.7547963857650757,
+        "combined_f1": 0.34545454545454546
+      },
+      "retrieval_time_ms": 56531.11,
+      "cost_usd": 0.014408
+    },
+    {
+      "query_id": 36,
+      "query": "Consider \"Keep\"'s privacy policy; is any information shared with third parties?",
+      "predicted_answer": "In addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.\nWe will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.697986577181208,
+        "precision": 1.0,
+        "recall": 0.5360824742268041,
+        "embedding_similarity": 0.7953190803527832,
+        "combined_f1": 0.697986577181208
+      },
+      "retrieval_time_ms": 36214.68,
+      "cost_usd": 0.009326,
+      "rag_confidence": 0.507
+    },
+    {
+      "query_id": 37,
+      "query": "Consider \"Keep\"'s privacy policy; can it access my other social media accounts?",
+      "predicted_answer": "Short answer: Yes — but only if you choose to connect or permit access.\n\nDetails:\n- \"When you choose to connect your third party social media account to your Keep account, we may collect certain information from your account with that social media platform for example, to facilitate your login to Keep App with that account.\" [Doc: Keep, Section: Keep (Part 1)]  \n- You \"may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\" [Doc: Keep, Section: Keep (Part 2)]  \n- You \"may also permit Keep to access other content and data on your device for example, your contact list and photo storage.\" [Doc: Keep, Section: Keep (Part 1)]  \n- Keep states it \"cannot control any of your personal information held by third parties\" and that sharing with third parties is based on your choices/consent; they also say they will not sell your personal information without consent. [Doc: Keep, Section: Keep (Part 3); Doc: Keep, Section: Keep (Part 1)]\n\nConfidence: High (multiple matching sections found in the Keep privacy policy).",
+      "ground_truth_answers": [
+        "To register, you may need to provide certain Personal Information, such as you name, mobile phone number, password, exercise goal and status.\n",
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.20370370370370372,
+        "precision": 0.11956521739130435,
+        "recall": 0.6875,
+        "embedding_similarity": 0.5541343688964844,
+        "combined_f1": 0.272
+      },
+      "retrieval_time_ms": 67468.86,
+      "cost_usd": 0.028114
+    },
+    {
+      "query_id": 38,
+      "query": "Consider \"Keep\"'s privacy policy; what information will this app have access to of mine?",
+      "predicted_answer": "We collect information from you when you use Keep App  for example, when you:\nRegister to use Keep App;\nLog into Keep App with third party platform accounts;\nUse Keep App; and\nCommunicate with us.\nThe following sets out how we collect such information from you as you use Keep App.\nThe remainder of this Privacy Policy sets out further information regarding some of these categories.\nRegistration and Account Information.\nYou must register for a Keep account in order to use Keep.\n\nTo register, you may need to provide certain Personal Information, such as you name, mobile phone number, password, exercise goal and status.\nSocial Connect.\nWhen you choose to connect your third party social media account to your Keep account, we may collect certain information from your account with that social media platform  for example, to facilitate your login to Keep App with that account.\nUsing Keep App.We collect information from and about you through your use of Keep App.\n\nFor example, we may collect Personal Information with Keep via the following:\nInformation you make available to us when you open a Keep account, as set out above;\nAny information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\n\nInformation you make available to us via your use of Keep  for example, via: a) Your sharing of your contact list with Keep in the Recommended Friends function in order to connect with other Keep users; b) Making purchases within Keep, including your credit card or bank details and information about the purchases that you make;\nInformation we collect in the course of you using Keep  such as certain location data and log data; and\n\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.\n\nWhere we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.",
+      "ground_truth_answers": [
+        "We need your age, height and weight to calculate your consumption of calorie when you complete each training class.\n",
+        "You must register for a Keep account in order to use Keep.\nTo register, you may need to provide certain Personal Information, such as you name, mobile phone number, password, exercise goal and status.\n",
+        "Using Keep App.We collect information from and about you through your use of Keep App.\nFor example, we may collect Personal Information with Keep via the following:\nInformation you make available to us when you open a Keep account, as set out above;\nAny information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\nInformation you make available to us via your use of Keep  for example, via: a) Your sharing of your contact list with Keep in the Recommended Friends function in order to connect with other Keep users; b) Making purchases within Keep, including your credit card or bank details and information about the purchases that you make;\nInformation we collect in the course of you using Keep  such as certain location data and log data; and\nInformation you provide through your communications with our customer support team.\nPurchases via Keep.\nWhen you make purchases through Keep, you may need to provide certain Personal Information to complete the purchase, such as your credit card information, bank account information.\nWhere the payment is processed by a third-party payment service provider, we do not collect or store such Personal Information, though we may receive summary information about transactions.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6693227091633466,
+        "precision": 0.5454545454545454,
+        "recall": 0.865979381443299,
+        "embedding_similarity": 0.8808754086494446,
+        "combined_f1": 0.6914498141263941
+      },
+      "retrieval_time_ms": 64075.68,
+      "cost_usd": 0.013349,
+      "rag_confidence": 0.576
+    },
+    {
+      "query_id": 39,
+      "query": "Consider \"Keep\"'s privacy policy; will the personal info i share with this app to sign up be shared with other companies, etc?",
+      "predicted_answer": "To provide you with a better experience through improving our products, services, content, and advertising or otherwise where you have consented, we may share the personal information with our affiliate companies and with joint venture partners and third-party service providers, contractors and agents, and use it consistent with this Privacy Policy. Other than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\n",
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.368421052631579,
+        "precision": 0.3620689655172414,
+        "recall": 0.375,
+        "embedding_similarity": 0.6629197597503662,
+        "combined_f1": 0.3941605839416058
+      },
+      "retrieval_time_ms": 33328.4,
+      "cost_usd": 0.0117,
+      "rag_confidence": 0.464
+    },
+    {
+      "query_id": 40,
+      "query": "Consider \"Keep\"'s privacy policy; will my workout data be given to anyone else or shared with anyone (i.e. insurance companies)?",
+      "predicted_answer": "In addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.\n\nTo provide you with a better experience through improving our products, services, content, and advertising or otherwise where you have consented, we may share the personal information with our affiliate companies and with joint venture partners and third-party service providers, contractors and agents, and use it consistent with this Privacy Policy.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\nOther than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.\nWe will ask for your explicit consent to share any sensitive personal information such as race, religion, sexual orientation, or health.\nWe will not disclose or transfer your personal information to any non-affiliated third parties, unless:\n",
+        "In order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.718562874251497,
+        "precision": 0.7228915662650602,
+        "recall": 0.7142857142857143,
+        "embedding_similarity": 0.8735851049423218,
+        "combined_f1": 0.6777777777777778
+      },
+      "retrieval_time_ms": 49442.59,
+      "cost_usd": 0.010536,
+      "rag_confidence": 0.361
+    },
+    {
+      "query_id": 41,
+      "query": "Consider \"Keep\"'s privacy policy; how well does keep protect my data and how do they do that?",
+      "predicted_answer": "We use a variety of security measures, including encryption and authentication tools, to help protect your information. Other than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes. We will share personal information if we have a good-faith belief that access, use, preservation, or disclosure of the information is reasonably necessary to a) meet any applicable law, regulation, legal process, or enforceable governmental request, or b) detect, prevent, or otherwise address fraud, security, or technical issues, or c) protect against harm to the rights, property or safety of Keep, our users, or the public as required or permitted by law.",
+      "ground_truth_answers": [
+        "You can also remove or delete content from your account or entirely delete your whole Keep account.\nIf any content you cannot remove or delete by yourself, please kindly reach us via support@gotokeep.com .\nIn some cases, we retain data for limited periods when it needs to be kept for legitimate business or legal purposes or to be protected from accidental or malicious deletion, there may be delays between when you delete something and when copies are deleted from our active and backup systems.\nWe use a variety of security measures, including encryption and authentication tools, to help protect your information.\nWe use secure servers when you place orders.\nAll credit card information you supply is transmitted via Secure Socket Layer (SSL) technology and then encrypted within our databases.\nHowever, like other companies, we cannot guarantee 100% the security or confidentiality of the information you provide to us.\nWe maintain server around the world and your information may be processed on servers located outside of the country where you live.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.31250000000000006,
+        "precision": 0.379746835443038,
+        "recall": 0.26548672566371684,
+        "embedding_similarity": 0.6901354789733887,
+        "combined_f1": 0.31250000000000006
+      },
+      "retrieval_time_ms": 71890.89,
+      "cost_usd": 0.017838,
+      "rag_confidence": 0.484
+    },
+    {
+      "query_id": 42,
+      "query": "Consider \"Keep\"'s privacy policy; can people see what workout list i'm using?",
+      "predicted_answer": "Any information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\nTo register, you may need to provide certain Personal Information, such as you name, mobile phone number, password, exercise goal and status.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.380952380952381,
+        "precision": 0.3137254901960784,
+        "recall": 0.48484848484848486,
+        "embedding_similarity": 0.4043096899986267,
+        "combined_f1": 0.380952380952381
+      },
+      "retrieval_time_ms": 64896.0,
+      "cost_usd": 0.016312,
+      "rag_confidence": 0.245
+    },
+    {
+      "query_id": 43,
+      "query": "Consider \"Keep\"'s privacy policy; can people see my workout log?",
+      "predicted_answer": "Information not found in documents",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.10526315789473685,
+        "precision": 0.4,
+        "recall": 0.06060606060606061,
+        "embedding_similarity": 0.09540268033742905,
+        "combined_f1": 0.10526315789473685
+      },
+      "retrieval_time_ms": 60736.59,
+      "cost_usd": 0.02486,
+      "rag_confidence": 0.66
+    },
+    {
+      "query_id": 44,
+      "query": "Consider \"Keep\"'s privacy policy; will they share my information with anyone?",
+      "predicted_answer": "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information. To provide you with a better experience through improving our products, services, content, and advertising or otherwise where you have consented, we may share the personal information with our affiliate companies and with joint venture partners and third-party service providers, contractors and agents, and use it consistent with this Privacy Policy. We will share personal information if we have a good-faith belief that access, use, preservation, or disclosure of the information is reasonably necessary to a) meet any applicable law, regulation, legal process, or enforceable governmental request, or b) detect, prevent, or otherwise address fraud, security, or technical issues, or c) protect against harm to the rights, property or safety of Keep, our users, or the public as required or permitted by law. We will never share with or sell the information gained through the use of Apple HealthKit, such as age, weight and heart rate data, to advertisers or other agencies without your authorization.\nWe will also never use the information for marketing, advertising or similar services. In order to participate in certain features, you may have to adjust your Privacy settings and share more information. You may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram. Please read the Privacy Policies of those platforms, as your activity published on those platforms will no longer be governed by this Privacy Policy.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\n",
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.4530386740331492,
+        "precision": 0.29285714285714287,
+        "recall": 1.0,
+        "embedding_similarity": 0.7836654186248779,
+        "combined_f1": 0.4931506849315068
+      },
+      "retrieval_time_ms": 57455.8,
+      "cost_usd": 0.013797
+    },
+    {
+      "query_id": 45,
+      "query": "Consider \"Keep\"'s privacy policy; will my location be monitored and shared?",
+      "predicted_answer": "Location Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nWhen you join or use certain services, you agree to publicly share a basic amount of information, which may include your username, city location, and profile picture.\nTo provide you with a better experience through improving our products, services, content, and advertising or otherwise where you have consented, we may share the personal information with our affiliate companies and with joint venture partners and third-party service providers, contractors and agents, and use it consistent with this Privacy Policy.",
+      "ground_truth_answers": [
+        "Any information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\n",
+        "When you make purchases through Keep, you may need to provide certain Personal Information to complete the purchase, such as your credit card information, bank account information.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.2580645161290323,
+        "precision": 0.17142857142857143,
+        "recall": 0.5217391304347826,
+        "embedding_similarity": 0.5128175020217896,
+        "combined_f1": 0.3238095238095238
+      },
+      "retrieval_time_ms": 108228.13,
+      "cost_usd": 0.028331
+    },
+    {
+      "query_id": 46,
+      "query": "Consider \"Keep\"'s privacy policy; how is my information protected?",
+      "predicted_answer": "In some cases, we retain data for limited periods when it needs to be kept for legitimate business or legal purposes or to be protected from accidental or malicious deletion, there may be delays between when you delete something and when copies are deleted from our active and backup systems.\nWe use a variety of security measures, including encryption and authentication tools, to help protect your information.\nWe use secure servers when you place orders.",
+      "ground_truth_answers": [
+        "You can also remove or delete content from your account or entirely delete your whole Keep account.\nIf any content you cannot remove or delete by yourself, please kindly reach us via support@gotokeep.com .\nIn some cases, we retain data for limited periods when it needs to be kept for legitimate business or legal purposes or to be protected from accidental or malicious deletion, there may be delays between when you delete something and when copies are deleted from our active and backup systems.\nWe use a variety of security measures, including encryption and authentication tools, to help protect your information.\nWe use secure servers when you place orders.\nAll credit card information you supply is transmitted via Secure Socket Layer (SSL) technology and then encrypted within our databases.\nHowever, like other companies, we cannot guarantee 100% the security or confidentiality of the information you provide to us.\nWe maintain server around the world and your information may be processed on servers located outside of the country where you live.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.6783625730994153,
+        "precision": 1.0,
+        "recall": 0.5132743362831859,
+        "embedding_similarity": 0.7509902715682983,
+        "combined_f1": 0.6783625730994153
+      },
+      "retrieval_time_ms": 41949.87,
+      "cost_usd": 0.01231
+    },
+    {
+      "query_id": 47,
+      "query": "Consider \"Keep\"'s privacy policy; will any of my information be sold?",
+      "predicted_answer": "Other than consented by you, we commit that we will not sell your personal information to any other third parties for their processing for any purposes.",
+      "ground_truth_answers": [
+        "Where we or our affiliate companies process your payments as a payment service provider, or where we fulfill any purchases you have made on Keep, we may collect, use and store your Personal Information in order to fulfill such purchases.\nLocation Data, Log Data and your device.Keep automatically collects Log Data from your device to enable and assist Keeps functionalities.\nIn addition, you may also permit Keep to access other content and data on your device  for example, your contact list and photo storage.\n",
+        "We will not disclose or transfer your personal information to any non-affiliated third parties, unless:\nYou may choose to share certain information.\nIn order to participate in certain features, you may have to adjust your Privacy settings and share more information.\nYou may also choose to share your activity on other platforms, such as Facebook, Twitter or Instagram.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.3809523809523809,
+        "precision": 0.5454545454545454,
+        "recall": 0.2926829268292683,
+        "embedding_similarity": 0.6187461614608765,
+        "combined_f1": 0.25742574257425743
+      },
+      "retrieval_time_ms": 39571.32,
+      "cost_usd": 0.011678,
+      "rag_confidence": 0.557
+    },
+    {
+      "query_id": 48,
+      "query": "Consider \"Keep\"'s privacy policy; do you know my location",
+      "predicted_answer": "Information you make available to us via your use of Keep  for example, via: a) Your sharing of your contact list with Keep in the Recommended Friends function in order to connect with other Keep users; b) Making purchases within Keep, including your credit card or bank details and information about the purchases that you make;\nInformation we collect in the course of you using Keep  such as certain location data and log data; and\nKeep automatically collects Log Data from your device to enable and assist Keeps functionalities.",
+      "ground_truth_answers": [
+        "Any information included in your publicly visible Keep profile, which may include your profile ID, name and photo;\n",
+        "When you make purchases through Keep, you may need to provide certain Personal Information to complete the purchase, such as your credit card information, bank account information.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.345679012345679,
+        "precision": 0.2413793103448276,
+        "recall": 0.6086956521739131,
+        "embedding_similarity": 0.7575011253356934,
+        "combined_f1": 0.3440860215053763
+      },
+      "retrieval_time_ms": 66685.47,
+      "cost_usd": 0.015211,
+      "rag_confidence": 0.675
+    },
+    {
+      "query_id": 49,
+      "query": "Consider \"Keep\"'s privacy policy; do you keep and upload my activity to your database",
+      "predicted_answer": "Short answer: Yes. Keep collects and stores information about your activity in the app (including log data and certain location/usage data), and some activity or profile details can become publicly visible depending on your privacy settings. [Doc: Keep, Section: Keep (Part 1)] [Doc: Keep, Section: Keep (Part 2)]\n\nSupporting excerpts:\n- \"We collect information from you when you use Keep App ... Use Keep App; and Communicate with us.\" [Doc: Keep, Section: Keep (Part 1)]  \n- \"Information we collect in the course of you using Keep  such as certain location data and log data;\" [Doc: Keep, Section: Keep (Part 1)]  \n- \"Once you register, your username and additional information regarding your activity is made public and is visible to all Users of the Site.\" [Doc: Keep, Section: Keep (Part 2)]  \n- \"You can export a copy of content in your Keep Account ... send your request to support@gotokeep.com.\" [Doc: Keep, Section: Keep (Part 2)]\n\nConfidence: Moderate (based on document retrieval). If you want, I can pull the exact full policy paragraphs or confirm any specific data type you’re worried about (e.g., GPS, workout history, photos).",
+      "ground_truth_answers": [
+        "We value your every uploaded training information as it is crucial for us to better understand which training class is more helpful to you.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.1322314049586777,
+        "precision": 0.08,
+        "recall": 0.38095238095238093,
+        "embedding_similarity": 0.3648865222930908,
+        "combined_f1": 0.1322314049586777
+      },
+      "retrieval_time_ms": 86382.75,
+      "cost_usd": 0.0194,
+      "rag_confidence": 0.795
+    },
+    {
+      "query_id": 50,
+      "query": "Consider \"Keep\"'s privacy policy; do you use my data to modify the app",
+      "predicted_answer": "Maintain and improve our services.\nWe use your information to ensure our services are working as intended, such as troubleshooting issues reported from you.\nWe use the information we collect to customize our services for you.",
+      "ground_truth_answers": [
+        "We use your information to ensure our services are working as intended, such as troubleshooting issues reported from you.\nDevelop new services.\nWe value your every uploaded training information as it is crucial for us to better understand which training class is more helpful to you.\nWith adequate data support, we will create and update more popular training classes for you to take.\n",
+        "We use the information we collect to customize our services for you.\nFor example, we may provide you with advanced training classes with your updated weight and body measurement in aims to help you achieve your training goals smoothly.\n"
+      ],
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.5633802816901409,
+        "precision": 0.8,
+        "recall": 0.43478260869565216,
+        "embedding_similarity": 0.6679064035415649,
+        "combined_f1": 0.5227272727272727
+      },
+      "retrieval_time_ms": 60181.85,
+      "cost_usd": 0.015497,
+      "rag_confidence": 0.506
+    }
+  ],
+  "total_time_seconds": 3060.09,
+  "total_cost_usd": 0.862795,
+  "avg_time_per_query_ms": 61201.74,
+  "cost_per_query_usd": 0.017256,
+  "config": {
+    "dataset_path": "benchmark_dataset/privacy_qa.json",
+    "documents_dir": "benchmark_dataset/privacy_qa",
+    "vector_store_path": "benchmark_db/combined_store",
+    "k": 5,
+    "enable_reranking": true,
+    "enable_graph_boost": false,
+    "enable_hybrid_search": true,
+    "max_queries": 50,
+    "debug_mode": false,
+    "fail_fast": true,
+    "agent_model": "gpt-5-mini",
+    "agent_temperature": 0.0,
+    "enable_prompt_caching": true,
+    "metrics": [
+      "exact_match",
+      "f1_score",
+      "precision",
+      "recall"
+    ],
+    "output_dir": "benchmark_results",
+    "save_markdown": true,
+    "save_json": true,
+    "save_per_query": false
+  },
+  "timestamp": "2025-11-01T11:06:02.583552"
+}

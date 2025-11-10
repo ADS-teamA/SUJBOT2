@@ -15,14 +15,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _load_agent_system_prompt() -> str:
-    """Load agent system prompt from prompts/ directory."""
+def _load_agent_base_prompt() -> str:
+    """
+    Load base agent prompt from prompts/ directory.
+
+    This loads the universal RAG search strategist instructions.
+    Task-specific prompts (chat, benchmark) should be appended separately.
+    """
     try:
         from .prompt_loader import load_prompt
 
-        return load_prompt("agent_system_prompt")
+        return load_prompt("base_agent_prompt")
     except Exception as e:
-        logger.error(f"Failed to load agent system prompt: {e}")
+        logger.error(f"Failed to load base agent prompt: {e}")
         # Fallback to minimal prompt
         return "You are a RAG-powered assistant for legal and technical documents."
 
@@ -223,8 +228,9 @@ class AgentConfig:
     cli_config: CLIConfig = field(default_factory=CLIConfig)
 
     # === System Prompt ===
-    # Loaded from prompts/agent_system_prompt.txt
-    system_prompt: str = field(default_factory=lambda: _load_agent_system_prompt())
+    # Loaded from prompts/base_agent_prompt.txt (universal RAG instructions)
+    # Task-specific prompts (chat/benchmark) should be appended by the caller
+    system_prompt: str = field(default_factory=lambda: _load_agent_base_prompt())
 
     def validate(self) -> None:
         """
@@ -306,9 +312,10 @@ class AgentConfig:
         Environment variables:
         - ANTHROPIC_API_KEY: Required
         - AGENT_MODEL: Model to use (default: claude-sonnet-4-5-20250929)
+        - AGENT_MAX_TOKENS: Max output tokens (default: 4096, Gemini max: 8192)
         - VECTOR_STORE_PATH: Path to hybrid store
         - KNOWLEDGE_GRAPH_PATH: Path to KG JSON (optional)
-        - QUERY_EXPANSION_MODEL: LLM model for query expansion (default: gpt-5-nano)
+        - QUERY_EXPANSION_MODEL: LLM model for query expansion (default: gpt-4o-mini)
 
         Args:
             **overrides: Override specific config values
@@ -329,24 +336,102 @@ class AgentConfig:
             query_expansion_model=query_expansion_model_env,
         )
 
+        # Load enable_knowledge_graph from environment
+        enable_kg_str = os.getenv("ENABLE_KNOWLEDGE_GRAPH", "false").lower()
+        enable_kg = enable_kg_str in ("true", "1", "yes")
+
+        # Load max_tokens from environment (NEW - for Gemini compatibility)
+        max_tokens = int(os.getenv("AGENT_MAX_TOKENS", "4096"))
+
         config = cls(
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             model=os.getenv("AGENT_MODEL", "claude-sonnet-4-5-20250929"),
+            max_tokens=max_tokens,
             vector_store_path=Path(os.getenv("VECTOR_STORE_PATH", "vector_db")),
+            enable_knowledge_graph=enable_kg,
             tool_config=tool_config,
         )
+
+        # Auto-detect KG path BEFORE applying overrides
+        kg_path_from_env = None
+        kg_path_str = os.getenv("KNOWLEDGE_GRAPH_PATH")
+        if kg_path_str:
+            kg_path = Path(kg_path_str)
+            if kg_path.exists():
+                kg_path_from_env = kg_path
 
         # Apply overrides
         for key, value in overrides.items():
             if hasattr(config, key):
                 setattr(config, key, value)
 
-        # Auto-detect KG if path exists
-        kg_path_str = os.getenv("KNOWLEDGE_GRAPH_PATH")
-        if kg_path_str:
-            kg_path = Path(kg_path_str)
-            if kg_path.exists():
-                config.knowledge_graph_path = kg_path
-                config.enable_knowledge_graph = True
+        # Set KG path after overrides
+        if kg_path_from_env:
+            config.knowledge_graph_path = kg_path_from_env
+            config.enable_knowledge_graph = True
+        elif config.enable_knowledge_graph and not config.knowledge_graph_path:
+            # Default to vector_store_path if KG enabled but no path specified
+            if config.vector_store_path:
+                default_kg_path = config.vector_store_path
+                if default_kg_path.exists():
+                    config.knowledge_graph_path = default_kg_path
+                    logger.info(f"Using vector store path for knowledge graphs: {default_kg_path}")
+
+        return config
+
+    @classmethod
+    def from_config(cls, root_config, **overrides) -> "AgentConfig":
+        """
+        Create config from validated RootConfig (config.json).
+
+        Args:
+            root_config: Validated RootConfig from src.config
+            **overrides: Override specific config values (e.g., from CLI args)
+
+        Returns:
+            AgentConfig instance
+        """
+        from src.config import ModelConfig
+
+        # Get model config for API keys
+        model_config = ModelConfig.from_config(root_config)
+
+        # Detect provider for query expansion model
+        query_expansion_model = root_config.agent.query_expansion_model
+        query_expansion_provider = "openai"
+        if "claude" in query_expansion_model.lower() or "haiku" in query_expansion_model.lower() or "sonnet" in query_expansion_model.lower():
+            query_expansion_provider = "anthropic"
+        elif "gemini" in query_expansion_model.lower():
+            query_expansion_provider = "google"
+
+        tool_config = ToolConfig(
+            query_expansion_provider=query_expansion_provider,
+            query_expansion_model=query_expansion_model,
+        )
+
+        # Create config from JSON
+        config = cls(
+            anthropic_api_key=model_config.anthropic_api_key or "",
+            openai_api_key=model_config.openai_api_key or "",
+            google_api_key=model_config.google_api_key or "",
+            model=root_config.agent.model,
+            max_tokens=root_config.agent.max_tokens or 4096,
+            temperature=root_config.agent.temperature,
+            vector_store_path=Path(root_config.agent.vector_store_path),
+            knowledge_graph_path=Path(root_config.agent.knowledge_graph_path) if root_config.agent.knowledge_graph_path else None,
+            enable_knowledge_graph=root_config.knowledge_graph.enable,
+            enable_tool_validation=root_config.agent.enable_tool_validation,
+            enable_prompt_caching=root_config.agent.enable_prompt_caching,
+            enable_context_management=root_config.agent.enable_context_management,
+            context_management_trigger=root_config.agent.context_management_trigger,
+            context_management_keep=root_config.agent.context_management_keep,
+            debug_mode=root_config.agent.debug_mode,
+            tool_config=tool_config,
+        )
+
+        # Apply overrides (e.g., from CLI args)
+        for key, value in overrides.items():
+            if hasattr(config, key):
+                setattr(config, key, value)
 
         return config

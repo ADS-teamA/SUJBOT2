@@ -1,7 +1,8 @@
 """
 TIER 1: Basic Retrieval Tools
 
-Fast tools (100-300ms) for common retrieval tasks.
+Fast tools (100-300ms baseline) for common retrieval tasks.
+Some tools have optional features that may extend performance beyond baseline.
 These should handle 80% of user queries.
 """
 
@@ -12,7 +13,7 @@ from pydantic import Field
 
 from .base import BaseTool, ToolInput, ToolResult
 from .registry import register_tool
-from .utils import format_chunk_result, validate_k_parameter
+from .utils import format_chunk_result, generate_citation, validate_k_parameter
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,7 @@ class GetToolHelpInput(ToolInput):
     """Input for get_tool_help tool."""
 
     tool_name: str = Field(
-        ...,
-        description="Name of tool to get help for (e.g., 'search', 'compare_documents')"
+        ..., description="Name of tool to get help for (e.g., 'search', 'compare_documents')"
     )
 
 
@@ -137,6 +137,10 @@ class SearchInput(ToolInput):
         ge=0,
         le=5,
     )
+    enable_graph_boost: bool = Field(
+        False,
+        description="Enable knowledge graph boosting for entity-centric queries. Boosts chunks mentioning query entities (+30%) and high-centrality concepts (+15%). Use when query mentions specific entities (organizations, standards, regulations). Performance overhead: +200-500ms. Default: False (performance-first).",
+    )
 
 
 @register_tool
@@ -144,11 +148,10 @@ class SearchTool(BaseTool):
     """Unified search with optional query expansion."""
 
     name = "search"
-    description = "Unified hybrid search with optional query expansion for better recall"
+    description = "Unified hybrid search with optional query expansion and graph boosting"
     detailed_help = """
     Unified search tool combining hybrid retrieval (BM25 + Dense + RRF) with optional
-    query expansion for improved recall. Agent can control both result count (k) and
-    number of paraphrases (num_expands).
+    query expansion and knowledge graph boosting for improved recall and precision.
 
     **Query Expansion:**
     - num_expands=0: Use original query only (fast, ~200-300ms, 1 query total)
@@ -156,31 +159,48 @@ class SearchTool(BaseTool):
     - num_expands=2: Original + 2 paraphrases (~800ms, 3 queries total, +15-25% recall)
     - num_expands=3: Original + 3 paraphrases (~1.2s, 4 queries total, +20-30% recall)
 
+    **Graph Boosting:**
+    - enable_graph_boost=False: Standard hybrid search (default, faster)
+    - enable_graph_boost=True: Graph-enhanced search (+200-500ms, better for entity queries)
+        - Boosts chunks mentioning query entities (+30% score boost)
+        - Boosts chunks with high-centrality entities (+15% score boost)
+        - Research-backed: +8% factual correctness on entity-centric queries (HybridRAG 2024)
+
     **When to use:**
-    - Most queries (replaces simple_search)
-    - When recall is important: Use num_expands=1 or 2
-    - When speed is critical: Use num_expands=0
-    - For ambiguous queries: Use num_expands=2 to capture different interpretations
+    - Most queries: Start with defaults (num_expands=0, enable_graph_boost=False)
+    - Entity-centric queries: Use enable_graph_boost=True (e.g., "What did GSSB issue?")
+    - Ambiguous queries: Use num_expands=1-2 for better recall
+    - Complex entity queries: Combine both (num_expands=1, enable_graph_boost=True)
+    - Speed critical: Keep both disabled (default)
+
+    **When NOT to use graph boosting:**
+    - Generic queries without specific entities (e.g., "What is waste management?")
+    - Keyword-based searches (graph boost has no effect)
+    - Speed is priority (adds ~300ms overhead)
 
     **Method:**
     1. Query expansion (if num_expands > 0): Generate N paraphrases using LLM
-    2. Hybrid search for each query: BM25 + Dense + RRF fusion
+    2. Hybrid search for each query:
+       - If enable_graph_boost=True: Use GraphEnhancedRetriever (entity extraction + boosting)
+       - If enable_graph_boost=False: Use standard hybrid search (BM25 + Dense + RRF)
     3. RRF fusion across queries (if multiple queries)
     4. Cross-encoder reranking (final quality boost)
 
     **Performance:**
-    - num_expands=0: ~200-300ms (1 query, no expansion)
-    - num_expands=1: ~500ms (2 queries, recommended)
-    - num_expands=2: ~800ms (3 queries, good balance)
-    - num_expands=3: ~1.2s (4 queries, maximum quality)
+    - num_expands=0, graph_boost=False: ~200-300ms (fastest, default)
+    - num_expands=0, graph_boost=True: ~400-700ms (entity-enhanced)
+    - num_expands=1, graph_boost=False: ~500ms (better recall)
+    - num_expands=1, graph_boost=True: ~700-1000ms (best quality for entity queries)
+    - num_expands=2, graph_boost=True: ~1.0-1.5s (maximum quality, slower)
 
     **Best practices:**
-    - Start with num_expands=0 for most queries
+    - Start with defaults for most queries (fast path)
+    - Enable graph boost for entity-focused questions (organizations, standards, regulations)
     - Use num_expands=1-2 when user query is ambiguous or recall is critical
-    - Use num_expands=3 only when comprehensive recall is essential
-    - Avoid num_expands > 3 (diminishing returns, performance impact)
+    - Combine both features for complex entity queries where quality > speed
+    - Check metadata.graph_boost_enabled to verify if boost was applied
     """
-    tier = 1
+    tier = 1  # Tier 1: Fast baseline (200-300ms). Optional features (graph_boost, num_expands) extend to 400-1500ms
     input_schema = SearchInput
     requires_reranker = True
 
@@ -241,7 +261,9 @@ class SearchTool(BaseTool):
 
         return self._query_expander
 
-    def execute_impl(self, query: str, k: int = 5, num_expands: int = 0) -> ToolResult:
+    def execute_impl(
+        self, query: str, k: int = 5, num_expands: int = 0, enable_graph_boost: bool = False
+    ) -> ToolResult:
         k, _ = validate_k_parameter(k, adaptive=True, detail_level="medium")
 
         # === STEP 1: Query Expansion ===
@@ -258,13 +280,15 @@ class SearchTool(BaseTool):
                     # Result will be [original] + num_expands paraphrases
                     expansion_result = expander.expand(query, num_expansions=num_expands)
                     queries = expansion_result.expanded_queries
-                    expansion_metadata.update({
-                        "expansion_method": expansion_result.expansion_method,
-                        "model_used": expansion_result.model_used,
-                        "queries_generated": len(queries),
-                        "paraphrases_requested": num_expands,
-                        "paraphrases_generated": len(queries) - 1,  # Exclude original
-                    })
+                    expansion_metadata.update(
+                        {
+                            "expansion_method": expansion_result.expansion_method,
+                            "model_used": expansion_result.model_used,
+                            "queries_generated": len(queries),
+                            "paraphrases_requested": num_expands,
+                            "paraphrases_generated": len(queries) - 1,  # Exclude original
+                        }
+                    )
                     logger.info(
                         f"Query expansion: original='{query}' + {num_expands} paraphrases "
                         f"→ {len(queries)} queries total: {queries}"
@@ -287,35 +311,120 @@ class SearchTool(BaseTool):
         all_chunks = []  # All chunks from all queries (with their original scores)
         search_metadata = []  # Track metadata for each query search
 
-        for idx, q in enumerate(queries, 1):
-            logger.info(f"Searching with query {idx}/{len(queries)}: '{q}'")
+        # Determine if graph boost should be used
+        use_graph_boost = enable_graph_boost and self.graph_retriever is not None
 
-            # Embed query
-            query_embedding = self.embedder.embed_texts([q])
-
-            # Hybrid search
-            results = self.vector_store.hierarchical_search(
-                query_text=q,
-                query_embedding=query_embedding,
-                k_layer3=candidates_k,
-            )
-
-            chunks = results["layer3"]
-            # Tag chunks with their source query for tracking
-            for chunk in chunks:
-                chunk["_source_query"] = q
-
-            all_chunks.extend(chunks)
-
-            # Track search metadata
-            search_metadata.append({
-                "query": q,
-                "chunks_retrieved": len(chunks),
-            })
-
+        if enable_graph_boost and self.graph_retriever is None:
             logger.info(
-                f"Query {idx} retrieved {len(chunks)} chunks from layer3"
+                "Graph boost requested but graph_retriever not available. "
+                "Falling back to standard hybrid search. "
+                "Tip: Run indexing with ENABLE_KNOWLEDGE_GRAPH=true to enable graph boosting."
             )
+
+        if use_graph_boost:
+            # NEW: Graph-enhanced retrieval path
+            logger.info("Using graph-enhanced retrieval (graph boost enabled)")
+
+            for idx, q in enumerate(queries, 1):
+                logger.info(f"Searching with graph boost (query {idx}/{len(queries)}): '{q}'")
+
+                # Embed query (extract 1D array for graph retriever)
+                query_embedding = self.embedder.embed_texts([q])[0]
+
+                # Delegate to GraphEnhancedRetriever with error handling
+                try:
+                    results = self.graph_retriever.search(
+                        query=q,
+                        query_embedding=query_embedding,
+                        k=candidates_k,
+                        enable_graph_boost=True,
+                    )
+
+                    chunks = results.get("layer3", [])
+
+                    if not chunks:
+                        logger.warning(
+                            f"Graph boost returned empty results for query {idx}. "
+                            f"Falling back to standard search for this query."
+                        )
+                        # Fallback to standard hybrid search for this query
+                        results = self.vector_store.hierarchical_search(
+                            query_text=q,
+                            query_embedding=query_embedding,
+                            k_layer3=candidates_k,
+                        )
+                        chunks = results["layer3"]
+                        graph_boost_applied = False
+                    else:
+                        graph_boost_applied = True
+
+                except (KeyError, AttributeError, ValueError, TypeError) as e:
+                    logger.warning(
+                        f"Graph boost failed for query {idx} ({type(e).__name__}: {e}). "
+                        f"Falling back to standard search for this query."
+                    )
+                    # Fallback to standard hybrid search
+                    results = self.vector_store.hierarchical_search(
+                        query_text=q,
+                        query_embedding=query_embedding,
+                        k_layer3=candidates_k,
+                    )
+                    chunks = results["layer3"]
+                    graph_boost_applied = False
+                # Tag chunks with their source query for tracking
+                for chunk in chunks:
+                    chunk["_source_query"] = q
+
+                all_chunks.extend(chunks)
+
+                # Track search metadata
+                search_metadata.append(
+                    {
+                        "query": q,
+                        "chunks_retrieved": len(chunks),
+                        "graph_boost_applied": graph_boost_applied,
+                    }
+                )
+
+                logger.info(f"Query {idx} retrieved {len(chunks)} graph-boosted chunks from layer3")
+
+        else:
+            # EXISTING: Standard hybrid search path
+            logger.debug(
+                f"Using standard hybrid search (graph_boost_enabled={enable_graph_boost}, "
+                f"graph_retriever_available={self.graph_retriever is not None})"
+            )
+
+            for idx, q in enumerate(queries, 1):
+                logger.info(f"Searching with query {idx}/{len(queries)}: '{q}'")
+
+                # Embed query (extract 1D array)
+                query_embedding = self.embedder.embed_texts([q])[0]
+
+                # Hybrid search
+                results = self.vector_store.hierarchical_search(
+                    query_text=q,
+                    query_embedding=query_embedding,
+                    k_layer3=candidates_k,
+                )
+
+                chunks = results["layer3"]
+                # Tag chunks with their source query for tracking
+                for chunk in chunks:
+                    chunk["_source_query"] = q
+
+                all_chunks.extend(chunks)
+
+                # Track search metadata
+                search_metadata.append(
+                    {
+                        "query": q,
+                        "chunks_retrieved": len(chunks),
+                        "graph_boost_applied": False,
+                    }
+                )
+
+                logger.info(f"Query {idx} retrieved {len(chunks)} chunks from layer3")
 
         # Log total candidates before fusion/reranking
         logger.info(
@@ -354,9 +463,7 @@ class SearchTool(BaseTool):
             logger.info(f"Reranking {len(chunks)} candidates to top {k}...")
             chunks = self.reranker.rerank(query=query, candidates=chunks, top_k=k)
             reranking_applied = True
-            logger.info(
-                f"Reranking complete: {chunks_before_rerank} → {len(chunks)} chunks"
-            )
+            logger.info(f"Reranking complete: {chunks_before_rerank} → {len(chunks)} chunks")
         else:
             chunks = chunks[:k]
             reranking_applied = False
@@ -366,20 +473,80 @@ class SearchTool(BaseTool):
         formatted = [format_chunk_result(c) for c in chunks]
         final_count = len(formatted)
 
-        # Generate citations
-        citations = [
-            f"[{i+1}] {c['document_id']}: {c['section_title']}" for i, c in enumerate(formatted)
-        ]
+        # Generate citations with breadcrumb path (uses generate_citation for consistency)
+        citations = [generate_citation(c, i + 1, format="inline") for i, c in enumerate(formatted)]
+
+        # === STEP 6: RAG Confidence Scoring ===
+        try:
+            from src.agent.rag_confidence import RAGConfidenceScorer
+
+            confidence_scorer = RAGConfidenceScorer()
+            confidence = confidence_scorer.score_retrieval(chunks, query=query)
+
+            logger.info(
+                f"RAG Confidence: {confidence.interpretation} ({confidence.overall_confidence:.3f})"
+            )
+
+            # Add warning to citations if low confidence
+            if confidence.should_flag:
+                citations.insert(0, f"⚠️ {confidence.interpretation}")
+
+        except (AttributeError, KeyError) as e:
+            # Data structure issue - chunks missing required fields
+            logger.error(
+                f"RAG confidence scoring failed - data structure error: {e}. "
+                f"Chunks may be missing required fields (bm25_score, dense_score, etc.). "
+                f"Continuing without confidence data.",
+                exc_info=False,
+            )
+            confidence = None
+        except ImportError as e:
+            # Should not happen in production - indicates setup error
+            logger.error(
+                f"RAG confidence module missing: {e}. This indicates a setup issue. "
+                f"Continuing without confidence data.",
+                exc_info=False,
+            )
+            confidence = None
+        except ValueError as e:
+            # Likely from numpy operations with invalid data
+            logger.error(
+                f"RAG confidence calculation error - invalid data: {e}. "
+                f"Retrieved chunks may contain malformed scores. "
+                f"Continuing without confidence data.",
+                exc_info=False,
+            )
+            confidence = None
+        except Exception as e:
+            # Unexpected error - log with full traceback for debugging
+            logger.error(
+                f"Unexpected error in RAG confidence scoring ({type(e).__name__}): {e}. "
+                f"This may indicate a bug. Continuing without confidence data.",
+                exc_info=True,
+            )
+            confidence = None
 
         # Enhanced metadata with debug info
         result_metadata = {
             "query": query,
             "k": k,
             "num_expands": num_expands,
+            "enable_graph_boost": enable_graph_boost,
+            "graph_boost_enabled": use_graph_boost,
             "expansion_metadata": expansion_metadata,
             "fusion_method": fusion_method,
             "reranking_applied": reranking_applied,
-            "method": "hybrid+expansion+rerank" if num_expands > 1 and self.reranker else "hybrid+rerank" if self.reranker else "hybrid",
+            "method": (
+                "hybrid+expansion+graph+rerank"
+                if num_expands > 1 and use_graph_boost and self.reranker
+                else "hybrid+graph+rerank"
+                if use_graph_boost and self.reranker
+                else "hybrid+expansion+rerank"
+                if num_expands > 1 and self.reranker
+                else "hybrid+rerank"
+                if self.reranker
+                else "hybrid"
+            ),
             "candidates_retrieved": len(all_chunks),
             "chunks_before_rerank": chunks_before_rerank,
             "chunks_after_rerank": final_count,
@@ -388,6 +555,10 @@ class SearchTool(BaseTool):
             "queries_used": queries,
             "search_metadata": search_metadata,
         }
+
+        # Add RAG confidence to metadata
+        if confidence:
+            result_metadata["rag_confidence"] = confidence.to_dict()
 
         # Log final summary
         logger.info(
@@ -446,11 +617,13 @@ class SearchTool(BaseTool):
             # RRF score: sum of 1/(k + rank) for all occurrences
             rrf_score = sum(1.0 / (k + rank) for rank, _ in data["ranks"])
 
-            rrf_scores.append({
-                "chunk": data["chunk"],
-                "rrf_score": rrf_score,
-                "appearances": len(data["ranks"]),
-            })
+            rrf_scores.append(
+                {
+                    "chunk": data["chunk"],
+                    "rrf_score": rrf_score,
+                    "appearances": len(data["ranks"]),
+                }
+            )
 
         # Sort by RRF score (descending)
         rrf_scores.sort(key=lambda x: x["rrf_score"], reverse=True)
@@ -506,6 +679,26 @@ class GetDocumentListTool(BaseTool):
                 summary = meta.get("content", "")
                 if doc_id and doc_id not in documents_map:
                     documents_map[doc_id] = summary
+
+        # Fallback: If Layer 1 is empty (single-layer optimization), extract from Layer 3
+        if not documents_map:
+            # Try metadata_layer3 (direct FAISSVectorStore)
+            if hasattr(self.vector_store, "metadata_layer3"):
+                for meta in self.vector_store.metadata_layer3:
+                    doc_id = meta.get("document_id")
+                    if doc_id and doc_id not in documents_map:
+                        # Layer 3 doesn't have document summaries, use document title or placeholder
+                        doc_title = meta.get("document_title", doc_id)
+                        documents_map[doc_id] = f"Privacy policy for {doc_title}"
+            # Try HybridVectorStore wrapper
+            elif hasattr(self.vector_store, "faiss_store") and hasattr(
+                self.vector_store.faiss_store, "metadata_layer3"
+            ):
+                for meta in self.vector_store.faiss_store.metadata_layer3:
+                    doc_id = meta.get("document_id")
+                    if doc_id and doc_id not in documents_map:
+                        doc_title = meta.get("document_title", doc_id)
+                        documents_map[doc_id] = f"Privacy policy for {doc_title}"
 
         # Build list of document objects with id and summary
         document_list = [
@@ -1077,23 +1270,79 @@ class ExactMatchSearchTool(BaseTool):
                 )
 
             formatted = [format_chunk_result(c) for c in results]
-            citations = [
-                f"[{i+1}] {c['document_id']}: {c['section_title']}" for i, c in enumerate(formatted)
-            ]
+            # Generate citations with breadcrumb path (uses generate_citation for consistency)
+            citations = [generate_citation(c, i + 1, format="inline") for i, c in enumerate(formatted)]
+
+            # === RAG Confidence Scoring ===
+            try:
+                from src.agent.rag_confidence import RAGConfidenceScorer
+
+                confidence_scorer = RAGConfidenceScorer()
+                confidence = confidence_scorer.score_retrieval(results, query=query)
+
+                logger.info(
+                    f"RAG Confidence: {confidence.interpretation} ({confidence.overall_confidence:.3f})"
+                )
+
+                # Add warning to citations if low confidence
+                if confidence.should_flag:
+                    citations.insert(0, f"⚠️ {confidence.interpretation}")
+
+            except (AttributeError, KeyError) as e:
+                # Data structure issue - chunks missing required fields
+                logger.error(
+                    f"RAG confidence scoring failed - data structure error: {e}. "
+                    f"Chunks may be missing required fields (bm25_score, dense_score, etc.). "
+                    f"Continuing without confidence data.",
+                    exc_info=False,
+                )
+                confidence = None
+            except ImportError as e:
+                # Should not happen in production - indicates setup error
+                logger.error(
+                    f"RAG confidence module missing: {e}. This indicates a setup issue. "
+                    f"Continuing without confidence data.",
+                    exc_info=False,
+                )
+                confidence = None
+            except ValueError as e:
+                # Likely from numpy operations with invalid data
+                logger.error(
+                    f"RAG confidence calculation error - invalid data: {e}. "
+                    f"Retrieved chunks may contain malformed scores. "
+                    f"Continuing without confidence data.",
+                    exc_info=False,
+                )
+                confidence = None
+            except Exception as e:
+                # Unexpected error - log with full traceback for debugging
+                logger.error(
+                    f"Unexpected error in RAG confidence scoring ({type(e).__name__}): {e}. "
+                    f"This may indicate a bug. Continuing without confidence data.",
+                    exc_info=True,
+                )
+                confidence = None
+
+            # Build metadata
+            result_metadata = {
+                "query": query,
+                "search_type": search_type,
+                "method": "bm25",
+                "search_scope": search_scope,
+                "document_id": document_id,
+                "section_id": section_id,
+                "results_count": len(formatted),
+            }
+
+            # Add RAG confidence to metadata
+            if confidence:
+                result_metadata["rag_confidence"] = confidence.to_dict()
 
             return ToolResult(
                 success=True,
                 data=formatted,
                 citations=citations,
-                metadata={
-                    "query": query,
-                    "search_type": search_type,
-                    "method": "bm25",
-                    "search_scope": search_scope,
-                    "document_id": document_id,
-                    "section_id": section_id,
-                    "results_count": len(formatted),
-                },
+                metadata=result_metadata,
             )
 
         except Exception as e:

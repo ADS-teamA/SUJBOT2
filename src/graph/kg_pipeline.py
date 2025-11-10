@@ -299,6 +299,46 @@ class KnowledgeGraphPipeline:
 
         return kg
 
+    def merge_graphs(self, other_pipeline: "KnowledgeGraphPipeline") -> Dict[str, Any]:
+        """
+        Merge another knowledge graph pipeline's graph into this one.
+
+        Entities are deduplicated using (type, normalized_value) matching.
+        Relationships are updated to reference merged entity IDs.
+
+        Args:
+            other_pipeline: KnowledgeGraphPipeline to merge from
+
+        Returns:
+            Merge statistics with entity/relationship counts
+
+        Example:
+            >>> target_pipeline = KnowledgeGraphPipeline(config)
+            >>> target_pipeline.build_from_phase3_file("doc1.json")
+            >>>
+            >>> source_pipeline = KnowledgeGraphPipeline(config)
+            >>> source_pipeline.build_from_phase3_file("doc2.json")
+            >>>
+            >>> stats = target_pipeline.merge_graphs(source_pipeline)
+            >>> print(f"Merged: +{stats['entities_added']} entities")
+        """
+        if not hasattr(self.graph_builder, "merge"):
+            raise NotImplementedError(
+                f"Graph builder {type(self.graph_builder).__name__} does not support merge"
+            )
+
+        logger.info("Merging knowledge graphs...")
+        stats = self.graph_builder.merge(other_pipeline.graph_builder)
+
+        logger.info(
+            f"Merge complete: "
+            f"+{stats['entities_added']} entities, "
+            f"~{stats['entities_deduplicated']} deduplicated, "
+            f"+{stats['relationships_added']} relationships"
+        )
+
+        return stats
+
     def query_graph(self, entity_id: str) -> Dict[str, Any]:
         """
         Query graph for entity and its relationships.
@@ -367,6 +407,100 @@ class KnowledgeGraphPipeline:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.close()
+
+    def build_unified_kg(
+        self,
+        storage_dir: str = "vector_db",
+        enable_cross_document_relationships: bool = True,
+    ) -> KnowledgeGraph:
+        """
+        Build unified knowledge graph from all existing per-document KGs.
+
+        Features:
+        - Loads all *_kg.json files from storage_dir
+        - Deduplicates entities across documents
+        - Detects cross-document relationships
+        - Saves to unified_kg.json + per-document backups
+
+        Args:
+            storage_dir: Directory with existing KG files (default: vector_db)
+            enable_cross_document_relationships: Enable cross-document relationship detection
+
+        Returns:
+            Unified KnowledgeGraph
+
+        Example:
+            >>> pipeline = KnowledgeGraphPipeline(config)
+            >>> unified_kg = pipeline.build_unified_kg("vector_db")
+            >>> print(f"Unified KG: {len(unified_kg.entities)} entities")
+        """
+        from .unified_kg_manager import UnifiedKnowledgeGraphManager
+        from .cross_doc_detector import CrossDocumentRelationshipDetector
+
+        logger.info("=" * 60)
+        logger.info("BUILDING UNIFIED KNOWLEDGE GRAPH")
+        logger.info("=" * 60)
+
+        # Initialize manager and detector
+        manager = UnifiedKnowledgeGraphManager(storage_dir=storage_dir)
+
+        cross_doc_detector = None
+        if enable_cross_document_relationships:
+            cross_doc_detector = CrossDocumentRelationshipDetector(
+                use_llm_validation=False,  # Pattern-based for speed
+                confidence_threshold=0.7,
+            )
+
+        # Load existing unified KG or create new
+        unified_kg = manager.load_or_create()
+
+        # Find all per-document KG files
+        storage_path = Path(storage_dir)
+        kg_files = list(storage_path.glob("*_kg.json"))
+
+        # Exclude unified_kg.json itself
+        kg_files = [f for f in kg_files if f.name != "unified_kg.json"]
+
+        logger.info(f"Found {len(kg_files)} document KGs to merge")
+
+        # Merge each document KG
+        for kg_file in kg_files:
+            document_id = kg_file.stem.replace("_kg", "")
+            logger.info(f"Merging document: {document_id}")
+
+            # Load document KG
+            doc_kg = KnowledgeGraph.load_json(str(kg_file))
+
+            # Merge into unified KG
+            unified_kg = manager.merge_document_graph(
+                unified_kg=unified_kg,
+                document_kg=doc_kg,
+                document_id=document_id,
+                cross_doc_detector=cross_doc_detector,
+            )
+
+        # Save unified KG + per-document backups
+        logger.info("Saving unified KG...")
+        for kg_file in kg_files:
+            document_id = kg_file.stem.replace("_kg", "")
+            manager.save(unified_kg, document_id=document_id)
+
+        # Print statistics
+        doc_stats = manager.get_document_statistics(unified_kg)
+
+        logger.info("=" * 60)
+        logger.info("UNIFIED KG COMPLETE")
+        logger.info("=" * 60)
+        logger.info(f"Total entities: {len(unified_kg.entities)}")
+        logger.info(f"Total relationships: {len(unified_kg.relationships)}")
+        logger.info(f"Documents: {doc_stats['total_documents']}")
+        logger.info(f"Cross-document entities: {doc_stats['cross_document_entities']}")
+        logger.info(
+            f"Cross-document entity %: {doc_stats['cross_document_entity_percentage']:.1f}%"
+        )
+        logger.info(f"Entities per document: {doc_stats['entities_per_document']}")
+
+        return unified_kg
 
 
 def build_knowledge_graph_from_file(

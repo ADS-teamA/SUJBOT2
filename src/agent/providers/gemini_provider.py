@@ -45,7 +45,7 @@ class GeminiProvider(BaseProvider):
             raise ValueError("Gemini API key is required")
 
         if not api_key.startswith("AIza"):
-            logger.warning(f"Unusual API key format (expected AIza prefix): {api_key[:10]}...")
+            logger.warning("Unusual API key format (expected AIza prefix)")
 
         # Validate model name
         if "gemini" not in model.lower():
@@ -85,11 +85,18 @@ class GeminiProvider(BaseProvider):
         gemini_messages = self._convert_messages_to_gemini(messages)
         gemini_tools = self._convert_tools_to_gemini(tools) if tools else None
 
+        # Extract system instruction
+        system_instruction = self._extract_system_instruction(system) if system else None
+
         # Build config
         config_params = {
             "temperature": temperature,
             "max_output_tokens": max_tokens,
         }
+
+        # Add system instruction if provided (CRITICAL for tool calling)
+        if system_instruction:
+            config_params["system_instruction"] = system_instruction
 
         # Add tools if provided
         if gemini_tools:
@@ -104,11 +111,27 @@ class GeminiProvider(BaseProvider):
 
         # Call Gemini API
         try:
+            # DEBUG: Log what we're sending
+            logger.debug(f"Sending to Gemini: {len(gemini_messages)} messages, tools={'yes' if gemini_tools else 'no'}, system={'yes' if system_instruction else 'no'}")
+
             response = self._client.models.generate_content(
                 model=self.model,
                 contents=gemini_messages,
                 config=config,
             )
+
+            # DEBUG: Log what we received
+            if response.candidates:
+                candidate = response.candidates[0]
+                parts_info = []
+                for part in candidate.content.parts:
+                    if part.text:
+                        parts_info.append(f"text({len(part.text)} chars)")
+                    elif part.function_call:
+                        parts_info.append(f"function_call({part.function_call.name})")
+                logger.debug(f"Gemini response: {len(response.candidates)} candidates, parts=[{', '.join(parts_info)}]")
+            else:
+                logger.warning("Gemini returned NO candidates!")
 
             # Convert to Anthropic format
             return self._convert_response_to_anthropic(response)
@@ -166,11 +189,18 @@ class GeminiProvider(BaseProvider):
         gemini_messages = self._convert_messages_to_gemini(messages)
         gemini_tools = self._convert_tools_to_gemini(tools) if tools else None
 
+        # Extract system instruction
+        system_instruction = self._extract_system_instruction(system) if system else None
+
         # Build config
         config_params = {
             "temperature": temperature,
             "max_output_tokens": max_tokens,
         }
+
+        # Add system instruction if provided (CRITICAL for tool calling)
+        if system_instruction:
+            config_params["system_instruction"] = system_instruction
 
         # Add tools if provided
         if gemini_tools:
@@ -341,6 +371,10 @@ class GeminiProvider(BaseProvider):
         """
         gemini_messages = []
 
+        # Track tool_use_id -> function_name mapping for tool results
+        # Gemini requires FunctionResponse.name to match the original function name
+        tool_id_to_name = {}
+
         for msg in messages:
             role = msg["role"]
             content = msg["content"]
@@ -361,20 +395,38 @@ class GeminiProvider(BaseProvider):
                         parts.append(types.Part(text=block["text"]))
                     elif block.get("type") == "tool_use":
                         # Gemini function call format
+                        # Track the mapping for later tool_result conversion
+                        tool_id = block.get("id")
+                        tool_name = block["name"]
+                        if tool_id:
+                            tool_id_to_name[tool_id] = tool_name
+
                         parts.append(
                             types.Part(
                                 function_call=types.FunctionCall(
-                                    name=block["name"],
+                                    name=tool_name,
                                     args=block.get("input", {}),
                                 )
                             )
                         )
                     elif block.get("type") == "tool_result":
                         # Gemini function response format
+                        # CRITICAL: Use function name (not tool_use_id) to match FunctionCall
+                        tool_use_id = block["tool_use_id"]
+                        function_name = tool_id_to_name.get(tool_use_id)
+
+                        if not function_name:
+                            # Fallback: extract name from ID (toolu_FUNCNAME -> FUNCNAME)
+                            function_name = tool_use_id.replace("toolu_", "")
+                            logger.warning(
+                                f"Could not find function name for tool_use_id={tool_use_id}, "
+                                f"using fallback: {function_name}"
+                            )
+
                         parts.append(
                             types.Part(
                                 function_response=types.FunctionResponse(
-                                    name=block["tool_use_id"],  # Use as identifier
+                                    name=function_name,  # Use function name (not ID)
                                     response={"result": block.get("content", "")},
                                 )
                             )
@@ -452,27 +504,59 @@ class GeminiProvider(BaseProvider):
                     })
 
             # Determine stop reason
-            finish_reason = candidate.finish_reason
-            if finish_reason == types.FinishReason.STOP:
-                stop_reason = "end_turn"
-            elif finish_reason == types.FinishReason.MAX_TOKENS:
-                stop_reason = "max_tokens"
+            # CRITICAL: Check if response contains tool_use blocks first
+            has_tool_use = any(block.get("type") == "tool_use" for block in content_blocks)
+
+            if has_tool_use:
+                # Gemini called a function - must continue loop for tool execution
+                stop_reason = "tool_use"
             else:
-                stop_reason = "end_turn"  # Default
+                # Normal finish reasons
+                finish_reason = candidate.finish_reason
+                if finish_reason == types.FinishReason.STOP:
+                    stop_reason = "end_turn"
+                elif finish_reason == types.FinishReason.MAX_TOKENS:
+                    stop_reason = "max_tokens"
+                else:
+                    stop_reason = "end_turn"  # Default
 
         else:
             content_blocks = [{"type": "text", "text": ""}]
             stop_reason = "end_turn"
 
-        # Extract usage
+        # Extract usage (handle None values carefully)
         usage_metadata = response.usage_metadata
+
+        # Extract tokens with None-safety
+        input_tokens = 0
+        output_tokens = 0
+        cache_read_tokens = 0
+
+        if usage_metadata:
+            # Input tokens
+            input_tokens = (
+                usage_metadata.prompt_token_count
+                if usage_metadata.prompt_token_count is not None
+                else 0
+            )
+
+            # Output tokens
+            output_tokens = (
+                usage_metadata.candidates_token_count
+                if usage_metadata.candidates_token_count is not None
+                else 0
+            )
+
+            # Cache read tokens (can be None even if attribute exists)
+            if hasattr(usage_metadata, "cached_content_token_count"):
+                cached_count = usage_metadata.cached_content_token_count
+                cache_read_tokens = cached_count if cached_count is not None else 0
+
         usage = {
-            "input_tokens": usage_metadata.prompt_token_count if usage_metadata else 0,
-            "output_tokens": usage_metadata.candidates_token_count if usage_metadata else 0,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "cache_creation_tokens": 0,  # Gemini doesn't report separately
-            "cache_read_tokens": usage_metadata.cached_content_token_count
-            if usage_metadata and hasattr(usage_metadata, "cached_content_token_count")
-            else 0,
+            "cache_read_tokens": cache_read_tokens,
         }
 
         return ProviderResponse(

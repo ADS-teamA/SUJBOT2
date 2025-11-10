@@ -2,7 +2,7 @@
 .env
 .env.local
 .env.*.local
-
+output/
 # Python
 __pycache__/
 *.py[cod]
@@ -46,10 +46,9 @@ env/
 
 # Output directories (large files)
 # Allow GRI 306 example output
-!output/GRI_306__Effluents_and_Waste_2016/
+phase1_output/
+phase3_output/
 
-# Ignore other outputs
-output/*
 
 CLAUDE.md
 .claude/
@@ -77,4 +76,6 @@ htmlcov/
 # Test data files (large PDFs)
 data_test/*.pdf
 !data_test/.gitkeep
-output/
+data_legacy/
+
+# Note: output/ is now tracked - contains indexed documents for testing

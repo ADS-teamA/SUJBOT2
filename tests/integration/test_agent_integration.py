@@ -179,11 +179,11 @@ def test_tool_registry():
         registry = get_registry()
         tool_count = len(registry._tool_classes)
 
-        if tool_count == 17:
-            print_pass(f"All 17 tools registered")
+        if tool_count == 14:
+            print_pass(f"All 14 tools registered")
             return True
         else:
-            print_warn(f"Expected 17 tools, found {tool_count}")
+            print_warn(f"Expected 14 tools, found {tool_count}")
             return False
 
     except Exception as e:

@@ -104,62 +104,17 @@ else
 fi
 
 echo ""
-print_info "Starting intelligent indexing pipeline..."
-print_info "(Pipeline will auto-detect existing components and skip them)"
+print_info "Starting intelligent indexing pipeline with automatic merge..."
+print_info "(Pipeline will auto-detect duplicates and merge into vector_db/)"
 echo ""
 
-# Run pipeline (with intelligent component detection)
-uv run python run_pipeline.py "$INPUT_PATH"
+# Run pipeline with automatic merge into vector_db
+uv run python run_pipeline.py "$INPUT_PATH" --merge vector_db
 
 # Check if pipeline succeeded
 if [ $? -ne 0 ]; then
     print_error "Pipeline failed"
     exit 1
-fi
-
-echo ""
-print_success "Pipeline completed successfully"
-
-# Find the output directory (most recent in output/)
-OUTPUT_DIR=$(find output -maxdepth 1 -type d -name "*" | grep -v "^output$" | sort -r | head -n 1)
-
-if [ -z "$OUTPUT_DIR" ]; then
-    print_error "Could not find output directory"
-    exit 1
-fi
-
-print_info "Output directory: $OUTPUT_DIR"
-
-# Check if vector store was created
-VECTOR_STORE="$OUTPUT_DIR/phase4_vector_store"
-if [ ! -d "$VECTOR_STORE" ]; then
-    # Try hybrid_store as fallback
-    VECTOR_STORE="$OUTPUT_DIR/hybrid_store"
-    if [ ! -d "$VECTOR_STORE" ]; then
-        print_error "Vector store not found in output directory"
-        exit 1
-    fi
-fi
-
-print_info "Vector store: $VECTOR_STORE"
-
-# Create central vector_db if it doesn't exist
-if [ ! -d "vector_db" ]; then
-    print_info "Creating central vector_db/"
-    mkdir -p vector_db
-fi
-
-# Check if vector_db is empty
-if [ -z "$(ls -A vector_db)" ]; then
-    print_info "Initializing central vector database..."
-    cp -r "$VECTOR_STORE"/* vector_db/
-    print_success "Vector store copied to vector_db/"
-else
-    print_warning "Central vector_db already exists"
-    print_info "To merge stores, use run_pipeline.py with existing vector_db/"
-    print_info "Or manually copy files from: $VECTOR_STORE"
-    echo ""
-    print_info "Current store preserved at: $VECTOR_STORE"
 fi
 
 echo ""

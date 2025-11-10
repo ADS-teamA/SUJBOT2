@@ -144,8 +144,9 @@ class SummaryGenerator:
         # Mode 2: Direct summarization (FALLBACK)
         if document_text:
             logger.warning("Using direct summarization (limited to first 5000 chars)")
-            # Truncate to first 5000 chars for efficiency
-            text_preview = document_text[:30000]
+            # Truncate to first 5000 chars to comply with CLAUDE.md constraint
+            # NEVER pass full document text to LLM (violates hierarchical summary constraint)
+            text_preview = document_text[:5000]
 
             prompt = f"""You are an expert document summarizer.
 
@@ -174,6 +175,30 @@ Summary (max {self.max_chars} characters):"""
                         f"Summary too long ({len(summary)} chars), regenerating with stricter limit"
                     )
                     return self.generate_document_summary_strict(text_preview)
+
+                # CRITICAL FIX: Validate summary is not empty
+                if not summary or len(summary) < 10:
+                    error_msg = (
+                        f"LLM returned empty/invalid summary ({len(summary)} chars). "
+                        f"This indicates an API failure, content filtering, or authentication issue. "
+                        f"Model: {self.model}, Provider: {self.provider}"
+                    )
+                    logger.error(error_msg, extra={"error_id": "SUMMARY_EMPTY_RESPONSE"})
+
+                    # Alert user explicitly
+                    print(f"\n❌ SUMMARY GENERATION FAILED")
+                    print(f"   Section: document")
+                    print(f"   Reason: API returned empty response")
+                    print(f"   Impact: Using truncated text fallback (reduced RAG quality)")
+                    print(f"   Action: Check {self.provider.upper()}_API_KEY and model availability\n")
+
+                    # Use fallback but make it obvious this is degraded mode
+                    # Triple-fallback strategy (only used when hierarchical summarization failed):
+                    # 1. LLM summary failed → 2. Truncate document text → 3. Unavailable message
+                    fallback = document_text[:self.max_chars].strip()
+                    if len(fallback) > 0:
+                        return f"[FALLBACK: {fallback}...]"
+                    return "(Document summary unavailable)"
 
                 logger.debug(f"Generated document summary: {len(summary)} chars")
                 return summary
@@ -287,6 +312,8 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
         """
         # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
         # GPT-5 models only support temperature=1.0 (default)
+        # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast, deterministic tasks
+        # Valid values: "minimal" (fastest), "low", "medium" (default), "high"
         tokens_param = max_tokens or self.max_tokens
         if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
             response = self.client.chat.completions.create(
@@ -294,6 +321,7 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
                 messages=[{"role": "user", "content": prompt}],
                 temperature=1.0,  # GPT-5 only supports default temperature
                 max_completion_tokens=tokens_param,
+                reasoning_effort="minimal",  # Fast mode for simple tasks (summarization doesn't need deep reasoning)
             )
         else:
             response = self.client.chat.completions.create(
@@ -312,7 +340,35 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
             operation="summary",
         )
 
-        return response.choices[0].message.content.strip()
+        # CRITICAL FIX: Handle None content (can happen with API failures or filters)
+        content = response.choices[0].message.content
+        if content is None:
+            finish_reason = response.choices[0].finish_reason
+            error_msg = (
+                f"OpenAI returned None content. "
+                f"finish_reason={finish_reason}, model={self.model}, "
+                f"input_tokens={response.usage.prompt_tokens}, "
+                f"output_tokens={response.usage.completion_tokens}, "
+                f"prompt_length={len(prompt)} chars"
+            )
+            logger.error(error_msg, extra={
+                "error_id": "OPENAI_NONE_CONTENT",
+                "finish_reason": finish_reason,
+                "model": self.model,
+                "prompt_preview": prompt[:200]
+            })
+
+            # Explain to user what happened
+            if finish_reason == "content_filter":
+                print("\n⚠️  OpenAI Content Filter Triggered")
+                print("   Your input may contain prohibited content")
+                print("   Review OpenAI usage policies: https://openai.com/policies/usage-policies\n")
+            elif finish_reason == "length":
+                print(f"\n⚠️  Output Truncated (Token Limit)")
+                print(f"   Increase max_tokens parameter (current: {self.max_tokens})\n")
+
+            return ""
+        return content.strip()
 
     def generate_document_summary_strict(self, document_text: str) -> str:
         """
@@ -436,22 +492,57 @@ Focus on the main topic and key information. This is a hard constraint.
 
 Summary (max {self.max_chars} characters):"""
 
+            # Build request body with model-specific parameters
+            # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
+            # GPT-5 models only support temperature=1.0 (default)
+            # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast tasks
+            # Valid values: "minimal" (fastest), "low", "medium", "high"
+            body = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+
+            if self.model.startswith(("gpt-5", "o1-", "o3-", "o4-")):
+                # GPT-5/o-series parameters
+                body["max_completion_tokens"] = self.max_tokens
+                body["temperature"] = 1.0  # GPT-5 only supports default temperature
+                body["reasoning_effort"] = "minimal"  # Fast mode for simple tasks (summarization doesn't need deep reasoning)
+            else:
+                # GPT-4 and earlier parameters
+                body["max_tokens"] = self.max_tokens
+                body["temperature"] = self.temperature
+
             return BatchRequest(
                 custom_id=f"section_{section_idx}",
                 method="POST",
                 url="/v1/chat/completions",
-                body={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": self.max_tokens,
-                    "temperature": self.temperature,
-                },
+                body=body,
             )
 
         # Define response parsing function
         def parse_response(response: dict) -> str:
             """Extract and validate summary from API response."""
-            summary = response["choices"][0]["message"]["content"].strip()
+            # CRITICAL FIX: Handle None content (can happen with API failures or filters)
+            content = response["choices"][0]["message"]["content"]
+            if content is None:
+                finish_reason = response["choices"][0].get("finish_reason", "unknown")
+                logger.error(
+                    f"Batch API returned None content for a summary. "
+                    f"finish_reason={finish_reason}",
+                    extra={"error_id": "BATCH_NONE_CONTENT", "finish_reason": finish_reason}
+                )
+                return ""
+
+            summary = content.strip()
+
+            # CRITICAL FIX: Validate summary is not empty or too short
+            if not summary or len(summary) < 10:
+                logger.error(
+                    f"Batch API returned empty/too-short summary ({len(summary)} chars). "
+                    f"This may indicate a prompt issue or API failure.",
+                    extra={"error_id": "BATCH_EMPTY_SUMMARY"}
+                )
+                return ""  # Will be handled by caller
 
             # Enforce length limit
             if len(summary) > self.max_chars + self.tolerance:
@@ -607,7 +698,8 @@ Generate summaries (MUST be valid JSON):"""
             raise
 
     def generate_batch_summaries(
-        self, texts: list[tuple[str, str]]  # [(text, title), ...]
+        self, texts: list[tuple[str, str]],  # [(text, title), ...]
+        min_text_length: int | None = None,  # Override min_text_length (None = use self.min_text_length)
     ) -> list[str]:
         """
         Generate summaries for multiple sections.
@@ -624,16 +716,19 @@ Generate summaries (MUST be valid JSON):"""
 
         Args:
             texts: List of (text, title) tuples
+            min_text_length: Override minimum text length (None = use self.min_text_length)
 
         Returns:
             List of summaries (in original order)
         """
+        # Use override or default
+        effective_min_length = min_text_length if min_text_length is not None else self.min_text_length
 
         # Filter out tiny sections
         filtered_texts = []
         skip_indices = []
         for i, (text, title) in enumerate(texts):
-            if len(text.strip()) < self.min_text_length:
+            if len(text.strip()) < effective_min_length:
                 skip_indices.append(i)
                 logger.debug(f"Skipping tiny section '{title}' ({len(text)} chars)")
             else:

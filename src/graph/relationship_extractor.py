@@ -232,13 +232,24 @@ class RelationshipExtractor:
         return relationships
 
     def _build_relationship_prompt(self, chunk_content: str, entities: List[Entity]) -> str:
-        """Build relationship extraction prompt."""
+        """Build relationship extraction prompt (loads from template file)."""
+        from pathlib import Path
+
+        # Load template from file
+        prompts_dir = Path(__file__).parent.parent.parent / "prompts"
+        template_path = prompts_dir / "relationship_extraction.txt"
+
+        try:
+            template = template_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            logger.error(f"Relationship extraction template not found: {template_path}")
+            logger.warning("Using fallback inline prompt")
+            return self._build_relationship_prompt_fallback(chunk_content, entities)
+
         # Format entity list
         entity_list = []
-        entity_lookup = {}
         for i, entity in enumerate(entities):
             entity_id = f"E{i+1}"
-            entity_lookup[entity_id] = entity
             entity_list.append(f"  {entity_id}: {entity.value} ({entity.type.value})")
 
         entities_str = "\n".join(entity_list)
@@ -246,55 +257,44 @@ class RelationshipExtractor:
         # Enabled relationship types
         rel_types_str = ", ".join([rt.value for rt in self.config.enabled_relationship_types])
 
+        # Substitute placeholders
+        prompt = template.format(
+            entities_str=entities_str,
+            chunk_content=chunk_content,
+            rel_types_str=rel_types_str,
+            min_confidence=self.config.min_confidence,
+            max_evidence_length=self.config.max_evidence_length
+        )
+
+        return prompt
+
+    def _build_relationship_prompt_fallback(self, chunk_content: str, entities: List[Entity]) -> str:
+        """Fallback inline prompt if template file missing."""
+        # Format entity list
+        entity_list = []
+        for i, entity in enumerate(entities):
+            entity_id = f"E{i+1}"
+            entity_list.append(f"  {entity_id}: {entity.value} ({entity.type.value})")
+
+        entities_str = "\n".join(entity_list)
+        rel_types_str = ", ".join([rt.value for rt in self.config.enabled_relationship_types])
+
         prompt = f"""Extract semantic relationships between entities in the following legal document text.
 
 **Entities** (extracted from this text):
 {entities_str}
 
-**Relationship Types**:
-- superseded_by: Old standard → New standard (e.g., "GRI 306:2016" superseded_by "GRI 306:2020")
-- supersedes: New standard → Old standard (inverse of superseded_by)
-- references: Document A → Document B (e.g., "GRI 303" references "ISO 14001")
-- issued_by: Standard → Organization (e.g., "GRI 306" issued_by "GSSB")
-- developed_by: Standard → Organization
-- published_by: Document → Organization
-- effective_date: Standard → Date (e.g., "GRI 303" effective_date "2018-07-01")
-- expiry_date: Contract → Date
-- covers_topic: Standard → Topic (e.g., "GRI 306" covers_topic "waste management")
-- contains_clause: Document → Clause
-- applies_to: Regulation → Location
-- mentioned_in: Entity → Chunk (for provenance)
-
 **Document Text**:
 {chunk_content}
 
-**Output Format** (JSON array):
-[
-  {{
-    "source_entity_id": "E1",
-    "relationship_type": "superseded_by",
-    "target_entity_id": "E2",
-    "confidence": 0.9,
-    "evidence": "GRI 306:2020 supersedes GRI 306:2016"
-  }}
-]
-
 **Instructions**:
-1. Identify ALL relationships between the entities above that are present in the text
+1. Identify ALL relationships between entities
 2. Only use relationship types: {rel_types_str}
-3. For each relationship, provide:
-   - source_entity_id: Source entity ID (E1, E2, etc.)
-   - relationship_type: Type of relationship
-   - target_entity_id: Target entity ID
-   - confidence: Confidence score (0.0-1.0)
-   - evidence: Supporting text snippet (max {self.config.max_evidence_length} chars)
-4. Only include relationships with confidence >= {self.config.min_confidence}
-5. Evidence must be exact text from the document
-6. Return valid JSON array
+3. Only include relationships with confidence >= {self.config.min_confidence}
+4. Return valid JSON array
 
 **Output** (JSON array only):
 """
-
         return prompt
 
     def _call_llm(self, prompt: str) -> str:
@@ -304,18 +304,30 @@ class RelationshipExtractor:
         for attempt in range(max_retries):
             try:
                 if self.config.llm_provider == "openai":
-                    response = self.client.chat.completions.create(
-                        model=self.config.llm_model,
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are an expert at extracting semantic relationships from legal documents. Always return valid JSON.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        temperature=self.config.temperature,
-                        max_tokens=4000,
-                    )
+                    # Prepare base parameters
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": "You are an expert at extracting semantic relationships from legal documents. Always return valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ]
+
+                    params = {
+                        "model": self.config.llm_model,
+                        "messages": messages,
+                    }
+
+                    # GPT-5/o-series models use different parameters
+                    if self.config.llm_model.startswith(("gpt-5", "o1-", "o3-")):
+                        params["max_completion_tokens"] = 4000
+                        # Note: GPT-5 only supports temperature=1.0 (default), don't set it
+                    else:
+                        # GPT-4 and earlier
+                        params["max_tokens"] = 4000
+                        params["temperature"] = self.config.temperature
+
+                    response = self.client.chat.completions.create(**params)
 
                     # Track cost
                     self.tracker.track_llm(

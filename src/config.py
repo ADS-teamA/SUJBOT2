@@ -1,128 +1,108 @@
 """
 Unified configuration system for RAG pipeline.
 
-## Configuration Philosophy
+## Configuration Philosophy (UPDATED 2025-11-10)
 
-**Single Source of Truth: .env file**
-- API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, VOYAGE_API_KEY)
-- Model selection (LLM_PROVIDER, LLM_MODEL, EMBEDDING_PROVIDER, EMBEDDING_MODEL)
-- Optional overrides for advanced users
+**Single Source of Truth: config.json file**
+- ALL configuration in one JSON file
+- Strict validation on startup - NO fallbacks, NO defaults
+- If any required parameter is missing, application exits with error
+- Hierarchical structure for better organization
 
-**config.py: Research-backed defaults**
-- Chunk size: 500 chars (RCTS optimal from LegalBench-RAG)
-- Summary length: 150 chars (generic summaries outperform expert)
-- Temperature: 0.3 (low for consistency)
-- Batch sizes, worker counts, etc.
+## Migration from .env to config.json
+
+Previous system used .env with fallback values. New system:
+1. Copy config.json.example to config.json
+2. Fill in ALL required values
+3. Application validates config on startup
+4. Missing values = immediate error, application stops
 
 ## Pipeline Phases
 
 - PHASE 1: Document Extraction (Docling)
-- PHASE 2: Summarization (Generic summaries, 150 chars) → Model from .env
-- PHASE 3: Chunking (Hierarchical with SAC, 500 chars)
-- PHASE 4: Embedding (Multi-layer embeddings) → Model from .env
+- PHASE 2: Summarization (Generic summaries, 150 chars) → Model from config.json
+- PHASE 3: Chunking (Hierarchical with SAC, 512 tokens)
+- PHASE 4: Embedding (Multi-layer embeddings) → Model from config.json
 
 ## Usage
 
-All model selections are loaded from .env automatically:
+All configuration is loaded from config.json automatically:
 
 ```python
-from src.config import SummarizationConfig, EmbeddingConfig
+from src.config import get_config, SummarizationConfig, EmbeddingConfig
 
-# Models loaded from .env automatically
-summary_config = SummarizationConfig()  # Uses LLM_PROVIDER, LLM_MODEL from .env
-embed_config = EmbeddingConfig()        # Uses EMBEDDING_PROVIDER, EMBEDDING_MODEL from .env
+# Load validated config (fails if config.json is invalid or missing)
+config = get_config()
 
-# Research parameters can be overridden if needed
-custom_config = SummarizationConfig(max_chars=200, temperature=0.5)
+# Access specific sections
+summary_config = SummarizationConfig.from_config(config.summarization)
+embed_config = EmbeddingConfig.from_config(config.embedding)
 ```
 
 All configuration classes can be imported by other modules.
 """
 
-import os
 import logging
 from typing import Optional, List
 from pathlib import Path
 from dataclasses import dataclass, field
 
+# Import JSON config loader and schema
+from src.config_schema import (
+    RootConfig,
+    load_config as load_json_config,
+    APIKeysConfig as APIKeysSchema,
+    ModelsConfig as ModelsSchema,
+    ExtractionConfig as ExtractionSchema,
+    SummarizationConfig as SummarizationSchema,
+    ContextGenerationConfig as ContextGenerationSchema,
+    ChunkingConfig as ChunkingSchema,
+    EmbeddingConfig as EmbeddingSchema,
+    ClusteringConfig as ClusteringSchema,
+)
+
 logger = logging.getLogger(__name__)
 
+# Global config instance - loaded once at module import
+_CONFIG: Optional[RootConfig] = None
 
-def load_env():
-    """Load environment variables from .env file with robust error handling."""
-    # Primary path: project root (src/config.py -> parent.parent)
-    env_path = Path(__file__).parent.parent / ".env"
 
-    def _load_env_file(path: Path, is_fallback: bool = False):
-        """Helper to load a single .env file with error handling."""
+def get_config(reload: bool = False) -> RootConfig:
+    """
+    Get validated configuration from config.json.
+
+    This function loads and validates config.json on first call,
+    then caches the result for subsequent calls.
+
+    Args:
+        reload: Force reload config.json (default: False)
+
+    Returns:
+        Validated RootConfig instance
+
+    Raises:
+        FileNotFoundError: If config.json does not exist
+        ValueError: If validation fails or required fields are missing
+    """
+    global _CONFIG
+
+    if _CONFIG is None or reload:
         try:
-            if is_fallback:
-                logger.warning(
-                    f"Primary .env not found at {env_path}\n"
-                    f"Using fallback: {path}\n"
-                    f"This may cause unexpected configuration behavior."
-                )
-            else:
-                logger.info(f"Loading configuration from {path}")
-
-            with open(path, "r", encoding="utf-8") as f:
-                for line_num, line in enumerate(f, 1):
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        try:
-                            key, value = line.split("=", 1)
-                            os.environ[key.strip()] = value.strip()
-                        except ValueError as e:
-                            logger.warning(f"Skipping malformed line {line_num} in {path}: {line}")
-            return True
-
-        except UnicodeDecodeError as e:
-            logger.error(f"Failed to read .env file (encoding error): {e}")
-            raise RuntimeError(
-                f".env file contains invalid UTF-8 characters.\n"
-                f"Please ensure .env is saved with UTF-8 encoding.\n"
-                f"Path: {path}"
-            )
-        except PermissionError as e:
-            logger.error(f"Permission denied reading .env file: {e}")
-            raise RuntimeError(
-                f"Cannot read .env file (permission denied).\n"
-                f"Please check file permissions.\n"
-                f"Path: {path}"
-            )
+            _CONFIG = load_json_config()
+            logger.info("Configuration loaded and validated successfully from config.json")
         except Exception as e:
-            logger.error(f"Failed to load .env file: {e}")
-            raise RuntimeError(
-                f"Failed to load configuration from .env file: {e}\n" f"Path: {path}"
-            )
+            logger.error(f"Failed to load configuration: {e}")
+            raise
 
-    # Try primary path first
-    if env_path.exists():
-        _load_env_file(env_path, is_fallback=False)
-    else:
-        # Fallback: current working directory
-        cwd_env = Path.cwd() / ".env"
-        if cwd_env.exists():
-            _load_env_file(cwd_env, is_fallback=True)
-        else:
-            logger.warning(
-                f"No .env file found.\n"
-                f"Expected: {env_path}\n"
-                f"Fallback: {cwd_env}\n"
-                f"Using default configuration values and environment variables."
-            )
-
-
-# Load .env on module import
-load_env()
+    return _CONFIG
 
 
 @dataclass
 class ModelConfig:
-    """Central model configuration loaded from environment variables."""
+    """Central model configuration loaded from config.json."""
 
     # LLM Configuration
-    llm_provider: str  # "claude" or "openai"
+    llm_provider: str  # "claude" or "openai" or "google"
     llm_model: str  # e.g., "claude-sonnet-4.5", "gpt-4o-mini"
 
     # Embedding Configuration
@@ -133,39 +113,48 @@ class ModelConfig:
     anthropic_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
     voyage_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
 
     @classmethod
-    def from_env(cls) -> "ModelConfig":
+    def from_config(cls, config: RootConfig) -> "ModelConfig":
         """
-        Load configuration from environment variables.
+        Load configuration from validated RootConfig.
 
-        Environment Variables:
-            LLM_PROVIDER: "claude" or "openai" (default: "claude")
-            LLM_MODEL: Model name (default: "claude-sonnet-4-5-20250929")
+        Args:
+            config: Validated RootConfig instance
 
-            EMBEDDING_PROVIDER: "voyage", "openai", or "huggingface" (default: "voyage")
-            EMBEDDING_MODEL: Model name (default: "kanon-2")
-
-            ANTHROPIC_API_KEY: Claude API key
-            OPENAI_API_KEY: OpenAI API key
-            VOYAGE_API_KEY: Voyage AI API key
+        Returns:
+            ModelConfig instance
         """
+        # Import ModelRegistry for provider detection
+        from src.utils.model_registry import ModelRegistry
+
+        # Auto-detect providers from model names if not explicitly set
+        llm_provider = config.models.llm_provider
+        if llm_provider is None:
+            llm_provider = ModelRegistry.get_provider(config.models.llm_model, "llm")
+
+        embedding_provider = config.models.embedding_provider
+        if embedding_provider is None:
+            embedding_provider = ModelRegistry.get_provider(config.models.embedding_model, "embedding")
+
         return cls(
             # LLM Configuration
-            llm_provider=os.getenv("LLM_PROVIDER", "claude"),
-            llm_model=os.getenv("LLM_MODEL", "claude-sonnet-4-5-20250929"),
+            llm_provider=llm_provider,
+            llm_model=config.models.llm_model,
             # Embedding Configuration
-            embedding_provider=os.getenv("EMBEDDING_PROVIDER", "huggingface"),
-            embedding_model=os.getenv("EMBEDDING_MODEL", "bge-m3"),
+            embedding_provider=embedding_provider,
+            embedding_model=config.models.embedding_model,
             # API Keys
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            voyage_api_key=os.getenv("VOYAGE_API_KEY"),
+            anthropic_api_key=config.api_keys.anthropic_api_key,
+            openai_api_key=config.api_keys.openai_api_key,
+            voyage_api_key=config.api_keys.voyage_api_key,
+            google_api_key=config.api_keys.google_api_key,
         )
 
     def get_llm_config(self) -> dict:
         """Get LLM configuration for SummaryGenerator."""
-        if self.llm_provider == "claude":
+        if self.llm_provider in ("claude", "anthropic"):
             return {
                 "provider": "claude",
                 "model": self.llm_model,
@@ -173,6 +162,8 @@ class ModelConfig:
             }
         elif self.llm_provider == "openai":
             return {"provider": "openai", "model": self.llm_model, "api_key": self.openai_api_key}
+        elif self.llm_provider == "google":
+            return {"provider": "google", "model": self.llm_model, "api_key": self.google_api_key}
         else:
             raise ValueError(f"Unsupported LLM provider: {self.llm_provider}")
 
@@ -232,61 +223,74 @@ def resolve_model_alias(model_name: str) -> str:
 class ExtractionConfig:
     """
     Configuration for Docling extraction (PHASE 1).
-
-    To customize, create instance with your values:
-        config = ExtractionConfig(
-            hierarchy_tolerance=0.5,  # Stricter clustering
-            enable_smart_hierarchy=True
-        )
     """
 
-    # OCR settings - Choice of OCR engine
-    enable_ocr: bool = True
-    # OCR engine: "tesseract" (best Czech support) or "rapidocr" (3-5× faster)
-    # To use RapidOCR: pip install rapidocr_onnxruntime
-    ocr_engine: str = "tesseract"  # "tesseract" or "rapidocr"
-    # Tesseract language codes: ces=Czech, eng=English, deu=German, etc.
-    # Use ["auto"] for automatic language detection
-    ocr_language: List[str] = field(default_factory=lambda: ["ces", "eng"])
-    ocr_recognition: str = "accurate"  # "accurate" or "fast" (deprecated for Tesseract)
+    # OCR settings
+    enable_ocr: bool
+    ocr_engine: str  # "tesseract" or "rapidocr"
+    ocr_language: List[str]
+    ocr_recognition: str  # "accurate" or "fast"
 
     # Table extraction
-    table_mode: str = "ACCURATE"  # Will be converted to TableFormerMode
-    extract_tables: bool = True
+    table_mode: str
+    extract_tables: bool
 
     # Hierarchy extraction (CRITICAL for hierarchical chunking)
-    extract_hierarchy: bool = True
-    enable_smart_hierarchy: bool = True  # Font-size based classification
-    hierarchy_tolerance: float = 0.8  # BBox height clustering tolerance (pixels, lower = stricter)
+    extract_hierarchy: bool
+    enable_smart_hierarchy: bool
+    hierarchy_tolerance: float
+
+    # Watermark / rotated text filtering
+    filter_rotated_text: bool
+    rotation_min_angle: float
+    rotation_max_angle: float
 
     # Summary generation (PHASE 2 integration)
-    generate_summaries: bool = True  # Generate document/section summaries
+    generate_summaries: bool
+    summary_model: Optional[str]
+    summary_max_chars: int
+    summary_style: str
+    use_batch_api: bool
+    batch_api_poll_interval: int
+    batch_api_timeout: int
 
     # Output formats
-    generate_markdown: bool = True
-    generate_json: bool = True
-
-    # Performance
-    layout_model: str = "EGRET_XLARGE"  # Options: HERON, EGRET_LARGE, EGRET_XLARGE (recommended)
+    generate_markdown: bool
+    generate_json: bool
 
     @classmethod
-    def from_env(cls) -> "ExtractionConfig":
+    def from_config(cls, extraction_config: ExtractionSchema) -> "ExtractionConfig":
         """
-        Load configuration from environment variables.
+        Load configuration from validated ExtractionSchema.
 
-        Environment Variables:
-            OCR_LANGUAGE: Comma-separated language codes (default: "ces,eng")
-            ENABLE_SMART_HIERARCHY: Enable font-size based hierarchy (default: "true")
+        Args:
+            extraction_config: Validated ExtractionSchema from RootConfig
 
         Returns:
-            ExtractionConfig instance loaded from environment
+            ExtractionConfig instance
         """
-        ocr_lang_str = os.getenv("OCR_LANGUAGE", "ces,eng")
-        ocr_languages = [lang.strip() for lang in ocr_lang_str.split(",")]
-
         return cls(
-            ocr_language=ocr_languages,
-            enable_smart_hierarchy=os.getenv("ENABLE_SMART_HIERARCHY", "true").lower() == "true",
+            enable_ocr=extraction_config.enable_ocr,
+            ocr_engine=extraction_config.ocr_engine,
+            ocr_language=extraction_config.ocr_language,
+            ocr_recognition=extraction_config.ocr_recognition,
+            table_mode=extraction_config.table_mode,
+            extract_tables=extraction_config.extract_tables,
+            extract_hierarchy=extraction_config.extract_hierarchy,
+            enable_smart_hierarchy=extraction_config.enable_smart_hierarchy,
+            hierarchy_tolerance=extraction_config.hierarchy_tolerance,
+            filter_rotated_text=extraction_config.filter_rotated_text,
+            rotation_min_angle=extraction_config.rotation_min_angle,
+            rotation_max_angle=extraction_config.rotation_max_angle,
+            generate_summaries=extraction_config.generate_summaries,
+            summary_model=extraction_config.summary_model,
+            summary_max_chars=extraction_config.summary_max_chars,
+            summary_style=extraction_config.summary_style,
+            use_batch_api=extraction_config.use_batch_api,
+            batch_api_poll_interval=extraction_config.batch_api_poll_interval,
+            batch_api_timeout=extraction_config.batch_api_timeout,
+            generate_markdown=extraction_config.generate_markdown,
+            generate_json=extraction_config.generate_json,
         )
 
 
@@ -294,172 +298,212 @@ class ExtractionConfig:
 class SummarizationConfig:
     """
     Configuration for summarization (PHASE 2).
-
-    Model selection is loaded from .env (LLM_PROVIDER, LLM_MODEL).
-    Only research-backed parameters are configured here.
     """
 
-    # Research-backed parameters (from LegalBench-RAG)
-    max_chars: int = 150  # Summary length (research optimal)
-    tolerance: int = 20  # Length tolerance
-    style: str = "generic"  # Generic > Expert summaries
-    temperature: float = 0.3  # Low temperature for consistency
-    max_tokens: int = 100  # Max LLM output tokens (optimized: 150 chars ≈ 40-60 tokens)
-    retry_on_exceed: bool = True  # Retry if exceeds max_chars
-    max_retries: int = 3  # Max retry attempts
-    # OPTIMIZED: Zvýšeno pro rychlejší zpracování (2× rychlejší)
-    max_workers: int = 20  # Parallel summary generation
-    min_text_length: int = 50  # Min text length for summarization
+    # Research-backed parameters (from LegalBench-RAG) - required fields first
+    max_chars: int
+    style: str
+    temperature: float
+    max_tokens: int
+    retry_on_exceed: bool
+    max_retries: int
+    max_workers: int
+    min_text_length: int
 
-    # Prompt batching optimization (DISABLED - JSON overhead makes it slower)
-    # For most LLMs, parallel mode with smaller max_tokens is faster than batching
-    enable_prompt_batching: bool = False  # Batch multiple sections in one API call
-    batch_size: int = 8  # Number of sections per API call (if enabled)
+    # Prompt batching optimization
+    enable_prompt_batching: bool
+    batch_size: int
 
-    # OpenAI Batch API optimization (NEW - 50% cost savings, async processing)
-    use_batch_api: bool = True  # Use OpenAI Batch API for summaries (50% cheaper)
-    batch_api_poll_interval: int = 5  # Seconds between status checks (faster response)
-    batch_api_timeout: int = 43200  # Max wait time in seconds (12 hours default)
+    # OpenAI Batch API optimization
+    use_batch_api: bool
+    batch_api_poll_interval: int
+    batch_api_timeout: int
 
-    # Model config loaded from .env (don't set here)
+    # Fields with defaults must come last
+    tolerance: int = 20
     provider: Optional[str] = None
     model: Optional[str] = None
 
     def __post_init__(self):
-        """Load model config from environment if not provided."""
+        """Load model config from global config if not provided."""
         if self.provider is None or self.model is None:
-            model_config = ModelConfig.from_env()
+            config = get_config()
+            model_config = ModelConfig.from_config(config)
             self.provider = model_config.llm_provider
             self.model = model_config.llm_model
 
     @classmethod
-    def from_env(cls, **overrides) -> "SummarizationConfig":
+    def from_config(cls, summarization_config: SummarizationSchema, **overrides) -> "SummarizationConfig":
         """
-        Load configuration from environment variables.
-
-        Environment Variables:
-            LLM_PROVIDER: LLM provider (from ModelConfig)
-            LLM_MODEL: Model name (from ModelConfig)
-            SPEED_MODE: "fast" or "eco" (affects use_batch_api)
+        Load configuration from validated SummarizationSchema.
 
         Args:
+            summarization_config: Validated SummarizationSchema from RootConfig
             **overrides: Override specific fields
 
         Returns:
-            SummarizationConfig instance loaded from environment
+            SummarizationConfig instance
         """
-        speed_mode = os.getenv("SPEED_MODE", "fast")
-        config = cls(use_batch_api=(speed_mode == "eco"), **overrides)
-        return config
+        # Get global config for extraction config (for max_chars, style)
+        root_config = get_config()
+        extraction = root_config.extraction
+
+        config_dict = {
+            "max_chars": extraction.summary_max_chars,
+            "style": extraction.summary_style,
+            "temperature": summarization_config.temperature,
+            "max_tokens": summarization_config.max_tokens,
+            "retry_on_exceed": summarization_config.retry_on_exceed,
+            "max_retries": summarization_config.max_retries,
+            "max_workers": summarization_config.max_workers,
+            "min_text_length": summarization_config.min_text_length,
+            "enable_prompt_batching": summarization_config.enable_batching,
+            "batch_size": summarization_config.batch_size,
+            "use_batch_api": (summarization_config.speed_mode == "eco"),
+            "batch_api_poll_interval": extraction.batch_api_poll_interval,
+            "batch_api_timeout": extraction.batch_api_timeout,
+        }
+
+        # Apply overrides
+        config_dict.update(overrides)
+
+        return cls(**config_dict)
 
 
 @dataclass
 class ContextGenerationConfig:
     """
     Configuration for Contextual Retrieval (Anthropic, Sept 2024).
-
-    Generates LLM-based context for each chunk instead of generic summaries.
-    Results in 67% reduction in retrieval failures (Anthropic research).
-
-    Model selection is loaded from .env (LLM_PROVIDER, LLM_MODEL).
     """
 
     # Enable contextual retrieval
-    enable_contextual: bool = True
+    enable_contextual: bool
 
     # Research-backed parameters
-    temperature: float = 0.3  # Low temperature for consistency
-    max_tokens: int = 150  # Context should be 50-100 words
+    temperature: float
+    max_tokens: int
 
     # Context window params
-    include_surrounding_chunks: bool = True  # Include chunks above/below for better context
-    num_surrounding_chunks: int = 1  # Number of chunks to include on each side
+    include_surrounding_chunks: bool
+    num_surrounding_chunks: int
 
     # Fallback behavior
-    fallback_to_basic: bool = True  # Use basic chunking if context generation fails
+    fallback_to_basic: bool
 
-    # Batch processing (for performance)
-    # OPTIMIZED: Zvýšeno pro rychlejší zpracování (2× rychlejší)
-    batch_size: int = 20  # Generate contexts in batches
-    max_workers: int = 10  # Parallel context generation
+    # Batch processing
+    batch_size: int
+    max_workers: int
 
-    # OpenAI Batch API optimization (NEW - 50% cost savings, async processing)
-    use_batch_api: bool = True  # Use OpenAI Batch API for contexts (50% cheaper)
-    batch_api_poll_interval: int = 5  # Seconds between status checks
-    batch_api_timeout: int = 43200  # Max wait time in seconds (12 hours default)
+    # OpenAI Batch API optimization
+    use_batch_api: bool
+    batch_api_poll_interval: int
+    batch_api_timeout: int
 
-    # Model config loaded from .env (don't set here)
+    # Model config
     provider: Optional[str] = None
     model: Optional[str] = None
     api_key: Optional[str] = None
 
     def __post_init__(self):
-        """Load model config and API key from environment if not provided."""
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        # Load model config from .env
+        """Load model config and API key from global config if not provided."""
         if self.provider is None or self.model is None:
-            model_config = ModelConfig.from_env()
+            config = get_config()
+            model_config = ModelConfig.from_config(config)
             self.provider = model_config.llm_provider
             self.model = model_config.llm_model
 
-        # Load API key from .env based on provider
-        if self.api_key is None:
-            if self.provider == "anthropic" or self.provider == "claude":
-                self.api_key = os.getenv("ANTHROPIC_API_KEY")
-                if not self.api_key:
-                    logger.warning(
-                        "ANTHROPIC_API_KEY not set in environment. "
-                        "Contextual retrieval will fail unless API key is provided during initialization."
-                    )
-            elif self.provider == "openai":
-                self.api_key = os.getenv("OPENAI_API_KEY")
-                if not self.api_key:
-                    logger.warning(
-                        "OPENAI_API_KEY not set in environment. "
-                        "Contextual retrieval will fail unless API key is provided during initialization."
-                    )
+            # Load API key based on provider
+            if self.api_key is None:
+                if self.provider in ("anthropic", "claude"):
+                    self.api_key = model_config.anthropic_api_key
+                    # Normalize provider to "anthropic"
+                    self.provider = "anthropic"
+                elif self.provider == "openai":
+                    self.api_key = model_config.openai_api_key
+                elif self.provider == "google":
+                    self.api_key = model_config.google_api_key
+
+    @classmethod
+    def from_config(cls, context_config: ContextGenerationSchema, **overrides) -> "ContextGenerationConfig":
+        """
+        Load configuration from validated ContextGenerationSchema.
+
+        Args:
+            context_config: Validated ContextGenerationSchema from RootConfig
+            **overrides: Override specific fields
+
+        Returns:
+            ContextGenerationConfig instance
+        """
+        # Get global config for summarization speed_mode
+        root_config = get_config()
+        speed_mode = root_config.summarization.speed_mode
+
+        config_dict = {
+            "enable_contextual": context_config.enable_contextual,
+            "temperature": context_config.temperature,
+            "max_tokens": context_config.max_tokens,
+            "include_surrounding_chunks": context_config.include_surrounding,
+            "num_surrounding_chunks": context_config.num_surrounding_chunks,
+            "fallback_to_basic": context_config.fallback_to_basic,
+            "batch_size": context_config.batch_size,
+            "max_workers": context_config.max_workers,
+            "use_batch_api": (speed_mode == "eco"),
+            "batch_api_poll_interval": context_config.batch_api_poll_interval,
+            "batch_api_timeout": context_config.batch_api_timeout,
+        }
+
+        # Apply overrides
+        config_dict.update(overrides)
+
+        return cls(**config_dict)
 
 
 @dataclass
 class ChunkingConfig:
-    """Configuration for chunking (PHASE 3)."""
+    """
+    Configuration for token-aware chunking (PHASE 3).
+    """
 
-    method: str = "RecursiveCharacterTextSplitter"
-    chunk_size: int = 500
-    chunk_overlap: int = 0
+    # Token-aware chunking (IMMUTABLE - research-backed)
+    max_tokens: int
+    tokenizer_model: str
 
     # Chunking strategy
-    enable_contextual: bool = True  # Contextual Retrieval (RECOMMENDED)
+    enable_contextual: bool
     enable_multi_layer: bool = True
 
     # Context generation config
     context_config: Optional["ContextGenerationConfig"] = None
 
-    separators: List[str] = field(default_factory=lambda: ["\n\n", "\n", ". ", "; ", ", ", " ", ""])
-
     def __post_init__(self):
-        """Initialize context_config if not provided."""
+        """Initialize context_config."""
         if self.context_config is None and self.enable_contextual:
-            self.context_config = ContextGenerationConfig()
+            config = get_config()
+            self.context_config = ContextGenerationConfig.from_config(config.context_generation)
 
     @classmethod
-    def from_env(cls) -> "ChunkingConfig":
+    def from_config(cls, chunking_config: ChunkingSchema) -> "ChunkingConfig":
         """
-        Load configuration from environment variables.
+        Load configuration from validated ChunkingSchema.
 
-        Environment Variables:
-            CHUNK_SIZE: Chunk size in characters (default: 500)
-            ENABLE_SAC: Enable Summary-Augmented Chunking (default: "true")
+        Args:
+            chunking_config: Validated ChunkingSchema from RootConfig
 
         Returns:
-            ChunkingConfig instance loaded from environment
+            ChunkingConfig instance
         """
+        # Get global config for context generation
+        root_config = get_config()
+        context_config = None
+        if chunking_config.enable_sac:
+            context_config = ContextGenerationConfig.from_config(root_config.context_generation)
+
         return cls(
-            chunk_size=int(os.getenv("CHUNK_SIZE", "500")),
-            enable_contextual=os.getenv("ENABLE_SAC", "true").lower() == "true",
+            max_tokens=chunking_config.max_tokens,
+            tokenizer_model=chunking_config.tokenizer_model,
+            enable_contextual=chunking_config.enable_sac,
+            context_config=context_config,
         )
 
 
@@ -467,42 +511,31 @@ class ChunkingConfig:
 class EmbeddingConfig:
     """
     Unified configuration for embedding generation (PHASE 4).
-
-    This is the SINGLE source of truth for embedding configuration across
-    the entire codebase (pipeline, agent, tools).
-
-    Model selection is loaded from .env (EMBEDDING_PROVIDER, EMBEDDING_MODEL).
-    Research-backed parameters (batch_size, normalize) are configured here.
-
-    Supports:
-    - Voyage AI: kanon-2, voyage-3-large, voyage-law-2
-    - OpenAI: text-embedding-3-large, text-embedding-3-small
-    - HuggingFace: BAAI/bge-m3 (local, multilingual)
     """
 
-    # Model selection (loaded from .env)
-    provider: Optional[str] = None  # "voyage", "openai", "huggingface"
-    model: Optional[str] = None  # Model name
+    # Model selection
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
     # Research-backed parameters
-    batch_size: int = 64  # Batch size for embedding generation (optimized)
-    normalize: bool = True  # Normalize for cosine similarity (FAISS IndexFlatIP)
+    batch_size: int = 64
+    normalize: bool = True
 
     # Multi-layer indexing
-    enable_multi_layer: bool = True  # Enable multi-layer indexing (document, section, chunk)
+    enable_multi_layer: bool = True
 
-    # Model metadata (auto-derived)
-    dimensions: Optional[int] = None  # Auto-detected from model
+    # Model metadata
+    dimensions: Optional[int] = None
 
     # Performance optimization
-    cache_enabled: bool = True  # Enable embedding cache (40-80% hit rate)
-    cache_max_size: int = 1000  # Max cache entries
+    cache_enabled: bool = True
+    cache_max_size: int = 1000
 
     def __post_init__(self):
-        """Load model config from environment if not provided and validate."""
-        # Load provider and model from .env if not provided
+        """Load model config from global config if not provided and validate."""
         if self.provider is None or self.model is None:
-            model_config = ModelConfig.from_env()
+            config = get_config()
+            model_config = ModelConfig.from_config(config)
             self.provider = model_config.embedding_provider
             self.model = model_config.embedding_model
 
@@ -513,36 +546,28 @@ class EmbeddingConfig:
             raise ValueError(f"dimensions must be positive if specified, got {self.dimensions}")
         if self.cache_max_size <= 0:
             raise ValueError(f"cache_max_size must be positive, got {self.cache_max_size}")
-        # Provider can be None (will be loaded from env in __post_init__) or one of the valid values
         if self.provider is not None and self.provider not in ["voyage", "openai", "huggingface"]:
             raise ValueError(
                 f"provider must be 'voyage', 'openai', or 'huggingface', got {self.provider}"
             )
 
     @classmethod
-    def from_env(cls) -> "EmbeddingConfig":
+    def from_config(cls, embedding_config: EmbeddingSchema) -> "EmbeddingConfig":
         """
-        Load configuration from environment variables.
+        Load configuration from validated EmbeddingSchema.
 
-        Environment Variables:
-            EMBEDDING_PROVIDER: "voyage", "openai", or "huggingface" (default: "huggingface")
-            EMBEDDING_MODEL: Model name (default: "bge-m3")
-            EMBEDDING_BATCH_SIZE: Batch size (default: 64)
-            EMBEDDING_CACHE_SIZE: Cache max size (default: 1000)
+        Args:
+            embedding_config: Validated EmbeddingSchema from RootConfig
 
         Returns:
-            EmbeddingConfig instance loaded from environment
+            EmbeddingConfig instance
         """
-        model_config = ModelConfig.from_env()
-
         return cls(
-            provider=model_config.embedding_provider,
-            model=model_config.embedding_model,
-            batch_size=int(os.getenv("EMBEDDING_BATCH_SIZE", "64")),
-            normalize=True,  # Always normalize for FAISS IndexFlatIP
-            enable_multi_layer=True,  # Multi-layer indexing enabled by default
-            cache_enabled=os.getenv("EMBEDDING_CACHE_ENABLED", "true").lower() == "true",
-            cache_max_size=int(os.getenv("EMBEDDING_CACHE_SIZE", "1000")),
+            batch_size=embedding_config.batch_size,
+            normalize=embedding_config.normalize,
+            enable_multi_layer=True,  # Always enabled
+            cache_enabled=embedding_config.cache_enabled,
+            cache_max_size=embedding_config.cache_size,
         )
 
 
@@ -550,40 +575,58 @@ class EmbeddingConfig:
 class PipelineConfig:
     """General pipeline configuration."""
 
-    log_level: str = "INFO"
+    log_level: str
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     log_file: str = "logs/pipeline.log"
+
+    @classmethod
+    def from_config(cls, pipeline_schema) -> "PipelineConfig":
+        """
+        Load configuration from validated pipeline schema.
+
+        Args:
+            pipeline_schema: Validated pipeline config from RootConfig
+
+        Returns:
+            PipelineConfig instance
+        """
+        return cls(
+            log_level=pipeline_schema.log_level,
+            log_file=pipeline_schema.log_file,
+        )
 
 
 @dataclass
 class RAGConfig:
     """
     Unified RAG pipeline configuration.
-
-    Combines all configuration with sensible defaults from research.
     """
 
-    extraction: ExtractionConfig = field(default_factory=ExtractionConfig)
-    summarization: SummarizationConfig = field(default_factory=SummarizationConfig)
-    chunking: ChunkingConfig = field(default_factory=ChunkingConfig)
-    embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
-    pipeline: PipelineConfig = field(default_factory=PipelineConfig)
-    models: ModelConfig = field(default_factory=ModelConfig.from_env)
+    extraction: ExtractionConfig
+    summarization: SummarizationConfig
+    chunking: ChunkingConfig
+    embedding: EmbeddingConfig
+    pipeline: PipelineConfig
+    models: ModelConfig
 
     @classmethod
-    def from_env(cls) -> "RAGConfig":
+    def from_config(cls, config: RootConfig) -> "RAGConfig":
         """
-        Load all sub-configs from environment variables.
+        Load all sub-configs from validated RootConfig.
+
+        Args:
+            config: Validated RootConfig instance
 
         Returns:
-            RAGConfig instance with all sub-configs loaded from environment
+            RAGConfig instance with all sub-configs
         """
         return cls(
-            extraction=ExtractionConfig.from_env(),
-            summarization=SummarizationConfig.from_env(),
-            chunking=ChunkingConfig.from_env(),
-            embedding=EmbeddingConfig.from_env(),
-            models=ModelConfig.from_env(),
+            extraction=ExtractionConfig.from_config(config.extraction),
+            summarization=SummarizationConfig.from_config(config.summarization),
+            chunking=ChunkingConfig.from_config(config.chunking),
+            embedding=EmbeddingConfig.from_config(config.embedding),
+            pipeline=PipelineConfig.from_config(config.pipeline),
+            models=ModelConfig.from_config(config),
         )
 
     def get_embedding_config(self) -> dict:
@@ -612,58 +655,160 @@ class RAGConfig:
 
 def get_default_config() -> RAGConfig:
     """
-    Get default RAG pipeline configuration.
-
-    Uses sensible defaults from research + environment variables for API keys.
+    Get default RAG pipeline configuration from config.json.
 
     Returns:
-        RAGConfig instance with all default settings
+        RAGConfig instance loaded from config.json
+
+    Raises:
+        FileNotFoundError: If config.json does not exist
+        ValueError: If validation fails
     """
-    return RAGConfig()
+    config = get_config()
+    return RAGConfig.from_config(config)
 
 
 def get_model_config() -> ModelConfig:
     """
-    Get model configuration from environment (legacy compatibility).
+    Get model configuration from config.json.
 
-    Default models (optimized for M1 Mac):
-    - LLM: Claude Sonnet 4.5 (balance of speed and quality)
-    - Embeddings: BGE-M3-v2 (multilingual, runs locally on M1 with MPS acceleration)
+    Returns:
+        ModelConfig instance
     """
-    return ModelConfig.from_env()
+    config = get_config()
+    return ModelConfig.from_config(config)
+
+
+@dataclass
+class ClusteringConfig:
+    """
+    Configuration for semantic clustering (PHASE 4.5).
+    """
+
+    # Algorithm selection
+    algorithm: str
+    n_clusters: Optional[int]
+
+    # HDBSCAN parameters
+    min_cluster_size: int
+
+    # Agglomerative auto-detection parameters
+    max_clusters: int
+    min_clusters: int
+
+    # Label generation
+    enable_cluster_labels: bool
+
+    # Which layers to cluster
+    cluster_layers: List[int]
+
+    # Visualization
+    enable_visualization: bool
+    visualization_output_dir: str
+
+    @classmethod
+    def from_config(cls, clustering_config: ClusteringSchema) -> "ClusteringConfig":
+        """
+        Load clustering configuration from validated ClusteringSchema.
+
+        Args:
+            clustering_config: Validated ClusteringSchema from RootConfig
+
+        Returns:
+            ClusteringConfig instance
+        """
+        return cls(
+            algorithm=clustering_config.algorithm,
+            n_clusters=clustering_config.n_clusters,
+            min_cluster_size=clustering_config.min_size,
+            max_clusters=clustering_config.max_clusters,
+            min_clusters=clustering_config.min_clusters,
+            enable_cluster_labels=clustering_config.enable_labels,
+            cluster_layers=clustering_config.layers,
+            enable_visualization=clustering_config.enable_visualization,
+            visualization_output_dir=clustering_config.visualization_dir,
+        )
+
+
+def validate_config_on_startup():
+    """
+    Validate config.json at startup and exit with clear message if invalid.
+
+    Call this at the top of every entrypoint script (run_pipeline.py, agent CLI, etc.)
+    to ensure configuration is valid before any operations begin.
+
+    Returns:
+        RootConfig: Validated configuration if successful
+
+    Exits:
+        sys.exit(1) with clear error message if config is invalid
+
+    Example:
+        >>> from src.config import validate_config_on_startup
+        >>> config = validate_config_on_startup()
+        >>> # Now safe to proceed with pipeline operations
+    """
+    import sys
+
+    try:
+        return get_config()
+    except FileNotFoundError:
+        print("\n❌ ERROR: config.json not found!")
+        print("\nPlease create config.json from config.json.example:")
+        print("  cp config.json.example config.json")
+        print("  # Edit config.json with your settings")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"\n❌ ERROR: Invalid configuration in config.json!")
+        print(f"\n{e}")
+        print("\nPlease fix the errors in config.json")
+        print("See config.json.example for reference")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ ERROR: Failed to load configuration!")
+        print(f"\n{e}")
+        print("\nUnexpected error - please report this issue:")
+        print("https://github.com/ADS-teamA/SUJBOT2/issues")
+        sys.exit(1)
 
 
 # Example usage
 if __name__ == "__main__":
-    # Load full pipeline config
-    config = get_default_config()
+    # Load full pipeline config from config.json
+    try:
+        config = get_default_config()
 
-    print("=== RAG Pipeline Configuration ===\n")
+        print("=== RAG Pipeline Configuration ===\n")
 
-    print("PHASE 1: Extraction")
-    print(f"  OCR: {config.extraction.enable_ocr}")
-    print(f"  Smart Hierarchy: {config.extraction.enable_smart_hierarchy}")
-    print(f"  Hierarchy Tolerance: {config.extraction.hierarchy_tolerance}")
-    print(f"  Layout Model: {config.extraction.layout_model}")
-    print()
+        print("PHASE 1: Extraction")
+        print(f"  OCR: {config.extraction.enable_ocr}")
+        print(f"  Smart Hierarchy: {config.extraction.enable_smart_hierarchy}")
+        print(f"  Hierarchy Tolerance: {config.extraction.hierarchy_tolerance}")
+        print()
 
-    print("PHASE 2: Summarization")
-    print(f"  Provider: {config.summarization.provider}")
-    print(f"  Model: {config.summarization.model}")
-    print(f"  Max Chars: {config.summarization.max_chars}")
-    print()
+        print("PHASE 2: Summarization")
+        print(f"  Provider: {config.summarization.provider}")
+        print(f"  Model: {config.summarization.model}")
+        print(f"  Max Chars: {config.summarization.max_chars}")
+        print()
 
-    print("PHASE 3: Chunking")
-    print(f"  Method: {config.chunking.method}")
-    print(f"  Chunk Size: {config.chunking.chunk_size}")
-    print(f"  Enable Contextual: {config.chunking.enable_contextual}")
-    print()
+        print("PHASE 3: Chunking")
+        print(f"  Max Tokens: {config.chunking.max_tokens}")
+        print(f"  Enable Contextual: {config.chunking.enable_contextual}")
+        print()
 
-    print("PHASE 4: Embedding")
-    print(f"  Provider: {config.embedding.provider}")
-    print(f"  Model: {config.embedding.model}")
-    print()
+        print("PHASE 4: Embedding")
+        print(f"  Provider: {config.embedding.provider}")
+        print(f"  Model: {config.embedding.model}")
+        print()
 
-    print("Models (from .env):")
-    print(f"  LLM: {config.models.llm_provider}/{config.models.llm_model}")
-    print(f"  Embedding: {config.models.embedding_provider}/{config.models.embedding_model}")
+        print("Models (from config.json):")
+        print(f"  LLM: {config.models.llm_provider}/{config.models.llm_model}")
+        print(f"  Embedding: {config.models.embedding_provider}/{config.models.embedding_model}")
+
+    except Exception as e:
+        print(f"ERROR: Failed to load configuration")
+        print(f"{e}")
+        print("\nPlease create config.json from config.json.example:")
+        print("  cp config.json.example config.json")
+        print("  # Edit config.json with your settings")

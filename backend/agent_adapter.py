@@ -17,6 +17,7 @@ from typing import AsyncGenerator, Dict, Any, Optional
 
 from src.agent.agent_core import AgentCore
 from src.agent.config import AgentConfig
+from src.agent.providers import create_provider
 from src.agent.tools.registry import get_registry
 from src.context_assembly import CitationFormat, ContextAssembler
 from src.cost_tracker import get_global_tracker, reset_global_tracker
@@ -91,12 +92,15 @@ class AgentAdapter:
                 except (ImportError, ModuleNotFoundError) as e:
                     logger.error(
                         f"Reranker dependencies missing: {e}. "
-                        f"Install with: pip install sentence-transformers"
+                        f"Install with: uv pip install sentence-transformers"
                     )
                     self.config.tool_config.enable_reranking = False
                     self.degraded_components.append({
                         "component": "reranker",
-                        "error": f"Missing dependencies: {e}"
+                        "error": f"Missing dependencies: {e}",
+                        "severity": "high",
+                        "user_message": "Search quality reduced - reranker unavailable",
+                        "action_required": "Install with: uv pip install sentence-transformers"
                     })
                 except (FileNotFoundError, ValueError) as e:
                     logger.error(
@@ -106,7 +110,10 @@ class AgentAdapter:
                     self.config.tool_config.enable_reranking = False
                     self.degraded_components.append({
                         "component": "reranker",
-                        "error": f"Configuration error: {e}"
+                        "error": f"Configuration error: {e}",
+                        "severity": "high",
+                        "user_message": "Search quality reduced - reranker misconfigured",
+                        "action_required": f"Check reranker model name '{self.config.tool_config.reranker_model}' in config"
                     })
                 except RuntimeError as e:
                     if "CUDA" in str(e) or "GPU" in str(e):
@@ -116,14 +123,18 @@ class AgentAdapter:
                         self.config.tool_config.enable_reranking = False
                         self.degraded_components.append({
                             "component": "reranker",
-                            "error": "GPU unavailable (CPU-only mode)"
+                            "error": "GPU unavailable (CPU-only mode)",
+                            "severity": "medium",
+                            "user_message": "Running on CPU only - reranker disabled for performance"
                         })
                     else:
                         logger.critical(f"Unexpected runtime error loading reranker: {e}", exc_info=True)
                         self.config.tool_config.enable_reranking = False
                         self.degraded_components.append({
                             "component": "reranker",
-                            "error": f"Runtime error: {e}"
+                            "error": f"Runtime error: {e}",
+                            "severity": "critical",
+                            "user_message": "Search quality reduced - reranker failed to initialize"
                         })
                 except Exception as e:
                     # Catch-all for truly unexpected errors
@@ -134,43 +145,60 @@ class AgentAdapter:
                     self.config.tool_config.enable_reranking = False
                     self.degraded_components.append({
                         "component": "reranker",
-                        "error": f"Unexpected error: {type(e).__name__}"
+                        "error": f"Unexpected error: {type(e).__name__}",
+                        "severity": "critical",
+                        "user_message": "Search quality reduced - reranker unavailable"
                     })
             else:
                 logger.info("Reranker set to lazy load")
 
-        # Load knowledge graph (optional)
+        # Load knowledge graph (optional) - UNIFIED WITH CLI
         knowledge_graph = None
         graph_retriever = None
         if self.config.enable_knowledge_graph and self.config.knowledge_graph_path:
             logger.info("Loading knowledge graph...")
             try:
-                from src.graph.models import KnowledgeGraph
-                from src.graph_retrieval import GraphEnhancedRetriever
+                from src.agent.graph_loader import load_knowledge_graph
 
-                knowledge_graph = KnowledgeGraph.load_json(str(self.config.knowledge_graph_path))
-                graph_retriever = GraphEnhancedRetriever(
-                    vector_store=vector_store, knowledge_graph=knowledge_graph
+                # Use shared loader (handles Neo4j/JSON with intelligent fallback)
+                knowledge_graph, graph_retriever = load_knowledge_graph(
+                    kg_path=self.config.knowledge_graph_path,
+                    vector_store=vector_store,
+                    user_print=None  # WebApp doesn't print to console
                 )
+
+            except RuntimeError as e:
+                # Explicit Neo4j config errors (fail-fast when KG_BACKEND=neo4j)
+                logger.error(f"Knowledge graph backend misconfigured: {e}")
+                self.config.enable_knowledge_graph = False
+                self.degraded_components.append({
+                    "component": "knowledge_graph",
+                    "error": f"Neo4j misconfiguration: {e}",
+                    "severity": "critical",
+                    "action_required": "Fix Neo4j config in .env or change KG_BACKEND=simple"
+                })
             except (ImportError, ModuleNotFoundError) as e:
                 logger.error(
                     f"Knowledge graph dependencies missing: {e}. "
-                    f"Install with: pip install networkx"
+                    f"Install with: uv pip install networkx neo4j"
                 )
                 self.config.enable_knowledge_graph = False
                 self.degraded_components.append({
                     "component": "knowledge_graph",
-                    "error": f"Missing dependencies: {e}"
+                    "error": f"Missing dependencies: {e}",
+                    "severity": "high"
                 })
             except FileNotFoundError as e:
-                logger.error(
+                logger.warning(
                     f"Knowledge graph file not found: {e}. "
-                    f"Expected path: {self.config.knowledge_graph_path}"
+                    f"Run indexing with ENABLE_KNOWLEDGE_GRAPH=true to generate it: "
+                    f"uv run python run_pipeline.py data/your_docs/"
                 )
                 self.config.enable_knowledge_graph = False
                 self.degraded_components.append({
                     "component": "knowledge_graph",
-                    "error": f"File not found: {e}"
+                    "error": f"File not found - run indexing to generate",
+                    "severity": "medium"
                 })
             except (ValueError, KeyError, TypeError) as e:
                 logger.error(
@@ -194,12 +222,29 @@ class AgentAdapter:
                     "error": f"Unexpected error: {type(e).__name__}"
                 })
 
-        # Warn if running in degraded mode
+        # Warn if running in degraded mode with detailed component info
         if self.degraded_components:
             component_names = [d["component"] for d in self.degraded_components]
-            logger.warning(
-                f"⚠️ RUNNING IN DEGRADED MODE - Missing components: {', '.join(component_names)}"
-            )
+
+            # Log detailed degradation info
+            logger.warning("=" * 60)
+            logger.warning("⚠️  WARNING: RUNNING IN DEGRADED MODE")
+            logger.warning("=" * 60)
+
+            for component in self.degraded_components:
+                severity = component.get("severity", "medium")
+                symbol = "🔴" if severity == "critical" else "🟡" if severity == "high" else "🟢"
+
+                logger.warning(f"{symbol} {component['component']}: {component['error']}")
+
+                if "user_message" in component:
+                    logger.warning(f"   → {component['user_message']}")
+
+                if "action_required" in component:
+                    logger.warning(f"   → Action: {component['action_required']}")
+
+            logger.warning("=" * 60)
+            logger.warning(f"Degraded components: {', '.join(component_names)}")
             logger.warning("Some agent tools may be unavailable or produce lower-quality results.")
 
         # Initialize context assembler
@@ -281,53 +326,42 @@ class AgentAdapter:
             # Get streaming generator from AgentCore
             text_stream = self.agent.process_message(query, stream=True)
 
-            # Stream text chunks and detect tool calls
+            # Stream text chunks (including markers for inline tool display)
+            # DO NOT send separate tool_call events during streaming
+            # Reasons:
+            # 1. Frontend expects markers in text for inline rendering
+            # 2. Sending both causes duplicate display (at top + inline)
+            # 3. Tool IDs available but execution metadata (timing, success) isn't until after execution
+
             for chunk in text_stream:
-                # Debug: Log chunk content (first 100 chars)
-                logger.debug(f"Chunk received: {repr(chunk[:100])}")
+                # Strip ANSI color codes only
+                clean_chunk = re.sub(r'\033\[[0-9;]+m', '', chunk)
 
-                # Detect tool call notification: [Using TOOL_NAME...]
-                # Pattern: [Using <tool_name>...]
-                tool_call_match = re.search(r'\[Using\s+([a-z_]+)\.{3}\]', chunk)
+                if clean_chunk:  # Only send non-empty chunks
+                    # DEBUG: Log chunk yielding to diagnose streaming issues
+                    logger.info(f"🔄 STREAMING: Yielding chunk ({len(clean_chunk)} chars): {clean_chunk[:50]}...")
 
-                if tool_call_match:
-                    # Extract tool name
-                    tool_name = tool_call_match.group(1)
-                    logger.info(f"🔧 Tool call detected: {tool_name}")
-
-                    # Send tool_call event immediately
+                    # Send ALL text including [Using tool...] markers
+                    # Frontend will parse markers and render tools inline
                     yield {
-                        "event": "tool_call",
+                        "event": "text_delta",
                         "data": {
-                            "tool_name": tool_name,
-                            "tool_input": {},  # Input not available yet (streamed before execution)
-                            "call_id": f"tool_{tool_name}"  # Placeholder ID
+                            "content": clean_chunk
                         }
                     }
-                    # Yield control to event loop
+                    # Yield control to event loop (allows concurrent requests)
                     await asyncio.sleep(0)
-                else:
-                    # Regular text content - strip ANSI color codes
-                    clean_chunk = re.sub(r'\033\[[0-9;]+m', '', chunk)
-
-                    if clean_chunk:  # Only send non-empty chunks
-                        yield {
-                            "event": "text_delta",
-                            "data": {
-                                "content": clean_chunk
-                            }
-                        }
-                        # Yield control to event loop (allows concurrent requests)
-                        await asyncio.sleep(0)
 
             # Extract tool calls from conversation history
             # Tool calls are stored in assistant message content blocks (Anthropic format)
             # Tool results are in subsequent user messages with metadata
             #
-            # Three-pass extraction is required because:
+            # Four-pass extraction is required because:
             # 1. Tool calls (tool_use) are in assistant messages with role="assistant"
             # 2. Tool results (tool_result) are in user messages with role="user"
             # 3. They must be joined by tool_use_id to create complete tool call objects
+            # 4. Execution metadata (timing, success) must be enriched from tool_call_history
+            #    (metadata was removed from API responses for Anthropic API compliance)
             #
             # Performance optimization: Scan last 10 messages only (not entire history)
             # Rationale: In tool-heavy conversations, each turn can generate 2-5 messages:
@@ -348,9 +382,20 @@ class AgentAdapter:
                         # Validate content is a list (defensive programming)
                         if not isinstance(content, list):
                             logger.error(
-                                f"Invalid message content format: expected list, got {type(content).__name__}. "
-                                f"Message role={message.get('role')}, content preview={str(content)[:100]}"
+                                f"CRITICAL: Invalid message content format in conversation history: "
+                                f"expected list, got {type(content).__name__}. "
+                                f"Message role={message.get('role')}, content preview={str(content)[:100]}. "
+                                f"This indicates data corruption - tool calls may be missing from UI."
                             )
+                            # Surface to user via error event
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "error": "Internal error: conversation history corruption detected. Some tool results may be missing.",
+                                    "type": "DataCorruptionError",
+                                    "severity": "high"
+                                }
+                            }
                             continue
 
                         for content_block in content:
@@ -382,9 +427,20 @@ class AgentAdapter:
                         # Validate content is a list
                         if not isinstance(content, list):
                             logger.error(
-                                f"Invalid message content format: expected list, got {type(content).__name__}. "
-                                f"Message role={message.get('role')}"
+                                f"CRITICAL: Invalid message content format in conversation history: "
+                                f"expected list, got {type(content).__name__}. "
+                                f"Message role={message.get('role')}. "
+                                f"This indicates data corruption - tool results may be missing from UI."
                             )
+                            # Surface to user via error event
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "error": "Internal error: conversation history corruption detected. Some tool results may be missing.",
+                                    "type": "DataCorruptionError",
+                                    "severity": "high"
+                                }
+                            }
                             continue
 
                         for content_block in content:
@@ -411,14 +467,72 @@ class AgentAdapter:
                         result_data = tool_results_map[tool_id]
                         tool_call["result"] = result_data.get("result")
 
-                        # Defensive: Get metadata with fallback to empty dict
-                        metadata = result_data.get("metadata", {})
-                        tool_call["executionTimeMs"] = metadata.get("execution_time_ms", 0)
-                        tool_call["success"] = metadata.get("success", True)
-                        tool_call["error"] = metadata.get("error")
-                        tool_call["explicitParams"] = metadata.get("explicit_params", [])
+                        # Metadata is no longer in API responses (removed for API compliance)
+                        # Will be enriched from tool_call_history in Pass 4
+                        tool_call["executionTimeMs"] = 0  # Placeholder, will be updated in Pass 4
+                        tool_call["success"] = True  # Default assumption
+                        tool_call["error"] = None
+                        tool_call["explicitParams"] = []
 
-            # Send tool calls summary if any
+                # Pass 4: Enrich with execution metadata from tool_call_history
+                # tool_call_history contains execution_time_ms, success, error, etc.
+                # Match by tool name and use counters to handle multiple calls to same tool
+                if self.agent.tool_call_history:
+                    # Build mapping: tool_name -> list of execution records (in order)
+                    tool_history_by_name = {}
+                    for record in self.agent.tool_call_history:
+                        tool_name = record.get("tool_name", "")
+                        if tool_name not in tool_history_by_name:
+                            tool_history_by_name[tool_name] = []
+                        tool_history_by_name[tool_name].append(record)
+
+                    # Track how many times we've matched each tool name (for multiple calls)
+                    tool_name_counters = {}
+
+                    # Enrich tool_calls_info with execution metadata
+                    for tool_call in tool_calls_info:
+                        tool_name = tool_call.get("name", "")
+
+                        # Get current index for this tool name
+                        current_index = tool_name_counters.get(tool_name, 0)
+                        tool_name_counters[tool_name] = current_index + 1
+
+                        # Find matching execution record
+                        if tool_name in tool_history_by_name:
+                            history_records = tool_history_by_name[tool_name]
+
+                            # Match in chronological order (FIFO)
+                            # Both tool_call_history and tool_calls_info are in chronological order
+                            if current_index < len(history_records):
+                                # Match forward: first call -> first execution, second -> second, etc.
+                                record_index = current_index
+                                record = history_records[record_index]
+
+                                # Enrich with execution metadata
+                                tool_call["executionTimeMs"] = record.get("execution_time_ms", 0)
+                                tool_call["success"] = record.get("success", True)
+                                # Only include error if present
+                                if "error" in record:
+                                    tool_call["error"] = record.get("error")
+                                # Include RAG confidence if available
+                                if "rag_confidence" in record:
+                                    tool_call["ragConfidence"] = record.get("rag_confidence")
+                            else:
+                                # Metadata missing - log and flag for UI
+                                logger.error(
+                                    f"Tool call metadata missing: tool_name={tool_name}, call_index={current_index}, "
+                                    f"history_length={len(history_records)}. This indicates execution tracking failure."
+                                )
+                                tool_call["executionTimeMs"] = None  # Explicitly mark as missing
+                                tool_call["success"] = None  # Don't default to True
+                                tool_call["error"] = "Execution metadata unavailable"
+                                tool_call["metadataMissing"] = True  # Flag for UI
+
+                    logger.info(f"Enriched {len(tool_calls_info)} tool calls with execution metadata from tool_call_history")
+
+            # Send tool_calls_summary with all tool results
+            # Frontend uses this for inline rendering (matches markers in text)
+            # No need for individual tool_result events - summary has everything
             if tool_calls_info:
                 logger.info(f"Extracted {len(tool_calls_info)} tool calls from conversation history")
                 yield {
@@ -523,14 +637,41 @@ class AgentAdapter:
 
     def switch_model(self, model: str) -> None:
         """
-        Switch to a different model.
+        Switch to a different model (UNIFIED WITH CLI).
+
+        Preserves conversation history and document list.
+        System prompt, tools, and history are sent on every API call automatically.
 
         Args:
             model: Model identifier
         """
+        old_model = self.config.model
+
+        # Update config
         self.config.model = model
-        self.agent = AgentCore(self.config)
-        logger.info(f"Switched to model: {model}")
+
+        # Create new provider (same logic as CLI)
+        new_provider = create_provider(
+            model=model,
+            anthropic_api_key=self.config.anthropic_api_key,
+            openai_api_key=self.config.openai_api_key,
+            google_api_key=self.config.google_api_key,
+        )
+
+        # Switch provider on existing agent (preserves conversation_history)
+        self.agent.provider = new_provider
+
+        # Auto-adjust streaming based on provider support (same as CLI)
+        streaming_supported = new_provider.supports_feature('streaming')
+        old_streaming = self.config.cli_config.enable_streaming
+        self.config.cli_config.enable_streaming = streaming_supported
+
+        logger.info(
+            f"Model switched: {old_model} → {model} "
+            f"(provider: {new_provider.get_provider_name()}, "
+            f"streaming: {old_streaming} → {streaming_supported}, "
+            f"history preserved: {len(self.agent.conversation_history)} messages)"
+        )
 
     def get_health_status(self) -> Dict[str, Any]:
         """

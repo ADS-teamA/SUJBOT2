@@ -358,21 +358,47 @@ Please give a short succinct context (50-100 words) to situate this chunk within
 
         Uses centralized retry logic with exponential backoff for rate limits.
         """
+        # Debug: Log prompt length
+        logger.debug(f"OpenAI context generation: prompt length={len(prompt)} chars")
+
         # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
         # GPT-5 models only support temperature=1.0 (default)
+        # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast, deterministic tasks
+        # Valid values: "minimal" (fastest), "low", "medium" (default), "high"
         if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
+            logger.debug(f"Using GPT-5/o-series parameters for model: {self.model}")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=1.0,  # GPT-5 only supports default temperature
                 max_completion_tokens=self.config.max_tokens,
+                reasoning_effort="minimal",  # Fast mode for simple tasks (context generation doesn't need deep reasoning)
             )
         else:
+            logger.debug(f"Using standard GPT-4 parameters for model: {self.model}")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
+            )
+
+        # Debug: Log response details
+        content = response.choices[0].message.content
+        logger.debug(
+            f"OpenAI response: "
+            f"content_length={len(content) if content else 0}, "
+            f"input_tokens={response.usage.prompt_tokens}, "
+            f"output_tokens={response.usage.completion_tokens}"
+        )
+
+        # Warning if empty response
+        if not content or len(content.strip()) == 0:
+            logger.warning(
+                f"⚠️  OpenAI returned EMPTY context! "
+                f"Model: {self.model}, "
+                f"Prompt length: {len(prompt)}, "
+                f"Output tokens: {response.usage.completion_tokens}"
             )
 
         # Track cost
@@ -384,7 +410,7 @@ Please give a short succinct context (50-100 words) to situate this chunk within
             operation="context",
         )
 
-        return response.choices[0].message.content
+        return content if content else ""
 
     def _generate_with_ollama(self, prompt: str) -> str:
         """Generate context using Ollama."""
@@ -476,31 +502,83 @@ Please give a short succinct context (50-100 words) to situate this chunk within
             section_path = metadata.get("section_path", "")
             chunk_preview = chunk_text[:1500]  # Limit chunk size for context
 
-            prompt = f"""Document: {doc_summary}
+            # Build prompt parts (skip empty values to avoid confusing LLM)
+            prompt_parts = []
 
-Section: {section_path or section_title}
+            if doc_summary:
+                prompt_parts.append(f"Document: {doc_summary}")
 
-Chunk content:
-{chunk_preview}
+            if section_path or section_title:
+                prompt_parts.append(f"Section: {section_path or section_title}")
 
-Provide a brief context (50-100 words) explaining what this chunk discusses within the document."""
+            prompt_parts.append(f"Chunk content:\n{chunk_preview}")
+            prompt_parts.append(
+                "Provide a brief context (50-100 words) explaining what this chunk discusses within the document."
+            )
+
+            prompt = "\n\n".join(prompt_parts)
+
+            # Build request body with model-specific parameters
+            # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
+            # GPT-5 models only support temperature=1.0 (default)
+            # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast tasks
+            # Valid values: "minimal" (fastest), "low", "medium", "high"
+            body = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+
+            if self.model.startswith(("gpt-5", "o1-", "o3-", "o4-")):
+                # GPT-5/o-series parameters
+                body["max_completion_tokens"] = self.config.max_tokens
+                body["temperature"] = 1.0  # GPT-5 only supports default temperature
+                body["reasoning_effort"] = "minimal"  # Fast mode for simple tasks (context generation doesn't need deep reasoning)
+            else:
+                # GPT-4 and earlier parameters
+                body["max_tokens"] = self.config.max_tokens
+                body["temperature"] = self.config.temperature
 
             return BatchRequest(
                 custom_id=f"chunk_{idx}",
                 method="POST",
                 url="/v1/chat/completions",
-                body={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": self.config.max_tokens,
-                    "temperature": self.config.temperature,
-                },
+                body=body,
             )
 
         # Define response parsing function
         def parse_response(response: dict) -> str:
             """Extract context from API response."""
-            return response["choices"][0]["message"]["content"].strip()
+            # CRITICAL FIX: Handle None content (can happen with API failures or filters)
+            content = response["choices"][0]["message"]["content"]
+            if content is None:
+                finish_reason = response["choices"][0].get("finish_reason", "unknown")
+                logger.error(
+                    f"Batch API returned None content for a context. "
+                    f"finish_reason={finish_reason}",
+                    extra={"error_id": "CONTEXT_NONE_CONTENT", "finish_reason": finish_reason}
+                )
+                return ""
+
+            context = content.strip()
+
+            # CRITICAL FIX: Log when context is empty (helps debugging)
+            if not context:
+                # Extract custom_id for debugging
+                custom_id = response.get("custom_id", "unknown")
+                logger.error(
+                    f"Batch API returned empty context (custom_id={custom_id}). "
+                    f"ROOT CAUSE ANALYSIS:\n"
+                    f"  1. Check PHASE 2: Are document summaries empty? (see summary_generator logs)\n"
+                    f"  2. Check prompt construction: Is document_summary passed correctly?\n"
+                    f"  3. Check model: Does {self.model} work with reasoning_effort='minimal'?",
+                    extra={
+                        "error_id": "CONTEXT_EMPTY_RESPONSE",
+                        "custom_id": custom_id,
+                        "model": self.model
+                    }
+                )
+
+            return context
 
         # Process batch using centralized client
         results_map = batch_client.process_batch(
@@ -586,7 +664,9 @@ Provide a brief context (50-100 words) explaining what this chunk discusses with
         if contexts_map:
             results = []
             for idx, (chunk_text, metadata) in enumerate(chunks):
-                context = contexts_map.get(idx, "")
+                # CRITICAL: custom_id in batch is "chunk_{idx}", not idx!
+                custom_id = f"chunk_{idx}"
+                context = contexts_map.get(custom_id, "")
                 results.append(
                     ChunkContext(
                         chunk_text=chunk_text,
@@ -603,6 +683,13 @@ Provide a brief context (50-100 words) explaining what this chunk discusses with
 
         def generate_one(chunk_text: str, metadata: dict) -> ChunkContext:
             try:
+                # Debug: Log metadata
+                logger.debug(
+                    f"Parallel mode - Generating context for chunk (length={len(chunk_text)}), "
+                    f"doc_summary={bool(metadata.get('document_summary'))}, "
+                    f"section_title={metadata.get('section_title', 'N/A')}"
+                )
+
                 context = self.generate_context(
                     chunk=chunk_text,
                     document_summary=metadata.get("document_summary"),
@@ -611,6 +698,18 @@ Provide a brief context (50-100 words) explaining what this chunk discusses with
                     preceding_chunk=metadata.get("preceding_chunk"),
                     following_chunk=metadata.get("following_chunk"),
                 )
+
+                # Debug: Log generated context
+                logger.debug(f"Parallel mode - Generated context length: {len(context)}")
+
+                # Warning if empty
+                if not context or len(context.strip()) == 0:
+                    logger.warning(
+                        f"⚠️  Parallel mode generated EMPTY context! "
+                        f"Chunk length: {len(chunk_text)}, "
+                        f"Section: {metadata.get('section_title', 'N/A')}"
+                    )
+
                 return ChunkContext(chunk_text=chunk_text, context=context, success=True)
             except Exception as e:
                 logger.error(f"Failed to generate context: {e}")

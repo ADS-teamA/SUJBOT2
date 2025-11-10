@@ -222,33 +222,30 @@ class AgentCLI:
         if self.config.enable_knowledge_graph and self.config.knowledge_graph_path:
             print("Loading knowledge graph...")
             try:
-                from src.graph.models import KnowledgeGraph
-                from src.graph_retrieval import GraphEnhancedRetriever
+                from pathlib import Path
+                from src.agent.graph_loader import load_knowledge_graph
 
-                knowledge_graph = KnowledgeGraph.load_json(str(self.config.knowledge_graph_path))
-                print(
-                    f"   Entities: {len(knowledge_graph.entities)}, "
-                    f"Relationships: {len(knowledge_graph.relationships)}"
+                # Use shared loader (handles Neo4j/JSON with intelligent fallback)
+                knowledge_graph, graph_retriever = load_knowledge_graph(
+                    kg_path=Path(self.config.knowledge_graph_path),
+                    vector_store=vector_store,
+                    user_print=print  # Pass print function for CLI output
                 )
 
-                graph_retriever = GraphEnhancedRetriever(
-                    vector_store=vector_store, knowledge_graph=knowledge_graph
-                )
-            except FileNotFoundError:
-                logger.warning(
-                    f"Knowledge graph file not found: {self.config.knowledge_graph_path}"
-                )
-                print(f"   ⚠️  Knowledge graph file not found: {self.config.knowledge_graph_path}")
+            except (RuntimeError, FileNotFoundError) as e:
+                # Explicit Neo4j config errors or missing files
+                logger.warning(f"Failed to load knowledge graph: {e}")
+                print(f"   ⚠️  Failed to load knowledge graph: {e}")
                 print("   Continuing without knowledge graph (graph tools will be unavailable)")
                 self.config.enable_knowledge_graph = False
             except ImportError as e:
-                logger.warning(f"Knowledge graph module not available: {e}")
+                logger.warning(f"Knowledge graph dependencies missing: {e}")
                 print(f"   ⚠️  Knowledge graph module not available: {e}")
                 print("   Continuing without knowledge graph")
                 self.config.enable_knowledge_graph = False
             except Exception as e:
-                logger.warning(f"Failed to load knowledge graph: {e}")
-                print(f"   ⚠️  Knowledge graph failed to load: {e}")
+                logger.critical(f"Unexpected error loading knowledge graph: {e}", exc_info=True)
+                print(f"   ⚠️  Unexpected error loading knowledge graph: {e}")
                 print("   Continuing without knowledge graph")
                 self.config.enable_knowledge_graph = False
 
@@ -282,6 +279,16 @@ class AgentCLI:
 
         # Create agent
         self.agent = AgentCore(self.config)
+
+        # Append chat-specific prompt to agent prompt (base prompt already loaded)
+        from .prompt_loader import load_prompt
+        chat_prompt = load_prompt("agent_chat_prompt")
+        self.agent.config.system_prompt = (
+            f"{self.agent.config.system_prompt}\n\n"
+            f"---\n\n"
+            f"{chat_prompt}"
+        )
+        logger.info("Chat prompt appended to base agent prompt (loaded from prompts/agent_chat_prompt.txt)")
 
         # Auto-adjust streaming based on provider support
         # (OpenAI models have streaming disabled by default, Claude models have it enabled)
@@ -359,6 +366,31 @@ class AgentCLI:
                 else:
                     response = self.agent.process_message(user_input, stream=False)
                     print(f"\n{COLOR_GREEN}A: {response}{COLOR_RESET}")
+
+                # Show RAG confidence if available
+                rag_confidence = self.agent.get_latest_rag_confidence()
+
+                # Debug: Log what we found
+                if self.config.debug_mode:
+                    logger.debug(f"Tool call history length: {len(self.agent.tool_call_history)}")
+                    logger.debug(f"RAG confidence retrieved: {rag_confidence is not None}")
+                    if rag_confidence:
+                        logger.debug(f"Confidence data: {rag_confidence}")
+
+                if rag_confidence:
+                    conf_score = rag_confidence.get("overall_confidence", 0.0)
+                    conf_interp = rag_confidence.get("interpretation", "Unknown")
+                    should_review = rag_confidence.get("should_flag_for_review", False)
+
+                    # Color code based on confidence level
+                    if should_review:
+                        conf_color = "\033[93m"  # Yellow for warning
+                        emoji = "⚠️"
+                    else:
+                        conf_color = "\033[92m"  # Green for good
+                        emoji = "✓"
+
+                    print(f"\n{conf_color}📊 RAG Confidence: {emoji} {conf_interp} ({conf_score:.2f}){COLOR_RESET}")
 
                 # Show session cost after each response
                 cost_summary = self.agent.tracker.get_session_cost_summary()
@@ -600,10 +632,11 @@ class AgentCLI:
                 print("\n⚠️  Warning: Prompt caching not supported by this model.")
                 print("   Costs will be higher than with Claude models (no 90% cache discount).")
 
-            # Reset conversation (tools need to be regenerated for new provider)
-            print("\n🔄 Resetting conversation for new model...")
-            self.agent.reset_conversation()
-            print("✅ Ready to use new model!\n")
+            # Conversation history preserved (system prompt, tools, and history sent on every API call)
+            print("\n✅ Model switched successfully!")
+            print("   💬 Conversation history preserved")
+            print("   📄 Document list preserved")
+            print("   🔧 Tool definitions will be sent to new model automatically\n")
 
         except ValueError as e:
             print(f"\n❌ Invalid model: {e}")
@@ -749,18 +782,28 @@ if __name__ == "__main__":
     """Allow running as: python -m src.agent.cli"""
     import argparse
 
+    # CRITICAL: Validate config.json before doing anything else
+    try:
+        from src.config import get_config
+        root_config = get_config()
+    except (FileNotFoundError, ValueError) as e:
+        print(f"\n❌ ERROR: Invalid or missing config.json!")
+        print(f"\n{e}")
+        print(f"\nPlease create config.json from config.json.example")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="RAG Agent CLI - Interactive document assistant")
     parser.add_argument(
         "--vector-store",
         type=str,
         help="Path to vector store directory",
-        default=os.getenv("VECTOR_STORE_PATH", "vector_db"),
+        default=root_config.agent.vector_store_path,
     )
     parser.add_argument(
         "--model",
         type=str,
-        help="Claude model to use",
-        default=os.getenv("AGENT_MODEL", "claude-haiku-4-5"),
+        help="Model to use (overrides config.json)",
+        default=root_config.agent.model,
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--no-streaming", action="store_true", help="Disable streaming responses")
@@ -769,10 +812,12 @@ if __name__ == "__main__":
 
     from .config import CLIConfig
 
-    config = AgentConfig(
+    # Load config from JSON with CLI arg overrides
+    config = AgentConfig.from_config(
+        root_config=root_config,
         vector_store_path=Path(args.vector_store),
         model=args.model,
-        debug_mode=args.debug,
+        debug_mode=args.debug or root_config.agent.debug_mode,
         cli_config=CLIConfig(enable_streaming=not args.no_streaming),
     )
 

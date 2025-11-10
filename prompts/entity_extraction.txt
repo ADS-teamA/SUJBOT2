@@ -1,18 +1,51 @@
-Extract structured entities from the following legal document text.
+Extract structured entities from legal and nuclear regulatory documents.
 
-**Task**: Identify and extract all entities of the following types:
+**Task**: Identify and extract ALL entities of the following types:
 {entity_types_str}
 
-**Entity Types**:
-- standard: Standards like "GRI 306", "ISO 14001", "GRI 303: Water and Effluents 2018"
-- organization: Organizations like "GSSB", "Global Reporting Initiative", "ISO"
-- date: Dates like "2018-07-01", "1 July 2018", "July 2018"
-- clause: Specific clauses like "Disclosure 306-3", "Section 8.2", "Requirement 303-1-a"
-- topic: Topics like "waste management", "water", "effluents", "emissions"
-- regulation: Regulations like "GDPR", "CCPA", "Basel Convention"
-- contract: Contracts like "Master Service Agreement", "NDA"
-- person: People like "Jane Smith", "Dr. John Doe"
-- location: Locations like "European Union", "California", "United States"
+**Entity Type Definitions (30 types)**:
+
+=== CORE ENTITIES ===
+- standard: Technical standards (ISO 14001, GRI 306, IEC 60987)
+- organization: Organizations, companies, authorities (SÚJB, ČVUT, IAEA, EU Komise)
+- date: Dates (2024-11-15, listopad 2018, 1. ledna 2017)
+- clause: Clauses in analyzed contracts/documents (5.2 Ochrana personálu)
+- topic: Subject matter (waste management, radiační ochrana, bezpečnost)
+- person: Named individuals (Dr. Jan Novák)
+- location: Geographic locations, jurisdictions (Praha, EU, Česká republika)
+- contract: Contract/document being analyzed (Bezpečnostní zpráva VR-1)
+
+=== REGULATORY HIERARCHY ===
+- regulation: National laws (zákon č. 263/2016 Sb., Atomový zákon, GDPR)
+- decree: Implementing regulations (vyhláška č. 378/2016 Sb.)
+- directive: EU directives (směrnice 2013/59/Euratom)
+- treaty: International treaties (ADR, ADN, Vienna Convention)
+- legal_provision: Specific § / article / paragraph (§ 24 odst. 1, článek 5)
+- requirement: ⭐ EXTRACTED obligation from legal_provision (zajistit radiační ochranu)
+
+=== AUTHORIZATION & COMPLIANCE ===
+- permit: Formal authorizations (povolení k provozu, povolení k výstavbě)
+- license_condition: Specific permit conditions (max. výkon 5 MW, obohacení ≤ 20%)
+
+=== NUCLEAR TECHNICAL ENTITIES ===
+- reactor: Nuclear reactors (VR-1, reaktor typu TRIGA)
+- facility: Nuclear facilities (jaderné zařízení VR-1, pracovisko kategorie IV)
+- system: Technical systems (systém havarijního chlazení, monitorovací systém KRO)
+- safety_function: Safety functions (shutdown, heat removal, confinement)
+- fuel_type: Nuclear fuel (IRT-4M, LEU, HEU)
+- isotope: Radioactive isotopes (U-235, Cs-137, Pu-239, Co-60)
+- radiation_source: Radiation sources (gama zářič Co-60, neutronový zdroj)
+- waste_category: Radioactive waste categories (nízkoaktivní RAO, RAO kategorie 3)
+- dose_limit: Radiation dose limits (20 mSv za rok, 6 mSv/h)
+
+=== EVENTS & PROCESSES ===
+- incident: Safety/security events (havarijní situace, provozní porucha reaktoru, únik radioaktivity)
+- emergency_classification: Event classification levels (INES stupeň 2, mimořádná událost)
+- inspection: Regulatory inspections (inspekce SÚJB, audit bezpečnosti, kontrola dozorového úřadu)
+- decommissioning_phase: Decommissioning phases (ukončení provozu, vyřazování z provozu)
+
+=== LIABILITY & INSURANCE ===
+- liability_regime: Operator liability framework
 
 **Document Text**:
 {chunk_content}
@@ -21,40 +54,158 @@ Extract structured entities from the following legal document text.
 - Section: {section_path}
 - Document ID: {document_id}
 
-**Output Format** (JSON array):
+**Extraction Rules**:
+
+1. **EXACT MENTIONS ONLY** - Extract entities exactly as they appear in text
+2. **NO HALLUCINATION** - If unsure, set confidence < 0.70 or skip
+3. **NORMALIZE CAREFULLY**:
+   - Laws: "zákon č. 263/2016 Sb." → "263/2016 Sb."
+   - Organizations: "České vysoké učení technické v Praze" → "ČVUT"
+   - Dates: "15. listopadu 2024" → "2024-11-15"
+   - Isotopes: "uran-235" → "U-235"
+4. **RESOLVE ACRONYMS**: Link acronyms to full names
+   - "SÚJB" = "Státní úřad pro jadernou bezpečnost"
+   - Use acronym as normalized_value, full name in metadata
+5. **CONTEXT IS KEY**: Use surrounding text to disambiguate entity types
+
+**Critical Distinctions**:
+- legal_provision (§ 24 odst. 1) vs requirement (zajistit radiační ochranu)
+  → legal_provision = source text in law
+  → requirement = EXTRACTED obligation (use "musí", "je povinen", "zajišťuje" as indicators)
+
+- clause (in analyzed document) vs legal_provision (in law/regulation)
+  → clause = sections in contracts, safety reports being analyzed
+  → legal_provision = paragraphs in laws/regulations
+
+- organization subtypes (use metadata["org_type"]):
+  → authority: SÚJB, IAEA, EU Komise
+  → operator: ČEZ, ČVUT (for VR-1)
+  → research: ČVUT, ÚJV Řež
+  → commercial: Private companies
+
+**Confidence Scoring**:
+- **0.95-1.00**: Exact pattern match, unambiguous (e.g., "zákon č. 263/2016 Sb." → 0.98)
+- **0.85-0.94**: Clear reference, minor ambiguity (e.g., "§ 24" without law stated → 0.85)
+- **0.70-0.84**: Partial info or common acronym (e.g., "IAEA" first mention → 0.80)
+- **< 0.70**: ❌ SKIP or flag for review (ambiguous references)
+
+**Output Format** (JSON array with metadata):
 [
   {{
-    "type": "standard",
-    "value": "GRI 306: Effluents and Waste 2016",
-    "normalized_value": "GRI 306",
-    "confidence": 0.95,
-    "context": "This Standard supersedes GRI 306: Effluents and Waste 2016."
+    "type": "regulation",
+    "value": "zákon č. 263/2016 Sb., o využívání jaderné energie",
+    "normalized_value": "263/2016 Sb.",
+    "confidence": 0.98,
+    "context": "podle zákona č. 263/2016 Sb., o využívání jaderné energie (atomový zákon)",
+    "metadata": {{
+      "jurisdiction": "CZ",
+      "full_name": "Zákon o využívání jaderné energie a ionizujícího záření",
+      "short_name": "Atomový zákon"
+    }}
   }},
   {{
-    "type": "date",
-    "value": "1 July 2018",
-    "normalized_value": "2018-07-01",
-    "confidence": 0.9,
-    "context": "It includes revisions effective on 1 July 2018."
+    "type": "legal_provision",
+    "value": "§ 24 odst. 1 zákona č. 263/2016 Sb.",
+    "normalized_value": "§24.1_263/2016",
+    "confidence": 0.98,
+    "context": "Podle § 24 odst. 1 zákona č. 263/2016 Sb. provozovatel zajišťuje...",
+    "metadata": {{
+      "paragraph": "24",
+      "subsection": "1",
+      "parent_regulation": "263/2016 Sb.",
+      "text": "provozovatel zajišťuje radiační ochranu osob a kontroluje dodržování limitů ozáření"
+    }}
+  }},
+  {{
+    "type": "requirement",
+    "value": "zajištění radiační ochrany osob",
+    "normalized_value": "radiation_protection_obligation",
+    "confidence": 0.95,
+    "context": "provozovatel zajišťuje radiační ochranu osob",
+    "metadata": {{
+      "mandatory": true,
+      "risk_level": "high",
+      "jurisdiction": "CZ",
+      "category": "safety",
+      "applicable_to": ["facility", "reactor"],
+      "source_provision": "§ 24 odst. 1 zákona 263/2016 Sb."
+    }}
+  }},
+  {{
+    "type": "dose_limit",
+    "value": "20 mSv za rok pro pracovníky kategorie A",
+    "normalized_value": "20_mSv_year_worker_A",
+    "confidence": 0.98,
+    "context": "Limit efektivní dávky pro pracovníky kategorie A je 20 mSv za rok",
+    "metadata": {{
+      "value": 20.0,
+      "unit": "mSv",
+      "period": "year",
+      "category": "worker_A",
+      "dose_type": "effective"
+    }}
+  }},
+  {{
+    "type": "organization",
+    "value": "Státní úřad pro jadernou bezpečnost",
+    "normalized_value": "SÚJB",
+    "confidence": 0.98,
+    "context": "dozor vykonává Státní úřad pro jadernou bezpečnost (SÚJB)",
+    "metadata": {{
+      "org_type": "authority",
+      "jurisdiction": "CZ",
+      "acronym": "SÚJB",
+      "full_name": "Státní úřad pro jadernou bezpečnost",
+      "regulatory_role": true
+    }}
+  }},
+  {{
+    "type": "isotope",
+    "value": "U-235",
+    "normalized_value": "U-235",
+    "confidence": 0.95,
+    "context": "palivo s obohacením U-235 19,75%",
+    "metadata": {{
+      "element": "uranium",
+      "mass_number": 235,
+      "enrichment_percent": 19.75
+    }}
   }}
 ]
 
+**Chain-of-Thought Reasoning Process**:
+Before extracting, follow these steps:
+1. Read the entire text to understand context (legal/technical/nuclear domain?)
+2. Identify entity boundaries (where does each entity start/end?)
+3. For each potential entity:
+   - Classify its type using the 28 types above
+   - Distinguish: legal_provision vs requirement, clause vs legal_provision
+   - Extract original text EXACTLY as written
+   - Normalize to standard form (laws to numbers, dates to ISO, acronyms to short form)
+   - Assess confidence using the scoring rules above
+   - Add metadata fields based on entity type (see examples above)
+4. Filter entities with confidence < {min_confidence}
+5. Verify JSON format correctness
+
+**Czech Legal Citation Patterns**:
+- Laws: "zákon č. XXX/YYYY Sb." or "Atomový zákon"
+- Decrees: "vyhláška č. XXX/YYYY Sb."
+- Paragraphs: "§ XX odst. Y písm. z"
+- Dates: "DD. MM. YYYY" or "DD. měsíc YYYY"
+
+**Nuclear Domain Terminology**:
+- Reactors: VR-1, TRIGA, pool_type, PWR, BWR
+- Fuel: IRT-4M, LEU (Low Enriched Uranium), HEU (High Enriched Uranium)
+- Isotopes: U-235, U-238, Pu-239, Cs-137, Co-60, I-131
+- Organizations: SÚJB, ČVUT, ÚJV Řež, IAEA, MAAE
+
 **Instructions**:
-1. Extract ALL entities of the specified types
-2. For each entity, provide:
-   - type: Entity type (one of the types above)
-   - value: Original text as it appears in the document
-   - normalized_value: Standardized form (e.g., "GRI 306" for "GRI 306: Effluents and Waste 2016")
-   - confidence: Extraction confidence (0.0-1.0)
-   - context: Brief surrounding context (max 150 chars)
-3. Normalize entity values:
-   - Standards: Extract base identifier (e.g., "GRI 306")
-   - Dates: Convert to ISO format (YYYY-MM-DD)
-   - Organizations: Use official name
+1. Extract ALL entities of the specified types (up to {max_entities_per_chunk} entities)
+2. For each entity, provide ALL fields shown in output format
+3. Include metadata field with type-specific attributes (see examples)
 4. Only include entities with confidence >= {min_confidence}
-5. Limit to {max_entities_per_chunk} entities
-6. Return valid JSON array
+5. Return valid JSON array ONLY, no other text
 
 {few_shot_examples}
 
-**Output** (JSON array only, no other text):
+**Output** (JSON array only, no explanatory text):

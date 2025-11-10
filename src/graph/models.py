@@ -1,10 +1,18 @@
 """
 Data models for Knowledge Graph entities and relationships.
 
-Defines the schema for legal document knowledge graphs:
-- Entity: Standards, Organizations, Dates, Clauses, Topics
-- Relationship: SUPERSEDED_BY, REFERENCES, ISSUED_BY, EFFECTIVE_DATE, etc.
-- KnowledgeGraph: Complete graph structure with entities and relationships
+Schema v2.0 (Extended for Compliance Checking):
+- 30 Entity Types: Core (8) + Regulatory (6) + Authorization (2) + Nuclear (9) + Events (4) + Liability (1)
+- 40 Relationship Types: Compliance (5) + Regulatory (5) + Structure (4) + Citations (4) +
+  Authorization (5) + Nuclear (8) + Temporal (4) + Content (2) + Provenance (3)
+
+Key Hierarchies:
+- Regulatory: TREATY → REGULATION → DECREE → LEGAL_PROVISION → REQUIREMENT
+- Compliance: REQUIREMENT ← COMPLIES_WITH/CONTRADICTS → CLAUSE
+- Nuclear: FACILITY → REACTOR → SYSTEM → SAFETY_FUNCTION
+- Authorization: AUTHORITY → GRANTED_BY → PERMIT → LICENSE_CONDITION
+
+Complete graph structure with entities, relationships, and compliance verification support.
 """
 
 from dataclasses import dataclass, field
@@ -17,48 +25,114 @@ import json
 class EntityType(Enum):
     """Types of entities extracted from legal documents."""
 
-    STANDARD = "standard"  # GRI 306, GRI 303, ISO 14001
-    ORGANIZATION = "organization"  # GSSB, Global Reporting Initiative
-    DATE = "date"  # 2018-07-01, 1 July 2018
-    CLAUSE = "clause"  # Disclosure 306-3, Section 8.2
-    TOPIC = "topic"  # waste, effluents, spills, water
-    PERSON = "person"  # Optional: authors, signatories
-    LOCATION = "location"  # Optional: jurisdictions
-    REGULATION = "regulation"  # GDPR, CCPA, etc.
-    CONTRACT = "contract"  # Specific contracts (NDAs, MSAs)
+    # ==================== CORE ENTITIES (existing) ====================
+    STANDARD = "standard"
+    ORGANIZATION = "organization"  # Includes authorities (use metadata['org_type'])
+    DATE = "date"
+    CLAUSE = "clause"  # Clause in contracts/documents being analyzed
+    TOPIC = "topic"
+    PERSON = "person"
+    LOCATION = "location"
+    CONTRACT = "contract"
+
+    # ==================== REGULATORY HIERARCHY ====================
+    # Hierarchical structure: TREATY → REGULATION → DECREE → LEGAL_PROVISION → REQUIREMENT
+    REGULATION = "regulation"  # National laws (Atomový zákon, GDPR)
+    DECREE = "decree"  # Vyhlášky, implementing regulations (378/2016 Sb.)
+    DIRECTIVE = "directive"  # EU directives (Euratom)
+    TREATY = "treaty"  # International treaties (ADR, ADN, Vienna Convention)
+    LEGAL_PROVISION = "legal_provision"  # Specific § / article / paragraph in law
+    REQUIREMENT = "requirement"  # Extracted compliance requirement from LEGAL_PROVISION
+
+    # ==================== AUTHORIZATION & COMPLIANCE ====================
+    PERMIT = "permit"  # Formal authorization (e.g., §9 stages: siting, construction, operation)
+    LICENSE_CONDITION = "license_condition"  # Specific condition in a permit/license
+
+    # ==================== NUCLEAR TECHNICAL ENTITIES ====================
+    REACTOR = "reactor"  # Nuclear reactor unit (VR-1, type, power rating)
+    FACILITY = "facility"  # Nuclear facility/site hosting reactors/systems
+    SYSTEM = "system"  # Technical systems (I&C, cooling, protection, monitoring)
+    SAFETY_FUNCTION = "safety_function"  # Safety functions (shutdown, heat removal, confinement)
+    FUEL_TYPE = "fuel_type"  # Nuclear fuel (IRT-4M, enrichment, cladding)
+    ISOTOPE = "isotope"  # Radioactive isotopes (U-235, Cs-137, Pu-239)
+    RADIATION_SOURCE = "radiation_source"  # Sealed sources, radiation equipment
+    WASTE_CATEGORY = "waste_category"  # Radioactive waste categories (low/medium/high level)
+    DOSE_LIMIT = "dose_limit"  # Radiation dose limits (mSv/year for workers/public)
+
+    # ==================== EVENTS & PROCESSES ====================
+    INCIDENT = "incident"  # Specific safety/security events
+    EMERGENCY_CLASSIFICATION = "emergency_classification"  # Event classification levels
+    INSPECTION = "inspection"  # Regulatory inspections, audits
+    DECOMMISSIONING_PHASE = "decommissioning_phase"  # Phases of decommissioning
+
+    # ==================== LIABILITY & INSURANCE ====================
+    LIABILITY_REGIME = "liability_regime"  # Operator liability framework
 
 
 class RelationshipType(Enum):
     """Types of relationships between entities."""
 
-    # Document relationships
-    SUPERSEDED_BY = "superseded_by"  # Old standard → New standard
-    SUPERSEDES = "supersedes"  # New standard → Old standard
-    REFERENCES = "references"  # Document A → Document B
-    REFERENCED_BY = "referenced_by"  # Document B → Document A
+    # ==================== COMPLIANCE CORE (bidirectional checking) ====================
+    # Contract → Law direction (compliance verification)
+    COMPLIES_WITH = "complies_with"  # Clause → Requirement (with confidence score)
+    CONTRADICTS = "contradicts"  # Clause → Requirement (non-compliance)
+    PARTIALLY_SATISFIES = "partially_satisfies"  # Clause → Requirement (partial compliance)
 
-    # Organizational relationships
-    ISSUED_BY = "issued_by"  # Standard → Organization
-    DEVELOPED_BY = "developed_by"  # Standard → Organization
-    PUBLISHED_BY = "published_by"  # Document → Organization
+    # Law → Contract direction (completeness auditing)
+    SPECIFIES_REQUIREMENT = "specifies_requirement"  # Regulation/Provision → Requirement
+    REQUIRES_CLAUSE = "requires_clause"  # Requirement → Required clause type
 
-    # Temporal relationships
-    EFFECTIVE_DATE = "effective_date"  # Standard → Date
-    EXPIRY_DATE = "expiry_date"  # Contract → Date
+    # ==================== REGULATORY HIERARCHY ====================
+    IMPLEMENTS = "implements"  # Decree → Law (national implementation)
+    TRANSPOSES = "transposes"  # National law → EU directive (EU law transposition)
+    SUPERSEDED_BY = "superseded_by"  # Old regulation → New regulation
+    SUPERSEDES = "supersedes"  # New regulation → Old regulation
+    AMENDS = "amends"  # Amendment → Original regulation
+
+    # ==================== DOCUMENT STRUCTURE ====================
+    CONTAINS_CLAUSE = "contains_clause"  # Contract/Document → Clause
+    CONTAINS_PROVISION = "contains_provision"  # Regulation → Legal provision
+    CONTAINS = "contains"  # Document → Section (generic hierarchy)
+    PART_OF = "part_of"  # Section → Document (reverse hierarchy)
+
+    # ==================== CITATIONS & REFERENCES ====================
+    REFERENCES = "references"  # Document A → Document B (generic reference)
+    REFERENCED_BY = "referenced_by"  # Document B → Document A (reverse)
+    CITES_PROVISION = "cites_provision"  # Document → Legal provision (specific citation)
+    BASED_ON = "based_on"  # Analysis/Decision → Evidence/Source
+
+    # ==================== AUTHORIZATION & ENFORCEMENT ====================
+    ISSUED_BY = "issued_by"  # Permit/Regulation → Authority/Organization
+    GRANTED_BY = "granted_by"  # Permit → Authority (specific authorization)
+    ENFORCED_BY = "enforced_by"  # Regulation → Authority (enforcement responsibility)
+    SUBJECT_TO_INSPECTION = "subject_to_inspection"  # Facility → Inspection type
+    SUPERVISES = "supervises"  # Authority → Facility/Operator (oversight)
+
+    # ==================== NUCLEAR TECHNICAL RELATIONSHIPS ====================
+    REGULATED_BY = "regulated_by"  # Facility/Reactor/System → Regulation
+    OPERATED_BY = "operated_by"  # Facility/Reactor → Organization
+    HAS_SYSTEM = "has_system"  # Facility/Reactor → System
+    PERFORMS_FUNCTION = "performs_function"  # System → Safety function
+    USES_FUEL = "uses_fuel"  # Reactor → Fuel type
+    CONTAINS_ISOTOPE = "contains_isotope"  # Fuel/Source → Isotope
+    PRODUCES_WASTE = "produces_waste"  # Reactor/Process → Waste category
+    HAS_DOSE_LIMIT = "has_dose_limit"  # Worker category/Area → Dose limit
+
+    # ==================== TEMPORAL RELATIONSHIPS ====================
+    EFFECTIVE_DATE = "effective_date"  # Regulation/Contract → Date
+    EXPIRY_DATE = "expiry_date"  # Permit/Contract → Date
     SIGNED_ON = "signed_on"  # Contract → Date
+    DECOMMISSIONED_ON = "decommissioned_on"  # Facility → Date
 
-    # Content relationships
-    COVERS_TOPIC = "covers_topic"  # Standard → Topic
-    CONTAINS_CLAUSE = "contains_clause"  # Contract → Clause
-    APPLIES_TO = "applies_to"  # Regulation → Location
+    # ==================== CONTENT & TOPICS ====================
+    COVERS_TOPIC = "covers_topic"  # Document → Topic
+    APPLIES_TO = "applies_to"  # Regulation → Location/Jurisdiction
 
-    # Structural relationships (hierarchy)
-    PART_OF = "part_of"  # Section → Document
-    CONTAINS = "contains"  # Document → Section
+    # ==================== PROVENANCE (entity → chunk) ====================
+    MENTIONED_IN = "mentioned_in"  # Entity → Chunk (all occurrences)
+    DEFINED_IN = "defined_in"  # Entity → Chunk (first occurrence/definition)
+    DOCUMENTED_IN = "documented_in"  # Activity/Decision → Report/Document
 
-    # Provenance (entity → chunk)
-    MENTIONED_IN = "mentioned_in"  # Entity → Chunk
-    DEFINED_IN = "defined_in"  # Entity → Chunk (first occurrence)
 
 
 @dataclass
@@ -68,6 +142,71 @@ class Entity:
 
     Entities are the nodes in the knowledge graph.
     Each entity has a unique ID, type, and normalized value.
+
+    Metadata Guidelines for Compliance Use Case
+    ============================================
+
+    REQUIREMENT (extracted from legal provisions):
+        {
+            "mandatory": bool,  # True if legally required
+            "risk_level": "high|medium|low",  # Severity if missing
+            "jurisdiction": str,  # CZ, EU, international
+            "category": str,  # safety, environmental, operational, etc.
+            "applicable_to": List[str],  # Entity types this applies to
+            "remediation": str,  # How to fix if missing
+            "source_provision": str  # § reference in law
+        }
+
+    CLAUSE (in analyzed contracts/documents):
+        {
+            "clause_type": str,  # indemnification, liability, safety, etc.
+            "page": int,
+            "section": str,
+            "risk_level": "high|medium|low",
+            "standard": bool,  # True if standard template clause
+            "reviewed_by_human": bool
+        }
+
+    ORGANIZATION:
+        {
+            "org_type": "authority|operator|research|commercial",
+            "jurisdiction": str,  # CZ, EU, international
+            "acronym": str,  # SÚJB, IAEA, etc.
+            "regulatory_role": bool  # True if regulatory authority
+        }
+
+    DOSE_LIMIT:
+        {
+            "value": float,  # Numeric value
+            "unit": str,  # mSv, Gy, etc.
+            "period": str,  # year, hour, single event
+            "category": str,  # worker_A, worker_B, public, etc.
+            "source_provision": str  # § reference
+        }
+
+    ISOTOPE:
+        {
+            "element": str,  # uranium, plutonium, cesium
+            "mass_number": int,  # 235, 239, 137
+            "enrichment_percent": float,  # For fuel
+            "half_life_years": float
+        }
+
+    PERMIT:
+        {
+            "stage": int,  # §9 stage number (1-5)
+            "type": str,  # siting, construction, commissioning, operation, decommissioning
+            "paragraph": str,  # § reference
+            "requires_documentation": List[str]  # Required supporting documents
+        }
+
+    LEGAL_PROVISION:
+        {
+            "paragraph": str,  # § number
+            "article": str,  # Article number (EU directives)
+            "parent_regulation": str,  # Parent law/regulation ID
+            "text": str  # Full text of provision
+        }
     """
 
     id: str  # Unique identifier (auto-generated)
@@ -84,7 +223,7 @@ class Entity:
     document_id: Optional[str] = None
     section_path: Optional[str] = None
 
-    # Type-specific metadata
+    # Type-specific metadata (see docstring for guidelines)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     # Extraction metadata
@@ -135,6 +274,57 @@ class Relationship:
 
     Relationships are the edges in the knowledge graph.
     Each relationship has a source entity, target entity, and type.
+
+    Properties Guidelines for Compliance Use Case
+    ==============================================
+
+    COMPLIES_WITH (Clause → Requirement):
+        {
+            "compliance_status": "full|partial|non_compliant",
+            "confidence": float,  # LLM confidence in assessment
+            "gaps": List[str],  # What's missing if partial
+            "evidence_citation": str,  # Quote from clause
+            "reasoning": str,  # Legal reasoning chain
+            "reviewed_by_human": bool,
+            "review_date": str  # ISO date
+        }
+
+    CONTRADICTS (Clause → Requirement):
+        {
+            "severity": "critical|high|medium|low",
+            "reason": str,  # Why it contradicts
+            "recommended_action": str,
+            "legal_risk": str  # Description of legal risk
+        }
+
+    SPECIFIES_REQUIREMENT (Regulation/Provision → Requirement):
+        {
+            "extraction_confidence": float,
+            "requirement_text": str,  # Original text from regulation
+            "interpretation_notes": str  # Any clarifications
+        }
+
+    IMPLEMENTS (Decree → Law):
+        {
+            "implementing_paragraph": str,  # § in decree
+            "implemented_paragraph": str,  # § in parent law
+            "effective_date": str  # ISO date
+        }
+
+    SUPERVISES (Authority → Facility):
+        {
+            "supervision_type": "continuous|periodic|event_based",
+            "frequency": str,  # "quarterly", "annually", etc.
+            "scope": str  # What aspects are supervised
+        }
+
+    GRANTED_BY (Permit → Authority):
+        {
+            "grant_date": str,  # ISO date
+            "permit_number": str,
+            "validity_period": str,  # Duration or expiry date
+            "conditions_count": int  # Number of license conditions
+        }
     """
 
     id: str  # Unique identifier (auto-generated)
@@ -147,7 +337,7 @@ class Relationship:
     source_chunk_id: str  # Chunk where relationship was found
     evidence_text: str  # Supporting text snippet
 
-    # Relationship-specific properties
+    # Relationship-specific properties (see docstring for guidelines)
     properties: Dict[str, Any] = field(default_factory=dict)
 
     # Extraction metadata

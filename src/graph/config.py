@@ -5,10 +5,10 @@ Defines settings for entity extraction, relationship extraction,
 graph storage backends, and integration with the RAG pipeline.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Set, Optional
-from enum import Enum
 import os
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import List, Optional, Set
 
 from .models import EntityType, RelationshipType
 
@@ -30,15 +30,45 @@ class EntityExtractionConfig:
     llm_model: str = "gpt-4o-mini"  # Fast, cost-effective for extraction
     temperature: float = 0.0  # Deterministic extraction
 
-    # Enabled entity types
+    # Enabled entity types (all 30 types for comprehensive extraction)
     enabled_entity_types: Set[EntityType] = field(
         default_factory=lambda: {
+            # CORE ENTITIES
             EntityType.STANDARD,
             EntityType.ORGANIZATION,
             EntityType.DATE,
             EntityType.CLAUSE,
             EntityType.TOPIC,
+            EntityType.PERSON,
+            EntityType.LOCATION,
+            EntityType.CONTRACT,
+            # REGULATORY HIERARCHY
             EntityType.REGULATION,
+            EntityType.DECREE,
+            EntityType.DIRECTIVE,
+            EntityType.TREATY,
+            EntityType.LEGAL_PROVISION,
+            EntityType.REQUIREMENT,
+            # AUTHORIZATION & COMPLIANCE
+            EntityType.PERMIT,
+            EntityType.LICENSE_CONDITION,
+            # NUCLEAR TECHNICAL ENTITIES
+            EntityType.REACTOR,
+            EntityType.FACILITY,
+            EntityType.SYSTEM,
+            EntityType.SAFETY_FUNCTION,
+            EntityType.FUEL_TYPE,
+            EntityType.ISOTOPE,
+            EntityType.RADIATION_SOURCE,
+            EntityType.WASTE_CATEGORY,
+            EntityType.DOSE_LIMIT,
+            # EVENTS & PROCESSES
+            EntityType.INCIDENT,
+            EntityType.EMERGENCY_CLASSIFICATION,
+            EntityType.INSPECTION,
+            EntityType.DECOMMISSIONING_PHASE,
+            # LIABILITY & INSURANCE
+            EntityType.LIABILITY_REGIME,
         }
     )
 
@@ -67,16 +97,58 @@ class RelationshipExtractionConfig:
     llm_model: str = "gpt-4o-mini"
     temperature: float = 0.0
 
-    # Enabled relationship types
+    # Enabled relationship types (all 40 types for comprehensive extraction)
     enabled_relationship_types: Set[RelationshipType] = field(
         default_factory=lambda: {
+            # COMPLIANCE CORE
+            RelationshipType.COMPLIES_WITH,
+            RelationshipType.CONTRADICTS,
+            RelationshipType.PARTIALLY_SATISFIES,
+            RelationshipType.SPECIFIES_REQUIREMENT,
+            RelationshipType.REQUIRES_CLAUSE,
+            # REGULATORY HIERARCHY
+            RelationshipType.IMPLEMENTS,
+            RelationshipType.TRANSPOSES,
             RelationshipType.SUPERSEDED_BY,
             RelationshipType.SUPERSEDES,
-            RelationshipType.REFERENCES,
-            RelationshipType.ISSUED_BY,
-            RelationshipType.EFFECTIVE_DATE,
-            RelationshipType.COVERS_TOPIC,
+            RelationshipType.AMENDS,
+            # DOCUMENT STRUCTURE
             RelationshipType.CONTAINS_CLAUSE,
+            RelationshipType.CONTAINS_PROVISION,
+            RelationshipType.CONTAINS,
+            RelationshipType.PART_OF,
+            # CITATIONS & REFERENCES
+            RelationshipType.REFERENCES,
+            RelationshipType.REFERENCED_BY,
+            RelationshipType.CITES_PROVISION,
+            RelationshipType.BASED_ON,
+            # AUTHORIZATION & ENFORCEMENT
+            RelationshipType.ISSUED_BY,
+            RelationshipType.GRANTED_BY,
+            RelationshipType.ENFORCED_BY,
+            RelationshipType.SUBJECT_TO_INSPECTION,
+            RelationshipType.SUPERVISES,
+            # NUCLEAR TECHNICAL RELATIONSHIPS
+            RelationshipType.REGULATED_BY,
+            RelationshipType.OPERATED_BY,
+            RelationshipType.HAS_SYSTEM,
+            RelationshipType.PERFORMS_FUNCTION,
+            RelationshipType.USES_FUEL,
+            RelationshipType.CONTAINS_ISOTOPE,
+            RelationshipType.PRODUCES_WASTE,
+            RelationshipType.HAS_DOSE_LIMIT,
+            # TEMPORAL RELATIONSHIPS
+            RelationshipType.EFFECTIVE_DATE,
+            RelationshipType.EXPIRY_DATE,
+            RelationshipType.SIGNED_ON,
+            RelationshipType.DECOMMISSIONED_ON,
+            # CONTENT & TOPICS
+            RelationshipType.COVERS_TOPIC,
+            RelationshipType.APPLIES_TO,
+            # PROVENANCE
+            RelationshipType.MENTIONED_IN,
+            RelationshipType.DEFINED_IN,
+            RelationshipType.DOCUMENTED_IN,
         }
     )
 
@@ -130,6 +202,82 @@ class Neo4jConfig:
 
 
 @dataclass
+class EntityDeduplicationConfig:
+    """
+    Configuration for entity deduplication during indexing.
+
+    Three-layer deduplication strategy:
+    - Layer 1 (Exact): Fast exact match on (type, normalized_value) - <1ms
+    - Layer 2 (Semantic): Embedding similarity for variants - 50-200ms
+    - Layer 3 (Acronym): Acronym expansion + fuzzy match - 100-500ms
+    """
+
+    # Master enable/disable
+    enabled: bool = True
+
+    # Layer 1: Exact match (always enabled if master enabled)
+    exact_match_enabled: bool = True
+
+    # Layer 2: Embedding-based similarity
+    use_embeddings: bool = False
+    embedding_model: str = "text-embedding-3-large"
+    similarity_threshold: float = 0.90  # Cosine similarity threshold
+    embedding_batch_size: int = 100
+    cache_embeddings: bool = True
+
+    # Layer 3: Acronym expansion
+    use_acronym_expansion: bool = False
+    acronym_fuzzy_threshold: float = 0.85  # Fuzzy match threshold
+    custom_acronyms: dict = field(default_factory=dict)  # Custom acronym mappings
+
+    # Neo4j-specific
+    apoc_enabled: bool = True  # Try APOC, fallback to Cypher
+    create_uniqueness_constraints: bool = True
+
+    def __post_init__(self) -> None:
+        """Validate configuration values after initialization."""
+        if not (0.0 <= self.similarity_threshold <= 1.0):
+            raise ValueError(
+                f"similarity_threshold must be in [0.0, 1.0], got {self.similarity_threshold}"
+            )
+
+        if not (0.0 <= self.acronym_fuzzy_threshold <= 1.0):
+            raise ValueError(
+                f"acronym_fuzzy_threshold must be in [0.0, 1.0], got {self.acronym_fuzzy_threshold}"
+            )
+
+        if self.embedding_batch_size <= 0:
+            raise ValueError(
+                f"embedding_batch_size must be positive, got {self.embedding_batch_size}"
+            )
+
+    @classmethod
+    def from_env(cls) -> "EntityDeduplicationConfig":
+        """Load deduplication config from environment variables."""
+        import os
+
+        custom_acronyms = {}
+        acronym_str = os.getenv("KG_DEDUP_CUSTOM_ACRONYMS", "")
+        if acronym_str:
+            # Parse format: "ACRO1:expansion1,ACRO2:expansion2"
+            for pair in acronym_str.split(","):
+                if ":" in pair:
+                    acro, expansion = pair.split(":", 1)
+                    custom_acronyms[acro.strip()] = expansion.strip()
+
+        return cls(
+            enabled=os.getenv("KG_DEDUPLICATE_ENTITIES", "true").lower() == "true",
+            use_embeddings=os.getenv("KG_DEDUP_USE_EMBEDDINGS", "false").lower() == "true",
+            similarity_threshold=float(os.getenv("KG_DEDUP_SIMILARITY_THRESHOLD", "0.90")),
+            use_acronym_expansion=os.getenv("KG_DEDUP_USE_ACRONYM_EXPANSION", "false").lower()
+            == "true",
+            acronym_fuzzy_threshold=float(os.getenv("KG_DEDUP_ACRONYM_FUZZY_THRESHOLD", "0.85")),
+            custom_acronyms=custom_acronyms,
+            apoc_enabled=os.getenv("KG_DEDUP_APOC_ENABLED", "true").lower() == "true",
+        )
+
+
+@dataclass
 class GraphStorageConfig:
     """Configuration for graph storage."""
 
@@ -145,10 +293,13 @@ class GraphStorageConfig:
     export_json: bool = True  # Export to JSON after construction
     export_path: str = "./data/graphs/knowledge_graph.json"
 
-    # Graph optimization
+    # Graph optimization (DEPRECATED - use deduplication_config)
     deduplicate_entities: bool = True  # Merge duplicate entities
     merge_similar_entities: bool = False  # Merge similar entities (expensive)
     similarity_threshold: float = 0.9  # For entity merging
+
+    # Deduplication configuration (NEW)
+    deduplication_config: Optional["EntityDeduplicationConfig"] = None
 
     # Provenance
     track_provenance: bool = True  # Track chunk sources for entities
@@ -320,6 +471,7 @@ def get_development_config() -> KnowledgeGraphConfig:
                 EntityType.STANDARD,
                 EntityType.ORGANIZATION,
                 EntityType.TOPIC,
+                EntityType.LOCATION,  # Added for dev testing
             },
         ),
         relationship_extraction=RelationshipExtractionConfig(
@@ -330,6 +482,8 @@ def get_development_config() -> KnowledgeGraphConfig:
                 RelationshipType.SUPERSEDED_BY,
                 RelationshipType.REFERENCES,
                 RelationshipType.COVERS_TOPIC,
+                RelationshipType.MENTIONED_IN,  # Added for dev testing
+                RelationshipType.APPLIES_TO,  # Added for dev testing
             },
         ),
         verbose=True,

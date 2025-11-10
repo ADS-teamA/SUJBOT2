@@ -171,25 +171,48 @@ class EntityExtractor:
         return entities
 
     def _build_extraction_prompt(self, chunk_content: str, chunk_metadata: Dict[str, Any]) -> str:
-        """Build entity extraction prompt for LLM."""
-        # Enabled entity types
+        """Build entity extraction prompt for LLM (loads from template file)."""
+        from pathlib import Path
+
+        # Load template from file
+        prompts_dir = Path(__file__).parent.parent.parent / "prompts"
+        template_path = prompts_dir / "entity_extraction.txt"
+
+        try:
+            template = template_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            logger.error(f"Entity extraction template not found: {template_path}")
+            # Fallback to inline prompt if file missing
+            logger.warning("Using fallback inline prompt")
+            return self._build_extraction_prompt_fallback(chunk_content, chunk_metadata)
+
+        # Prepare substitution variables
+        entity_types_str = ", ".join([et.value for et in self.config.enabled_entity_types])
+
+        # Few-shot examples
+        few_shot = self._get_few_shot_examples() if self.config.include_examples else ""
+
+        # Substitute placeholders
+        prompt = template.format(
+            entity_types_str=entity_types_str,
+            chunk_content=chunk_content,
+            section_path=chunk_metadata.get('section_path', 'N/A'),
+            document_id=chunk_metadata.get('document_id', 'N/A'),
+            min_confidence=self.config.min_confidence,
+            max_entities_per_chunk=self.config.max_entities_per_chunk,
+            few_shot_examples=few_shot
+        )
+
+        return prompt
+
+    def _build_extraction_prompt_fallback(self, chunk_content: str, chunk_metadata: Dict[str, Any]) -> str:
+        """Fallback inline prompt if template file missing."""
         entity_types_str = ", ".join([et.value for et in self.config.enabled_entity_types])
 
         prompt = f"""Extract structured entities from the following legal document text.
 
 **Task**: Identify and extract all entities of the following types:
 {entity_types_str}
-
-**Entity Types**:
-- standard: Standards like "GRI 306", "ISO 14001", "GRI 303: Water and Effluents 2018"
-- organization: Organizations like "GSSB", "Global Reporting Initiative", "ISO"
-- date: Dates like "2018-07-01", "1 July 2018", "July 2018"
-- clause: Specific clauses like "Disclosure 306-3", "Section 8.2", "Requirement 303-1-a"
-- topic: Topics like "waste management", "water", "effluents", "emissions"
-- regulation: Regulations like "GDPR", "CCPA", "Basel Convention"
-- contract: Contracts like "Master Service Agreement", "NDA"
-- person: People like "Jane Smith", "Dr. John Doe"
-- location: Locations like "European Union", "California", "United States"
 
 **Document Text**:
 {chunk_content}
@@ -198,48 +221,14 @@ class EntityExtractor:
 - Section: {chunk_metadata.get('section_path', 'N/A')}
 - Document ID: {chunk_metadata.get('document_id', 'N/A')}
 
-**Output Format** (JSON array):
-[
-  {{
-    "type": "standard",
-    "value": "GRI 306: Effluents and Waste 2016",
-    "normalized_value": "GRI 306",
-    "confidence": 0.95,
-    "context": "This Standard supersedes GRI 306: Effluents and Waste 2016."
-  }},
-  {{
-    "type": "date",
-    "value": "1 July 2018",
-    "normalized_value": "2018-07-01",
-    "confidence": 0.9,
-    "context": "It includes revisions effective on 1 July 2018."
-  }}
-]
-
 **Instructions**:
 1. Extract ALL entities of the specified types
-2. For each entity, provide:
-   - type: Entity type (one of the types above)
-   - value: Original text as it appears in the document
-   - normalized_value: Standardized form (e.g., "GRI 306" for "GRI 306: Effluents and Waste 2016")
-   - confidence: Extraction confidence (0.0-1.0)
-   - context: Brief surrounding context (max 150 chars)
-3. Normalize entity values:
-   - Standards: Extract base identifier (e.g., "GRI 306")
-   - Dates: Convert to ISO format (YYYY-MM-DD)
-   - Organizations: Use official name
-4. Only include entities with confidence >= {self.config.min_confidence}
-5. Limit to {self.config.max_entities_per_chunk} entities
-6. Return valid JSON array
+2. Only include entities with confidence >= {self.config.min_confidence}
+3. Limit to {self.config.max_entities_per_chunk} entities
+4. Return valid JSON array
 
+**Output** (JSON array only, no other text):
 """
-
-        # Add few-shot examples if enabled
-        if self.config.include_examples:
-            prompt += self._get_few_shot_examples()
-
-        prompt += "\n**Output** (JSON array only, no other text):\n"
-
         return prompt
 
     def _get_few_shot_examples(self) -> str:
@@ -269,18 +258,30 @@ class EntityExtractor:
         for attempt in range(max_retries):
             try:
                 if self.config.llm_provider == "openai":
-                    response = self.client.chat.completions.create(
-                        model=self.config.llm_model,
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are an expert at extracting structured entities from legal documents. Always return valid JSON.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        temperature=self.config.temperature,
-                        max_tokens=4000,
-                    )
+                    # Prepare base parameters
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": "You are an expert at extracting structured entities from legal documents. Always return valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ]
+
+                    params = {
+                        "model": self.config.llm_model,
+                        "messages": messages,
+                    }
+
+                    # GPT-5/o-series models use different parameters
+                    if self.config.llm_model.startswith(("gpt-5", "o1-", "o3-")):
+                        params["max_completion_tokens"] = 4000
+                        # Note: GPT-5 only supports temperature=1.0 (default), don't set it
+                    else:
+                        # GPT-4 and earlier
+                        params["max_tokens"] = 4000
+                        params["temperature"] = self.config.temperature
+
+                    response = self.client.chat.completions.create(**params)
 
                     # Track cost
                     self.tracker.track_llm(
