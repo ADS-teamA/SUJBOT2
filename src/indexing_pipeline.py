@@ -260,9 +260,10 @@ class IndexingConfig:
         # Initialize clustering config if enabled
         if self.enable_semantic_clustering and self.clustering_config is None:
             try:
-                from src.config import ClusteringConfig
+                from src.config import ClusteringConfig, get_config
 
-                self.clustering_config = ClusteringConfig.from_env()
+                root_config = get_config()
+                self.clustering_config = ClusteringConfig.from_config(root_config.clustering)
             except ImportError:
                 logger.warning("Semantic clustering enabled but clustering module not available")
 
@@ -283,27 +284,24 @@ class IndexingConfig:
         Returns:
             IndexingConfig instance loaded from environment
         """
-        # Load speed mode from env
-        speed_mode = os.getenv("SPEED_MODE", "fast")
+        # Load validated config from config.json
+        from src.config import get_config
+        root_config = get_config()
 
-        # Create config with sub-configs loaded from env
+        # Create config with sub-configs loaded from config.json
         config = cls(
-            speed_mode=speed_mode,
-            extraction_config=ExtractionConfig.from_env(),
-            summarization_config=SummarizationConfig.from_env(),
-            chunking_config=ChunkingConfig.from_env(),
-            embedding_config=EmbeddingConfig.from_env(),
-            enable_semantic_clustering=os.getenv("ENABLE_SEMANTIC_CLUSTERING", "false").lower() == "true",
-            enable_knowledge_graph=os.getenv("ENABLE_KNOWLEDGE_GRAPH", "true").lower() == "true",
-            enable_hybrid_search=os.getenv("ENABLE_HYBRID_SEARCH", "true").lower() == "true",
-            enable_duplicate_detection=(
-                os.getenv("ENABLE_DUPLICATE_DETECTION", "true").lower() == "true"
-            ),
-            duplicate_similarity_threshold=float(
-                os.getenv("DUPLICATE_SIMILARITY_THRESHOLD", "0.98")
-            ),
-            duplicate_sample_pages=int(os.getenv("DUPLICATE_SAMPLE_PAGES", "1")),
-            vector_store_path=os.getenv("VECTOR_STORE_PATH", "vector_db"),
+            speed_mode=root_config.summarization.speed_mode,
+            extraction_config=ExtractionConfig.from_config(root_config.extraction),
+            summarization_config=SummarizationConfig.from_config(root_config.summarization),
+            chunking_config=ChunkingConfig.from_config(root_config.chunking),
+            embedding_config=EmbeddingConfig.from_config(root_config.embedding),
+            enable_semantic_clustering=root_config.clustering.enable_labels,
+            enable_knowledge_graph=root_config.knowledge_graph.enable,
+            enable_hybrid_search=root_config.hybrid_search.enable,
+            enable_duplicate_detection=True,  # Always enabled
+            duplicate_similarity_threshold=0.98,  # Default value
+            duplicate_sample_pages=1,  # Default value
+            vector_store_path=root_config.agent.vector_store_path,
             **overrides,
         )
 

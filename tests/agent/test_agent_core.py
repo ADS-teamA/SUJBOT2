@@ -21,6 +21,12 @@ def mock_config():
     config.max_tokens = 4096
     config.temperature = 0.3
     config.anthropic_api_key = "sk-ant-test-key"
+    config.openai_api_key = ""
+    config.google_api_key = ""
+    config.enable_prompt_caching = True
+    config.enable_context_management = True
+    config.context_management_trigger = 50000
+    config.context_management_keep = 3
     config.system_prompt = "You are a helpful assistant."
     config.debug_mode = False
     config.cli_config = Mock()

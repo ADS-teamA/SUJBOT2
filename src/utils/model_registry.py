@@ -276,7 +276,12 @@ class ModelRegistry:
         elif "BAAI/" in resolved or "intfloat/" in resolved or "sentence-transformers/" in resolved:
             return "huggingface"
         else:
-            return "unknown"
+            # Cannot auto-detect provider - user must specify explicitly
+            raise ValueError(
+                f"Unable to auto-detect provider for model '{resolved}' (type: {model_type}).\n"
+                f"Supported providers: anthropic, openai, google, voyage, huggingface\n"
+                f"Please set '{model_type}_provider' explicitly in config.json"
+            )
 
     @classmethod
     def list_models(cls, model_type: str = "all") -> Dict[str, str]:

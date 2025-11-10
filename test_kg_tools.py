@@ -2,8 +2,19 @@
 Test KG tools with benchmark database.
 """
 
+import sys
 import logging
 from pathlib import Path
+
+# CRITICAL: Validate config.json before doing anything else
+try:
+    from src.config import get_config
+    _config = get_config()
+except (FileNotFoundError, ValueError) as e:
+    print(f"\n❌ ERROR: Invalid or missing config.json!")
+    print(f"\n{e}")
+    print(f"\nPlease create config.json from config.json.example")
+    sys.exit(1)
 
 from src.agent.tools.tier2_advanced import GraphSearchTool, BrowseEntitiesTool
 

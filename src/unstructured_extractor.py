@@ -873,14 +873,11 @@ class UnstructuredExtractor:
         # PHASE 2: Generate summaries (hierarchical document summary from section summaries)
         if self.config.generate_summaries:
             from src.summary_generator import SummaryGenerator
-            from src.config import SummarizationConfig
+            from src.config import SummarizationConfig, get_config
 
-            # Create summarization config
-            summary_config = SummarizationConfig(
-                model=self.config.summary_model,
-                max_chars=self.config.summary_max_chars,
-                style=self.config.summary_style,
-            )
+            # Load summarization config from config.json
+            root_config = get_config()
+            summary_config = SummarizationConfig.from_config(root_config.summarization)
 
             summary_gen = SummaryGenerator(config=summary_config)
 

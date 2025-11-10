@@ -378,3 +378,60 @@ class AgentConfig:
                     logger.info(f"Using vector store path for knowledge graphs: {default_kg_path}")
 
         return config
+
+    @classmethod
+    def from_config(cls, root_config, **overrides) -> "AgentConfig":
+        """
+        Create config from validated RootConfig (config.json).
+
+        Args:
+            root_config: Validated RootConfig from src.config
+            **overrides: Override specific config values (e.g., from CLI args)
+
+        Returns:
+            AgentConfig instance
+        """
+        from src.config import ModelConfig
+
+        # Get model config for API keys
+        model_config = ModelConfig.from_config(root_config)
+
+        # Detect provider for query expansion model
+        query_expansion_model = root_config.agent.query_expansion_model
+        query_expansion_provider = "openai"
+        if "claude" in query_expansion_model.lower() or "haiku" in query_expansion_model.lower() or "sonnet" in query_expansion_model.lower():
+            query_expansion_provider = "anthropic"
+        elif "gemini" in query_expansion_model.lower():
+            query_expansion_provider = "google"
+
+        tool_config = ToolConfig(
+            query_expansion_provider=query_expansion_provider,
+            query_expansion_model=query_expansion_model,
+        )
+
+        # Create config from JSON
+        config = cls(
+            anthropic_api_key=model_config.anthropic_api_key or "",
+            openai_api_key=model_config.openai_api_key or "",
+            google_api_key=model_config.google_api_key or "",
+            model=root_config.agent.model,
+            max_tokens=root_config.agent.max_tokens or 4096,
+            temperature=root_config.agent.temperature,
+            vector_store_path=Path(root_config.agent.vector_store_path),
+            knowledge_graph_path=Path(root_config.agent.knowledge_graph_path) if root_config.agent.knowledge_graph_path else None,
+            enable_knowledge_graph=root_config.knowledge_graph.enable,
+            enable_tool_validation=root_config.agent.enable_tool_validation,
+            enable_prompt_caching=root_config.agent.enable_prompt_caching,
+            enable_context_management=root_config.agent.enable_context_management,
+            context_management_trigger=root_config.agent.context_management_trigger,
+            context_management_keep=root_config.agent.context_management_keep,
+            debug_mode=root_config.agent.debug_mode,
+            tool_config=tool_config,
+        )
+
+        # Apply overrides (e.g., from CLI args)
+        for key, value in overrides.items():
+            if hasattr(config, key):
+                setattr(config, key, value)
+
+        return config

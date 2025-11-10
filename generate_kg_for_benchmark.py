@@ -5,10 +5,21 @@ Reads already indexed documents from benchmark_dataset/privacy_qa/
 and generates KG using simple backend + KnowledgeGraphPipeline.
 """
 
+import sys
 import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Any
+
+# CRITICAL: Validate config.json before doing anything else
+try:
+    from src.config import get_config
+    _config = get_config()
+except (FileNotFoundError, ValueError) as e:
+    print(f"\n❌ ERROR: Invalid or missing config.json!")
+    print(f"\n{e}")
+    print(f"\nPlease create config.json from config.json.example")
+    sys.exit(1)
 
 from src.graph.kg_pipeline import KnowledgeGraphPipeline
 from src.graph.config import KnowledgeGraphConfig, GraphBackend

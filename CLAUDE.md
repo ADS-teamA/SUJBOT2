@@ -252,23 +252,29 @@ else:
 
 ## 🔧 Configuration
 
-**SSOT (Single Source of Truth): `.env.example`**
+**SSOT (Single Source of Truth): `config.json.example`** (UPDATED 2025-11-10)
 
-All configuration lives in [`.env.example`](.env.example) - DO NOT duplicate config in CLAUDE.md!
+All configuration lives in [`config.json.example`](config.json.example) - DO NOT duplicate config in CLAUDE.md!
+
+**Migration from .env to config.json:**
+- Strict validation - NO fallbacks, NO defaults
+- If any required parameter is missing, application exits with error
+- Hierarchical JSON structure for better organization
 
 **Setup:**
 ```bash
-cp .env.example .env
-# Edit .env with your API keys and settings
+cp config.json.example config.json
+# Edit config.json with your API keys and settings
+# ALL required fields must be filled in
 ```
 
-**Key decisions** (see `.env.example` for all options):
-- **Required:** `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
-- **Embedding:** `EMBEDDING_MODEL=bge-m3` (macOS M1/M2/M3, free) or `text-embedding-3-large` (Windows, cloud)
-- **Knowledge Graph:** `KG_BACKEND=neo4j` (production) or `simple` (dev/testing)
-- **Speed:** `SPEED_MODE=fast` (default) or `eco` (50% cheaper, overnight jobs)
+**Key decisions** (see `config.json.example` for all options):
+- **Required:** `api_keys.anthropic_api_key` or `api_keys.openai_api_key`
+- **Embedding:** `models.embedding_model="bge-m3"` (macOS M1/M2/M3, free) or `"text-embedding-3-large"` (Windows, cloud)
+- **Knowledge Graph:** `knowledge_graph.backend="neo4j"` (production) or `"simple"` (dev/testing)
+- **Speed:** `summarization.speed_mode="fast"` (default) or `"eco"` (50% cheaper, overnight jobs)
 
-**For detailed config docs, read `.env.example` inline comments.**
+**For detailed config docs, read `config.json.example` inline comments.**
 
 ---
 

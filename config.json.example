@@ -1,0 +1,233 @@
+{
+  "_comment": "Copy this file to config.json and fill in your values. API keys are loaded from .env file (see .env.example)",
+  "models": {
+    "llm_model": "gpt-4o-mini",
+    "llm_provider": null,
+    "embedding_model": "text-embedding-3-large",
+    "embedding_provider": "openai"
+  },
+  "extraction": {
+    "enable_ocr": true,
+    "ocr_engine": "tesseract",
+    "ocr_language": [
+      "ces",
+      "eng"
+    ],
+    "ocr_recognition": "accurate",
+    "extract_tables": true,
+    "table_mode": "ACCURATE",
+    "extract_hierarchy": true,
+    "enable_smart_hierarchy": true,
+    "hierarchy_tolerance": 0.8,
+    "filter_rotated_text": true,
+    "rotation_min_angle": 25.0,
+    "rotation_max_angle": 65.0,
+    "generate_summaries": true,
+    "summary_model": null,
+    "summary_max_chars": 150,
+    "summary_style": "generic",
+    "use_batch_api": true,
+    "batch_api_poll_interval": 5,
+    "batch_api_timeout": 43200,
+    "generate_markdown": true,
+    "generate_json": true,
+    "layout_model": "EGRET_XLARGE"
+  },
+  "unstructured": {
+    "strategy": "hi_res",
+    "model": "yolox",
+    "languages": [
+      "ces",
+      "eng"
+    ],
+    "detect_language_per_element": true,
+    "infer_table_structure": true,
+    "extract_images": false,
+    "include_page_breaks": true
+  },
+  "hierarchy_detection": {
+    "enable_generic_hierarchy": true,
+    "hierarchy_signals": [
+      "type",
+      "font_size",
+      "spacing",
+      "numbering",
+      "parent_id"
+    ],
+    "clustering_eps": 0.15,
+    "clustering_min_samples": 2
+  },
+  "summarization": {
+    "speed_mode": "fast",
+    "temperature": 0.3,
+    "max_tokens": 100,
+    "retry_on_exceed": true,
+    "max_retries": 3,
+    "max_workers": 20,
+    "min_text_length": 50,
+    "enable_batching": false,
+    "batch_size": 8
+  },
+  "context_generation": {
+    "enable_contextual": true,
+    "temperature": 0.3,
+    "max_tokens": 150,
+    "include_surrounding": true,
+    "num_surrounding_chunks": 1,
+    "fallback_to_basic": true,
+    "batch_size": 20,
+    "max_workers": 10,
+    "use_batch_api": true,
+    "batch_api_poll_interval": 5,
+    "batch_api_timeout": 43200
+  },
+  "chunking": {
+    "max_tokens": 512,
+    "tokenizer_model": "text-embedding-3-large",
+    "enable_sac": true
+  },
+  "embedding": {
+    "batch_size": 64,
+    "cache_enabled": true,
+    "cache_size": 1000,
+    "normalize": true
+  },
+  "clustering": {
+    "algorithm": "hdbscan",
+    "n_clusters": null,
+    "min_size": 5,
+    "max_clusters": 50,
+    "min_clusters": 5,
+    "layers": [
+      3
+    ],
+    "enable_labels": true,
+    "enable_visualization": false,
+    "visualization_dir": "output/clusters"
+  },
+  "hybrid_search": {
+    "enable": true,
+    "fusion_k": 60
+  },
+  "knowledge_graph": {
+    "enable": true,
+    "llm_provider": "openai",
+    "llm_model": "gpt-4o-mini",
+    "backend": "simple",
+    "export_path": "./output/graphs/knowledge_graph.json",
+    "verbose": true,
+    "min_entity_confidence": 0.6,
+    "min_relationship_confidence": 0.5,
+    "enable_entity_extraction": true,
+    "enable_relationship_extraction": true,
+    "enable_cross_document_relationships": false,
+    "max_retries": 3,
+    "retry_delay": 1.0,
+    "timeout": 300,
+    "log_path": "./logs/kg_extraction.log"
+  },
+  "entity_extraction": {
+    "temperature": 0.0,
+    "min_confidence": 0.6,
+    "extract_definitions": true,
+    "normalize": true,
+    "batch_size": 20,
+    "max_workers": 10,
+    "cache_results": true,
+    "include_examples": true,
+    "max_per_chunk": 50,
+    "enabled_types": null
+  },
+  "relationship_extraction": {
+    "temperature": 0.0,
+    "min_confidence": 0.5,
+    "extract_evidence": true,
+    "max_evidence_length": 200,
+    "within_chunk": true,
+    "cross_chunk": true,
+    "from_metadata": true,
+    "batch_size": 10,
+    "max_workers": 10,
+    "cache_results": true,
+    "max_per_entity": 100,
+    "enabled_types": null
+  },
+  "neo4j": {
+    "uri": "neo4j+s://YOUR_INSTANCE_ID.databases.neo4j.io",
+    "username": "neo4j",
+    "password": "YOUR_AURA_PASSWORD",
+    "database": "neo4j",
+    "max_connection_lifetime": 3600,
+    "max_connection_pool_size": 50,
+    "connection_timeout": 30,
+    "create_indexes": true,
+    "create_constraints": true
+  },
+  "entity_deduplication": {
+    "enable": true,
+    "use_embeddings": false,
+    "similarity_threshold": 0.9,
+    "use_acronym_expansion": false,
+    "acronym_fuzzy_threshold": 0.85,
+    "custom_acronyms": null,
+    "apoc_enabled": true,
+    "embedding_model": "text-embedding-3-large",
+    "embedding_batch_size": 100,
+    "cache_embeddings": true,
+    "create_constraints": true
+  },
+  "graph_storage": {
+    "backend": "simple",
+    "simple_store_path": "./data/graphs/simple_graph.json",
+    "export_json": true,
+    "export_path": "./data/graphs/knowledge_graph.json",
+    "deduplicate_entities": true,
+    "merge_similar_entities": false,
+    "similarity_threshold": 0.9,
+    "track_provenance": true
+  },
+  "agent": {
+    "model": "claude-haiku-4-5",
+    "max_tokens": 8192,
+    "temperature": 0.3,
+    "enable_tool_validation": true,
+    "debug_mode": false,
+    "vector_store_path": "vector_db",
+    "knowledge_graph_path": "output/knowledge_graph.json",
+    "enable_prompt_caching": true,
+    "enable_context_management": true,
+    "context_management_trigger": 50000,
+    "context_management_keep": 3,
+    "query_expansion_model": "gpt-4o-mini"
+  },
+  "agent_tools": {
+    "default_k": 6,
+    "enable_reranking": true,
+    "reranker_candidates": 50,
+    "reranker_model": "bge-reranker-large",
+    "enable_graph_boost": true,
+    "graph_boost_weight": 0.3,
+    "max_document_compare": 3,
+    "compliance_threshold": 0.7,
+    "context_window": 2,
+    "lazy_load_reranker": false,
+    "lazy_load_graph": true,
+    "cache_embeddings": true
+  },
+  "cli": {
+    "show_citations": true,
+    "citation_format": "inline",
+    "show_tool_calls": true,
+    "show_timing": true,
+    "enable_streaming": true,
+    "save_history": true,
+    "history_file": ".agent_history",
+    "max_history_items": 1000
+  },
+  "pipeline": {
+    "log_level": "INFO",
+    "log_file": "logs/pipeline.log",
+    "data_dir": "data",
+    "output_dir": "output"
+  }
+}

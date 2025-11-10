@@ -7,6 +7,17 @@ Checks FAISS indexes, BM25 indexes, and unified knowledge graph for completeness
 
 import sys
 from pathlib import Path
+
+# CRITICAL: Validate config.json before doing anything else
+try:
+    from src.config import get_config
+    _config = get_config()
+except (FileNotFoundError, ValueError) as e:
+    print(f"\n❌ ERROR: Invalid or missing config.json!")
+    print(f"\n{e}")
+    print(f"\nPlease create config.json from config.json.example")
+    sys.exit(1)
+
 from src.hybrid_search import HybridVectorStore
 from src.graph.models import KnowledgeGraph
 from collections import Counter
