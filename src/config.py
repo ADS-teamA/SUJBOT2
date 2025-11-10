@@ -258,9 +258,6 @@ class ExtractionConfig:
     generate_markdown: bool
     generate_json: bool
 
-    # Performance
-    layout_model: str
-
     @classmethod
     def from_config(cls, extraction_config: ExtractionSchema) -> "ExtractionConfig":
         """
@@ -294,7 +291,6 @@ class ExtractionConfig:
             batch_api_timeout=extraction_config.batch_api_timeout,
             generate_markdown=extraction_config.generate_markdown,
             generate_json=extraction_config.generate_json,
-            layout_model=extraction_config.layout_model,
         )
 
 
@@ -788,7 +784,6 @@ if __name__ == "__main__":
         print(f"  OCR: {config.extraction.enable_ocr}")
         print(f"  Smart Hierarchy: {config.extraction.enable_smart_hierarchy}")
         print(f"  Hierarchy Tolerance: {config.extraction.hierarchy_tolerance}")
-        print(f"  Layout Model: {config.extraction.layout_model}")
         print()
 
         print("PHASE 2: Summarization")

@@ -30,8 +30,7 @@
     "batch_api_poll_interval": 5,
     "batch_api_timeout": 43200,
     "generate_markdown": true,
-    "generate_json": true,
-    "layout_model": "EGRET_XLARGE"
+    "generate_json": true
   },
   "unstructured": {
     "strategy": "hi_res",
