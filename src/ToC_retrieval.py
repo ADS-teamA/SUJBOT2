@@ -1,18 +1,42 @@
+"""
+ToC Retrieval Pipeline - LLM-based Table of Contents Extraction
+
+This module provides an ALTERNATIVE extraction method for documents where:
+1. PDF embedded outline/bookmarks are missing (Tier 1)
+2. Visual ToC pages exist but aren't in metadata (Tier 2)
+
+WHEN TO USE:
+- Use this for documents where unstructured_extractor.py fails to extract structure
+- Cost: ~$0.003 per document (Gemini 2.5 Flash)
+- Supports: PDF (with potential for .tex, .txt extension)
+
+INTEGRATION POINT:
+- This is NOT part of the main indexing pipeline (run_pipeline.py)
+- Use as a pre-processing step or fallback for structure extraction
+- Output HierarchyNode can be converted to DoclingDocument format
+
+STATUS CODES:
+- "TIER_1_SUCCESS": PDF has embedded outline/bookmarks
+- "TIER_2_SUCCESS": TOC found via LLM heuristic analysis
+- "TIER_2_FAILURE": Heuristic failed to find TOC header
+- "ERROR_DOC_OPEN": Failed to open PDF document
+- "ERROR_AGENT_INIT": LLM agent initialization failed
+"""
+
 # ==============================================================================
 # 0. ZÁKLADNÍ DEFINICE, IMPORTY A POMOCNÉ FUNKCE
 # ==============================================================================
 import os
-import fitz
 import re
+import json
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any, Type
 
+import fitz
 import google.generativeai as genai
-import os
-import json
 from pydantic import BaseModel, Field
-from typing import List, Type, Tuple
-from dotenv import load_dotenv, dotenv_values
+
+from src.config import Config
 
 
 
@@ -33,9 +57,9 @@ class BaseDocumentParser(ABC):
     def get_document_type(self) -> str:
         pass
 
-    # Všimněte si, že vracíme DVOJICI: (List nadpisů, Surový OCR text)
+    # Všimněte si, že vracíme TROJICI: (List nadpisů, Surový OCR text, celková_cena)
     @abstractmethod
-    def extract_structured_headings(self) -> Tuple[List[HeadingData], Optional[str]]:
+    def extract_structured_headings(self) -> Tuple[List[HeadingData], Optional[str], float]:
         pass
 
 class HierarchyNode:
@@ -83,32 +107,9 @@ class HierarchyBuilder:
 
         return root
 
-# --- Schémata pro Pydantic (Vynucení JSON výstupu) ---
-
-class FirstChapterSchema(BaseModel):
-    """Schéma pro nalezení první kapitoly."""
-    first_chapter_page: int = Field(
-        description="Číslo stránky (1-based), kde začíná první hlavní kapitola/sekce (např. '1. Úvod' nebo 'Kapitola I')."
-    )
-
-class HeadingItem(BaseModel):
-    """Schéma pro jednu položku v hierarchii."""
-    title: str = Field(description="Čistý název kapitoly nebo sekce.")
-    level: int = Field(description="Odvozená hierarchická úroveň (1 pro nejvyšší, 2 pro podsekci atd.).")
-    page_number: int = Field(description="Číslo stránky, kde tato sekce začíná.")
-
-class FullStructureSchema(BaseModel):
-    """Schéma pro kompletní hierarchii dokumentu."""
-    headings: List[HeadingItem] = Field(
-        description="Kompletní seznam všech hierarchických položek z obsahu."
-    )
-
-# --- Třída Agenta ---
-
-# --- Manuální Definice Schémat (Jednoduché Slovníky) ---
+# --- Manuální Definice Schémat pro Gemini API ---
 
 # Schéma pro Fázi 1 (Hledání první kapitoly)
-# Toto je zjednodušené schéma bez 'title' a '$defs'
 FIRST_CHAPTER_SCHEMA_DICT = {
     "type": "object",
     "properties": {
@@ -151,49 +152,16 @@ FULL_STRUCTURE_SCHEMA_DICT = {
     "required": ["headings"]
 }
 
-
-# --- Třída Agenta (Upravená) ---
-
-FIRST_CHAPTER_SCHEMA_DICT = {
-    "type": "object",
-    "properties": {
-        "first_chapter_page": {
-            "type": "integer",
-            "description": "Číslo stránky (1-based), kde začíná první hlavní kapitola/sekce."
-        }
-    },
-    "required": ["first_chapter_page"]
-}
-
-FULL_STRUCTURE_SCHEMA_DICT = {
-    "type": "object",
-    "properties": {
-        "headings": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "level": {"type": "integer"},
-                    "page_number": {"type": "integer"}
-                },
-                "required": ["title", "level", "page_number"]
-            }
-        }
-    },
-    "required": ["headings"]
-}
-
-# --- Třída Agenta (OPRAVENÁ) ---
-
 class LLMAgent:
     """
     Zapouzdřuje volání LLM a nyní také sleduje náklady na tokeny.
+
+    NOTE: Pricing accurate as of 2025-01. Update according to https://ai.google.dev/pricing
     """
-    
+
     MODEL_PRICING = {
         "models/gemini-2.5-flash": {
-            "input": 0.30, 
+            "input": 0.30,  # USD per 1M tokens
             "output": 0.60
         },
         "default": {
@@ -203,24 +171,22 @@ class LLMAgent:
     }
 
     def __init__(self):
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        dotenv_path = os.path.join(script_dir, '.env')
-        if os.path.exists(dotenv_path):
-            load_dotenv(dotenv_path=dotenv_path)
-        
-        api_key = os.getenv("GEMINI_API_KEY")
+        # Load API key from project's config.json
+        config = Config.load()
+        api_key = config.api_keys.google_api_key
+
         if not api_key:
-            raise ValueError("Chyba: Proměnná prostředí 'GEMINI_API_KEY' není nastavena.")
-        
+            raise ValueError("Chyba: 'google_api_key' není nastaven v config.json.")
+
         genai.configure(api_key=api_key)
-        
-        self.model_name = "models/gemini-2.5-flash" # Používáme název z vaší diagnostiky
-        self.model = genai.GenerativeModel(self.model_name) 
+
+        self.model_name = "models/gemini-2.5-flash"
+        self.model = genai.GenerativeModel(self.model_name)
         self.pricing = self.MODEL_PRICING.get(self.model_name, self.MODEL_PRICING["default"])
-        
+
         print(f"✅ LLM Agent (Gemini) inicializován. Model: {self.model_name}")
 
-    def _execute_json_prompt(self, prompt: str, schema_dict: Dict[str, Any]) -> Tuple[dict | None, float]:
+    def _execute_json_prompt(self, prompt: str, schema_dict: Dict[str, Any]) -> Tuple[Optional[dict], float]:
         """Vrací (výsledek_json, vypočtená_cena)."""
         try:
             config = genai.GenerationConfig(
@@ -246,7 +212,7 @@ class LLMAgent:
             print(f"❌ Kritická chyba LLM Agenta: {e}")
             return None, 0.0
 
-    def find_first_chapter_page(self, toc_page_text: str) -> Tuple[int | None, float]:
+    def find_first_chapter_page(self, toc_page_text: str) -> Tuple[Optional[int], float]:
         """Fáze 1: Nyní vrací (číslo_stránky, cena)."""
         prompt = f"""
         Analyzuj následující text první stránky obsahu.
@@ -259,15 +225,12 @@ class LLMAgent:
         """ 
         
         result, cost = self._execute_json_prompt(prompt, FIRST_CHAPTER_SCHEMA_DICT)
-        
+
         if result and 'first_chapter_page' in result:
-            # OPRAVA: Vracíme (int, float)
             return int(result['first_chapter_page']), cost
-        
+
         print("⚠️ LLM (Fáze 1) selhal při hledání 'first_chapter_page'.")
-        # OPRAVA: Vracíme (None, float)
-        return None, cost 
-    # --- KONEC OPRAVY ---
+        return None, cost
 
     def extract_full_structure(self, full_toc_text: str) -> Tuple[List[HeadingData], float]:
         """Fáze 2: Nyní vrací (seznam_nadpisů, cena)."""
@@ -292,8 +255,7 @@ class LLMAgent:
                 )
         else:
              print("⚠️ LLM (Fáze 2) selhal při extrakci 'headings'.")
-             
-        # Tato metoda již byla správně (vracela tuple)
+
         return headings_list, cost
 # ==============================================================================
 # 2. KONKRÉTNÍ PARSERY
@@ -477,23 +439,14 @@ class DocumentHierarchyTool:
         if not parser:
             return None, None, 0.0
 
-        # --- ZDE BYLA CHYBA ---
-        # VŠECHNY PARSERY NYNÍ VRACEJÍ 3 HODNOTY:
-        # (structured_headings, ocr_text, total_cost)
-        
-        # Předtím zde bylo: structured_headings, ocr_text = parser.extract_structured_headings()
-        # Nyní správně rozbalujeme 3 hodnoty:
+        # Rozbalíme 3 hodnoty: nadpisy, OCR text, náklady na LLM
         structured_headings, ocr_text, total_cost = parser.extract_structured_headings()
-        # --- KONEC OPRAVY ---
-        
+
         if not structured_headings:
-            # Vracíme (None, ocr_text, total_cost)
-            # Ocr_text a cost mohou být platné i při selhání parsování.
             return None, ocr_text, total_cost
 
         document_tree = self.builder.build_tree(structured_headings)
-        
-        # Vracíme VŠECHNY TŘI HODNOTY
+
         return document_tree, ocr_text, total_cost
 
 # --- Pomocná funkce pro vizualizaci (pro kontext, měla by být definována globálně/jinde) ---
@@ -677,7 +630,26 @@ class DocumentTestRunner:
                 f.write(log_content)
             print(f"🛑 {run_type}: Zpracování selhalo, uložen log do: {output_path}")
 
-test_path = r"C:\Users\Majitel\Desktop\VŠ\FJFI\NMS\ADS\testing"
-output_path = r"C:\Users\Majitel\Desktop\VŠ\FJFI\NMS\ADS\vysledky"
-testing = DocumentTestRunner(test_dir_path=test_path, output_dir_path=output_path)
-testing.run_tests(phase="full")
+
+if __name__ == "__main__":
+    """
+    Example usage - customize paths for your environment.
+
+    Usage:
+        python src/ToC_retrieval.py [test_dir] [output_dir] [phase]
+
+    Args:
+        test_dir: Directory containing PDF files to test (default: "test_data/")
+        output_dir: Directory for output files (default: "test_results/")
+        phase: Test phase - "full", "scope", or "structure" (default: "full")
+    """
+    import sys
+
+    # Parse command-line arguments or use defaults
+    test_path = sys.argv[1] if len(sys.argv) > 1 else "test_data/"
+    output_path = sys.argv[2] if len(sys.argv) > 2 else "test_results/"
+    phase = sys.argv[3] if len(sys.argv) > 3 else "full"
+
+    # Run tests
+    testing = DocumentTestRunner(test_dir_path=test_path, output_dir_path=output_path)
+    testing.run_tests(phase=phase)
