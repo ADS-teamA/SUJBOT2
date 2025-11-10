@@ -734,6 +734,48 @@ class ClusteringConfig:
         )
 
 
+def validate_config_on_startup():
+    """
+    Validate config.json at startup and exit with clear message if invalid.
+
+    Call this at the top of every entrypoint script (run_pipeline.py, agent CLI, etc.)
+    to ensure configuration is valid before any operations begin.
+
+    Returns:
+        RootConfig: Validated configuration if successful
+
+    Exits:
+        sys.exit(1) with clear error message if config is invalid
+
+    Example:
+        >>> from src.config import validate_config_on_startup
+        >>> config = validate_config_on_startup()
+        >>> # Now safe to proceed with pipeline operations
+    """
+    import sys
+
+    try:
+        return get_config()
+    except FileNotFoundError:
+        print("\n❌ ERROR: config.json not found!")
+        print("\nPlease create config.json from config.json.example:")
+        print("  cp config.json.example config.json")
+        print("  # Edit config.json with your settings")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"\n❌ ERROR: Invalid configuration in config.json!")
+        print(f"\n{e}")
+        print("\nPlease fix the errors in config.json")
+        print("See config.json.example for reference")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ ERROR: Failed to load configuration!")
+        print(f"\n{e}")
+        print("\nUnexpected error - please report this issue:")
+        print("https://github.com/ADS-teamA/SUJBOT2/issues")
+        sys.exit(1)
+
+
 # Example usage
 if __name__ == "__main__":
     # Load full pipeline config from config.json
