@@ -29,10 +29,11 @@ Outputs saved to: output/<document_name>/<timestamp>/
 - phase4_vector_store/ - FAISS + BM25 indexes + metadata
 - <document_id>_kg.json - Knowledge graph (if enabled)
 
-Configuration: All settings controlled via .env file
-- See .env.example for available options
-- Hybrid Search: ENABLE_HYBRID_SEARCH=true
-- Knowledge Graph: ENABLE_KNOWLEDGE_GRAPH=true
+Configuration: All settings controlled via config.json file
+- Copy config.json.example to config.json and fill in your values
+- See config.json.example for available options
+- Hybrid Search: "hybrid_search": {"enable": true}
+- Knowledge Graph: "knowledge_graph": {"enable": true}
 """
 
 import sys
@@ -40,6 +41,27 @@ import logging
 import argparse
 import shutil
 from pathlib import Path
+
+# CRITICAL: Validate config.json before doing anything else
+try:
+    from src.config import get_config
+    _config = get_config()  # This will fail if config.json is invalid or missing
+except FileNotFoundError as e:
+    print(f"\n❌ ERROR: config.json not found!")
+    print(f"\nPlease create config.json from config.json.example:")
+    print(f"  cp config.json.example config.json")
+    print(f"  # Edit config.json with your settings")
+    sys.exit(1)
+except ValueError as e:
+    print(f"\n❌ ERROR: Invalid configuration in config.json!")
+    print(f"\n{e}")
+    print(f"\nPlease fix the errors in config.json")
+    print(f"See config.json.example for reference")
+    sys.exit(1)
+except Exception as e:
+    print(f"\n❌ ERROR: Failed to load configuration!")
+    print(f"\n{e}")
+    sys.exit(1)
 
 # Setup logging
 logging.basicConfig(

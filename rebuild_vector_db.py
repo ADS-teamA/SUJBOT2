@@ -7,6 +7,17 @@ Manually merges all per-document vector stores back into unified vector_db/.
 
 import sys
 from pathlib import Path
+
+# CRITICAL: Validate config.json before doing anything else
+try:
+    from src.config import get_config
+    _config = get_config()  # This will fail if config.json is invalid or missing
+except (FileNotFoundError, ValueError) as e:
+    print(f"\n❌ ERROR: Invalid or missing config.json!")
+    print(f"\n{e}")
+    print(f"\nPlease create config.json from config.json.example")
+    sys.exit(1)
+
 from src.hybrid_search import HybridVectorStore
 
 def main():

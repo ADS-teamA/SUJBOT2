@@ -780,24 +780,30 @@ def main(config: AgentConfig):
 
 if __name__ == "__main__":
     """Allow running as: python -m src.agent.cli"""
-    # Load environment variables from .env
-    from dotenv import load_dotenv
-    load_dotenv()
-
     import argparse
+
+    # CRITICAL: Validate config.json before doing anything else
+    try:
+        from src.config import get_config
+        root_config = get_config()
+    except (FileNotFoundError, ValueError) as e:
+        print(f"\n❌ ERROR: Invalid or missing config.json!")
+        print(f"\n{e}")
+        print(f"\nPlease create config.json from config.json.example")
+        sys.exit(1)
 
     parser = argparse.ArgumentParser(description="RAG Agent CLI - Interactive document assistant")
     parser.add_argument(
         "--vector-store",
         type=str,
         help="Path to vector store directory",
-        default=os.getenv("VECTOR_STORE_PATH", "vector_db"),
+        default=root_config.agent.vector_store_path,
     )
     parser.add_argument(
         "--model",
         type=str,
-        help="Claude model to use",
-        default=os.getenv("AGENT_MODEL", "claude-haiku-4-5"),
+        help="Model to use (overrides config.json)",
+        default=root_config.agent.model,
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--no-streaming", action="store_true", help="Disable streaming responses")
@@ -806,11 +812,12 @@ if __name__ == "__main__":
 
     from .config import CLIConfig
 
-    # Load config from environment with CLI arg overrides
-    config = AgentConfig.from_env(
+    # Load config from JSON with CLI arg overrides
+    config = AgentConfig.from_config(
+        root_config=root_config,
         vector_store_path=Path(args.vector_store),
         model=args.model,
-        debug_mode=args.debug,
+        debug_mode=args.debug or root_config.agent.debug_mode,
         cli_config=CLIConfig(enable_streaming=not args.no_streaming),
     )
 
