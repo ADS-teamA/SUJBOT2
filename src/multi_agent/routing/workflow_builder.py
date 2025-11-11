@@ -36,6 +36,9 @@ class WorkflowBuilder:
         self,
         agent_registry: AgentRegistry,
         checkpointer: Optional[PostgresSaver] = None,
+        hitl_config: Optional[HITLConfig] = None,
+        quality_detector: Optional[QualityDetector] = None,
+        clarification_generator: Optional[ClarificationGenerator] = None,
     ):
         """
         Initialize workflow builder.
@@ -43,9 +46,15 @@ class WorkflowBuilder:
         Args:
             agent_registry: Registry containing all agent instances
             checkpointer: Optional PostgreSQL checkpointer for state persistence
+            hitl_config: Optional HITL configuration
+            quality_detector: Optional quality detector for HITL
+            clarification_generator: Optional clarification generator for HITL
         """
         self.agent_registry = agent_registry
         self.checkpointer = checkpointer
+        self.hitl_config = hitl_config
+        self.quality_detector = quality_detector
+        self.clarification_generator = clarification_generator
 
         logger.info("WorkflowBuilder initialized")
 
@@ -71,7 +80,10 @@ class WorkflowBuilder:
         for agent_name in agent_sequence:
             self._add_agent_node(workflow, agent_name)
 
-        # Add edges to connect agents
+        # Add HITL gate node if enabled
+        self._add_hitl_gate_node(workflow)
+
+        # Add edges to connect agents (with HITL gate if enabled)
         self._add_workflow_edges(workflow, agent_sequence, enable_parallel)
 
         # Set entry point (first agent)
@@ -104,42 +116,203 @@ class WorkflowBuilder:
             raise ValueError(f"Agent not found in registry: {agent_name}")
 
         # Create node function that wraps agent execution
-        async def agent_node(state: MultiAgentState) -> MultiAgentState:
+        async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             """Execute agent and update state."""
             try:
+                # Convert MultiAgentState to dict if needed
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
+
                 # Update execution phase
-                state["execution_phase"] = ExecutionPhase.AGENT_EXECUTION.value
-                state["current_agent"] = agent_name
+                updated_state = {
+                    **state_dict,
+                    "execution_phase": ExecutionPhase.AGENT_EXECUTION.value,
+                    "current_agent": agent_name,
+                }
 
                 # Add agent to sequence if not already there
-                if agent_name not in state.get("agent_sequence", []):
-                    state["agent_sequence"] = state.get("agent_sequence", []) + [
-                        agent_name
-                    ]
+                agent_sequence = updated_state.get("agent_sequence", [])
+                if agent_name not in agent_sequence:
+                    updated_state["agent_sequence"] = agent_sequence + [agent_name]
 
                 logger.info(f"Executing agent: {agent_name}")
 
-                # Execute agent
-                updated_state = await agent.execute(state)
+                # Execute agent (pass dict, expect dict back)
+                result = await agent.execute(updated_state)
 
                 logger.info(f"Agent {agent_name} completed successfully")
 
-                return updated_state
+                return result
 
             except Exception as e:
                 logger.error(f"Agent {agent_name} failed: {e}", exc_info=True)
 
-                # Add error to state
-                updated_state = state.copy()
-                updated_state["errors"] = updated_state.get("errors", [])
-                updated_state["errors"].append(f"{agent_name} error: {str(e)}")
+                # Convert to dict if needed
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
 
-                return updated_state
+                # Add error to state
+                errors = state_dict.get("errors", [])
+                errors.append(f"{agent_name} error: {str(e)}")
+
+                return {**state_dict, "errors": errors}
 
         # Add node to workflow
         workflow.add_node(agent_name, agent_node)
 
         logger.debug(f"Added agent node: {agent_name}")
+
+    def _add_hitl_gate_node(self, workflow: StateGraph) -> None:
+        """
+        Add HITL quality gate node to workflow.
+
+        This node evaluates retrieval quality and triggers clarification if needed.
+
+        Args:
+            workflow: StateGraph to add node to
+        """
+        if not self.hitl_config or not self.hitl_config.enabled:
+            logger.info("HITL not enabled, skipping gate node")
+            return
+
+        async def hitl_gate(state: Dict[str, Any]) -> Dict[str, Any]:
+            """
+            Quality gate that checks if clarification is needed.
+
+            Returns state with clarification questions if quality is low,
+            or passes through if quality is acceptable.
+            """
+            try:
+                # Convert MultiAgentState to dict if needed
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
+
+                # Check if we're resuming after user clarification
+                if state_dict.get("user_clarification"):
+                    logger.info("HITL: Resuming after user clarification")
+                    from ..hitl.context_enricher import ContextEnricher
+
+                    enricher = ContextEnricher(self.hitl_config)
+
+                    # Enrich query with user response
+                    original_query = state_dict.get("original_query", state_dict.get("query", ""))
+                    user_response = state_dict["user_clarification"]
+
+                    updated_state = enricher.enrich(original_query, user_response, state_dict)
+                    updated_state["awaiting_user_input"] = False
+                    updated_state["quality_check_required"] = False
+
+                    logger.info(f"HITL: Query enriched, continuing workflow")
+                    return updated_state
+
+                # Check complexity threshold
+                complexity_score = state_dict.get("complexity_score", 0)
+                if complexity_score < self.hitl_config.min_complexity_score:
+                    logger.info(
+                        f"HITL: Complexity {complexity_score} below threshold "
+                        f"{self.hitl_config.min_complexity_score}, skipping"
+                    )
+                    return {**state_dict, "quality_check_required": False}
+
+                # Evaluate retrieval quality
+                query = state_dict.get("query", "")
+                search_results = state_dict.get("documents", [])
+
+                should_clarify, metrics = self.quality_detector.evaluate(
+                    query=query,
+                    search_results=search_results,
+                    complexity_score=complexity_score,
+                )
+
+                # Store metrics in state
+                updated_state = {
+                    **state_dict,
+                    "quality_metrics": {
+                        "retrieval_score": metrics.retrieval_score,
+                        "semantic_coherence": metrics.semantic_coherence,
+                        "query_pattern_score": metrics.query_pattern_score,
+                        "document_diversity": metrics.document_diversity,
+                        "overall_quality": metrics.overall_quality,
+                    },
+                    "quality_issues": metrics.failing_metrics,
+                }
+
+                if not should_clarify:
+                    logger.info(
+                        f"HITL: Quality acceptable ({metrics.overall_quality:.2f}), "
+                        f"continuing workflow"
+                    )
+                    return {**updated_state, "quality_check_required": False}
+
+                # Check clarification round limit
+                current_round = state_dict.get("clarification_round", 0)
+                if current_round >= self.hitl_config.max_rounds:
+                    logger.warning(
+                        f"HITL: Max clarification rounds ({self.hitl_config.max_rounds}) "
+                        f"reached, continuing anyway"
+                    )
+                    return {**updated_state, "quality_check_required": False}
+
+                # Generate clarifying questions
+                logger.info(
+                    f"HITL: Quality low ({metrics.overall_quality:.2f}), "
+                    f"generating clarifying questions"
+                )
+
+                questions = await self.clarification_generator.generate(
+                    query=query,
+                    metrics=metrics,
+                    context={
+                        "complexity_score": complexity_score,
+                        "num_results": len(search_results),
+                    },
+                )
+
+                # Update state for clarification
+                final_state = {
+                    **updated_state,
+                    "quality_check_required": True,
+                    "clarifying_questions": [
+                        {"id": q.id, "text": q.text, "type": q.type} for q in questions
+                    ],
+                    "original_query": query,
+                    "clarification_round": current_round + 1,
+                    "awaiting_user_input": True,
+                }
+
+                logger.info(f"HITL: Generated {len(questions)} clarifying questions")
+
+                # Interrupt workflow to wait for user response
+                interrupt(
+                    {
+                        "type": "clarification_needed",
+                        "questions": final_state["clarifying_questions"],
+                        "quality_metrics": final_state["quality_metrics"],
+                    }
+                )
+
+                return final_state
+
+            except Exception as e:
+                logger.error(f"HITL gate error: {e}", exc_info=True)
+                # On error, continue without clarification
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
+                errors = state_dict.get("errors", [])
+                errors.append(f"HITL gate error: {str(e)}")
+                return {**state_dict, "quality_check_required": False, "errors": errors}
+
+        # Add gate node to workflow
+        workflow.add_node("hitl_gate", hitl_gate)
+        logger.debug("Added HITL gate node")
 
     def _add_workflow_edges(
         self,
@@ -150,6 +323,8 @@ class WorkflowBuilder:
         """
         Add edges to connect agents in workflow.
 
+        Inserts HITL gate after extractor if enabled.
+
         Args:
             workflow: StateGraph to add edges to
             agent_sequence: Ordered list of agent names
@@ -158,6 +333,13 @@ class WorkflowBuilder:
         if len(agent_sequence) == 0:
             return
 
+        # Check if we should insert HITL gate
+        should_insert_hitl = (
+            self.hitl_config
+            and self.hitl_config.enabled
+            and "extractor" in agent_sequence
+        )
+
         # Sequential execution (default)
         if not enable_parallel:
             # Connect agents in sequence
@@ -165,9 +347,14 @@ class WorkflowBuilder:
                 current_agent = agent_sequence[i]
                 next_agent = agent_sequence[i + 1]
 
-                workflow.add_edge(current_agent, next_agent)
-
-                logger.debug(f"Added edge: {current_agent} → {next_agent}")
+                # Insert HITL gate after extractor
+                if should_insert_hitl and current_agent == "extractor":
+                    workflow.add_edge(current_agent, "hitl_gate")
+                    workflow.add_edge("hitl_gate", next_agent)
+                    logger.debug(f"Added edge: {current_agent} → hitl_gate → {next_agent}")
+                else:
+                    workflow.add_edge(current_agent, next_agent)
+                    logger.debug(f"Added edge: {current_agent} → {next_agent}")
 
             # Last agent goes to END
             last_agent = agent_sequence[-1]

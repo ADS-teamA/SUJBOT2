@@ -25,6 +25,9 @@ from .routing.workflow_builder import WorkflowBuilder
 from .checkpointing import create_checkpointer, StateManager
 from .caching import create_cache_manager
 from .observability import setup_langsmith
+from .hitl.config import HITLConfig
+from .hitl.quality_detector import QualityDetector
+from .hitl.clarification_generator import ClarificationGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,11 @@ class MultiAgentRunner:
         self.agent_registry = None
         self.complexity_analyzer = None
         self.workflow_builder = None
+
+        # HITL components
+        self.hitl_config = None
+        self.quality_detector = None
+        self.clarification_generator = None
 
         logger.info("MultiAgentRunner initialized")
 
@@ -87,9 +95,34 @@ class MultiAgentRunner:
             routing_config = self.multi_agent_config.get("routing", {})
             self.complexity_analyzer = ComplexityAnalyzer(routing_config)
 
+            # 6. Initialize HITL components (if enabled)
+            clarification_config = self.multi_agent_config.get("clarification", {})
+            if clarification_config.get("enabled", False):
+                logger.info("Initializing HITL clarification system...")
+
+                # Load HITL config
+                self.hitl_config = HITLConfig.from_dict(clarification_config)
+
+                # Initialize quality detector
+                self.quality_detector = QualityDetector(self.hitl_config)
+
+                # Initialize clarification generator
+                api_key = self.config.get("api_keys", {}).get("anthropic_api_key", "")
+                self.clarification_generator = ClarificationGenerator(
+                    config=self.hitl_config, api_key=api_key
+                )
+
+                logger.info("HITL clarification system initialized")
+            else:
+                logger.info("HITL clarification system disabled")
+
+            # 7. Initialize workflow builder (with HITL components if enabled)
             self.workflow_builder = WorkflowBuilder(
                 agent_registry=self.agent_registry,
                 checkpointer=self.checkpointer.get_saver() if self.checkpointer else None,
+                hitl_config=self.hitl_config,
+                quality_detector=self.quality_detector,
+                clarification_generator=self.clarification_generator,
             )
 
             logger.info("Multi-agent system initialized successfully")
@@ -97,7 +130,29 @@ class MultiAgentRunner:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize multi-agent system: {e}", exc_info=True)
+            from .core.error_tracker import track_error, ErrorSeverity
+
+            error_id = track_error(
+                error=e,
+                severity=ErrorSeverity.CRITICAL,
+                context={"phase": "initialization", "config_keys": list(self.multi_agent_config.keys())}
+            )
+
+            logger.error(
+                f"[{error_id}] Failed to initialize multi-agent system: {type(e).__name__}: {e}. "
+                f"Check: (1) API keys are valid in config.json, (2) PostgreSQL is running (if checkpointing enabled), "
+                f"(3) all agent configs are present, (4) dependencies are installed.",
+                exc_info=True
+            )
+
+            # Store error for health endpoint
+            self.initialization_error = {
+                "error_id": error_id,
+                "error": str(e),
+                "type": type(e).__name__,
+                "message": f"Multi-agent system failed to initialize [{error_id}]. Check logs for details."
+            }
+
             return False
 
     async def _register_agents(self) -> None:
@@ -231,12 +286,42 @@ class MultiAgentRunner:
             }
 
         except Exception as e:
-            logger.error(f"Query execution failed: {e}", exc_info=True)
+            from .core.error_tracker import track_error, ErrorSeverity
+
+            error_id = track_error(
+                error=e,
+                severity=ErrorSeverity.HIGH,
+                context={
+                    "query": query[:200] if query else "",
+                    "complexity_score": state.complexity_score if hasattr(state, 'complexity_score') else None,
+                    "agent_sequence": state.agent_sequence if hasattr(state, 'agent_sequence') else [],
+                }
+            )
+
+            logger.error(
+                f"[{error_id}] Query execution failed: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+
+            # Build actionable error message
+            error_message = f"Query processing failed [{error_id}]. "
+
+            # Add specific guidance based on error type
+            if isinstance(e, (TimeoutError, asyncio.TimeoutError)):
+                error_message += "The query is taking too long. Try simplifying your question or breaking it into smaller parts."
+            elif "API" in str(e) or "rate limit" in str(e).lower():
+                error_message += "API service is temporarily unavailable. Please try again in a few moments."
+            elif isinstance(e, MemoryError):
+                error_message += "The query requires too much memory. Please contact support."
+            else:
+                error_message += f"Error: {type(e).__name__}. {str(e)[:200]}"
 
             return {
                 "success": False,
-                "final_answer": f"Error: {str(e)}",
-                "errors": [str(e)],
+                "final_answer": error_message,
+                "errors": [f"[{error_id}] {str(e)}"],
+                "error_id": error_id,
+                "error_type": type(e).__name__,
             }
 
     def shutdown(self) -> None:

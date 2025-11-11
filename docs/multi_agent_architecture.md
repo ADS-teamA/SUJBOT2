@@ -560,7 +560,7 @@ class ToolAdapter:
         #    - error: Optional[str]
 ```
 
-**Tool Availability:** All 17 existing tools available to agents:
+**Tool Availability:** All 16 existing tools available to agents:
 
 **Tier 1 (Fast, 100-300ms):**
 1. `search_documents` - Hybrid search

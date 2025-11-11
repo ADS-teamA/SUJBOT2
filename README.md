@@ -56,7 +56,7 @@ Production-ready RAG system based on 4 research papers implementing state-of-the
 
 **Agent (PHASE 7) - Multi-Agent System:**
 - **8 specialized agents** (Orchestrator, Extractor, Classifier, Compliance, Risk Verifier, Citation Auditor, Gap Synthesizer, Report Generator)
-- **17 existing tools** integrated via adapter pattern (zero changes needed)
+- **16 existing tools** integrated via adapter pattern (zero changes needed)
 - **3-level prompt caching** for 90% cost savings (regulatory docs + contract templates + system prompts)
 - **PostgreSQL checkpointing** for state persistence and recovery
 - **LangSmith observability** for full workflow tracing

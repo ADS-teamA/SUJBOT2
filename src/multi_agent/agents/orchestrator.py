@@ -99,14 +99,33 @@ class OrchestratorAgent(BaseAgent):
             return state
 
         except Exception as e:
-            logger.error(f"Orchestration failed: {e}", exc_info=True)
-            state["errors"] = state.get("errors", [])
-            state["errors"].append(f"Orchestration error: {str(e)}")
+            from ..core.error_tracker import track_error, ErrorSeverity
 
-            # Fallback to simple pattern
-            state["complexity_score"] = 50
-            state["query_type"] = QueryType.SEARCH.value
-            state["agent_sequence"] = ["extractor", "report_generator"]
+            error_id = track_error(
+                error=e,
+                severity=ErrorSeverity.CRITICAL,
+                agent_name="orchestrator",
+                context={"query": query[:200]}
+            )
+
+            logger.error(
+                f"[{error_id}] Orchestration failed: {type(e).__name__}: {e}. "
+                f"Check: (1) Anthropic/OpenAI API key is valid, (2) model name is correct, "
+                f"(3) prompt is under token limit, (4) network connection is stable.",
+                exc_info=True
+            )
+
+            state["errors"] = state.get("errors", [])
+            state["errors"].append(f"[{error_id}] Orchestration failed: {type(e).__name__}: {str(e)}")
+
+            # DO NOT silently fall back - user must know orchestration failed
+            state["execution_phase"] = "error"
+            state["final_answer"] = (
+                f"Query analysis failed [{error_id}]. "
+                f"Unable to determine optimal workflow for your query. "
+                f"Error: {type(e).__name__}. "
+                f"Please check system configuration and try again."
+            )
 
             return state
 
