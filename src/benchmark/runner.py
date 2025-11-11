@@ -1,5 +1,8 @@
 """
-Benchmark runner - main orchestrator.
+Benchmark runner - Legacy single-agent runner (DEPRECATED).
+
+DEPRECATED: Use multi_agent_runner.py instead.
+This file is kept for backward compatibility with dataclass definitions only.
 
 Coordinates:
 1. Dataset loading
@@ -17,11 +20,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from tqdm import tqdm
-
-from ..agent.agent_core import AgentCore
+# Legacy imports removed (use multi_agent_runner.py)
+# from ..agent.agent_core import AgentCore  # DELETED
 from ..agent.config import AgentConfig
-from ..agent.prompt_loader import load_prompt
+# from ..agent.prompt_loader import load_prompt  # Not used in multi-agent
 from ..hybrid_search import HybridVectorStore
 from ..cost_tracker import get_global_tracker, reset_global_tracker
 
@@ -125,21 +127,36 @@ class BenchmarkResult:
 
 class BenchmarkRunner:
     """
-    Main benchmark orchestrator.
+    DEPRECATED: Legacy single-agent benchmark runner.
 
-    Usage:
-        config = BenchmarkConfig.from_env()
-        runner = BenchmarkRunner(config)
-        result = runner.run()
+    Use MultiAgentBenchmarkRunner from multi_agent_runner.py instead.
+
+    This class is deprecated and will raise an error if instantiated.
+    Kept for backward compatibility with import statements only.
+
+    For new code, use:
+        from src.benchmark.multi_agent_runner import MultiAgentBenchmarkRunner
+        runner = MultiAgentBenchmarkRunner(config)
+        result = await runner.run()
     """
 
     def __init__(self, config: BenchmarkConfig):
         """
-        Initialize benchmark runner.
+        Initialize benchmark runner (DEPRECATED).
 
         Args:
             config: Benchmark configuration
+
+        Raises:
+            RuntimeError: Always raises - use MultiAgentBenchmarkRunner instead
         """
+        raise RuntimeError(
+            "BenchmarkRunner is deprecated. "
+            "Use MultiAgentBenchmarkRunner from src.benchmark.multi_agent_runner instead. "
+            "Example: runner = MultiAgentBenchmarkRunner(config); await runner.run()"
+        )
+
+        # Legacy code below (unreachable) - kept for reference
         self.config = config
 
         # Load dataset
@@ -163,7 +180,7 @@ class BenchmarkRunner:
 
         logger.info("Benchmark runner initialized successfully")
 
-    def _initialize_agent(self) -> AgentCore:
+    def _initialize_agent(self) -> Any:  # AgentCore (deleted)
         """
         Initialize agent with benchmark-specific configuration.
 

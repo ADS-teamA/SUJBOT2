@@ -48,6 +48,7 @@ class AgentConfig:
     role: AgentRole                 # Agent role/responsibility
     tier: AgentTier                 # Execution tier
     model: str                      # LLM model for this agent
+    api_key: str = ""               # API key for LLM provider
     max_tokens: int = 4096          # Max output tokens
     temperature: float = 0.3        # LLM temperature
     tools: Set[str] = field(default_factory=set)  # Tool names this agent can access
@@ -198,7 +199,17 @@ class BaseAgent(ABC):
         Returns:
             Updated state with error recorded
         """
-        error_message = f"{self.config.name}: {type(error).__name__}: {str(error)}"
+        # Track error with unique ID for Sentry
+        from .error_tracker import track_error, ErrorSeverity
+
+        error_id = track_error(
+            error=error,
+            severity=ErrorSeverity.HIGH,
+            agent_name=self.config.name,
+            context={"query": state.get("query", ""), "phase": state.get("execution_phase", "")}
+        )
+
+        error_message = f"[{error_id}] {self.config.name}: {type(error).__name__}: {str(error)}"
 
         # Add error to state
         if "errors" not in state:
@@ -208,7 +219,7 @@ class BaseAgent(ABC):
         # Mark execution phase as error
         state["execution_phase"] = "error"
 
-        self.logger.error(f"Error in agent {self.config.name}: {error}")
+        self.logger.error(f"[{error_id}] Error in agent {self.config.name}: {error}")
 
         return state
 

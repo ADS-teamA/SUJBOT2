@@ -26,6 +26,7 @@ class QueryType(str, Enum):
 class ExecutionPhase(str, Enum):
     """Workflow execution phase."""
     ROUTING = "routing"              # Determine complexity
+    AGENT_EXECUTION = "agent_execution"  # Agent executing task
     EXTRACTION = "extraction"        # Extract from docs
     CLASSIFICATION = "classification" # Classify content
     VERIFICATION = "verification"    # Verify accuracy
@@ -159,7 +160,8 @@ class MultiAgentState(BaseModel):
     def add_agent_output(self, agent_name: str, output: Any) -> None:
         """Record output from an agent."""
         self.agent_outputs[agent_name] = output
-        self.agent_path.append(agent_name) if agent_name not in self.agent_path else None
+        if agent_name not in self.agent_sequence:
+            self.agent_sequence.append(agent_name)
 
     def add_tool_execution(self, execution: ToolExecution) -> None:
         """Record a tool execution."""
@@ -178,7 +180,7 @@ class MultiAgentState(BaseModel):
 
     def get_agent_history(self) -> List[str]:
         """Get list of agents that have processed this query."""
-        return self.agent_path
+        return self.agent_sequence
 
     def is_error_state(self) -> bool:
         """Check if workflow is in error state."""

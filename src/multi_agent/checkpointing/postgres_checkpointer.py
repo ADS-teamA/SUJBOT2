@@ -81,7 +81,11 @@ class PostgresCheckpointer:
             )
             yield conn
         except Exception as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.error(
+                f"Database connection failed to {self.host}:{self.port}/{self.database} "
+                f"(user={self.user}): {type(e).__name__}: {e}. "
+                f"Check: (1) PostgreSQL is running, (2) credentials are correct, (3) database exists."
+            )
             if conn:
                 conn.rollback()
             raise
@@ -149,7 +153,13 @@ class PostgresCheckpointer:
             logger.info("PostgreSQL checkpointer initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize checkpointer: {e}", exc_info=True)
+            logger.error(
+                f"Failed to initialize checkpointer tables in {self.database}.{self.table_name}: "
+                f"{type(e).__name__}: {e}. "
+                f"Check: (1) User {self.user} has CREATE TABLE permission, "
+                f"(2) Database {self.database} exists, (3) No conflicting table schemas.",
+                exc_info=True
+            )
             raise
 
     def get_saver(self) -> PostgresSaver:
@@ -208,7 +218,10 @@ class PostgresCheckpointer:
             logger.debug(f"Snapshot saved: thread={thread_id}, checkpoint={checkpoint_id}")
 
         except Exception as e:
-            logger.warning(f"Failed to save snapshot: {e}")
+            logger.warning(
+                f"Failed to save snapshot for thread {thread_id}: {type(e).__name__}: {e}. "
+                f"Non-critical error, continuing execution."
+            )
 
     def get_latest_snapshot(self, thread_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -246,7 +259,10 @@ class PostgresCheckpointer:
                 return None
 
         except Exception as e:
-            logger.error(f"Failed to get snapshot: {e}")
+            logger.error(
+                f"Failed to retrieve latest snapshot for thread {thread_id}: "
+                f"{type(e).__name__}: {e}. Returning None."
+            )
             return None
 
     def cleanup_old_snapshots(self) -> int:
@@ -279,7 +295,10 @@ class PostgresCheckpointer:
             return deleted_count
 
         except Exception as e:
-            logger.error(f"Failed to cleanup snapshots: {e}")
+            logger.error(
+                f"Failed to cleanup snapshots older than {self.recovery_window_hours}h: "
+                f"{type(e).__name__}: {e}. Returning 0 (no snapshots deleted)."
+            )
             return 0
 
     def close(self) -> None:

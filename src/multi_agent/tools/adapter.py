@@ -175,7 +175,8 @@ class ToolAdapter:
             json_str = json.dumps(data, ensure_ascii=False, default=str)
             # Rough estimate: 4 chars per token
             return len(json_str) // 4
-        except:
+        except (TypeError, ValueError, OverflowError) as e:
+            logger.debug(f"Token estimation failed: {type(e).__name__}: {e}")
             return 0
 
     def _summarize_result(self, result: ToolResult) -> str:
@@ -184,7 +185,8 @@ class ToolAdapter:
             import json
             data_str = json.dumps(result.data, ensure_ascii=False, default=str)
             return data_str[:200] + ("..." if len(data_str) > 200 else "")
-        except:
+        except (TypeError, ValueError, OverflowError) as e:
+            logger.debug(f"Result summarization failed: {type(e).__name__}: {e}")
             return str(result.data)[:200]
 
     def get_available_tools(self) -> List[str]:

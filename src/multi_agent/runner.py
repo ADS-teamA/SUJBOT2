@@ -188,7 +188,7 @@ class MultiAgentRunner:
             logger.info("Step 1: Analyzing query complexity...")
             orchestrator = self.agent_registry.get_agent("orchestrator")
 
-            state_dict = state.dict()
+            state_dict = state.model_dump()
             state_dict = await orchestrator.execute(state_dict)
 
             # Update state
@@ -209,9 +209,9 @@ class MultiAgentRunner:
             # Run workflow with LangSmith tracing
             if self.langsmith and self.langsmith.is_enabled():
                 with self.langsmith.trace_workflow(f"query_{thread_id}"):
-                    result = await workflow.ainvoke(state.dict(), {"thread_id": thread_id})
+                    result = await workflow.ainvoke(state.model_dump(), {"thread_id": thread_id})
             else:
-                result = await workflow.ainvoke(state.dict(), {"thread_id": thread_id})
+                result = await workflow.ainvoke(state.model_dump(), {"thread_id": thread_id})
 
             # Step 4: Extract final answer
             final_answer = result.get("final_answer", "No answer generated")

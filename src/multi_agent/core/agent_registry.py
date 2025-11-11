@@ -65,6 +65,29 @@ class AgentRegistry:
         self._configs[agent_name] = config
         logger.debug(f"Registered config for agent: {agent_name}")
 
+    def register(self, agent: BaseAgent) -> None:
+        """
+        Register an agent instance directly.
+
+        Args:
+            agent: Agent instance to register
+        """
+        agent_name = agent.config.name
+
+        # Register the agent class if not already registered
+        if agent_name not in self._agent_classes:
+            self._agent_classes[agent_name] = agent.__class__
+            logger.debug(f"Registered agent class: {agent_name}")
+
+        # Register the config
+        if agent_name not in self._configs:
+            self._configs[agent_name] = agent.config
+            logger.debug(f"Registered config for agent: {agent_name}")
+
+        # Cache the instance
+        self._agent_instances[agent_name] = agent
+        logger.info(f"Registered agent instance: {agent_name}")
+
     def get_agent(self, agent_name: str) -> Optional[BaseAgent]:
         """
         Get agent instance (creates if not exists).
