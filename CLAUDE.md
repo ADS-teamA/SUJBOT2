@@ -1,8 +1,8 @@
 # CLAUDE.md - Navigation Guide
 
-**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + 17-tool AI agent.
+**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + multi-agent orchestration.
 
-**Status:** PHASE 1-7 COMPLETE ✅ (2025-11-03)
+**Status:** MULTI-AGENT SYSTEM COMPLETE ✅ (2025-11-11)
 
 ---
 
@@ -20,14 +20,15 @@
 # Index documents
 uv run python run_pipeline.py data/document.pdf
 
-# Launch agent
-uv run python -m src.agent.cli
+# Launch multi-agent system
+uv run python -m src.multi_agent.runner --query "your query"
+uv run python -m src.multi_agent.runner --interactive
+
+# Launch web interface
+./start_web.sh
 
 # Run tests
 uv run pytest tests/ -v
-
-# Debug issues
-/debug-optimize
 ```
 
 ---

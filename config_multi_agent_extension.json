@@ -1,0 +1,135 @@
+{
+  "_comment": "Multi-Agent Configuration - Add this section to config.json",
+  "multi_agent": {
+    "_comment": "LangGraph multi-agent system configuration",
+    "enabled": true,
+
+    "orchestrator": {
+      "model": "claude-sonnet-4-5-20250929",
+      "max_tokens": 1024,
+      "temperature": 0.1,
+      "enable_prompt_caching": true,
+      "system_prompt_file": "prompts/agents/orchestrator.txt"
+    },
+
+    "agents": {
+      "extractor": {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 2048,
+        "temperature": 0.3,
+        "timeout_seconds": 30,
+        "enable_prompt_caching": true,
+        "tools": ["search", "get_chunk_context", "get_document_info"],
+        "system_prompt_file": "prompts/agents/extractor.txt"
+      },
+
+      "classifier": {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "temperature": 0.2,
+        "timeout_seconds": 20,
+        "enable_prompt_caching": true,
+        "tools": ["filtered_search", "explain_results", "get_document_list"],
+        "system_prompt_file": "prompts/agents/classifier.txt"
+      },
+
+      "compliance": {
+        "model": "claude-sonnet-4-5-20250929",
+        "max_tokens": 2048,
+        "temperature": 0.1,
+        "timeout_seconds": 45,
+        "enable_prompt_caching": true,
+        "tools": ["graph_search", "assess_confidence", "exact_match_search"],
+        "system_prompt_file": "prompts/agents/compliance.txt"
+      },
+
+      "risk_verifier": {
+        "model": "claude-sonnet-4-5-20250929",
+        "max_tokens": 2048,
+        "temperature": 0.2,
+        "timeout_seconds": 45,
+        "enable_prompt_caching": true,
+        "tools": ["compare_documents", "similarity_search", "get_chunk_context"],
+        "system_prompt_file": "prompts/agents/risk_verifier.txt"
+      },
+
+      "citation_auditor": {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "temperature": 0.1,
+        "timeout_seconds": 15,
+        "enable_prompt_caching": true,
+        "tools": ["get_document_info", "exact_match_search", "get_chunk_context"],
+        "system_prompt_file": "prompts/agents/citation_auditor.txt"
+      },
+
+      "gap_synthesizer": {
+        "model": "claude-sonnet-4-5-20250929",
+        "max_tokens": 3072,
+        "temperature": 0.4,
+        "timeout_seconds": 60,
+        "enable_prompt_caching": true,
+        "tools": ["browse_entities", "graph_search", "compare_documents"],
+        "system_prompt_file": "prompts/agents/gap_synthesizer.txt"
+      },
+
+      "report_generator": {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 4096,
+        "temperature": 0.3,
+        "timeout_seconds": 30,
+        "enable_prompt_caching": true,
+        "tools": ["list_available_tools", "get_stats"],
+        "system_prompt_file": "prompts/agents/report_generator.txt"
+      }
+    },
+
+    "routing": {
+      "complexity_threshold_low": 30,
+      "complexity_threshold_high": 70,
+      "enable_parallel_execution": true,
+      "max_parallel_agents": 3,
+      "complexity_model": "claude-haiku-4-5-20251001"
+    },
+
+    "caching": {
+      "enable_regulatory_cache": true,
+      "enable_contract_cache": true,
+      "enable_system_cache": true,
+      "cache_ttl_hours": 24,
+      "regulatory_docs_path": "data/regulatory_templates",
+      "contract_templates_path": "data/contract_templates"
+    },
+
+    "checkpointing": {
+      "backend": "postgresql",
+      "postgresql": {
+        "host": "localhost",
+        "port": 5432,
+        "user": "postgres",
+        "password": "${POSTGRES_PASSWORD}",
+        "database": "sujbot_agents",
+        "table_name": "agent_checkpoints"
+      },
+      "enable_state_snapshots": true,
+      "snapshot_interval_queries": 5,
+      "recovery_window_hours": 24
+    },
+
+    "langsmith": {
+      "enabled": true,
+      "api_key": "${LANGSMITH_API_KEY}",
+      "project_name": "sujbot2-multi-agent",
+      "trace_logging_level": "INFO",
+      "sample_rate": 1.0
+    },
+
+    "cost_optimization": {
+      "enable_cost_tracking": true,
+      "enable_model_selection": true,
+      "budget_cents_per_query": 100,
+      "model_preference": "cost",
+      "fallback_model": "claude-haiku-4-5-20251001"
+    }
+  }
+}

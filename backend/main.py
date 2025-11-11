@@ -40,6 +40,13 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Initializing agent adapter...")
         agent_adapter = AgentAdapter()
+
+        # Initialize multi-agent system
+        logger.info("Initializing multi-agent system...")
+        success = await agent_adapter.initialize()
+        if not success:
+            raise RuntimeError("Multi-agent system initialization failed")
+
         logger.info("Agent adapter initialized successfully")
     except Exception as e:
         logger.error(f"FATAL: Failed to initialize agent: {e}", exc_info=True)
@@ -51,6 +58,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown (cleanup if needed)
     logger.info("Shutting down...")
+    if agent_adapter and hasattr(agent_adapter, 'runner'):
+        agent_adapter.runner.shutdown()
 
 
 # Initialize FastAPI app with lifespan

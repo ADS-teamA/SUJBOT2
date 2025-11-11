@@ -1,0 +1,32 @@
+"""Multi-agent implementations for SUJBOT2.
+
+This package contains 8 specialized agents:
+- OrchestratorAgent: Query complexity analysis and routing
+- ExtractorAgent: Document retrieval and context extraction
+- ClassifierAgent: Content categorization and classification
+- ComplianceAgent: Regulatory compliance verification
+- RiskVerifierAgent: Risk assessment and severity scoring
+- CitationAuditorAgent: Citation verification and validation
+- GapSynthesizerAgent: Knowledge gap analysis
+- ReportGeneratorAgent: Final report compilation
+"""
+
+from .orchestrator import OrchestratorAgent
+from .extractor import ExtractorAgent
+from .classifier import ClassifierAgent
+from .compliance import ComplianceAgent
+from .risk_verifier import RiskVerifierAgent
+from .citation_auditor import CitationAuditorAgent
+from .gap_synthesizer import GapSynthesizerAgent
+from .report_generator import ReportGeneratorAgent
+
+__all__ = [
+    "OrchestratorAgent",
+    "ExtractorAgent",
+    "ClassifierAgent",
+    "ComplianceAgent",
+    "RiskVerifierAgent",
+    "CitationAuditorAgent",
+    "GapSynthesizerAgent",
+    "ReportGeneratorAgent",
+]
