@@ -124,6 +124,78 @@
       "sample_rate": 1.0
     },
 
+    "clarification": {
+      "_comment": "Human-in-the-Loop clarification system (ChatGPT Deep Research pattern)",
+      "enabled": true,
+
+      "policy": {
+        "trigger_after_agent": "extractor",
+        "quality_threshold": 0.60,
+        "min_complexity_score": 40,
+        "always_ask_if_zero_results": true,
+        "never_ask_for_simple_queries": true,
+        "max_clarifications_per_query": 2
+      },
+
+      "quality_detection": {
+        "require_multiple_failures": true,
+        "min_failing_metrics": 2,
+        "metrics": {
+          "retrieval_score": {
+            "enabled": true,
+            "weight": 0.30,
+            "threshold": 0.65,
+            "description": "Average relevance score of retrieved chunks"
+          },
+          "semantic_coherence": {
+            "enabled": true,
+            "weight": 0.25,
+            "threshold": 0.30,
+            "description": "Variance in chunk embeddings (high variance = low coherence)"
+          },
+          "query_pattern": {
+            "enabled": true,
+            "weight": 0.25,
+            "threshold": 0.50,
+            "description": "Vague keyword detection (what, how, all, etc.)"
+          },
+          "document_diversity": {
+            "enabled": true,
+            "weight": 0.20,
+            "threshold": 5.0,
+            "description": "Number of distinct documents retrieved (too many = scattered)"
+          }
+        }
+      },
+
+      "question_generation": {
+        "model": "claude-haiku-4-5-20251001",
+        "temperature": 0.4,
+        "max_tokens": 512,
+        "min_questions": 2,
+        "max_questions": 5,
+        "enable_prompt_caching": true
+      },
+
+      "user_interaction": {
+        "timeout_seconds": 300,
+        "allow_skip": true,
+        "enable_multi_round": true,
+        "max_rounds": 2
+      },
+
+      "query_enrichment": {
+        "strategy": "append_with_context",
+        "template": "{original_query}\\n\\n[Context]: {user_response}",
+        "max_enriched_length": 500
+      },
+
+      "monitoring": {
+        "log_all_clarifications": true,
+        "track_quality_improvement": true
+      }
+    },
+
     "cost_optimization": {
       "enable_cost_tracking": true,
       "enable_model_selection": true,

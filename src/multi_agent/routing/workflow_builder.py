@@ -13,9 +13,13 @@ from typing import Any, Dict, List, Optional, Callable
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.types import interrupt
 
 from ..core.state import MultiAgentState, ExecutionPhase
 from ..core.agent_registry import AgentRegistry
+from ..hitl.config import HITLConfig
+from ..hitl.quality_detector import QualityDetector
+from ..hitl.clarification_generator import ClarificationGenerator
 
 logger = logging.getLogger(__name__)
 

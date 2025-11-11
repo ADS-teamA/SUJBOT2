@@ -239,7 +239,7 @@ class RAGConfidenceScorer:
         1. rerank_score: Cross-encoder reranker score (best for ranking)
         2. boosted_score: Graph-boosted RRF score (includes KG relevance)
         3. rrf_score: Reciprocal Rank Fusion score (BM25 + Dense fusion)
-        4. score: Fallback generic score (BM25 for exact_match_search)
+        4. score: Fallback generic score (BM25 for filtered_search with bm25_only mode)
 
         Returns:
             List of normalized scores (0-1) from chunks, defaults to 0.0 if missing

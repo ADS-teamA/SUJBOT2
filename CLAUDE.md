@@ -113,12 +113,14 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 4. `src/embedding_generator.py`, `src/faiss_vector_store.py` - Embeddings + FAISS
 5. `src/hybrid_search.py`, `src/graph/`, `src/reranker.py` - Advanced retrieval
 6. `src/context_assembly.py` - Context prep
-7. `src/agent/` - RAG agent (17 tools)
+7. `src/agent/` - RAG agent (16 tools)
 
 **Agent Tools:**
-- `src/agent/tools/tier1_basic.py` - 6 fast tools (100-300ms)
-- `src/agent/tools/tier2_advanced.py` - 8 quality tools (500-1000ms)
-- `src/agent/tools/tier3_analysis.py` - 3 analysis tools (1-3s)
+- `src/agent/tools/tier1_basic.py` - 5 fast tools (100-300ms)
+- `src/agent/tools/tier2_advanced.py` - 10 quality tools (500-1000ms)
+  - **NEW (2025-01):** `multi_doc_synthesizer` - Multi-document synthesis (replaces broken `compare_documents`)
+  - **NEW (2025-01):** `contextual_chunk_enricher` - Anthropic Contextual Retrieval (-58% context drift)
+- `src/agent/tools/tier3_analysis.py` - 1 analysis tool (1-3s)
 
 **Tests:**
 - `tests/test_phase*.py` - Pipeline tests
@@ -152,6 +154,61 @@ class MyTool(BaseTool):
         results = self.vector_store.search(query, k=10)
         return ToolResult(success=True, data=results)
 ```
+
+### New Tools (2025-01)
+
+#### **multi_doc_synthesizer** (Tier 2)
+Synthesizes information from multiple documents using LLM. Replaces broken `compare_documents` tool.
+
+**Use cases:**
+```python
+# Compare documents
+tool.execute(
+    document_ids=["doc1", "doc2", "doc3"],
+    synthesis_query="Compare privacy policies",
+    synthesis_mode="compare"
+)
+
+# Unified summary
+tool.execute(
+    document_ids=["standard1", "standard2"],
+    synthesis_query="Data retention requirements",
+    synthesis_mode="summarize"
+)
+```
+
+**Key features:**
+- Synthesis modes: `compare`, `summarize`, `analyze`
+- Uses public API only (hierarchical_search with document filters)
+- 2-10 documents supported
+- Cites all source documents
+
+#### **contextual_chunk_enricher** (Tier 2)
+Implements Anthropic Contextual Retrieval technique (-58% context drift).
+
+**Use cases:**
+```python
+# Auto mode (intelligent selection)
+tool.execute(
+    chunk_ids=["doc1:sec1:0", "doc1:sec2:1"],
+    enrichment_mode="auto"
+)
+
+# Maximum context
+tool.execute(
+    chunk_ids=["doc1:sec1:0"],
+    enrichment_mode="both",  # document + section summaries
+    include_metadata=True
+)
+```
+
+**Enrichment modes:**
+- `auto`: Selects best mode (section > document)
+- `document_summary`: Prepend document context
+- `section_summary`: Prepend section context
+- `both`: Maximum context (document + section)
+
+**Research basis:** Anthropic (2024) - Contextual Retrieval
 
 ### Debugging Retrieval Issues
 ```bash
@@ -321,7 +378,7 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-**Last Updated:** 2025-11-03
-**Version:** PHASE 1-7 COMPLETE + Hierarchical Summaries + Query Expansion + RAG Confidence Scoring
+**Last Updated:** 2025-01-11
+**Version:** PHASE 1-7 COMPLETE + Multi-Doc Synthesis + Contextual Chunk Enrichment (16 tools)
 
 **Note:** `vector_db/` is tracked in git (contains merged vector stores) - DO NOT add to `.gitignore`

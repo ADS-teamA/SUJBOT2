@@ -137,6 +137,17 @@ class MultiAgentState(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     checkpoints: List[str] = Field(default_factory=list)  # Checkpoint IDs
 
+    # === HUMAN-IN-THE-LOOP (CLARIFICATIONS) ===
+    quality_check_required: bool = False
+    quality_issues: List[str] = Field(default_factory=list)
+    quality_metrics: Optional[Dict[str, float]] = None
+    clarifying_questions: List[Dict[str, Any]] = Field(default_factory=list)
+    original_query: Optional[str] = None
+    user_clarification: Optional[str] = None
+    enriched_query: Optional[str] = None
+    clarification_round: int = 0  # Track multi-round clarifications
+    awaiting_user_input: bool = False  # Signal frontend to pause
+
     @field_validator("complexity_score")
     @classmethod
     def validate_complexity(cls, v):
