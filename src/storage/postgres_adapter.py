@@ -24,16 +24,13 @@ def _run_async_safe(coro):
     """
     Safely run async coroutine from sync context.
 
-    Uses nest-asyncio to allow nested event loops when called from FastAPI async context.
+    Uses asyncio.run() with nest-asyncio to handle nested event loops.
+    nest_asyncio patches asyncio.run() to work even when called from within
+    an existing event loop (e.g., FastAPI's loop).
     """
-    try:
-        # Check if we're already in an async context
-        loop = asyncio.get_running_loop()
-        # With nest-asyncio applied, we can safely run in the same loop
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        # No loop running - safe to use asyncio.run()
-        return asyncio.run(coro)
+    # With nest_asyncio.apply() at module level, asyncio.run() works
+    # even when called from within FastAPI's async context
+    return asyncio.run(coro)
 
 
 class PostgresVectorStoreAdapter(VectorStoreAdapter):

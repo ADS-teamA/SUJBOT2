@@ -72,7 +72,7 @@ RUN uv pip install --system --no-cache \
     "beautifulsoup4>=4.12.3" "pandas>=2.1.4" "lxml>=4.0.0" "pillow>=10.0.0" \
     "pylatexenc>=2.10" "scipy>=1.6.0" "marko>=2.1.2" \
     # PostgreSQL drivers
-    psycopg2-binary asyncpg pgvector \
+    psycopg2-binary asyncpg pgvector nest-asyncio \
     # Language support for BM25 hybrid search
     "spacy>=3.7.0" "langdetect>=1.0.9" "nltk>=3.8.0"
 
@@ -99,7 +99,8 @@ COPY config.json ./config.json
 EXPOSE 8000
 
 # Default command (overridden in docker-compose.override.yml)
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Using --loop asyncio for nest-asyncio compatibility (required for PostgreSQL adapter)
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--loop", "asyncio"]
 
 # ============================================================================
 # Stage 4: Production - Minimal runtime with copied source
@@ -134,4 +135,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Production runs with multiple workers (no hot reload)
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Using --loop asyncio for nest-asyncio compatibility (required for PostgreSQL adapter)
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--loop", "asyncio"]
