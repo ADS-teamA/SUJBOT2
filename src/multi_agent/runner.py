@@ -15,7 +15,7 @@ Replaces the old single-agent CLI (src/agent/cli.py).
 import logging
 import asyncio
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, AsyncGenerator
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -463,7 +463,7 @@ class MultiAgentRunner:
             api_key=self.config.get("api_keys", {}).get("anthropic_api_key", ""),
         )
 
-    async def run_query(self, query: str, stream_progress: bool = False):
+    async def run_query(self, query: str, stream_progress: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Run query through multi-agent system.
 
@@ -471,8 +471,9 @@ class MultiAgentRunner:
             query: User query
             stream_progress: If True, yields intermediate progress updates
 
-        Returns:
-            Dict with final_answer and metadata (or yields intermediate + final)
+        Yields:
+            Dict events with type 'progress', 'tool_call', or 'final'.
+            Final event has type='final' and contains final_answer and metadata.
         """
         logger.info(f"Running query: {query[:100]}...")
 
@@ -573,8 +574,12 @@ class MultiAgentRunner:
 
                         # If streaming progress, yield intermediate state
                         if stream_progress:
-                            # Extract current agent from state
-                            current_agent = state_chunk.get("current_agent")
+                            # Extract actual state from node dict
+                            # astream() returns {"node_name": {state}}, need to unwrap
+                            actual_state = next(iter(state_chunk.values())) if state_chunk else {}
+
+                            # Extract current agent from actual state
+                            current_agent = actual_state.get("current_agent")
                             if current_agent:
                                 yield {
                                     "type": "progress",
@@ -593,7 +598,12 @@ class MultiAgentRunner:
 
                     # If streaming progress, yield intermediate state
                     if stream_progress:
-                        current_agent = state_chunk.get("current_agent")
+                        # Extract actual state from node dict
+                        # astream() returns {"node_name": {state}}, need to unwrap
+                        actual_state = next(iter(state_chunk.values())) if state_chunk else {}
+
+                        # Extract current agent from actual state
+                        current_agent = actual_state.get("current_agent")
                         if current_agent:
                             yield {
                                 "type": "progress",
@@ -870,8 +880,16 @@ async def main():
 
     # Run query or interactive mode
     if args.query:
-        # Single query mode
-        result = await runner.run_query(args.query)
+        # Single query mode - consume async generator
+        result = None
+        async for event in runner.run_query(args.query):
+            if event.get("type") == "final":
+                result = event
+                break
+
+        if not result:
+            print("Error: No result returned from query")
+            return
 
         print("\n" + "=" * 80)
         print("FINAL ANSWER:")
@@ -900,11 +918,19 @@ async def main():
                 if not query:
                     continue
 
-                result = await runner.run_query(query)
+                # Consume async generator
+                result = None
+                async for event in runner.run_query(query):
+                    if event.get("type") == "final":
+                        result = event
+                        break
 
-                print("\n" + "-" * 80)
-                print(result["final_answer"])
-                print("-" * 80)
+                if result:
+                    print("\n" + "-" * 80)
+                    print(result["final_answer"])
+                    print("-" * 80)
+                else:
+                    print("\nError: No result returned")
 
             except KeyboardInterrupt:
                 print("\nInterrupted")
