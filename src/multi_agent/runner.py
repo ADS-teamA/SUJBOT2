@@ -515,8 +515,13 @@ class MultiAgentRunner:
             state = MultiAgentState(**state_dict)
 
             # Restore EventBus for later use (will be re-injected before workflow execution)
+            # CRITICAL: Always ensure event_bus is valid (never None) to prevent AttributeError
             if preserved_event_bus:
                 event_bus = preserved_event_bus
+            else:
+                # EventBus was lost during orchestrator execution (shouldn't happen but defensive)
+                logger.warning("EventBus was lost during orchestrator execution, recreating")
+                event_bus = EventBus(max_queue_size=1000)
 
             # Step 2: Check if orchestrator provided direct answer (for greetings/simple queries)
             # When no agents are needed, orchestrator returns final_answer directly
@@ -602,17 +607,17 @@ class MultiAgentRunner:
                             # astream() returns {"node_name": {state}}, need to unwrap
                             actual_state = next(iter(state_chunk.values())) if state_chunk else {}
 
-                            # Extract current agent from actual state
+                            # Extract current agent from actual state and emit AGENT_START event
                             current_agent = actual_state.get("current_agent")
-                            if current_agent:
-                                yield {
-                                    "type": "progress",
-                                    "agent": current_agent,
-                                    "status": "running"
-                                }
+                            if current_agent and event_bus:  # Defensive check to prevent AttributeError
+                                await event_bus.emit(
+                                    event_type=EventType.AGENT_START,
+                                    data={"agent": current_agent},
+                                    agent_name=current_agent
+                                )
 
                             # Yield pending events from EventBus
-                            events = await event_bus.get_pending_events(timeout=0.0)
+                            events = await event_bus.get_pending_events(timeout=0.0) if event_bus else []
                             for event in events:
                                 yield self._convert_event_to_sse(event)
             else:
@@ -626,17 +631,17 @@ class MultiAgentRunner:
                         # astream() returns {"node_name": {state}}, need to unwrap
                         actual_state = next(iter(state_chunk.values())) if state_chunk else {}
 
-                        # Extract current agent from actual state
+                        # Extract current agent from actual state and emit AGENT_START event
                         current_agent = actual_state.get("current_agent")
-                        if current_agent:
-                            yield {
-                                "type": "progress",
-                                "agent": current_agent,
-                                "status": "running"
-                            }
+                        if current_agent and event_bus:  # Defensive check to prevent AttributeError
+                            await event_bus.emit(
+                                event_type=EventType.AGENT_START,
+                                data={"agent": current_agent},
+                                agent_name=current_agent
+                            )
 
                         # Yield pending events from EventBus
-                        events = await event_bus.get_pending_events(timeout=0.0)
+                        events = await event_bus.get_pending_events(timeout=0.0) if event_bus else []
                         for event in events:
                             yield self._convert_event_to_sse(event)
 
@@ -838,7 +843,19 @@ class MultiAgentRunner:
         Returns:
             Dict in SSE format expected by frontend
         """
-        if event.event_type == EventType.TOOL_CALL_START:
+        if event.event_type == EventType.AGENT_START:
+            return {
+                "type": "agent_start",
+                "agent": event.agent_name,
+                "timestamp": event.timestamp.isoformat()
+            }
+        elif event.event_type == EventType.AGENT_COMPLETE:
+            return {
+                "type": "agent_complete",
+                "agent": event.agent_name,
+                "timestamp": event.timestamp.isoformat()
+            }
+        elif event.event_type == EventType.TOOL_CALL_START:
             return {
                 "type": "tool_call",
                 "agent": event.agent_name,
