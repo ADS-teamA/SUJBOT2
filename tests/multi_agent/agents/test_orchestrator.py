@@ -58,6 +58,8 @@ async def test_direct_answer_for_greetings(orchestrator, mock_provider, mock_llm
     # Mock LLM to return direct response with empty agent sequence
     mock_provider.create_message.return_value = mock_llm_response(
         text=json.dumps({
+            "complexity_score": 0,
+            "query_type": "chitchat",
             "agent_sequence": [],
             "final_answer": "Hello! I'm doing well, thank you. How can I help you today?",
             "reasoning": "This is a greeting, no specialized agents needed."
@@ -85,8 +87,9 @@ async def test_routes_complex_query_to_multiple_agents(orchestrator, mock_provid
     # Mock LLM to return complex routing
     mock_provider.create_message.return_value = mock_llm_response(
         text=json.dumps({
-            "agent_sequence": ["extractor", "classifier", "compliance", "gap_synthesizer", "report_generator"],
             "complexity_score": 85,
+            "query_type": "multi_document_analysis",
+            "agent_sequence": ["extractor", "classifier", "compliance", "gap_synthesizer", "report_generator"],
             "reasoning": "Complex multi-document compliance comparison requiring extraction, classification, analysis, and synthesis."
         })
     )
@@ -114,8 +117,9 @@ async def test_routes_simple_query_to_few_agents(orchestrator, mock_provider, mo
     # Mock LLM to return simple routing
     mock_provider.create_message.return_value = mock_llm_response(
         text=json.dumps({
-            "agent_sequence": ["extractor"],
             "complexity_score": 25,
+            "query_type": "retrieval",
+            "agent_sequence": ["extractor"],
             "reasoning": "Simple retrieval query requires only extractor."
         })
     )
@@ -152,26 +156,25 @@ async def test_calls_list_documents_tool_when_needed(orchestrator, mock_provider
         # Then: Provide routing decision
         mock_llm_response(
             text=json.dumps({
-                "agent_sequence": ["extractor", "classifier"],
-                "complexity_score": 40
+                "complexity_score": 40,
+                "query_type": "retrieval",
+                "agent_sequence": ["extractor", "classifier"]
             })
         )
     ]
 
-    # Mock tool to return document list
-    mock_tool_adapter.execute.return_value = {
-        "success": True,
-        "data": {"documents": ["doc1", "doc2", "doc3"], "count": 3},
-        "metadata": {"api_cost_usd": 0.0}
-    }
+    # Mock orchestrator tools instance
+    mock_list_documents = Mock(return_value={
+        "documents": [{"id": "doc1"}, {"id": "doc2"}, {"id": "doc3"}],
+        "count": 3,
+        "message": "Found 3 documents"
+    })
 
-    with patch("src.multi_agent.agents.orchestrator.tool_adapter", mock_tool_adapter):
+    with patch.object(orchestrator.orchestrator_tools_instance, 'list_available_documents', mock_list_documents):
         result = await orchestrator.execute(state)
 
     # Verify tool was called
-    mock_tool_adapter.execute.assert_called()
-    call_args = mock_tool_adapter.execute.call_args
-    assert call_args[1]["tool_name"] == "list_available_documents"
+    mock_list_documents.assert_called_once()
 
 
 # ============================================================================
@@ -208,8 +211,9 @@ async def test_validates_agent_sequence_contains_valid_agents(orchestrator, mock
     # Mock LLM to return invalid agent name
     mock_provider.create_message.return_value = mock_llm_response(
         text=json.dumps({
-            "agent_sequence": ["extractor", "invalid_agent_name", "classifier"],
-            "complexity_score": 50
+            "complexity_score": 50,
+            "query_type": "analysis",
+            "agent_sequence": ["extractor", "invalid_agent_name", "classifier"]
         })
     )
 
@@ -240,8 +244,9 @@ async def test_complexity_score_reflects_query_difficulty(orchestrator, mock_pro
 
         mock_provider.create_message.return_value = mock_llm_response(
             text=json.dumps({
-                "agent_sequence": ["extractor"],
-                "complexity_score": (min_score + max_score) // 2
+                "complexity_score": (min_score + max_score) // 2,
+                "query_type": "analysis" if min_score > 40 else "retrieval",
+                "agent_sequence": ["extractor"]
             })
         )
 
@@ -273,28 +278,29 @@ async def test_calls_list_available_agents_tool(orchestrator, mock_provider, moc
         ], stop_reason="tool_use"),
         mock_llm_response(
             text=json.dumps({
+                "complexity_score": 0,
+                "query_type": "meta",
                 "agent_sequence": [],
                 "final_answer": "I can help with document search, compliance analysis, risk verification, and more."
             })
         )
     ]
 
-    mock_tool_adapter.execute.return_value = {
-        "success": True,
-        "data": {
-            "agents": [
-                {"name": "extractor", "description": "Extract information"},
-                {"name": "compliance", "description": "Verify compliance"}
-            ]
-        },
-        "metadata": {}
-    }
+    # Mock orchestrator tools instance
+    mock_list_agents = Mock(return_value={
+        "agents": [
+            {"name": "extractor", "role": "extract", "tools": ["search"]},
+            {"name": "compliance", "role": "verify", "tools": ["assess_confidence"]}
+        ],
+        "count": 2,
+        "message": "Found 2 available agents"
+    })
 
-    with patch("src.multi_agent.agents.orchestrator.tool_adapter", mock_tool_adapter):
+    with patch.object(orchestrator.orchestrator_tools_instance, 'list_available_agents', mock_list_agents):
         result = await orchestrator.execute(state)
 
     # Verify tool was called
-    mock_tool_adapter.execute.assert_called()
+    mock_list_agents.assert_called_once()
 
 
 # ============================================================================
@@ -308,6 +314,8 @@ async def test_empty_agent_sequence_returns_final_answer(orchestrator, mock_prov
 
     mock_provider.create_message.return_value = mock_llm_response(
         text=json.dumps({
+            "complexity_score": 0,
+            "query_type": "meta",
             "agent_sequence": [],
             "final_answer": "I am SUJBOT2, a legal document analysis assistant."
         })

@@ -196,7 +196,7 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
 
             for iteration in range(max_tool_iterations):
                 # Call provider's unified create_message API
-                response = self.provider.create_message(
+                response = await self.provider.create_message(
                     messages=messages,
                     tools=self.orchestrator_tool_schemas,
                     system=system,
