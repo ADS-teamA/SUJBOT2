@@ -38,6 +38,22 @@ async def lifespan(app: FastAPI):
 
     # Startup
     try:
+        # Validate required API keys before initialization
+        import os
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+
+        if not anthropic_key and not openai_key:
+            raise ValueError(
+                "At least one API key is required (ANTHROPIC_API_KEY or OPENAI_API_KEY). "
+                "Set in .env file or environment variables."
+            )
+
+        if anthropic_key:
+            logger.info("✓ Anthropic API key found")
+        if openai_key:
+            logger.info("✓ OpenAI API key found")
+
         logger.info("Initializing agent adapter...")
         agent_adapter = AgentAdapter()
 

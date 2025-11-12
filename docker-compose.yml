@@ -9,7 +9,7 @@ services:
     container_name: sujbot_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sujbot_secure_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}
       POSTGRES_DB: ${POSTGRES_DB:-sujbot}
       # Performance tuning
       POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-4GB}
@@ -24,7 +24,9 @@ services:
       # Performance config
       - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
     ports:
-      # WARNING: Remove this port mapping in production (security risk)
+      # WARNING: SECURITY RISK - PostgreSQL exposed on host network
+      # Remove this port mapping in production or use docker-compose.override.yml
+      # For production: Comment out this entire ports section
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sujbot}"]
@@ -59,7 +61,7 @@ services:
         condition: service_healthy
     environment:
       # Database connection
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-sujbot_secure_password}@postgres:5432/${POSTGRES_DB:-sujbot}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}@postgres:5432/${POSTGRES_DB:-sujbot}
 
       # API Keys (load from .env)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}

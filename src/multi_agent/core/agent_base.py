@@ -437,19 +437,50 @@ class BaseAgent(ABC):
                     )
 
                     # Extract API cost from result metadata
-                    tool_cost = result.get("metadata", {}).get("api_cost_usd", 0.0)
+                    tool_cost = result.get("metadata", {}).get("api_cost_usd", 0.0) if isinstance(result, dict) else 0.0
                     total_tool_cost += tool_cost
+
+                    # Check for critical tool failures and surface them to user
+                    if not result.get("success", False):
+                        error_msg = result.get("error", "Unknown error")
+                        self.logger.error(
+                            f"Tool execution failed: {tool_name}",
+                            extra={
+                                "tool_name": tool_name,
+                                "tool_input": str(tool_input)[:200],  # Truncate for log size
+                                "error": error_msg
+                            }
+                        )
+
+                        # Critical tools that must succeed for valid results
+                        critical_tools = {
+                            "hierarchical_search", "similarity_search", "graph_search",
+                            "get_document_info", "bm25_search", "hybrid_search"
+                        }
+
+                        if tool_name in critical_tools:
+                            # Add error to state for user notification
+                            if "errors" not in state:
+                                state["errors"] = []
+                            state["errors"].append(
+                                f"Critical tool '{tool_name}' failed: {error_msg}. "
+                                f"Results may be incomplete or unreliable."
+                            )
+                            self.logger.warning(
+                                f"Critical tool failure surfaced to user: {tool_name}"
+                            )
 
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": tool_use.get('id'),
-                        "content": str(result.get("data", "")) if result["success"] else f"Error: {result.get('error', 'Unknown')}"
+                        "content": str(result.get("data", "")) if result.get("success", False) else f"Error: {result.get('error', 'Unknown error')}",
+                        "is_error": not result.get("success", False)  # Add error flag for debugging
                     })
 
                     tool_call_history.append({
                         "tool": tool_name,
                         "input": tool_input,
-                        "success": result["success"],
+                        "success": result.get("success", False),
                         "api_cost_usd": tool_cost  # Track cost per tool call
                     })
 

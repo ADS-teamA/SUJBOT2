@@ -143,12 +143,13 @@ class MultiAgentRunner:
                 context={"phase": "initialization", "config_keys": list(self.multi_agent_config.keys())}
             )
 
-            logger.error(
+            error_msg = (
                 f"[{error_id}] Failed to initialize multi-agent system: {type(e).__name__}: {e}. "
                 f"Check: (1) API keys are valid in config.json, (2) PostgreSQL is running (if checkpointing enabled), "
-                f"(3) all agent configs are present, (4) dependencies are installed.",
-                exc_info=True
+                f"(3) all agent configs are present, (4) dependencies are installed."
             )
+
+            logger.error(error_msg, exc_info=True)
 
             # Store error for health endpoint
             self.initialization_error = {
@@ -158,7 +159,9 @@ class MultiAgentRunner:
                 "message": f"Multi-agent system failed to initialize [{error_id}]. Check logs for details."
             }
 
-            return False
+            # CRITICAL: Raise instead of returning False
+            # This prevents caller from using uninitialized runner
+            raise RuntimeError(error_msg) from e
 
     async def _register_agents(self) -> None:
         """Register all agents with registry."""

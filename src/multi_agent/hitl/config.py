@@ -23,7 +23,7 @@ class HITLConfig:
     """
     Human-in-the-Loop configuration.
 
-    Loaded from config_multi_agent_extension.json under multi_agent.clarification
+    Loaded from config.json under multi_agent.clarification section.
     """
 
     # === POLICY ===

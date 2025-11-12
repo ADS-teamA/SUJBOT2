@@ -266,8 +266,8 @@ async def resume_with_clarification(thread_id, user_response, original_state):
     return result
 ```
 
-#### 9. `config_multi_agent_extension.json` (Modified)
-**Changes**: Added complete `clarification` section (70 lines, 127-197)
+#### 9. `config.json` (Modified)
+**Changes**: Added complete `clarification` section under `multi_agent` (70 lines)
 
 **Structure**:
 ```json
@@ -471,7 +471,7 @@ class ClarificationRequest(BaseModel):
 
 ### Enable/Disable HITL
 
-**In `config_multi_agent_extension.json`**:
+**In `config.json`** (under `multi_agent.clarification` section):
 ```json
 {
   "clarification": {
