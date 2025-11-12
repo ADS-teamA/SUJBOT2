@@ -80,8 +80,6 @@ services:
       - model_cache:/root/.cache
       # Document data (read-only)
       - ./data:/app/data:ro
-      # Vector database (FAISS indexes, BM25, required!)
-      - ./vector_db:/app/vector_db:ro
       # Logs (optional, for debugging)
       - ./logs:/app/logs
     ports:

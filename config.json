@@ -6,7 +6,7 @@
     "embedding_provider": "openai"
   },
   "storage": {
-    "backend": "faiss",
+    "backend": "postgresql",
     "postgresql": {
       "connection_string_env": "DATABASE_URL",
       "pool_size": 20,
