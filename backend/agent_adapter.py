@@ -370,16 +370,19 @@ class AgentAdapter:
                     }
                 }
 
-            # Send final cost update
-            total_cost_cents = result.get("total_cost_cents", 0.0)
+            # Send final cost update (use CostTracker for accurate model-specific pricing)
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            total_cost_cents = total_cost_usd * 100.0
+
             yield {
                 "event": "cost_update",
                 "data": {
                     "summary": {
                         "total_cost_cents": total_cost_cents,
-                        "total_cost_usd": total_cost_cents / 100.0,
+                        "total_cost_usd": total_cost_usd,
                     },
-                    "total_cost": total_cost_cents / 100.0,
+                    "total_cost": total_cost_usd,
                     "complexity_score": complexity_score,
                     "agents_used": len(agent_sequence),
                 }
@@ -582,13 +585,15 @@ class AgentAdapter:
                     }
                     await asyncio.sleep(0.05)
 
-            # Emit cost update
+            # Emit cost update (use CostTracker for accurate model-specific pricing)
             cost_summary = tracker.get_summary()
+            total_cost_usd = tracker.get_total_cost()
+
             yield {
                 "event": "cost_update",
                 "data": {
                     "summary": cost_summary,
-                    "total_cost": result.get("total_cost_cents", 0) / 100,
+                    "total_cost": total_cost_usd,
                 },
             }
 

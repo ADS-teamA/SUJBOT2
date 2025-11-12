@@ -175,15 +175,14 @@ class MultiAgentState(BaseModel):
             self.agent_sequence.append(agent_name)
 
     def add_tool_execution(self, execution: ToolExecution) -> None:
-        """Record a tool execution."""
-        self.tool_executions.append(execution)
+        """
+        Record a tool execution.
 
-        # Update cost tracking
-        agent_cost = self.cost_breakdown.get(execution.agent_name, 0.0)
-        # Estimate cost: rough approximation for tracking
-        token_cost = (execution.input_tokens + execution.output_tokens) * 0.000003  # $3/1M tokens
-        self.cost_breakdown[execution.agent_name] = agent_cost + token_cost
-        self.total_cost_cents += token_cost * 100
+        NOTE: Cost tracking removed from this method (2025-11).
+        Use global CostTracker instead for accurate model-specific pricing.
+        The total_cost_cents field is now populated by runner/backend from CostTracker.
+        """
+        self.tool_executions.append(execution)
 
     def update_execution_phase(self, phase: ExecutionPhase) -> None:
         """Update the current execution phase."""

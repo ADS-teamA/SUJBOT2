@@ -1,34 +1,53 @@
 # CLAUDE.md - Navigation Guide
 
-**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + multi-agent orchestration + Human-in-the-Loop clarifications.
+**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + multi-agent orchestration + Human-in-the-Loop clarifications + Docker-based web interface.
 
-**Status:** MULTI-AGENT SYSTEM + HITL COMPLETE ✅ (2025-11-11)
+**Status:** MULTI-AGENT SYSTEM + HITL + WEB UI COMPLETE ✅ (2025-11-12)
 
 ---
 
 ## 🚀 Quick Start
 
+**Architecture:** Full-stack application running in Docker (PostgreSQL + FastAPI Backend + React Frontend)
+
 **Read these files for detailed information:**
 - [`README.md`](README.md) - User guide, installation, quick start
 - [`PIPELINE.md`](PIPELINE.md) - Complete pipeline specification with research papers
-- [`INSTALL.md`](INSTALL.md) - Platform-specific setup (Windows/macOS/Linux)
-- [`docs/agent/README.md`](docs/agent/README.md) - Agent CLI documentation
 - [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md) - Human-in-the-Loop clarification system
+- [`docs/BENCHMARK.md`](docs/BENCHMARK.md) - Benchmark evaluation system
+- [`docs/DOCKER_SETUP.md`](docs/DOCKER_SETUP.md) - Docker configuration and deployment
+- [`docs/WEB_INTERFACE.md`](docs/WEB_INTERFACE.md) - Web UI features and usage
+- [`docs/LANGUAGE_SUPPORT.md`](docs/LANGUAGE_SUPPORT.md) - Multilingual BM25 support (Czech + 24 languages)
 - Visual docs: [`indexing_pipeline.html`](indexing_pipeline.html), [`user_search_pipeline.html`](user_search_pipeline.html)
 
-**Common commands:**
+**Docker Commands (primary interface):**
 ```bash
-# Index documents
+# 1. Setup (first time only)
+cp config.json.example config.json
+# Edit config.json with your API keys
+
+# 2. Index documents (before first use)
 uv run python run_pipeline.py data/document.pdf
 
-# Launch multi-agent system
-uv run python -m src.multi_agent.runner --query "your query"
-uv run python -m src.multi_agent.runner --interactive
+# 3. Start full stack (backend + frontend + PostgreSQL)
+docker-compose up -d
 
-# Launch web interface
+# OR use convenience script
 ./start_web.sh
 
-# Run tests
+# 4. Access web interface
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+
+# 5. View logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# 6. Stop services
+docker-compose down
+
+# Development: Run tests
 uv run pytest tests/ -v
 ```
 
@@ -37,6 +56,67 @@ uv run pytest tests/ -v
 ## ⚠️ CRITICAL CONSTRAINTS (NEVER CHANGE)
 
 These are research-backed decisions. **DO NOT modify** without explicit approval:
+
+### -1. SINGLE SOURCE OF TRUTH (SSOT) & CODE HYGIENE (MANDATORY) 🧹
+
+**CRITICAL: Maintain SSOT principles and eliminate duplicate/legacy implementations!**
+
+**SSOT Principles:**
+1. **One canonical implementation** - Each feature/component has EXACTLY ONE authoritative implementation
+2. **No duplicate code** - If you find two implementations of the same functionality, remove the obsolete one
+3. **No legacy code** - If you encounter unused/deprecated code, delete it immediately
+4. **No test files in root** - All tests belong in `tests/` directory
+5. **No documentation in root** - Detailed docs belong in `docs/` directory
+6. **No utility scripts in root** - Migration/utility scripts belong in `scripts/` directory
+
+**Root Directory Rules:**
+```
+✅ ALLOWED in root:
+- Config files (.env, .gitignore, config.json, docker-compose.yml)
+- Main entry points (run_pipeline.py, run_benchmark.py, start_web.sh)
+- Core documentation (README.md, CLAUDE.md, PIPELINE.md)
+- Python packaging (pyproject.toml, uv.lock, pytest.ini)
+
+❌ FORBIDDEN in root:
+- Test files (test_*.py, *_test.sh, test_*.sh)
+- Test results (RESULTS.md, TEST_OUTPUT.md)
+- Detailed documentation (BENCHMARK.md, DOCKER_SETUP.md, etc.) → move to docs/
+- Utility scripts (rebuild_*.py, verify_*.py, migrate_*.py) → move to scripts/
+- Temporary files, logs, debug outputs
+```
+
+**Duplicate Detection & Removal Protocol:**
+When you encounter ANY of these patterns:
+1. **Two implementations of same feature** - Compare timestamps, choose newer, delete older
+2. **Legacy tool/agent** - If replaced by new version, delete old immediately
+3. **Unused imports/functions** - Remove if not referenced anywhere
+4. **Commented-out code blocks** - Delete (git history preserves it)
+5. **Multiple config files for same thing** - Consolidate to SSOT (config.json)
+
+**Examples of violations to fix immediately:**
+```
+❌ BAD: src/agent/tools/old_search.py + src/agent/tools/tier1_basic.py both have search
+→ FIX: Keep tier1_basic.py (newer), delete old_search.py
+
+❌ BAD: test_fixes.py in root
+→ FIX: Move to tests/ or delete if temporary
+
+❌ BAD: BENCHMARK.md in root
+→ FIX: Move to docs/BENCHMARK.md
+
+❌ BAD: rebuild_vector_db.py in root
+→ FIX: Move to scripts/rebuild_vector_db.py
+```
+
+**Why this matters:**
+- Prevents confusion about which implementation to use
+- Reduces maintenance burden (update one place, not three)
+- Keeps codebase navigable and professional
+- Eliminates "zombie code" that wastes context window
+
+**Enforcement:** Whenever you read/modify code and spot duplicate/legacy implementations, **DELETE THEM IMMEDIATELY**. Do not wait for explicit user request.
+
+---
 
 ### 0. AUTONOMOUS AGENTIC ARCHITECTURE (MANDATORY) 🤖
 
@@ -128,11 +208,19 @@ Every agent prompt (in `prompts/agents/`) follows this structure:
 
 **Testing:**
 ```bash
-# Test single autonomous agent
+# Test single autonomous agent (local dev)
 uv run python test_autonomous.py
 
-# Test full multi-agent workflow
-uv run python -m src.multi_agent.runner --query "Your query here"
+# Test full multi-agent workflow via web interface
+# 1. Start services: docker-compose up -d
+# 2. Open http://localhost:5173
+# 3. Send query: "What are GDPR compliance requirements?"
+# 4. Observe agent progress in real-time
+
+# Test backend API directly
+curl -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Test query", "conversation_id": "test", "model": null}'
 ```
 
 **Why:** True agentic system enables emergent behavior, better reasoning, and flexibility without code changes. LLM can discover optimal tool calling strategies we didn't explicitly program.
@@ -193,6 +281,97 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 
 ---
 
+## 🐳 Docker Architecture
+
+**Current Setup:** 3-tier containerized application with persistent storage
+
+### Services
+
+**1. PostgreSQL (`sujbot_postgres`)**
+- **Purpose:** Vector storage (pgvector), knowledge graph (Apache AGE), checkpointing
+- **Extensions:** pgvector (vector similarity search), Apache AGE (graph queries)
+- **Volumes:**
+  - `postgres_data:/var/lib/postgresql/data` (persistent, CRITICAL)
+  - `./docker/postgres/init:/docker-entrypoint-initdb.d` (initialization scripts)
+- **Ports:** 5432 (⚠️ exposed for development, remove in production)
+- **Health Check:** `pg_isready` every 5s
+- **Resources:** 2-4 CPU cores, 4-8GB RAM
+
+**2. Backend (`sujbot_backend`)**
+- **Purpose:** FastAPI server + multi-agent system + RAG pipeline
+- **Base:** Python 3.10 + uv package manager
+- **Volumes:**
+  - `model_cache:/root/.cache` (sentence-transformers, ~2-5GB, persistent)
+  - `./data:/app/data:ro` (documents, read-only)
+  - `./vector_db:/app/vector_db:ro` (FAISS indexes + BM25, read-only, REQUIRED)
+  - `./logs:/app/logs` (optional debugging)
+- **Environment:**
+  - `DATABASE_URL` (PostgreSQL connection)
+  - `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`
+  - `STORAGE_BACKEND=postgresql`
+- **Ports:** 8000 (FastAPI)
+- **Health Check:** `curl http://localhost:8000/health` every 30s
+- **Resources:** 1-2 CPU cores, 2-4GB RAM
+
+**3. Frontend (`sujbot_frontend`)**
+- **Purpose:** React SPA with real-time agent progress visualization
+- **Base:** Node 22 + Vite (dev) or Nginx (production)
+- **Build Targets:**
+  - `development`: Hot reload with Vite dev server (port 5173)
+  - `production`: Optimized build served by Nginx (port 80)
+- **Environment:**
+  - `VITE_API_BASE_URL=http://localhost:8000` (backend connection)
+- **Ports:** 5173 (dev), 80 (prod)
+- **Resources:** 0.5-1 CPU core, 512MB-1GB RAM
+
+### Volumes (Persistent Data)
+
+**CRITICAL: Do NOT delete these without backup!**
+- `postgres_data`: All vectors, graphs, checkpoints (~5-10GB)
+- `model_cache`: Downloaded models (~2-5GB, speeds up startup)
+
+### Network
+
+- Bridge network `sujbot_net` (172.20.0.0/16)
+- All services communicate via service names (e.g., `backend:8000`)
+
+### Build Targets
+
+```bash
+# Development (hot reload, verbose logging)
+BUILD_TARGET=development docker-compose up
+
+# Production (optimized, nginx serving frontend)
+BUILD_TARGET=production docker-compose up
+```
+
+### Common Operations
+
+```bash
+# Rebuild after code changes
+docker-compose build backend
+docker-compose up -d backend
+
+# Rebuild everything
+docker-compose build --no-cache
+docker-compose up -d
+
+# View logs (real-time)
+docker-compose logs -f backend frontend
+
+# Shell access
+docker exec -it sujbot_backend bash
+docker exec -it sujbot_postgres psql -U postgres -d sujbot
+
+# Backup PostgreSQL
+docker exec sujbot_postgres pg_dump -U postgres sujbot > backup.sql
+
+# Restore PostgreSQL
+cat backup.sql | docker exec -i sujbot_postgres psql -U postgres sujbot
+```
+
+---
+
 ## 🔢 Token vs Character Equivalence
 
 **Research Constraint (LegalBench-RAG):**
@@ -216,44 +395,87 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 
 ## 📂 Key File Locations
 
-**Pipeline Core:**
-- `run_pipeline.py` - CLI entry point
+### Docker & Infrastructure
+
+- `docker-compose.yml` - Services orchestration (PostgreSQL + Backend + Frontend)
+- `docker/backend/Dockerfile` - Backend container (Python 3.10 + uv)
+- `docker/frontend/Dockerfile` - Frontend container (Node 22 + Vite/Nginx)
+- `docker/postgres/Dockerfile` - PostgreSQL with pgvector + Apache AGE
+- `.env` - Environment variables (API keys, ports)
+- `start_web.sh` - Convenience script (builds + starts all services)
+
+### Backend (FastAPI + Multi-Agent System)
+
+**Entry Points:**
+- `backend/main.py` - FastAPI server, SSE streaming endpoints
+- `backend/agent_adapter.py` - Adapter between FastAPI and multi-agent system
+- `backend/models.py` - Pydantic request/response models
+
+**Multi-Agent System:**
+- `src/multi_agent/runner.py` - Main orchestrator (query routing, workflow execution)
+- `src/multi_agent/agents/*.py` - 8 agents (orchestrator, extractor, classifier, compliance, risk_verifier, citation_auditor, gap_synthesizer, report_generator)
+- `src/multi_agent/core/agent_base.py` - Base class with autonomous tool calling loop
+- `src/multi_agent/core/event_bus.py` - Real-time event system (agent progress, tool calls)
+- `src/multi_agent/tools/adapter.py` - Tool schema conversion (Pydantic → LLM format)
+- `prompts/agents/*.txt` - System prompts (guide autonomous agent behavior)
+
+**Human-in-the-Loop (HITL):**
+- `src/multi_agent/hitl/` - HITL components (4 files)
+  - `config.py` - Quality thresholds
+  - `quality_detector.py` - Multi-metric quality detection
+  - `clarification_generator.py` - LLM-based question generation
+  - `context_enricher.py` - Query enrichment
+- `backend/main.py:268` - `/chat/clarify` endpoint
+- **Docs:** [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md)
+
+**RAG Pipeline (PHASE 1-7):**
+- `run_pipeline.py` - Document indexing CLI
 - `src/indexing_pipeline.py` - Main orchestrator (PHASE 1-6)
 - `src/config.py` - Shared configs
-
-**7 Phases:**
-1. `src/unstructured_extractor.py` - Multi-format extraction with Unstructured.io (Layout model: **yolox** - best results from testing on legal documents)
-2. `src/summary_generator.py` - Document summaries (hierarchical from section summaries)
-3. `src/multi_layer_chunker.py` - Token-aware chunking + SAC + section summaries
-4. `src/embedding_generator.py`, `src/faiss_vector_store.py` - Embeddings + FAISS
-5. `src/hybrid_search.py`, `src/graph/`, `src/reranker.py` - Advanced retrieval
-6. `src/context_assembly.py` - Context prep
-7. `src/agent/` - RAG agent (16 tools)
+- **PHASE 1:** `src/unstructured_extractor.py` (layout model: **yolox**)
+- **PHASE 2:** `src/summary_generator.py` (hierarchical summaries)
+- **PHASE 3:** `src/multi_layer_chunker.py` (token-aware + SAC)
+- **PHASE 4:** `src/embedding_generator.py`, `src/faiss_vector_store.py` (embeddings + FAISS)
+- **PHASE 5:** `src/hybrid_search.py`, `src/graph/`, `src/reranker.py` (hybrid search + graph + reranking)
+- **PHASE 6:** `src/context_assembly.py` (context prep)
+- **PHASE 7:** `src/agent/` (RAG agent, 16 tools)
 
 **Agent Tools:**
 - `src/agent/tools/tier1_basic.py` - 5 fast tools (100-300ms)
 - `src/agent/tools/tier2_advanced.py` - 10 quality tools (500-1000ms)
-  - **NEW (2025-01):** `multi_doc_synthesizer` - Multi-document synthesis (replaces broken `compare_documents`)
-  - **NEW (2025-01):** `contextual_chunk_enricher` - Anthropic Contextual Retrieval (-58% context drift)
+  - `multi_doc_synthesizer` - Multi-document synthesis
+  - `contextual_chunk_enricher` - Contextual Retrieval (-58% context drift)
 - `src/agent/tools/tier3_analysis.py` - 1 analysis tool (1-3s)
 
-**Tests:**
+### Frontend (React + TypeScript + Vite)
+
+**Entry Points:**
+- `frontend/src/main.tsx` - React app entry point
+- `frontend/src/App.tsx` - Main application component
+- `frontend/src/pages/ChatPage.tsx` - Chat interface page
+
+**Core Components:**
+- `frontend/src/hooks/useChat.ts` - Chat state management + SSE streaming
+- `frontend/src/services/api.ts` - Backend API client
+- `frontend/src/components/chat/` - Chat UI components
+  - `ChatContainer.tsx` - Main chat container
+  - `ChatMessage.tsx` - Message display with inline tool calls
+  - `ChatInput.tsx` - Message input with attachments
+  - `AgentProgress.tsx` - Real-time agent activity visualization (FIXED 2025-11-12)
+  - `ClarificationModal.tsx` - HITL clarification dialog
+  - `ToolCallDisplay.tsx` - Tool execution results
+
+**Design System:**
+- `frontend/src/design-system/` - Reusable UI components
+- `frontend/src/types/index.ts` - TypeScript type definitions
+
+### Tests
+
 - `tests/test_phase*.py` - Pipeline tests
 - `tests/agent/` - Agent tests (49 tests)
 - `tests/graph/` - Knowledge graph tests
 - `tests/multi_agent/integration/` - HITL integration tests
-
-**Human-in-the-Loop (HITL) System:**
-- `src/multi_agent/hitl/` - HITL components (4 files)
-  - `config.py` - Configuration with quality thresholds
-  - `quality_detector.py` - Multi-metric quality detection
-  - `clarification_generator.py` - LLM-based question generation
-  - `context_enricher.py` - Query enrichment with user response
-- `backend/main.py` - `/chat/clarify` endpoint for clarification submission
-- `backend/agent_adapter.py` - `resume_clarification()` method
-- `frontend/src/components/chat/ClarificationModal.tsx` - React modal component
-- **Enabled by default** - Configure in `config_multi_agent_extension.json` under `clarification`
-- **See:** [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md) for complete documentation
+- `test_agent_progress_fix.py` - Real-time progress event verification
 
 ---
 
@@ -338,14 +560,26 @@ tool.execute(
 
 **Research basis:** Anthropic (2024) - Contextual Retrieval
 
-### Debugging Retrieval Issues
-```bash
-# Enable debug mode
-uv run python -m src.agent.cli --debug
+### Adding New Frontend Component
 
-# Use /debug-optimize slash command
-/debug-optimize
-[Paste error description]
+1. Create component in `frontend/src/components/`
+2. Follow existing patterns (TypeScript + Tailwind CSS)
+3. Use design system components from `frontend/src/design-system/`
+4. Add types to `frontend/src/types/index.ts`
+5. Update parent component to import
+
+Example skeleton:
+```typescript
+import React from 'react';
+import type { MyComponentProps } from '../../types';
+
+export const MyComponent: React.FC<MyComponentProps> = ({ data }) => {
+  return (
+    <div className="p-4 bg-white dark:bg-gray-800">
+      {/* Component content */}
+    </div>
+  );
+};
 ```
 
 ### GPT-5 and O-Series Model Compatibility
@@ -429,10 +663,69 @@ else:
 - **Token limits:** Use `max_total_tokens` parameter to prevent context overflow
 
 ### Debugging
-- **Debug mode:** Use `--debug` flag to see tool execution details
-- **Cost tracking:** Call `reset_global_tracker()` at operation start, `get_summary()` at end
-- **Vector store stats:** Use `store.get_stats()` to diagnose retrieval issues
-- **Multi-agent debug:** Use `/debug-optimize` for complex issues (auto-applies fixes)
+
+**Docker Logs:**
+```bash
+# View real-time logs
+docker-compose logs -f backend  # Backend + agent execution
+docker-compose logs -f frontend # Frontend build/serve
+docker-compose logs -f postgres # Database queries
+
+# Filter logs by error level
+docker-compose logs backend | grep ERROR
+docker-compose logs backend | grep WARNING
+```
+
+**Backend Debugging:**
+```bash
+# Shell access
+docker exec -it sujbot_backend bash
+
+# Python REPL with full context
+docker exec -it sujbot_backend python
+>>> from src.multi_agent.runner import MultiAgentRunner
+>>> runner = MultiAgentRunner()
+
+# Check vector store stats
+docker exec -it sujbot_backend python -c "from src.faiss_vector_store import FAISSVectorStore; store = FAISSVectorStore('vector_db'); print(store.get_stats())"
+
+# View environment
+docker exec -it sujbot_backend env | grep API_KEY
+```
+
+**Frontend Debugging:**
+```bash
+# Hot reload (development mode)
+BUILD_TARGET=development docker-compose up frontend
+
+# View browser console for SSE events
+# Open DevTools → Console, filter by "FRONTEND: Received event"
+
+# Check API connection
+curl http://localhost:8000/health
+curl http://localhost:8000/models
+```
+
+**Multi-Agent Debugging:**
+- **EventBus:** Check `src/multi_agent/core/event_bus.py` for event emission
+- **Agent Progress:** Verify events in `backend/agent_adapter.py:217-254`
+- **Frontend SSE:** Trace events in `frontend/src/hooks/useChat.ts:210`
+- **Test script:** Run `uv run python test_agent_progress_fix.py` to verify event flow
+
+**Database Debugging:**
+```bash
+# PostgreSQL shell
+docker exec -it sujbot_postgres psql -U postgres -d sujbot
+
+# Check tables
+\dt
+
+# Query vectors
+SELECT id, document_id FROM vector_embeddings LIMIT 10;
+
+# Check graph (Apache AGE)
+SELECT * FROM ag_graph.ag_label;
+```
 
 ---
 
@@ -491,22 +784,12 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-## 🐛 Debug System
-
-**`/debug-optimize` slash command** - Multi-agent debugging:
-- 5 specialized agents (cost-optimizer, rag-debugger, validation-expert, pipeline-expert, agent-expert)
-- Auto-applies fixes (max 20 per run)
-- Respects research constraints
-- Git commits if tests pass
-
-**When to use:**
-- Agent errors, tool failures
-- High API costs, cache misses
-- Pipeline failures, validation errors
-
 ---
 
-**Last Updated:** 2025-11-11
-**Version:** PHASE 1-7 COMPLETE + Multi-Agent System + HITL Clarifications (16 tools, 8 agents)
+**Last Updated:** 2025-11-12
+**Version:** PHASE 1-7 COMPLETE + Multi-Agent System + HITL + Docker Web UI (16 tools, 8 agents, real-time progress visualization)
 
-**Note:** `vector_db/` is tracked in git (contains merged vector stores) - DO NOT add to `.gitignore`
+**Notes:**
+- `vector_db/` is tracked in git (contains FAISS + BM25 indexes) - DO NOT add to `.gitignore`
+- PostgreSQL volume `postgres_data` contains all vectors/graphs - backup before deletion!
+- Frontend real-time progress fixed 2025-11-12 (LangGraph state extraction bug)

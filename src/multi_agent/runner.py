@@ -513,6 +513,12 @@ class MultiAgentRunner:
             # When no agents are needed, orchestrator returns final_answer directly
             if hasattr(state, 'final_answer') and state.final_answer and not state.agent_sequence:
                 logger.info("Orchestrator provided direct answer without agents")
+                # Get accurate cost from CostTracker (model-specific pricing)
+                from ...cost_tracker import get_global_tracker
+                tracker = get_global_tracker()
+                total_cost_usd = tracker.get_total_cost()
+                total_cost_cents = total_cost_usd * 100.0
+
                 direct_result = {
                     "success": True,
                     "final_answer": state.final_answer,
@@ -521,7 +527,7 @@ class MultiAgentRunner:
                     "agent_sequence": [],
                     "documents": [],
                     "citations": [],
-                    "total_cost_cents": 0.0,
+                    "total_cost_cents": total_cost_cents,
                     "errors": [],
                 }
                 # Always yield result (function is now always a generator)
@@ -639,6 +645,12 @@ class MultiAgentRunner:
 
             logger.info("Query execution completed successfully")
 
+            # Get accurate cost from CostTracker (model-specific pricing)
+            from ...cost_tracker import get_global_tracker
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            total_cost_cents = total_cost_usd * 100.0
+
             # Build final result dict
             final_result_dict = {
                 "success": True,
@@ -648,7 +660,7 @@ class MultiAgentRunner:
                 "agent_sequence": result.get("agent_sequence", []),
                 "documents": result.get("documents", []),
                 "citations": result.get("citations", []),
-                "total_cost_cents": result.get("total_cost_cents", 0.0),
+                "total_cost_cents": total_cost_cents,
                 "errors": result.get("errors", []),
             }
 
@@ -770,6 +782,12 @@ class MultiAgentRunner:
 
             logger.info("Resumed workflow completed successfully")
 
+            # Get accurate cost from CostTracker (model-specific pricing)
+            from ...cost_tracker import get_global_tracker
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            total_cost_cents = total_cost_usd * 100.0
+
             return {
                 "success": True,
                 "final_answer": final_answer,
@@ -778,7 +796,7 @@ class MultiAgentRunner:
                 "agent_sequence": result.get("agent_sequence", []),
                 "documents": result.get("documents", []),
                 "citations": result.get("citations", []),
-                "total_cost_cents": result.get("total_cost_cents", 0.0),
+                "total_cost_cents": total_cost_cents,
                 "errors": result.get("errors", []),
                 "enriched_query": result.get("enriched_query"),
             }
