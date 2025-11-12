@@ -53,6 +53,67 @@ uv run pytest tests/ -v
 
 ---
 
+## 🔄 Storage Migration: FAISS → PostgreSQL
+
+**Current Storage Backend:** PostgreSQL with pgvector (`config.json`: `"storage.backend": "postgresql"`)
+
+**Why PostgreSQL?**
+- ✅ ACID transactions and atomic operations
+- ✅ Concurrent access without file locking issues
+- ✅ Standard backup/recovery (pg_dump, WAL archiving)
+- ✅ Production-ready: No shared file mounts across containers
+- ✅ Integrated hybrid search: pgvector (dense) + tsvector (sparse, replaces BM25)
+
+### Migration from Legacy FAISS (One-Time Setup)
+
+If you have existing FAISS vector store in `vector_db/`, migrate to PostgreSQL:
+
+```bash
+# 1. Ensure PostgreSQL is running with pgvector
+docker-compose up -d postgres
+
+# Wait for PostgreSQL to be ready
+docker-compose logs -f postgres | grep "ready to accept connections"
+
+# 2. Verify DATABASE_URL is set (check .env file)
+echo $DATABASE_URL
+# Should be: postgresql://postgres:your_password@localhost:5432/sujbot
+
+# 3. Run migration script (one-time operation)
+uv run python scripts/migrate_faiss_to_postgres.py \
+  --faiss-dir vector_db/ \
+  --db-url "${DATABASE_URL}" \
+  --batch-size 500
+
+# Expected output:
+# - Layer 1: X documents migrated
+# - Layer 2: X documents migrated
+# - Layer 3: X documents migrated
+# - Migration complete!
+
+# 4. Verify migration
+docker-compose exec postgres psql -U postgres -d sujbot -c \
+  "SELECT COUNT(*) FROM vectors.layer1; SELECT COUNT(*) FROM vectors.layer2; SELECT COUNT(*) FROM vectors.layer3;"
+
+# 5. Optional: Backup old FAISS data
+mv vector_db vector_db.backup.$(date +%Y%m%d)
+
+# 6. Start application (will use PostgreSQL)
+docker-compose up -d
+```
+
+**Post-Migration:**
+- Application automatically uses PostgreSQL (configured in `config.json`)
+- Old `vector_db/` directory no longer needed (but keep as backup until verified)
+- All searches now use: pgvector (cosine similarity) + tsvector (full-text search) + RRF fusion
+
+**Troubleshooting:**
+- If migration fails: Check PostgreSQL logs (`docker-compose logs postgres`)
+- If "pgvector extension not found": Ensure Docker PostgreSQL image includes pgvector (see `docker/postgres/Dockerfile`)
+- If connection errors: Verify `DATABASE_URL` in `.env` matches PostgreSQL container
+
+---
+
 ## ⚠️ CRITICAL CONSTRAINTS (NEVER CHANGE)
 
 These are research-backed decisions. **DO NOT modify** without explicit approval:

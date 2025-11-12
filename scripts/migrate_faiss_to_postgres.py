@@ -100,21 +100,21 @@ class FAISSToPostgresMigrator:
         logger.info(f"Layer {layer}: Preparing {len(metadata)} records...")
         records = []
         for i, meta in enumerate(metadata):
-            # Convert embedding to list for PostgreSQL
+            # Convert embedding to pgvector format (string representation)
             embedding_list = embeddings[i].tolist()
+            embedding_str = '[' + ','.join(map(str, embedding_list)) + ']'
 
-            # Extract metadata fields
+            # Extract metadata fields (match PostgreSQL schema)
             chunk_id = meta["chunk_id"]
             document_id = meta["document_id"]
             content = meta.get("content", "")
-            section_id = meta.get("section_id")
-            section_title = meta.get("section_title")
-            section_path = meta.get("section_path")
+            title = meta.get("title") or meta.get("section_title")  # Fallback for old metadata
             hierarchical_path = meta.get("hierarchical_path")
             page_number = meta.get("page_number")
 
             # Remaining metadata as JSONB
-            metadata_json = {
+            import json
+            metadata_json = json.dumps({
                 k: v
                 for k, v in meta.items()
                 if k
@@ -122,22 +122,19 @@ class FAISSToPostgresMigrator:
                     "chunk_id",
                     "document_id",
                     "content",
-                    "section_id",
-                    "section_title",
-                    "section_path",
+                    "title",
+                    "section_title",  # Exclude if present
                     "hierarchical_path",
                     "page_number",
                 ]
-            }
+            })
 
             record = (
                 chunk_id,
                 document_id,
-                embedding_list,
+                title,
+                embedding_str,
                 content,
-                section_id,
-                section_title,
-                section_path,
                 hierarchical_path,
                 page_number,
                 metadata_json,
@@ -152,9 +149,8 @@ class FAISSToPostgresMigrator:
 
             insert_sql = f"""
                 INSERT INTO vectors.layer{layer}
-                (chunk_id, document_id, embedding, content, section_id, section_title,
-                 section_path, hierarchical_path, page_number, metadata)
-                VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9, $10::jsonb)
+                (chunk_id, document_id, title, embedding, content, hierarchical_path, page_number, metadata)
+                VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8::jsonb)
                 ON CONFLICT (chunk_id) DO NOTHING
             """
 
