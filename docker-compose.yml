@@ -1,0 +1,155 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector and Apache AGE extensions
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    container_name: sujbot_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}
+      POSTGRES_DB: ${POSTGRES_DB:-sujbot}
+      # Performance tuning
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-4GB}
+      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE:-12GB}
+      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-64MB}
+      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-1GB}
+    volumes:
+      # Persistent data
+      - postgres_data:/var/lib/postgresql/data
+      # Initialization scripts (run once on first start)
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      # Performance config
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    ports:
+      # WARNING: SECURITY RISK - PostgreSQL exposed on host network
+      # Remove this port mapping in production or use docker-compose.override.yml
+      # For production: Comment out this entire ports section
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sujbot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    # Resource limits (adjust based on your hardware)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+  # Backend - FastAPI with multi-agent RAG system
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+      target: ${BUILD_TARGET:-production}
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.10}
+    container_name: sujbot_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}@postgres:5432/${POSTGRES_DB:-sujbot}
+
+      # API Keys (load from .env)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+
+      # Storage backend
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-postgresql}
+
+      # Python environment
+      PYTHONUNBUFFERED: 1
+      PYTHONPATH: /app:/app/backend
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # Model cache (sentence-transformers, ~2-5GB)
+      - model_cache:/root/.cache
+      # Document data (read-only)
+      - ./data:/app/data:ro
+      # Logs (optional, for debugging)
+      - ./logs:/app/logs
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Frontend - React + Vite (dev) or Nginx (prod)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend/Dockerfile
+      target: ${BUILD_TARGET:-production}
+      args:
+        NODE_VERSION: ${NODE_VERSION:-22}
+        # API URL for production build
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: sujbot_frontend
+    depends_on:
+      - backend
+    environment:
+      # Development mode environment variables
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      # Dev mode: 5173, Prod mode: 80
+      - "${FRONTEND_DEV_PORT:-5173}:5173"
+      - "${FRONTEND_PROD_PORT:-80}:80"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  # PostgreSQL data - CRITICAL (contains all vectors, graphs, checkpoints)
+  postgres_data:
+    driver: local
+
+  # Model cache - Speeds up startup (sentence-transformers models)
+  model_cache:
+    driver: local
+
+networks:
+  sujbot_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

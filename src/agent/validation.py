@@ -575,14 +575,18 @@ class AgentValidator:
             registry = get_registry()
             tool_count = len(registry._tool_classes)
 
-            # Minimum expected tools (Tier 1: 5, Tier 2: 6, Tier 3: 3 = 14 total)
+            # Minimum expected tools (Tier 1: 5, Tier 2: 10, Tier 3: 1 = 16 total)
             # Tier 1 (5): search, get_document_list, get_document_info, get_tool_help, list_available_tools
-            # Tier 2 (6): graph_search (4 modes), compare_documents, explain_search_results, filtered_search (3 methods), similarity_search, expand_context
-            # Tier 3 (3): timeline_view, summarize_section, get_stats
-            # Note: Tool consolidation reduced count from 16 to 14
-            # - graph_search replaces multi_hop_search + entity_tool
-            # - filtered_search replaces exact_match_search + enhanced HybridSearchWithFiltersTool
-            MINIMUM_TOOL_COUNT = 14
+            # Tier 2 (10): graph_search (4 modes), explain_search_results, assess_retrieval_confidence,
+            #              filtered_search (3 methods), similarity_search, expand_context, browse_entities,
+            #              cluster_search, multi_doc_synthesizer, contextual_chunk_enricher
+            # Tier 3 (1): get_stats
+            # Note: Tool changes (2025-01):
+            # - REMOVED: exact_match_search (replaced by filtered_search), compare_documents (broken),
+            #   timeline_view (primitive), summarize_section (false advertising)
+            # - ADDED: multi_doc_synthesizer (proper multi-doc synthesis),
+            #   contextual_chunk_enricher (Anthropic Contextual Retrieval, -58% context drift)
+            MINIMUM_TOOL_COUNT = 16
 
             if tool_count < MINIMUM_TOOL_COUNT:
                 self.results.append(

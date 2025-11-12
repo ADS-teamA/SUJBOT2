@@ -1,8 +1,29 @@
 # SUJBOT2 - Production RAG System for Legal/Technical Documents
 
-Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and interactive AI agent.
+Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and **multi-agent AI framework**.
 
-**Status:** PHASE 1-7 COMPLETE ✅ (Full SOTA 2025 RAG System + 14-Tool Agent + Query Expansion)
+**Status:** PHASE 1-7 COMPLETE + **MULTI-AGENT UPGRADE** ✅ (2025-11-11)
+
+## 🆕 NEW: Multi-Agent System (v2.0)
+
+SUJBOT2 has been upgraded to a **research-backed multi-agent framework** achieving:
+- ✅ **90% cost savings** via 3-level prompt caching (Harvey AI case study)
+- ✅ **8 specialized agents** for higher quality (Orchestrator, Extractor, Classifier, Compliance, Risk Verifier, Citation Auditor, Gap Synthesizer, Report Generator)
+- ✅ **State persistence** with PostgreSQL checkpointing
+- ✅ **Full observability** with LangSmith integration
+
+**Quick Start:**
+```bash
+# New multi-agent command
+uv run python -m src.multi_agent.runner --query "Verify GDPR compliance"
+
+# Interactive mode
+uv run python -m src.multi_agent.runner --interactive
+```
+
+**Migrating from v1.x single-agent?** → See [**MIGRATION_GUIDE.md**](MIGRATION_GUIDE.md)
+
+**Architecture details** → See [**MULTI_AGENT_STATUS.md**](MULTI_AGENT_STATUS.md)
 
 ## 📚 Interactive Documentation
 
@@ -33,12 +54,13 @@ Production-ready RAG system based on 4 research papers implementing state-of-the
 - **PHASE 5:** Hybrid search (BM25+Dense+RRF) + Knowledge graph + Cross-encoder reranking + Query expansion
 - **PHASE 6:** Context assembly with citations
 
-**Agent (PHASE 7):**
-- **Interactive CLI** powered by Claude SDK
-- **14 specialized tools** (5 basic + 6 advanced + 3 analysis)
-- **Query expansion** with multi-query generation (+15-25% recall improvement)
-- **Cost tracking** with prompt caching (90% savings on cached tokens)
-- **Conversation management** (/help, /model, /stats, /config, /clear)
+**Agent (PHASE 7) - Multi-Agent System:**
+- **8 specialized agents** (Orchestrator, Extractor, Classifier, Compliance, Risk Verifier, Citation Auditor, Gap Synthesizer, Report Generator)
+- **16 existing tools** integrated via adapter pattern (zero changes needed)
+- **3-level prompt caching** for 90% cost savings (regulatory docs + contract templates + system prompts)
+- **PostgreSQL checkpointing** for state persistence and recovery
+- **LangSmith observability** for full workflow tracing
+- **Adaptive routing** with 3 workflow patterns (Simple, Standard, Complex)
 
 ---
 

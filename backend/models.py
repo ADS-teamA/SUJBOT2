@@ -51,3 +51,15 @@ class ModelsResponse(BaseModel):
 
     models: List[ModelInfo]
     default_model: str
+
+
+class ClarificationRequest(BaseModel):
+    """Request to provide clarification for interrupted workflow."""
+
+    thread_id: str = Field(..., description="Thread ID from clarification_needed event")
+    response: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="User's free-form clarification response",
+    )

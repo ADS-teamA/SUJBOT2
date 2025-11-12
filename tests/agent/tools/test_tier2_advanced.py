@@ -1,13 +1,21 @@
 """
 Tests for Tier 2 Advanced Retrieval Tools.
 
-Tests all 6 Tier 2 tools (after consolidation):
+Tests all 10 Tier 2 tools (after cleanup + additions 2025-01):
 1. GraphSearchTool (consolidated: MultiHopSearchTool + EntityTool) - 4 modes, 16 tests
-2. CompareDocumentsTool
-3. ExplainSearchResultsTool
-4. FilteredSearchTool (enhanced: HybridSearchWithFiltersTool + ExactMatchSearchTool) - 3 methods, 18 tests
-5. SimilaritySearchTool (renamed from ChunkSimilaritySearchTool)
-6. ExpandContextTool (renamed from ExpandSearchContextTool)
+2. ExplainSearchResultsTool
+3. FilteredSearchTool (enhanced: HybridSearchWithFiltersTool + ExactMatchSearchTool) - 3 methods, 18 tests
+4. SimilaritySearchTool (renamed from ChunkSimilaritySearchTool)
+5. ExpandContextTool (renamed from ExpandSearchContextTool)
+6. AssessRetrievalConfidenceTool
+7. BrowseEntitiesTool
+8. ClusterSearchTool
+9. MultiDocSynthesizerTool (NEW - replaces broken CompareDocumentsTool)
+10. ContextualChunkEnricherTool (NEW - Anthropic Contextual Retrieval, -58% context drift)
+
+Removed tools (2025-01):
+- CompareDocumentsTool: Broken implementation (internal API access)
+- Replaced by: MultiDocSynthesizerTool (proper multi-document synthesis using public APIs)
 
 Coverage:
 - Valid inputs and expected outputs
@@ -15,6 +23,8 @@ Coverage:
 - Mode/method-based functionality (GraphSearchTool: 4 modes, FilteredSearchTool: 3 methods)
 - Legacy parameter compatibility
 - Edge cases and safety limits
+- NEW: Multi-document synthesis modes (compare, summarize, analyze)
+- NEW: Contextual enrichment modes (auto, document_summary, section_summary, both)
 """
 
 import pytest
@@ -24,7 +34,7 @@ import numpy as np
 
 from src.agent.tools.tier2_advanced import (
     # MultiHopSearchTool,  # REMOVED - replaced by GraphSearchTool
-    CompareDocumentsTool,
+    # CompareDocumentsTool,  # REMOVED 2025-01 - broken implementation
     # FindRelatedChunksTool,  # TODO: Check if this tool exists
     # TemporalSearchTool,  # TODO: Check if this tool exists
     # HybridSearchWithFiltersTool,  # REMOVED - replaced by FilteredSearchTool
@@ -909,127 +919,10 @@ class TestGraphSearchTool:
 
 
 # ============================================================================
-# TEST 2: CompareDocumentsTool
+# TEST 2: CompareDocumentsTool - REMOVED (2025-01)
+# Reason: Broken implementation using internal APIs (_rrf_fusion, direct access to faiss_store/bm25_store)
+# Replacement: TODO - Implement multi_doc_synthesizer tool using public APIs
 # ============================================================================
-
-
-class TestCompareDocumentsTool:
-    """Test document comparison functionality."""
-
-    def test_compare_documents_basic(self, tool_dependencies, mock_vector_store):
-        """Test basic document comparison."""
-
-        # Mock the new direct layer search approach
-        doc1_chunks = [
-            {
-                "chunk_id": "doc1:sec1:0",
-                "doc_id": "doc1",
-                "document_id": "doc1",
-                "content": "Doc1 content.",
-            }
-        ]
-        doc2_chunks = [
-            {
-                "chunk_id": "doc2:sec1:0",
-                "doc_id": "doc2",
-                "document_id": "doc2",
-                "content": "Doc2 content.",
-            }
-        ]
-
-        # Mock faiss_store and bm25_store
-        mock_vector_store.faiss_store = Mock()
-        mock_vector_store.bm25_store = Mock()
-        mock_vector_store._rrf_fusion = Mock()
-
-        # Setup side_effect to return appropriate chunks
-        def rrf_fusion_side_effect(dense, sparse, k):
-            # Determine which document based on call order
-            if not hasattr(rrf_fusion_side_effect, 'call_count'):
-                rrf_fusion_side_effect.call_count = 0
-            rrf_fusion_side_effect.call_count += 1
-            return doc1_chunks if rrf_fusion_side_effect.call_count == 1 else doc2_chunks
-
-        mock_vector_store._rrf_fusion.side_effect = rrf_fusion_side_effect
-        mock_vector_store.faiss_store.search_layer3.return_value = []
-        mock_vector_store.bm25_store.search_layer3.return_value = []
-
-        tool = CompareDocumentsTool(**tool_dependencies)
-        result = tool.execute(doc_id_1="doc1", doc_id_2="doc2")
-
-        assert result.success is True
-        assert result.data["doc_id_1"] == "doc1"
-        assert result.data["doc_id_2"] == "doc2"
-        assert "doc1_chunk_count" in result.data
-        assert "doc2_chunk_count" in result.data
-        assert "doc1" in result.citations
-        assert "doc2" in result.citations
-
-    def test_compare_documents_with_aspect(self, tool_dependencies, mock_vector_store):
-        """Test document comparison with specific aspect."""
-        # Mock the new direct layer search approach
-        mock_vector_store.faiss_store = Mock()
-        mock_vector_store.bm25_store = Mock()
-        mock_vector_store._rrf_fusion = Mock(return_value=[
-            {"chunk_id": "doc1:sec1:0", "doc_id": "doc1", "content": "Requirements content."}
-        ])
-        mock_vector_store.faiss_store.search_layer3.return_value = []
-        mock_vector_store.bm25_store.search_layer3.return_value = []
-
-        tool = CompareDocumentsTool(**tool_dependencies)
-
-        result = tool.execute(doc_id_1="doc1", doc_id_2="doc2", comparison_aspect="requirements")
-
-        assert result.success is True
-        assert result.data["comparison_aspect"] == "requirements"
-        assert "doc1_relevant_chunks" in result.data
-        assert "doc2_relevant_chunks" in result.data
-
-    def test_compare_documents_first_not_found(self, tool_dependencies):
-        """Test comparison when first document not found."""
-        # Create fresh mock that returns empty for all calls
-        mock_vs = Mock()
-        mock_vs.faiss_store = Mock()
-        mock_vs.bm25_store = Mock()
-        mock_vs._rrf_fusion = Mock(return_value=[])
-        mock_vs.faiss_store.search_layer3.return_value = []
-        mock_vs.bm25_store.search_layer3.return_value = []
-        tool_dependencies["vector_store"] = mock_vs
-
-        tool = CompareDocumentsTool(**tool_dependencies)
-        result = tool.execute(doc_id_1="nonexistent", doc_id_2="doc2")
-
-        assert result.success is False
-        assert "not found" in result.error.lower()
-
-    def test_compare_documents_second_not_found(self, tool_dependencies, mock_vector_store):
-        """Test comparison when second document not found."""
-
-        # Mock the new direct layer search approach
-        doc1_chunks = [{"chunk_id": "doc1:sec1:0", "doc_id": "doc1"}]
-        doc2_chunks = []  # Empty - doc2 not found
-
-        # Mock faiss_store and bm25_store
-        mock_vector_store.faiss_store = Mock()
-        mock_vector_store.bm25_store = Mock()
-        mock_vector_store._rrf_fusion = Mock()
-
-        # Setup side_effect to return doc1 chunks first, then empty for doc2
-        def rrf_fusion_side_effect(dense, sparse, k):
-            if not hasattr(rrf_fusion_side_effect, 'call_count'):
-                rrf_fusion_side_effect.call_count = 0
-            rrf_fusion_side_effect.call_count += 1
-            return doc1_chunks if rrf_fusion_side_effect.call_count == 1 else doc2_chunks
-
-        mock_vector_store._rrf_fusion.side_effect = rrf_fusion_side_effect
-        mock_vector_store.faiss_store.search_layer3.return_value = []
-        mock_vector_store.bm25_store.search_layer3.return_value = []
-
-        tool = CompareDocumentsTool(**tool_dependencies)
-        result = tool.execute(doc_id_1="doc1", doc_id_2="nonexistent")
-
-        assert result.success is False
-        assert "nonexistent" in result.error
 
 
 # ============================================================================
@@ -2197,15 +2090,15 @@ class TestEdgeCasesAndErrors:
 
     def test_tool_statistics_tracking(self, tool_dependencies):
         """Test that tools track execution statistics."""
-        tool = CompareDocumentsTool(**tool_dependencies)
+        tool = FilteredSearchTool(**tool_dependencies)
 
         # Execute tool multiple times
-        tool.execute(doc_id_1="doc1", doc_id_2="doc2")
-        tool.execute(doc_id_1="doc1", doc_id_2="doc3")
+        tool.execute(query="test1", search_method="hybrid", k=6)
+        tool.execute(query="test2", search_method="hybrid", k=6)
 
         stats = tool.get_stats()
         assert stats["execution_count"] == 2
-        assert stats["name"] == "compare_documents"
+        assert stats["name"] == "filtered_search"
         assert "avg_time_ms" in stats
 
 
@@ -2246,14 +2139,12 @@ class TestToolIntegration:
         # Each tool should handle the error gracefully
         tools = [
             FilteredSearchTool(**tool_dependencies),
-            CompareDocumentsTool(**tool_dependencies),
+            # CompareDocumentsTool removed 2025-01
             ExplainSearchResultsTool(**tool_dependencies),
         ]
 
         for tool in tools:
-            if tool.name == "compare_documents":
-                result = tool.execute(doc_id_1="doc1", doc_id_2="doc2")
-            elif tool.name == "explain_search_results":
+            if tool.name == "explain_search_results":
                 result = tool.execute(chunk_ids=["doc1:sec1:0"])
             else:
                 result = tool.execute(query="test", search_method="hybrid", k=6)
@@ -2687,3 +2578,288 @@ class TestBrowseEntitiesTool:
         assert result.execution_time_ms > 0
         assert "execution_time_ms" in result.metadata
         assert result.metadata["execution_time_ms"] > 0
+
+# ============================================================================
+# TEST 9: MultiDocSynthesizerTool (NEW 2025-01)
+# ============================================================================
+
+
+class TestMultiDocSynthesizerTool:
+    """Test multi-document synthesis functionality."""
+
+    def test_multi_doc_synthesizer_basic(self, tool_dependencies, mock_vector_store):
+        """Test basic multi-document synthesis."""
+        from src.agent.tools.tier2_advanced import MultiDocSynthesizerTool
+
+        # Mock hierarchical_search to return chunks for each document
+        def hierarchical_search_side_effect(query_text, query_embedding, k_layer3, document_filter=None):
+            if document_filter == "doc1":
+                return {
+                    "layer3": [
+                        {
+                            "chunk_id": "doc1:sec1:0",
+                            "doc_id": "doc1",
+                            "content": "Doc1 privacy policy section 1",
+                            "section_title": "Privacy Policy",
+                        }
+                    ]
+                }
+            elif document_filter == "doc2":
+                return {
+                    "layer3": [
+                        {
+                            "chunk_id": "doc2:sec1:0",
+                            "doc_id": "doc2",
+                            "content": "Doc2 privacy policy section 1",
+                            "section_title": "Privacy",
+                        }
+                    ]
+                }
+            else:
+                return {"layer3": []}
+
+        mock_vector_store.hierarchical_search.side_effect = hierarchical_search_side_effect
+
+        tool = MultiDocSynthesizerTool(**tool_dependencies)
+        result = tool.execute(
+            document_ids=["doc1", "doc2"],
+            synthesis_query="privacy policies",
+            k_per_document=5,
+            synthesis_mode="compare",
+        )
+
+        assert result.success is True
+        assert result.data["document_count"] == 2
+        assert result.data["total_chunks_retrieved"] == 2
+        assert result.data["synthesis_mode"] == "compare"
+        assert "doc1" in result.citations
+        assert "doc2" in result.citations
+
+    def test_multi_doc_synthesizer_insufficient_documents(self, tool_dependencies):
+        """Test that at least 2 documents are required."""
+        from src.agent.tools.tier2_advanced import MultiDocSynthesizerTool
+
+        tool = MultiDocSynthesizerTool(**tool_dependencies)
+        result = tool.execute(
+            document_ids=["doc1"],  # Only 1 document
+            synthesis_query="test",
+            k_per_document=5,
+            synthesis_mode="compare",
+        )
+
+        assert result.success is False
+        # Pydantic validation handles min_items, so check for "validation" or "at least"
+        assert ("validation" in result.error.lower() or "at least 2" in result.error.lower())
+
+    def test_multi_doc_synthesizer_too_many_documents(self, tool_dependencies):
+        """Test that maximum 10 documents are allowed."""
+        from src.agent.tools.tier2_advanced import MultiDocSynthesizerTool
+
+        tool = MultiDocSynthesizerTool(**tool_dependencies)
+        result = tool.execute(
+            document_ids=[f"doc{i}" for i in range(11)],  # 11 documents
+            synthesis_query="test",
+            k_per_document=5,
+            synthesis_mode="compare",
+        )
+
+        assert result.success is False
+        # Pydantic validation handles max_items, so check for "validation" or "at most"
+        assert ("validation" in result.error.lower() or "at most 10" in result.error.lower())
+
+    def test_multi_doc_synthesizer_invalid_mode(self, tool_dependencies):
+        """Test that invalid synthesis mode is rejected."""
+        from src.agent.tools.tier2_advanced import MultiDocSynthesizerTool
+
+        tool = MultiDocSynthesizerTool(**tool_dependencies)
+        result = tool.execute(
+            document_ids=["doc1", "doc2"],
+            synthesis_query="test",
+            k_per_document=5,
+            synthesis_mode="invalid_mode",
+        )
+
+        assert result.success is False
+        assert "invalid synthesis_mode" in result.error.lower()
+
+    def test_multi_doc_synthesizer_no_chunks_found(self, tool_dependencies, mock_vector_store):
+        """Test when no relevant chunks are found in documents."""
+        from src.agent.tools.tier2_advanced import MultiDocSynthesizerTool
+
+        # Mock hierarchical_search to return empty results for both documents
+        mock_vector_store.hierarchical_search.return_value = {"layer3": []}
+        # Reset side_effect to None so return_value takes effect
+        mock_vector_store.hierarchical_search.side_effect = None
+
+        tool = MultiDocSynthesizerTool(**tool_dependencies)
+        result = tool.execute(
+            document_ids=["doc1", "doc2"],
+            synthesis_query="nonexistent topic",
+            k_per_document=5,
+            synthesis_mode="compare",
+        )
+
+        assert result.success is False
+        assert "no relevant chunks" in result.error.lower()
+
+
+# ============================================================================
+# TEST 10: ContextualChunkEnricherTool (NEW 2025-01)
+# ============================================================================
+
+
+class TestContextualChunkEnricherTool:
+    """Test contextual chunk enrichment functionality."""
+
+    def test_contextual_enricher_basic(self, tool_dependencies, mock_vector_store):
+        """Test basic chunk enrichment with document summary."""
+        from src.agent.tools.tier2_advanced import ContextualChunkEnricherTool
+
+        # Mock hierarchical_search to return chunk
+        mock_vector_store.hierarchical_search.return_value = {
+            "layer3": [
+                {
+                    "chunk_id": "doc1:sec1:0",
+                    "doc_id": "doc1",
+                    "content": "Original chunk content",
+                    "document_summary": "Document is about GDPR compliance",
+                    "section_title": "Introduction",
+                }
+            ]
+        }
+
+        tool = ContextualChunkEnricherTool(**tool_dependencies)
+        result = tool.execute(
+            chunk_ids=["doc1:sec1:0"],
+            enrichment_mode="document_summary",
+            include_metadata=True,
+        )
+
+        assert result.success is True
+        assert result.data["enriched_count"] == 1
+        assert result.data["failed_count"] == 0
+        enriched = result.data["enriched_chunks"][0]
+        assert "Original chunk content" in enriched["enriched_content"]
+        assert "Document: doc1" in enriched["enriched_content"]
+        assert "GDPR compliance" in enriched["enriched_content"]
+
+    def test_contextual_enricher_section_summary(self, tool_dependencies, mock_vector_store):
+        """Test enrichment with section summary."""
+        from src.agent.tools.tier2_advanced import ContextualChunkEnricherTool
+
+        # Mock hierarchical_search to return chunk with section summary
+        mock_vector_store.hierarchical_search.return_value = {
+            "layer3": [
+                {
+                    "chunk_id": "doc1:sec1:0",
+                    "doc_id": "doc1",
+                    "content": "Original chunk content",
+                    "section_summary": "This section covers data processing",
+                    "section_title": "Data Processing",
+                }
+            ]
+        }
+
+        tool = ContextualChunkEnricherTool(**tool_dependencies)
+        result = tool.execute(
+            chunk_ids=["doc1:sec1:0"],
+            enrichment_mode="section_summary",
+            include_metadata=True,
+        )
+
+        assert result.success is True
+        enriched = result.data["enriched_chunks"][0]
+        assert "Section: Data Processing" in enriched["enriched_content"]
+        assert "data processing" in enriched["enriched_content"]
+
+    def test_contextual_enricher_auto_mode(self, tool_dependencies, mock_vector_store):
+        """Test auto mode selects best enrichment strategy."""
+        from src.agent.tools.tier2_advanced import ContextualChunkEnricherTool
+
+        # Mock chunk with section summary (auto should prefer section)
+        mock_vector_store.hierarchical_search.return_value = {
+            "layer3": [
+                {
+                    "chunk_id": "doc1:sec1:0",
+                    "doc_id": "doc1",
+                    "content": "Original chunk content",
+                    "document_summary": "Document summary",
+                    "section_summary": "Section summary",
+                    "section_title": "Section",
+                }
+            ]
+        }
+
+        tool = ContextualChunkEnricherTool(**tool_dependencies)
+        result = tool.execute(
+            chunk_ids=["doc1:sec1:0"],
+            enrichment_mode="auto",
+            include_metadata=True,
+        )
+
+        assert result.success is True
+        enriched = result.data["enriched_chunks"][0]
+        # Auto mode should select section_summary when available
+        assert enriched["enrichment_mode"] == "section_summary"
+
+    def test_contextual_enricher_both_mode(self, tool_dependencies, mock_vector_store):
+        """Test enrichment with both document and section summaries."""
+        from src.agent.tools.tier2_advanced import ContextualChunkEnricherTool
+
+        # Mock chunk with both summaries
+        mock_vector_store.hierarchical_search.return_value = {
+            "layer3": [
+                {
+                    "chunk_id": "doc1:sec1:0",
+                    "doc_id": "doc1",
+                    "content": "Original chunk content",
+                    "document_summary": "Document summary",
+                    "section_summary": "Section summary",
+                    "section_title": "Section",
+                }
+            ]
+        }
+
+        tool = ContextualChunkEnricherTool(**tool_dependencies)
+        result = tool.execute(
+            chunk_ids=["doc1:sec1:0"],
+            enrichment_mode="both",
+            include_metadata=True,
+        )
+
+        assert result.success is True
+        enriched = result.data["enriched_chunks"][0]
+        # Both summaries should be included
+        assert "Document summary" in enriched["enriched_content"]
+        assert "Section summary" in enriched["enriched_content"]
+
+    def test_contextual_enricher_chunk_not_found(self, tool_dependencies, mock_vector_store):
+        """Test handling of non-existent chunk."""
+        from src.agent.tools.tier2_advanced import ContextualChunkEnricherTool
+
+        # Mock hierarchical_search to return empty results
+        mock_vector_store.hierarchical_search.return_value = {"layer3": []}
+
+        tool = ContextualChunkEnricherTool(**tool_dependencies)
+        result = tool.execute(
+            chunk_ids=["nonexistent:chunk:0"],
+            enrichment_mode="auto",
+            include_metadata=True,
+        )
+
+        assert result.success is False
+        assert "failed to enrich any chunks" in result.error.lower()
+
+    def test_contextual_enricher_invalid_mode(self, tool_dependencies):
+        """Test that invalid enrichment mode is rejected."""
+        from src.agent.tools.tier2_advanced import ContextualChunkEnricherTool
+
+        tool = ContextualChunkEnricherTool(**tool_dependencies)
+        result = tool.execute(
+            chunk_ids=["doc1:sec1:0"],
+            enrichment_mode="invalid_mode",
+            include_metadata=True,
+        )
+
+        assert result.success is False
+        assert "invalid enrichment_mode" in result.error.lower()

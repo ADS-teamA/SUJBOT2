@@ -75,12 +75,12 @@ export class ApiService {
     const decoder = new TextDecoder();
     let buffer = '';
 
-    // Timeout to prevent hanging on backend issues (5 minutes)
-    const STREAM_TIMEOUT_MS = 5 * 60 * 1000;
+    // Timeout to prevent hanging on backend issues (10 minutes)
+    const STREAM_TIMEOUT_MS = 10 * 60 * 1000;
     let timedOut = false;
     const timeoutId = setTimeout(() => {
       timedOut = true;
-      reader.cancel('Stream timeout after 5 minutes');
+      reader.cancel('Stream timeout after 10 minutes');
       console.error('⏰ API: Stream timeout - cancelling reader');
     }, STREAM_TIMEOUT_MS);
 
@@ -93,7 +93,7 @@ export class ApiService {
           yield {
             event: 'error',
             data: {
-              error: 'Stream timeout after 5 minutes. The backend may be experiencing performance issues or the query is too complex. Try a simpler question or refresh the page.',
+              error: 'Stream timeout after 10 minutes. The backend may be experiencing performance issues or the query is too complex. Try a simpler question or refresh the page.',
               type: 'TimeoutError'
             }
           };
@@ -227,6 +227,140 @@ export class ApiService {
     }
 
     return response.json();
+  }
+
+  /**
+   * Stream clarification response using Server-Sent Events (SSE)
+   *
+   * Called when user responds to clarification questions. Resumes the workflow.
+   */
+  async *streamClarification(
+    threadId: string,
+    userResponse: string
+  ): AsyncGenerator<SSEEvent, void, unknown> {
+    let response;
+    try {
+      response = await fetch(`${API_BASE_URL}/chat/clarify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          thread_id: threadId,
+          response: userResponse,
+        }),
+      });
+    } catch (error) {
+      console.error('❌ API: Clarification fetch failed:', error);
+      yield {
+        event: 'error',
+        data: {
+          error: `Failed to connect to backend: ${(error as Error).message}`,
+          type: 'NetworkError'
+        }
+      };
+      return;
+    }
+
+    if (!response.ok) {
+      yield {
+        event: 'error',
+        data: {
+          error: `Backend returned HTTP ${response.status}`,
+          type: 'HTTPError',
+          status: response.status
+        }
+      };
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      yield {
+        event: 'error',
+        data: {
+          error: 'Backend response has no body',
+          type: 'NoResponseBody'
+        }
+      };
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // Timeout (10 minutes)
+    const STREAM_TIMEOUT_MS = 10 * 60 * 1000;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      reader.cancel('Stream timeout after 10 minutes');
+    }, STREAM_TIMEOUT_MS);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (timedOut) {
+          yield {
+            event: 'error',
+            data: {
+              error: 'Stream timeout after 10 minutes',
+              type: 'TimeoutError'
+            }
+          };
+          break;
+        }
+
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        const lines = buffer.split(/\r?\n\r?\n/);
+
+        if (lines.length === 1) {
+          continue;
+        }
+
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim() || line.trim().startsWith(':')) {
+            continue;
+          }
+
+          const eventMatch = line.match(/^event:\s*(.+)$/m);
+          const dataMatch = line.match(/^data:\s*(.+)$/m);
+
+          if (eventMatch && dataMatch) {
+            const event = eventMatch[1].trim();
+
+            try {
+              const data = JSON.parse(dataMatch[1]);
+              yield {
+                event: event as SSEEvent['event'],
+                data,
+              };
+            } catch (parseError) {
+              console.error('❌ API: Failed to parse clarification JSON:', parseError);
+              yield {
+                event: 'error',
+                data: {
+                  error: `Failed to parse server response (event: ${event})`,
+                  type: 'JSONParseError'
+                }
+              };
+            }
+          }
+        }
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      reader.releaseLock();
+    }
   }
 }
 

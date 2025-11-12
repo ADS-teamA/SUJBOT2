@@ -25,7 +25,7 @@ class GetToolHelpInput(ToolInput):
     """Input for get_tool_help tool."""
 
     tool_name: str = Field(
-        ..., description="Name of tool to get help for (e.g., 'search', 'compare_documents')"
+        ..., description="Name of tool to get help for (e.g., 'search', 'multi_doc_synthesizer')"
     )
 
 
@@ -349,7 +349,6 @@ class SearchTool(BaseTool):
                         )
                         # Fallback to standard hybrid search for this query
                         results = self.vector_store.hierarchical_search(
-                            query_text=q,
                             query_embedding=query_embedding,
                             k_layer3=candidates_k,
                         )
@@ -365,7 +364,6 @@ class SearchTool(BaseTool):
                     )
                     # Fallback to standard hybrid search
                     results = self.vector_store.hierarchical_search(
-                        query_text=q,
                         query_embedding=query_embedding,
                         k_layer3=candidates_k,
                     )
@@ -403,7 +401,6 @@ class SearchTool(BaseTool):
 
                 # Hybrid search
                 results = self.vector_store.hierarchical_search(
-                    query_text=q,
                     query_embedding=query_embedding,
                     k_layer3=candidates_k,
                 )
@@ -820,7 +817,7 @@ class ListAvailableToolsTool(BaseTool):
                         "entity_focused": "Use 'search' with entity names, or multi_hop_search if KG available",
                         "specific_document": "Use exact_match_search or filtered_search with document_id filter",
                         "multi_hop_reasoning": "multi_hop_search (requires KG)",
-                        "comparison": "compare_documents",
+                        "comparison": "multi_doc_synthesizer",
                         "temporal_info": "filtered_search with filter_type='temporal' or timeline_view",
                     },
                 },
@@ -1118,233 +1115,5 @@ class GetDocumentInfoTool(BaseTool):
             return ToolResult(success=False, data=None, error=str(e))
 
 
-class ExactMatchSearchInput(ToolInput):
-    """Input for unified exact_match_search tool."""
-
-    query: str = Field(..., description="Search query (keywords or reference text)")
-    search_type: Literal["keywords", "cross_references"] = Field(
-        ...,
-        description="Search type: 'keywords' (general keyword search), 'cross_references' (find references to specific clauses/articles)",
-    )
-    k: int = Field(6, description="Number of results", ge=1, le=10)
-    document_id: Optional[str] = Field(
-        None,
-        description="Optional: Filter search to specific document (index-level filtering for better performance)",
-    )
-    section_id: Optional[str] = Field(
-        None,
-        description="Optional: Filter results to specific section (requires document_id, uses post-retrieval filtering)",
-    )
-
-
-@register_tool
-class ExactMatchSearchTool(BaseTool):
-    """Fast BM25 keyword/exact match search."""
-
-    name = "exact_match_search"
-    description = "Fast BM25 keyword search"
-    detailed_help = """
-    Fast BM25-based search optimized for exact keyword matches and cross-references.
-    Supports optional scope limiting to specific documents or sections.
-
-    **Search types:**
-    - 'keywords': General keyword search
-    - 'cross_references': Find references to specific clauses/articles
-
-    **When to use:**
-    - Exact keyword or phrase matching
-    - Finding cross-references (e.g., "článek 5", "section 3.2")
-    - When speed is critical over semantic understanding
-
-    **Best practices for queries:**
-    - Keep queries SHORT and SPECIFIC (2-5 words ideal)
-    - Use exact terms from documents
-    - For cross-refs: Use standard format (e.g., "článek 5", "§ 15")
-    - Avoid long sentences (BM25 works better with keywords)
-    - Use document_id filter when possible for faster results
-
-    **Method:** BM25 sparse retrieval only (no embeddings)
-    **Speed:** ~50-100ms (fastest tool)
-    """
-    tier = 1
-    input_schema = ExactMatchSearchInput
-
-    def execute_impl(
-        self,
-        query: str,
-        search_type: str,
-        k: int = 6,
-        document_id: Optional[str] = None,
-        section_id: Optional[str] = None,
-    ) -> ToolResult:
-        k, _ = validate_k_parameter(k, adaptive=True, detail_level="medium")
-
-        # Validate section_id requires document_id
-        if section_id and not document_id:
-            return ToolResult(
-                success=False,
-                data=None,
-                error="section_id requires document_id to be specified",
-            )
-
-        try:
-            # Retrieve 3x candidates when section_id filtering is needed, since we'll
-            # be post-filtering results by section_id (BM25 doesn't support section-level
-            # index filtering, only document-level). This ensures we get ~k results after filtering.
-            # Note: If section has < k chunks, we may return fewer than k results.
-            retrieval_k = k * 3 if section_id else k
-
-            if search_type == "keywords":
-                # Pure BM25 keyword search with optional document filter
-                if hasattr(self.vector_store, "bm25_store"):
-                    results = self.vector_store.bm25_store.search_layer3(
-                        query=query,
-                        k=retrieval_k,
-                        document_filter=document_id,  # BM25 supports document filtering
-                    )
-                else:
-                    # Fallback
-                    import numpy as np
-
-                    dummy_embedding = np.zeros((1, self.embedder.dimensions))
-                    results_dict = self.vector_store.hierarchical_search(
-                        query_text=query,
-                        query_embedding=dummy_embedding,
-                        k_layer3=retrieval_k,
-                        document_filter=document_id,
-                    )
-                    results = results_dict["layer3"]
-
-            elif search_type == "cross_references":
-                # Cross-reference search: Find exact mentions of clauses/articles/sections
-                # Uses BM25 for initial retrieval, then strict substring matching to ensure
-                # the reference actually appears in the chunk (BM25 may match partial words).
-                # Retrieves 2x candidates to account for filtering by substring match.
-                results_dict = self.vector_store.hierarchical_search(
-                    query_text=query,
-                    query_embedding=None,
-                    k_layer3=retrieval_k * 2,
-                    document_filter=document_id,  # Apply document filter
-                )
-                chunks = results_dict.get("layer3", [])
-
-                # Filter chunks that actually contain the reference
-                reference_lower = query.lower()
-                results = [
-                    chunk
-                    for chunk in chunks
-                    if reference_lower in chunk.get("raw_content", chunk.get("content", "")).lower()
-                ][:retrieval_k]
-
-            else:
-                return ToolResult(
-                    success=False,
-                    data=None,
-                    error=f"Invalid search_type: {search_type}. Must be 'keywords' or 'cross_references'",
-                )
-
-            # Apply section_id filter if specified
-            if section_id:
-                results = [chunk for chunk in results if chunk.get("section_id") == section_id][:k]
-
-            # Determine search scope for metadata
-            if section_id:
-                search_scope = f"section (doc={document_id}, section={section_id})"
-            elif document_id:
-                search_scope = f"document (doc={document_id})"
-            else:
-                search_scope = "entire database"
-
-            if not results:
-                return ToolResult(
-                    success=True,
-                    data=[],
-                    metadata={
-                        "query": query,
-                        "search_type": search_type,
-                        "search_scope": search_scope,
-                        "document_id": document_id,
-                        "section_id": section_id,
-                        "no_results": True,
-                    },
-                )
-
-            formatted = [format_chunk_result(c) for c in results]
-            # Generate citations with breadcrumb path (uses generate_citation for consistency)
-            citations = [generate_citation(c, i + 1, format="inline") for i, c in enumerate(formatted)]
-
-            # === RAG Confidence Scoring ===
-            try:
-                from src.agent.rag_confidence import RAGConfidenceScorer
-
-                confidence_scorer = RAGConfidenceScorer()
-                confidence = confidence_scorer.score_retrieval(results, query=query)
-
-                logger.info(
-                    f"RAG Confidence: {confidence.interpretation} ({confidence.overall_confidence:.3f})"
-                )
-
-                # Add warning to citations if low confidence
-                if confidence.should_flag:
-                    citations.insert(0, f"⚠️ {confidence.interpretation}")
-
-            except (AttributeError, KeyError) as e:
-                # Data structure issue - chunks missing required fields
-                logger.error(
-                    f"RAG confidence scoring failed - data structure error: {e}. "
-                    f"Chunks may be missing required fields (bm25_score, dense_score, etc.). "
-                    f"Continuing without confidence data.",
-                    exc_info=False,
-                )
-                confidence = None
-            except ImportError as e:
-                # Should not happen in production - indicates setup error
-                logger.error(
-                    f"RAG confidence module missing: {e}. This indicates a setup issue. "
-                    f"Continuing without confidence data.",
-                    exc_info=False,
-                )
-                confidence = None
-            except ValueError as e:
-                # Likely from numpy operations with invalid data
-                logger.error(
-                    f"RAG confidence calculation error - invalid data: {e}. "
-                    f"Retrieved chunks may contain malformed scores. "
-                    f"Continuing without confidence data.",
-                    exc_info=False,
-                )
-                confidence = None
-            except Exception as e:
-                # Unexpected error - log with full traceback for debugging
-                logger.error(
-                    f"Unexpected error in RAG confidence scoring ({type(e).__name__}): {e}. "
-                    f"This may indicate a bug. Continuing without confidence data.",
-                    exc_info=True,
-                )
-                confidence = None
-
-            # Build metadata
-            result_metadata = {
-                "query": query,
-                "search_type": search_type,
-                "method": "bm25",
-                "search_scope": search_scope,
-                "document_id": document_id,
-                "section_id": section_id,
-                "results_count": len(formatted),
-            }
-
-            # Add RAG confidence to metadata
-            if confidence:
-                result_metadata["rag_confidence"] = confidence.to_dict()
-
-            return ToolResult(
-                success=True,
-                data=formatted,
-                citations=citations,
-                metadata=result_metadata,
-            )
-
-        except Exception as e:
-            logger.error(f"Exact match search failed: {e}", exc_info=True)
-            return ToolResult(success=False, data=None, error=str(e))
+# exact_match_search tool removed - replaced by filtered_search with backward compatibility
+# Use filtered_search(search_method='bm25_only') instead

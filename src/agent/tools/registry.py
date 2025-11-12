@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional, Type
 
 from .base import BaseTool, ToolResult
+from src.storage import VectorStoreAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class ToolRegistry:
 
     def initialize_tools(
         self,
-        vector_store,
+        vector_store: VectorStoreAdapter,
         embedder,
         reranker=None,
         graph_retriever=None,
@@ -60,7 +61,7 @@ class ToolRegistry:
         This creates tool instances by injecting pipeline components.
 
         Args:
-            vector_store: HybridVectorStore
+            vector_store: VectorStoreAdapter (FAISS or PostgreSQL backend)
             embedder: EmbeddingGenerator
             reranker: CrossEncoderReranker (optional)
             graph_retriever: GraphEnhancedRetriever (optional)

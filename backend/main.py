@@ -17,8 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
-from agent_adapter import AgentAdapter
-from models import ChatRequest, HealthResponse, ModelsResponse, ModelInfo
+from .agent_adapter import AgentAdapter
+from .models import ChatRequest, HealthResponse, ModelsResponse, ModelInfo, ClarificationRequest
 
 # Configure logging
 logging.basicConfig(
@@ -38,8 +38,31 @@ async def lifespan(app: FastAPI):
 
     # Startup
     try:
+        # Validate required API keys before initialization
+        import os
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+
+        if not anthropic_key and not openai_key:
+            raise ValueError(
+                "At least one API key is required (ANTHROPIC_API_KEY or OPENAI_API_KEY). "
+                "Set in .env file or environment variables."
+            )
+
+        if anthropic_key:
+            logger.info("✓ Anthropic API key found")
+        if openai_key:
+            logger.info("✓ OpenAI API key found")
+
         logger.info("Initializing agent adapter...")
         agent_adapter = AgentAdapter()
+
+        # Initialize multi-agent system
+        logger.info("Initializing multi-agent system...")
+        success = await agent_adapter.initialize()
+        if not success:
+            raise RuntimeError("Multi-agent system initialization failed")
+
         logger.info("Agent adapter initialized successfully")
     except Exception as e:
         logger.error(f"FATAL: Failed to initialize agent: {e}", exc_info=True)
@@ -51,6 +74,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown (cleanup if needed)
     logger.info("Shutting down...")
+    if agent_adapter and hasattr(agent_adapter, 'runner'):
+        agent_adapter.runner.shutdown()
 
 
 # Initialize FastAPI app with lifespan
@@ -64,7 +89,11 @@ app = FastAPI(
 # Enable CORS for localhost development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Vite default port
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",  # Vite alternative port
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -229,6 +258,86 @@ async def chat_stream(request: ChatRequest):
                     "error": str(e),
                     "type": type(e).__name__
                 }, ensure_ascii=True)  # Use ASCII for error messages (defensive)
+            }
+
+    return EventSourceResponse(event_generator())
+
+
+@app.post("/chat/clarify")
+async def chat_clarify(request: ClarificationRequest):
+    """
+    Resume interrupted workflow with user clarification.
+
+    This endpoint is called after the workflow emits a clarification_needed event.
+    The user provides their clarification response, and the workflow resumes.
+
+    Events (SSE):
+    - progress: Resume progress updates
+    - text_delta: Streaming text chunks from final answer
+    - cost_update: Token usage and cost update
+    - done: Stream completed
+    - error: Error occurred
+
+    Example usage:
+    ```
+    POST /chat/clarify
+    {
+        "thread_id": "abc123",
+        "response": "I need information about GDPR Article 17 specifically."
+    }
+    ```
+    """
+    if agent_adapter is None:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+
+    async def event_generator():
+        """Generate SSE events from resume stream."""
+        try:
+            async for event in agent_adapter.resume_clarification(
+                thread_id=request.thread_id, user_response=request.response
+            ):
+                # Format as SSE event
+                event_type = event["event"]
+
+                # Serialize event data
+                try:
+                    event_data = json.dumps(event["data"], ensure_ascii=False)
+                except (TypeError, ValueError, UnicodeDecodeError) as e:
+                    logger.error(
+                        f"Failed to serialize clarification event: {e}",
+                        exc_info=True,
+                    )
+                    # Fallback to ASCII
+                    try:
+                        event_data = json.dumps(event["data"], ensure_ascii=True)
+                    except Exception as fallback_error:
+                        logger.error(f"ASCII fallback failed: {fallback_error}", exc_info=True)
+                        yield {
+                            "event": "error",
+                            "data": json.dumps(
+                                {
+                                    "error": f"Failed to encode response: {type(e).__name__}",
+                                    "type": "EncodingError",
+                                },
+                                ensure_ascii=True,
+                            ),
+                        }
+                        continue
+
+                yield {"event": event_type, "data": event_data}
+
+        except asyncio.CancelledError:
+            logger.info("Clarification stream cancelled by client")
+            raise
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as e:
+            logger.error(f"Error in clarification event generator: {e}", exc_info=True)
+            yield {
+                "event": "error",
+                "data": json.dumps(
+                    {"error": str(e), "type": type(e).__name__}, ensure_ascii=True
+                ),
             }
 
     return EventSourceResponse(event_generator())

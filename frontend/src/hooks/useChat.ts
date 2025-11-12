@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { storageService } from '../lib/storage';
-import type { Message, Conversation, ToolCall } from '../types';
+import type { Message, Conversation, ToolCall, ClarificationData } from '../types';
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>(() =>
@@ -19,6 +19,8 @@ export function useChat() {
     // Load from localStorage, or use Gemini 2.5 Flash Lite as default
     storageService.getSelectedModel() || 'gemini-2.5-flash-latest-exp-1206'
   );
+  const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
+  const [awaitingClarification, setAwaitingClarification] = useState(false);
 
   // Refs for managing streaming state
   const currentMessageRef = useRef<Message | null>(null);
@@ -362,6 +364,15 @@ export function useChat() {
                 })
               );
             }
+          } else if (event.event === 'clarification_needed') {
+            // HITL: Agent needs clarification
+            console.log('🤔 FRONTEND: Clarification needed:', event.data);
+
+            setClarificationData(event.data);
+            setAwaitingClarification(true);
+
+            // Don't emit "done" - workflow is paused
+            return;
           } else if (event.event === 'done') {
             // Stream completed
             break;
@@ -583,11 +594,161 @@ export function useChat() {
     [isStreaming, sendMessage, currentConversationId]
   );
 
+  /**
+   * Submit clarification response and resume workflow
+   */
+  const submitClarification = useCallback(
+    async (response: string) => {
+      if (!clarificationData || !response.trim()) {
+        return;
+      }
+
+      const { thread_id } = clarificationData;
+
+      // Reset clarification state
+      setClarificationData(null);
+      setAwaitingClarification(false);
+
+      // Get current conversation
+      const conversation = conversations.find((c) => c.id === currentConversationId);
+      if (!conversation) {
+        console.error('No current conversation found');
+        return;
+      }
+
+      // Initialize assistant message for resumed workflow
+      currentMessageRef.current = {
+        id: `msg_${Date.now()}_assistant`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        toolCalls: [],
+      };
+      currentToolCallsRef.current = new Map();
+
+      setIsStreaming(true);
+
+      try {
+        // Stream clarification response from backend
+        for await (const event of apiService.streamClarification(thread_id, response)) {
+          console.log('📨 FRONTEND: Received clarification event:', event.event);
+
+          if (event.event === 'text_delta') {
+            // Append text delta
+            if (currentMessageRef.current) {
+              currentMessageRef.current.content += event.data.content;
+
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== conversation.id) return c;
+
+                  const messages = [...c.messages];
+                  const lastMsg = messages[messages.length - 1];
+
+                  if (lastMsg?.role === 'assistant') {
+                    messages[messages.length - 1] = { ...currentMessageRef.current! };
+                  } else {
+                    messages.push({ ...currentMessageRef.current! });
+                  }
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          } else if (event.event === 'cost_update') {
+            // Cost tracking update
+            if (currentMessageRef.current) {
+              currentMessageRef.current.cost = {
+                totalCost: event.data.total_cost,
+                inputTokens: event.data.input_tokens,
+                outputTokens: event.data.output_tokens,
+                cachedTokens: event.data.cached_tokens,
+                summary: event.data.summary,
+              };
+
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== conversation.id) return c;
+
+                  const messages = [...c.messages];
+                  messages[messages.length - 1] = { ...currentMessageRef.current! };
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          } else if (event.event === 'done') {
+            // Stream completed
+            break;
+          } else if (event.event === 'error') {
+            // Error occurred
+            console.error('Clarification stream error:', event.data);
+
+            if (currentMessageRef.current) {
+              currentMessageRef.current.content += `\n\n[Error: ${event.data.error}]`;
+            }
+          }
+        }
+
+        // Save final message
+        const finalMessage = currentMessageRef.current;
+        if (finalMessage) {
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c.id !== conversation.id) return c;
+
+              const messages = [...c.messages];
+              const lastMsg = messages[messages.length - 1];
+
+              if (lastMsg?.role === 'assistant') {
+                messages[messages.length - 1] = { ...finalMessage };
+              } else {
+                messages.push({ ...finalMessage });
+              }
+
+              const cleanedMessages = cleanMessages(messages);
+              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date() };
+
+              storageService.saveConversation(finalConv);
+
+              return finalConv;
+            })
+          );
+        }
+      } catch (error) {
+        console.error('❌ Error during clarification streaming:', error);
+
+        if (currentMessageRef.current) {
+          currentMessageRef.current.content += `\n\n[Error: ${(error as Error).message}]`;
+        }
+      } finally {
+        setIsStreaming(false);
+        currentMessageRef.current = null;
+        currentToolCallsRef.current = new Map();
+      }
+    },
+    [clarificationData, conversations, currentConversationId, cleanMessages]
+  );
+
+  /**
+   * Cancel clarification and continue with original query
+   */
+  const cancelClarification = useCallback(() => {
+    console.log('🚫 FRONTEND: Clarification cancelled - continuing with original query');
+    setClarificationData(null);
+    setAwaitingClarification(false);
+    setIsStreaming(false);
+
+    // Optionally: Could show a message to the user that clarification was skipped
+  }, []);
+
   return {
     conversations,
     currentConversation,
     isStreaming,
     selectedModel,
+    clarificationData,
+    awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
@@ -595,5 +756,7 @@ export function useChat() {
     switchModel,
     editMessage,
     regenerateMessage,
+    submitClarification,
+    cancelClarification,
   };
 }

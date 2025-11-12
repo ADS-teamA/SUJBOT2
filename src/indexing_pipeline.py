@@ -52,6 +52,7 @@ from src.unstructured_extractor import UnstructuredExtractor
 from src.multi_layer_chunker import MultiLayerChunker
 from src.embedding_generator import EmbeddingGenerator
 from src.faiss_vector_store import FAISSVectorStore
+from src.storage import create_vector_store_adapter
 from src.cost_tracker import get_global_tracker, reset_global_tracker
 
 # Knowledge Graph imports (optional)
@@ -434,7 +435,7 @@ class IndexingPipeline:
 
         Returns:
             Dict with pipeline results, or None if document is a duplicate and was skipped:
-                - vector_store: FAISSVectorStore with indexed document
+                - vector_store: VectorStoreAdapter (FAISS) with indexed document
                 - knowledge_graph: KnowledgeGraph (if enabled, else None)
                 - chunks: Dict of chunks (if save_intermediate)
                 - stats: Pipeline statistics
@@ -874,9 +875,21 @@ class IndexingPipeline:
         logger.info(f"Indexing complete: {document_path.name}")
         logger.info("=" * 80)
 
+        # Wrap vector store in adapter (for unified interface)
+        from src.hybrid_search import HybridVectorStore
+        if isinstance(vector_store, HybridVectorStore):
+            # HybridVectorStore contains a FAISSVectorStore, wrap the FAISS component
+            vector_store_adapter = create_vector_store_adapter(
+                faiss_store=vector_store.faiss_store,
+                bm25_store=vector_store.bm25_store
+            )
+        else:
+            # Plain FAISSVectorStore
+            vector_store_adapter = create_vector_store_adapter(faiss_store=vector_store)
+
         # Prepare result
         result_dict = {
-            "vector_store": vector_store,
+            "vector_store": vector_store_adapter,
             "knowledge_graph": knowledge_graph,
             "stats": {
                 "document_id": result.document_id,
@@ -914,7 +927,7 @@ class IndexingPipeline:
 
         Returns:
             Dict with:
-                - vector_store: Combined FAISSVectorStore
+                - vector_store: Combined VectorStoreAdapter (FAISS)
                 - knowledge_graphs: List of KnowledgeGraphs (if enabled)
                 - stats: Batch statistics
         """
@@ -1033,8 +1046,20 @@ class IndexingPipeline:
         logger.info(f"\nBatch indexing complete: {vector_store.get_stats()}")
         logger.info(f"Saved to: {combined_output}")
 
+        # Wrap vector store in adapter (for unified interface)
+        from src.hybrid_search import HybridVectorStore
+        if isinstance(vector_store, HybridVectorStore):
+            # HybridVectorStore contains a FAISSVectorStore, wrap the FAISS component
+            vector_store_adapter = create_vector_store_adapter(
+                faiss_store=vector_store.faiss_store,
+                bm25_store=vector_store.bm25_store
+            )
+        else:
+            # Plain FAISSVectorStore
+            vector_store_adapter = create_vector_store_adapter(faiss_store=vector_store)
+
         return {
-            "vector_store": vector_store,
+            "vector_store": vector_store_adapter,
             "knowledge_graphs": knowledge_graphs,
             "stats": {
                 "total_documents": len(document_paths),

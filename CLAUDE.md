@@ -1,8 +1,8 @@
 # CLAUDE.md - Navigation Guide
 
-**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + 17-tool AI agent.
+**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + multi-agent orchestration + Human-in-the-Loop clarifications.
 
-**Status:** PHASE 1-7 COMPLETE ✅ (2025-11-03)
+**Status:** MULTI-AGENT SYSTEM + HITL COMPLETE ✅ (2025-11-11)
 
 ---
 
@@ -13,6 +13,7 @@
 - [`PIPELINE.md`](PIPELINE.md) - Complete pipeline specification with research papers
 - [`INSTALL.md`](INSTALL.md) - Platform-specific setup (Windows/macOS/Linux)
 - [`docs/agent/README.md`](docs/agent/README.md) - Agent CLI documentation
+- [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md) - Human-in-the-Loop clarification system
 - Visual docs: [`indexing_pipeline.html`](indexing_pipeline.html), [`user_search_pipeline.html`](user_search_pipeline.html)
 
 **Common commands:**
@@ -20,14 +21,15 @@
 # Index documents
 uv run python run_pipeline.py data/document.pdf
 
-# Launch agent
-uv run python -m src.agent.cli
+# Launch multi-agent system
+uv run python -m src.multi_agent.runner --query "your query"
+uv run python -m src.multi_agent.runner --interactive
+
+# Launch web interface
+./start_web.sh
 
 # Run tests
 uv run pytest tests/ -v
-
-# Debug issues
-/debug-optimize
 ```
 
 ---
@@ -35,6 +37,105 @@ uv run pytest tests/ -v
 ## ⚠️ CRITICAL CONSTRAINTS (NEVER CHANGE)
 
 These are research-backed decisions. **DO NOT modify** without explicit approval:
+
+### 0. AUTONOMOUS AGENTIC ARCHITECTURE (MANDATORY) 🤖
+
+**CRITICAL: Agents MUST be autonomous LLM-driven, NOT hardcoded workflows!**
+
+```
+❌ WRONG (Hardcoded):
+class ComplianceAgent:
+    def execute():
+        step1 = call_tool_a()  # Hardcoded sequence
+        step2 = call_tool_b()
+        return synthesize(step1, step2)
+
+✅ CORRECT (Autonomous):
+class ComplianceAgent:
+    def execute():
+        # LLM autonomously decides which tools to call and when
+        return llm.run(
+            system_prompt="You are compliance expert...",
+            tools=[search, graph_search, assess_confidence, ...],
+            messages=[user_query]
+        )
+```
+
+**Principles:**
+1. **LLM decides tool calling** - Agent provides system prompt + tools, LLM autonomously calls them
+2. **No hardcoded flows** - No predefined "step 1, step 2, step 3" logic
+3. **Tools are capabilities** - Agent defines WHAT tools are available, LLM decides HOW to use them
+4. **Orchestrator exception** - ONLY Orchestrator has hardcoded logic (routing), all other agents are autonomous
+5. **System prompts guide behavior** - Control agent behavior via prompts, NOT code
+
+**Technical Implementation:**
+
+All agents inherit from `BaseAgent` which provides the autonomous tool calling loop:
+
+```python
+# src/multi_agent/core/agent_base.py
+async def _run_autonomous_tool_loop(
+    self,
+    system_prompt: str,
+    state: Dict[str, Any],
+    max_iterations: int = 10
+) -> Dict[str, Any]:
+    """
+    Core autonomous agentic behavior:
+    1. LLM sees state/query + available tools
+    2. LLM decides to call tools or provide final answer
+    3. Tool results fed back to LLM
+    4. Loop continues until LLM provides final answer
+    """
+```
+
+**How it works:**
+1. Agent calls `_run_autonomous_tool_loop()` with system prompt and state
+2. Loop builds context from state (query + previous agent outputs)
+3. LLM receives: system prompt + context + tool schemas
+4. LLM decides: call tools (→ execute tools → feed results back) OR provide final answer
+5. Loop continues until LLM returns final answer or max_iterations reached
+6. Result contains: final_answer, tool_calls history, iterations count
+
+**Tool Schema Conversion:**
+- `ToolAdapter.get_tool_schema()` converts Pydantic schemas to LLM format (Anthropic/OpenAI)
+- Agents automatically get schemas for their configured tools from `config.json`
+- LLM sees tool name, description, and input schema for each available tool
+
+**Prompt Design Pattern:**
+Every agent prompt (in `prompts/agents/`) follows this structure:
+1. **ROLE** - Agent's responsibility
+2. **DOMAIN KNOWLEDGE** - Risk categories, compliance frameworks, etc.
+3. **AVAILABLE TOOLS (use autonomously as needed)** - Explicit tool listing
+4. **AUTONOMOUS WORKFLOW** - "Typical approach" guidance (NOT prescription)
+5. **IMPORTANT** - Reinforces autonomy: "YOU decide which tools to use"
+6. **FINAL ANSWER FORMAT** - Expected output structure
+
+**Benefits vs Hardcoded:**
+- ✅ ~70% code reduction per agent (~200 lines → ~60 lines)
+- ✅ LLM adapts to query complexity (simple → calls 1-2 tools, complex → calls 5+ tools)
+- ✅ Emergent reasoning (LLM discovers tool combinations we didn't explicitly program)
+- ✅ Behavior changes via prompts (no code changes needed)
+- ✅ Single implementation in BaseAgent (changes propagate automatically)
+- ❌ Requires proper tool schemas and clear prompts
+- ❌ LLM cost per agent execution (tool calling loop)
+
+**Files:**
+- `src/multi_agent/core/agent_base.py` - Autonomous agent base class with `_run_autonomous_tool_loop()`
+- `src/multi_agent/tools/adapter.py` - Tool schema conversion (`get_tool_schema()`)
+- `src/multi_agent/agents/*.py` - All 7 agents use autonomous pattern (extractor, classifier, compliance, risk_verifier, citation_auditor, gap_synthesizer, report_generator)
+- `prompts/agents/*.txt` - System prompts guide autonomous behavior
+
+**Testing:**
+```bash
+# Test single autonomous agent
+uv run python test_autonomous.py
+
+# Test full multi-agent workflow
+uv run python -m src.multi_agent.runner --query "Your query here"
+```
+
+**Why:** True agentic system enables emergent behavior, better reasoning, and flexibility without code changes. LLM can discover optimal tool calling strategies we didn't explicitly program.
 
 ### 1. Hierarchical Document Summary (MANDATORY)
 ```
@@ -75,6 +176,21 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 - **+23% precision** vs dense-only
 - RRF k=60 (optimal)
 
+### 8. **AUTONOMOUS AGENT RESPONSES (CRITICAL - NO HARDCODED TEMPLATES)**
+- **NEVER use rule-based conditional responses** (if greeting → template)
+- **ALL communication generated by LLM agents** - no hardcoded strings
+- **Orchestrator returns `final_answer` directly** when no specialized agents needed (greetings, chitchat, meta queries)
+- **Why this matters:**
+  - Enables contextual awareness and natural conversation flow
+  - Eliminates brittle template logic that fails on edge cases
+  - Allows agent to adapt responses based on conversation history
+  - Modern LLM-based architecture principle
+- **Implementation:**
+  - Orchestrator: Returns `{"agent_sequence": [], "final_answer": "<LLM-generated response>"}` for greetings
+  - Runner: Checks for `final_answer` in orchestrator output, returns directly without building workflow
+  - NO if/else conditional logic for response generation anywhere in codebase
+- **Files:** `src/multi_agent/runner.py`, `src/multi_agent/agents/orchestrator.py`, `prompts/agents/orchestrator.txt`
+
 ---
 
 ## 🔢 Token vs Character Equivalence
@@ -112,17 +228,32 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 4. `src/embedding_generator.py`, `src/faiss_vector_store.py` - Embeddings + FAISS
 5. `src/hybrid_search.py`, `src/graph/`, `src/reranker.py` - Advanced retrieval
 6. `src/context_assembly.py` - Context prep
-7. `src/agent/` - RAG agent (17 tools)
+7. `src/agent/` - RAG agent (16 tools)
 
 **Agent Tools:**
-- `src/agent/tools/tier1_basic.py` - 6 fast tools (100-300ms)
-- `src/agent/tools/tier2_advanced.py` - 8 quality tools (500-1000ms)
-- `src/agent/tools/tier3_analysis.py` - 3 analysis tools (1-3s)
+- `src/agent/tools/tier1_basic.py` - 5 fast tools (100-300ms)
+- `src/agent/tools/tier2_advanced.py` - 10 quality tools (500-1000ms)
+  - **NEW (2025-01):** `multi_doc_synthesizer` - Multi-document synthesis (replaces broken `compare_documents`)
+  - **NEW (2025-01):** `contextual_chunk_enricher` - Anthropic Contextual Retrieval (-58% context drift)
+- `src/agent/tools/tier3_analysis.py` - 1 analysis tool (1-3s)
 
 **Tests:**
 - `tests/test_phase*.py` - Pipeline tests
 - `tests/agent/` - Agent tests (49 tests)
 - `tests/graph/` - Knowledge graph tests
+- `tests/multi_agent/integration/` - HITL integration tests
+
+**Human-in-the-Loop (HITL) System:**
+- `src/multi_agent/hitl/` - HITL components (4 files)
+  - `config.py` - Configuration with quality thresholds
+  - `quality_detector.py` - Multi-metric quality detection
+  - `clarification_generator.py` - LLM-based question generation
+  - `context_enricher.py` - Query enrichment with user response
+- `backend/main.py` - `/chat/clarify` endpoint for clarification submission
+- `backend/agent_adapter.py` - `resume_clarification()` method
+- `frontend/src/components/chat/ClarificationModal.tsx` - React modal component
+- **Enabled by default** - Configure in `config_multi_agent_extension.json` under `clarification`
+- **See:** [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md) for complete documentation
 
 ---
 
@@ -151,6 +282,61 @@ class MyTool(BaseTool):
         results = self.vector_store.search(query, k=10)
         return ToolResult(success=True, data=results)
 ```
+
+### New Tools (2025-01)
+
+#### **multi_doc_synthesizer** (Tier 2)
+Synthesizes information from multiple documents using LLM. Replaces broken `compare_documents` tool.
+
+**Use cases:**
+```python
+# Compare documents
+tool.execute(
+    document_ids=["doc1", "doc2", "doc3"],
+    synthesis_query="Compare privacy policies",
+    synthesis_mode="compare"
+)
+
+# Unified summary
+tool.execute(
+    document_ids=["standard1", "standard2"],
+    synthesis_query="Data retention requirements",
+    synthesis_mode="summarize"
+)
+```
+
+**Key features:**
+- Synthesis modes: `compare`, `summarize`, `analyze`
+- Uses public API only (hierarchical_search with document filters)
+- 2-10 documents supported
+- Cites all source documents
+
+#### **contextual_chunk_enricher** (Tier 2)
+Implements Anthropic Contextual Retrieval technique (-58% context drift).
+
+**Use cases:**
+```python
+# Auto mode (intelligent selection)
+tool.execute(
+    chunk_ids=["doc1:sec1:0", "doc1:sec2:1"],
+    enrichment_mode="auto"
+)
+
+# Maximum context
+tool.execute(
+    chunk_ids=["doc1:sec1:0"],
+    enrichment_mode="both",  # document + section summaries
+    include_metadata=True
+)
+```
+
+**Enrichment modes:**
+- `auto`: Selects best mode (section > document)
+- `document_summary`: Prepend document context
+- `section_summary`: Prepend section context
+- `both`: Maximum context (document + section)
+
+**Research basis:** Anthropic (2024) - Contextual Retrieval
 
 ### Debugging Retrieval Issues
 ```bash
@@ -320,7 +506,7 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-**Last Updated:** 2025-11-03
-**Version:** PHASE 1-7 COMPLETE + Hierarchical Summaries + Query Expansion + RAG Confidence Scoring
+**Last Updated:** 2025-11-11
+**Version:** PHASE 1-7 COMPLETE + Multi-Agent System + HITL Clarifications (16 tools, 8 agents)
 
 **Note:** `vector_db/` is tracked in git (contains merged vector stores) - DO NOT add to `.gitignore`
