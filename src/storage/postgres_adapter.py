@@ -10,31 +10,30 @@ import asyncpg
 import numpy as np
 from typing import List, Dict, Optional, Any
 import logging
-import concurrent.futures
+import nest_asyncio
 
 from .vector_store_adapter import VectorStoreAdapter
 
 logger = logging.getLogger(__name__)
+
+# Enable nested event loops
+nest_asyncio.apply()
 
 
 def _run_async_safe(coro):
     """
     Safely run async coroutine from sync context.
 
-    Handles the case where event loop is already running (FastAPI async context)
-    by executing the coroutine in a thread pool executor.
+    Uses nest-asyncio to allow nested event loops when called from FastAPI async context.
     """
     try:
         # Check if we're already in an async context
         loop = asyncio.get_running_loop()
+        # With nest-asyncio applied, we can safely run in the same loop
+        return loop.run_until_complete(coro)
     except RuntimeError:
         # No loop running - safe to use asyncio.run()
         return asyncio.run(coro)
-    else:
-        # Loop is running - execute in thread pool to avoid nesting
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(asyncio.run, coro)
-            return future.result()
 
 
 class PostgresVectorStoreAdapter(VectorStoreAdapter):

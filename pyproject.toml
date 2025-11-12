@@ -71,6 +71,7 @@ dependencies = [
     "click>=8.1.0",
     "tqdm>=4.65.0",
     "asyncpg>=0.30.0",
+    "nest-asyncio>=1.6.0",
 ]
 
 [project.optional-dependencies]
