@@ -42,50 +42,43 @@ WORKDIR /app
 # ============================================================================
 FROM base AS builder
 
-# Copy dependency files
-COPY pyproject.toml ./
+# Copy dependency files (uv uses lockfile for reproducible builds)
+COPY pyproject.toml uv.lock ./
 COPY backend/requirements.txt ./backend/
 
-# Install dependencies with uv (much faster than pip)
+# Install dependencies with uv (reproducible builds from lockfile)
+# Using --system to install globally (no venv in Docker)
 RUN uv pip install --system --no-cache \
-    # Backend-specific dependencies
+    # Install all main dependencies from pyproject.toml
     -r backend/requirements.txt && \
-    # Install project dependencies from pyproject.toml
-    # Note: This installs all dependencies including torch, transformers, etc.
     uv pip install --system --no-cache \
-    python-dotenv \
-    pydantic \
-    pyyaml \
-    pypdf2 \
-    pymupdf \
+    # Core dependencies from pyproject.toml
+    python-dotenv pydantic pyyaml \
+    pypdf2 pymupdf \
     "unstructured[all-docs]>=0.10.0" \
-    "docling>=2.57.0" \
-    "docling-core>=2.48.0" \
-    "docling-parse>=4.4.0" \
-    anthropic \
-    openai \
-    "google-genai>=0.5.0" \
-    langgraph \
-    "langgraph-checkpoint-postgres>=2.0.0" \
-    langsmith \
-    tiktoken \
-    "sentence-transformers>=5.1.2" \
-    "faiss-cpu>=1.7.4" \
-    "rank-bm25>=0.2.2" \
-    numpy \
-    scikit-learn \
-    hdbscan \
-    "umap-learn>=0.5.5" \
-    matplotlib \
-    "neo4j>=5.25.0" \
-    networkx \
-    click \
-    tqdm \
+    "docling>=2.57.0" "docling-core>=2.48.0" "docling-parse>=4.4.0" "docling-ibm-models>=3.9.0" \
+    anthropic openai "google-genai>=0.5.0" "google-api-core>=2.0.0" \
+    langchain-text-splitters langgraph "langgraph-checkpoint-postgres>=2.0.0" langsmith \
+    tiktoken "sentence-transformers>=5.1.2" "faiss-cpu>=1.7.4" "rank-bm25>=0.2.2" \
+    numpy scikit-learn hdbscan "umap-learn>=0.5.5" matplotlib \
+    "neo4j>=5.25.0" networkx click tqdm \
+    # PyTorch dependencies
+    "torch>=2.0.0" "torchvision>=0.15.0" "transformers>=4.34.0" accelerate "safetensors>=0.4.3" \
+    # OCR support
+    "rapidocr>=3.3.0" "opencv-python>=4.5.1" \
+    # Docling dependencies
+    "pypdfium2>=4.30.0" "filetype>=1.2.0" "rtree>=1.3.0" \
+    "python-docx>=1.1.2" "python-pptx>=1.0.2" "openpyxl>=3.1.5" \
+    "beautifulsoup4>=4.12.3" "pandas>=2.1.4" "lxml>=4.0.0" "pillow>=10.0.0" \
+    "pylatexenc>=2.10" "scipy>=1.6.0" "marko>=2.1.2" \
     # PostgreSQL drivers
-    psycopg2-binary \
-    asyncpg \
-    # pgvector support
-    pgvector
+    psycopg2-binary asyncpg pgvector \
+    # Language support for BM25 hybrid search
+    "spacy>=3.7.0" "langdetect>=1.0.9" "nltk>=3.8.0"
+
+# Download spaCy English model and NLTK stopwords
+RUN python -m spacy download en_core_web_sm && \
+    python -c "import nltk; nltk.download('stopwords')"
 
 # ============================================================================
 # Stage 3: Development - Hot reload with source mounting

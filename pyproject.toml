@@ -104,12 +104,22 @@ knowledge-graph = [
     "pyvis>=0.3.0",  # Interactive graph visualization
 ]
 
+# Language processing for BM25 hybrid search (PHASE 5B)
+language-support = [
+    "spacy>=3.7.0",  # Lemmatization + stop words (best quality)
+    "langdetect>=1.0.9",  # Auto language detection
+    "nltk>=3.8.0",  # Stop words fallback
+]
+
 # All optional features
 all = [
     "sentence-transformers>=2.2.0",
     "voyageai>=0.2.0",
     "networkx>=3.0",
     "neo4j>=5.0.0",
+    "spacy>=3.7.0",
+    "langdetect>=1.0.9",
+    "nltk>=3.8.0",
 ]
 
 [build-system]

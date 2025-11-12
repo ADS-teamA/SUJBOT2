@@ -2,20 +2,17 @@
 # Automatically loaded in development mode (docker-compose up)
 # Provides hot reload and source code mounting
 
-version: '3.8'
-
 services:
   backend:
     build:
       target: development
     volumes:
-      # Mount source code for hot reload
-      - ./:/app:ro
+      # Mount source code for hot reload (no root mount to avoid conflicts)
       - ./src:/app/src
       - ./backend:/app/backend
       - ./prompts:/app/prompts
       - ./config.json:/app/config.json
-      # Exclude Python cache from host
+      # Exclude Python cache from host (anonymous volumes)
       - /app/src/__pycache__
       - /app/backend/__pycache__
     command: >
