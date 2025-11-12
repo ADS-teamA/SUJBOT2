@@ -514,7 +514,7 @@ class MultiAgentRunner:
             if hasattr(state, 'final_answer') and state.final_answer and not state.agent_sequence:
                 logger.info("Orchestrator provided direct answer without agents")
                 # Get accurate cost from CostTracker (model-specific pricing)
-                from ...cost_tracker import get_global_tracker
+                from src.cost_tracker import get_global_tracker
                 tracker = get_global_tracker()
                 total_cost_usd = tracker.get_total_cost()
                 total_cost_cents = total_cost_usd * 100.0
@@ -542,7 +542,7 @@ class MultiAgentRunner:
                 logger.error("Empty agent sequence without final_answer from orchestrator")
 
                 # Get accurate cost from CostTracker (model-specific pricing)
-                from ...cost_tracker import get_global_tracker
+                from src.cost_tracker import get_global_tracker
                 tracker = get_global_tracker()
                 total_cost_usd = tracker.get_total_cost()
                 total_cost_cents = total_cost_usd * 100.0
@@ -653,7 +653,7 @@ class MultiAgentRunner:
             logger.info("Query execution completed successfully")
 
             # Get accurate cost from CostTracker (model-specific pricing)
-            from ...cost_tracker import get_global_tracker
+            from src.cost_tracker import get_global_tracker
             tracker = get_global_tracker()
             total_cost_usd = tracker.get_total_cost()
             total_cost_cents = total_cost_usd * 100.0
@@ -790,7 +790,7 @@ class MultiAgentRunner:
             logger.info("Resumed workflow completed successfully")
 
             # Get accurate cost from CostTracker (model-specific pricing)
-            from ...cost_tracker import get_global_tracker
+            from src.cost_tracker import get_global_tracker
             tracker = get_global_tracker()
             total_cost_usd = tracker.get_total_cost()
             total_cost_cents = total_cost_usd * 100.0
