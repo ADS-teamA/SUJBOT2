@@ -64,36 +64,35 @@ uv run pytest tests/ -v
 - ✅ Production-ready: No shared file mounts across containers
 - ✅ Integrated hybrid search: pgvector (dense) + tsvector (sparse, replaces BM25)
 
-### Migration from Legacy FAISS (One-Time Setup)
+### Migration from Legacy FAISS (✅ COMPLETED 2025-11-12)
 
-If you have existing FAISS vector store in `vector_db/`, migrate to PostgreSQL:
+**Migration Status:** All FAISS data successfully migrated to PostgreSQL
+
+**Migrated Data:**
+- ✅ Layer 1: **5 documents**
+- ✅ Layer 2: **4,213 sections**
+- ✅ Layer 3: **5,650 chunks**
+- ✅ **Total: 9,868 vectors**
+- ✅ Vector similarity search verified working
+
+**If you need to re-run migration** (e.g., after adding new documents to FAISS):
 
 ```bash
-# 1. Ensure PostgreSQL is running with pgvector
+# 1. Ensure PostgreSQL is running
 docker-compose up -d postgres
 
-# Wait for PostgreSQL to be ready
-docker-compose logs -f postgres | grep "ready to accept connections"
+# 2. Run migration from backend container (required for Docker networking)
+docker-compose exec backend uv run python scripts/migrate_faiss_to_postgres.py \
+  --faiss-dir /app/vector_db/ \
+  --db-url postgresql://postgres:PASSWORD@postgres:5432/sujbot \
+  --batch-size 500 \
+  --verify
 
-# 2. Verify DATABASE_URL is set (check .env file)
-echo $DATABASE_URL
-# Should be: postgresql://postgres:your_password@localhost:5432/sujbot
-
-# 3. Run migration script (one-time operation)
-uv run python scripts/migrate_faiss_to_postgres.py \
-  --faiss-dir vector_db/ \
-  --db-url "${DATABASE_URL}" \
-  --batch-size 500
-
-# Expected output:
-# - Layer 1: X documents migrated
-# - Layer 2: X documents migrated
-# - Layer 3: X documents migrated
-# - Migration complete!
-
-# 4. Verify migration
+# 3. Verify migration
 docker-compose exec postgres psql -U postgres -d sujbot -c \
-  "SELECT COUNT(*) FROM vectors.layer1; SELECT COUNT(*) FROM vectors.layer2; SELECT COUNT(*) FROM vectors.layer3;"
+  "SELECT 'L1:', COUNT(*) FROM vectors.layer1 UNION ALL
+   SELECT 'L2:', COUNT(*) FROM vectors.layer2 UNION ALL
+   SELECT 'L3:', COUNT(*) FROM vectors.layer3;"
 
 # 5. Optional: Backup old FAISS data
 mv vector_db vector_db.backup.$(date +%Y%m%d)
