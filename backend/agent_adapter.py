@@ -624,23 +624,26 @@ class AgentAdapter:
                     "degraded_components": []
                 }
 
-            # Check vector store
-            vector_store_exists = self.config.vector_store_path.exists()
+            # Check vector store (skip for PostgreSQL backend)
+            import os
+            storage_backend = os.getenv("STORAGE_BACKEND", "faiss")
+
+            if storage_backend == "faiss":
+                vector_store_exists = self.config.vector_store_path.exists()
+                if not vector_store_exists:
+                    return {
+                        "status": "error",
+                        "message": "Vector store not found",
+                        "details": {
+                            "vector_store_path": str(self.config.vector_store_path)
+                        },
+                        "degraded_components": []
+                    }
 
             # Check API keys
             has_anthropic_key = bool(self.config.anthropic_api_key)
             has_openai_key = bool(self.config.openai_api_key)
             has_google_key = bool(self.config.google_api_key)
-
-            if not vector_store_exists:
-                return {
-                    "status": "error",
-                    "message": "Vector store not found",
-                    "details": {
-                        "vector_store_path": str(self.config.vector_store_path)
-                    },
-                    "degraded_components": []
-                }
 
             if not has_anthropic_key and not has_openai_key and not has_google_key:
                 return {
