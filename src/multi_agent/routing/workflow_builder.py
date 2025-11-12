@@ -119,6 +119,17 @@ class WorkflowBuilder:
         async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             """Execute agent and update state."""
             try:
+                # LangGraph may pass state as MultiAgentState (Pydantic) or dict
+                # Extract EventBus using proper accessor based on type
+                if hasattr(state, "event_bus"):
+                    # Pydantic model - access as attribute (field name: event_bus)
+                    event_bus = state.event_bus
+                elif isinstance(state, dict):
+                    # Plain dict - access as key
+                    event_bus = state.get("event_bus")
+                else:
+                    event_bus = None
+
                 # Convert MultiAgentState to dict if needed
                 if hasattr(state, "model_dump"):
                     state_dict = state.model_dump()
@@ -131,6 +142,12 @@ class WorkflowBuilder:
                     "execution_phase": ExecutionPhase.AGENT_EXECUTION.value,
                     "current_agent": agent_name,
                 }
+
+                # Restore EventBus into state dict (for agent's autonomous tool loop to emit progress events)
+                # NOTE: This will be converted back to Pydantic model by LangGraph
+                # Use "event_bus" key (no underscore) to match MultiAgentState field name
+                if event_bus:
+                    updated_state["event_bus"] = event_bus
 
                 # Add agent to sequence if not already there
                 agent_sequence = updated_state.get("agent_sequence", [])

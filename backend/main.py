@@ -126,13 +126,24 @@ async def health_check():
     return HealthResponse(**health_status)
 
 
-@app.get("/models", response_model=ModelsResponse)
+@app.get("/models", response_model=ModelsResponse, deprecated=True)
 async def get_models():
     """
-    Get list of available models.
+    [DEPRECATED] Get list of available models.
+
+    **This endpoint is deprecated.** Models are now configured in config.json
+    under `multi_agent.agents.*model` and `agent.model`. Dynamic model selection
+    has been removed from the frontend.
+
+    This endpoint will be removed in a future version.
 
     Returns models with provider and description.
     """
+    logger.warning(
+        "DEPRECATED: /models endpoint called. Models should be configured in config.json. "
+        "This endpoint will be removed in a future version."
+    )
+
     if agent_adapter is None:
         raise HTTPException(
             status_code=503,
@@ -157,9 +168,10 @@ async def chat_stream(request: ChatRequest):
     - text_delta: Streaming text chunks from agent response
     - tool_call: Tool execution started (streamed immediately when detected)
     - tool_calls_summary: Summary of all tool calls with results (sent after completion)
-    - cost_update: Token usage and cost update
     - done: Stream completed
     - error: Error occurred
+
+    Note: Cost tracking is performed internally but not exposed to users.
 
     Example event format:
     ```
@@ -171,9 +183,6 @@ async def chat_stream(request: ChatRequest):
 
     event: tool_calls_summary
     data: {"tool_calls": [...], "count": 2}
-
-    event: cost_update
-    data: {"summary": "...", "total_cost": 0.001, ...}
 
     event: done
     data: {}
@@ -188,11 +197,6 @@ async def chat_stream(request: ChatRequest):
             status_code=503,
             detail="Agent not initialized"
         )
-
-    # Switch model if specified
-    if request.model and request.model != agent_adapter.config.model:
-        logger.info(f"Switching model to: {request.model}")
-        agent_adapter.switch_model(request.model)
 
     async def event_generator():
         """Generate SSE events from agent stream."""
@@ -276,9 +280,10 @@ async def chat_clarify(request: ClarificationRequest):
     Events (SSE):
     - progress: Resume progress updates
     - text_delta: Streaming text chunks from final answer
-    - cost_update: Token usage and cost update
     - done: Stream completed
     - error: Error occurred
+
+    Note: Cost tracking is performed internally but not exposed to users.
 
     Example usage:
     ```
@@ -345,32 +350,41 @@ async def chat_clarify(request: ClarificationRequest):
     return EventSourceResponse(event_generator())
 
 
-@app.post("/model/switch")
+@app.post("/model/switch", deprecated=True)
 async def switch_model(model: str):
     """
-    Switch to a different model.
+    [DEPRECATED] Switch to a different model.
+
+    **This endpoint is deprecated.** Models are now configured in config.json
+    under `multi_agent.agents.*model` and `agent.model`. Dynamic model switching
+    has been removed - each agent uses its configured model from config.json.
+
+    This endpoint will be removed in a future version.
 
     Args:
-        model: Model identifier
+        model: Model identifier (ignored - for backward compatibility only)
 
     Returns:
-        Success confirmation
+        Success confirmation (no-op for backward compatibility)
     """
+    logger.warning(
+        f"DEPRECATED: /model/switch endpoint called (requested model: {model}). "
+        "Model switching is no longer supported. Models should be configured in config.json. "
+        "This endpoint will be removed in a future version. Returning success for backward compatibility."
+    )
+
     if agent_adapter is None:
         raise HTTPException(
             status_code=503,
             detail="Agent not initialized"
         )
 
-    try:
-        agent_adapter.switch_model(model)
-        return {"success": True, "model": model}
-    except Exception as e:
-        logger.error(f"Failed to switch model: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to switch model: {str(e)}"
-        )
+    # Return success without doing anything (backward compatibility)
+    return {
+        "success": True,
+        "model": model,
+        "warning": "Model switching is deprecated. Configure models in config.json instead."
+    }
 
 
 @app.get("/")

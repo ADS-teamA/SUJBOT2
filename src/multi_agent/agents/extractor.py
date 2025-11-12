@@ -95,10 +95,22 @@ class ExtractorAgent(BaseAgent):
             tool_calls = result.get("tool_calls", [])
             agent_cost = result.get("total_tool_cost_usd", 0.0)
 
-            # Store extraction output
+            # Extract citations from tool results (CRITICAL for report generation)
+            all_citations = []
+            for tool_call in tool_calls:
+                tool_result = tool_call.get("result", {})
+                if isinstance(tool_result, dict) and "citations" in tool_result:
+                    citations = tool_result["citations"]
+                    if isinstance(citations, list):
+                        all_citations.extend(citations)
+
+            logger.info(f"Extracted {len(all_citations)} citations from {len(tool_calls)} tool calls")
+
+            # Store extraction output WITH CITATIONS
             extraction_output = {
                 "analysis": final_answer,
                 "tool_calls_made": [t["tool"] for t in tool_calls],
+                "citations": all_citations,  # ADD CITATIONS for downstream agents
                 "iterations": result.get("iterations", 0),
                 "retrieval_method": "autonomous_llm_driven",
                 "total_tool_cost_usd": agent_cost

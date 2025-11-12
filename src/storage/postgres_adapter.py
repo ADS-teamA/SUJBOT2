@@ -125,6 +125,28 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         norm = np.linalg.norm(vec)
         return vec / norm if norm > 0 else vec
 
+    def _vector_to_pgvector_string(self, vec: np.ndarray) -> str:
+        """
+        Convert numpy array to PostgreSQL vector string format.
+
+        asyncpg doesn't automatically serialize Python lists to pgvector type,
+        so we need to manually convert to string format: '[1.0,2.0,3.0]'
+
+        Args:
+            vec: Numpy array or list (can be nested)
+
+        Returns:
+            String representation compatible with pgvector (e.g., '[0.1,0.2,0.3]')
+        """
+        # Flatten array if needed (handles 2D arrays from some embedding models)
+        if isinstance(vec, np.ndarray):
+            vec = vec.flatten().tolist()
+        elif isinstance(vec, list) and len(vec) > 0 and isinstance(vec[0], list):
+            # Handle nested lists (e.g., [[0.1, 0.2, ...]])
+            vec = vec[0] if len(vec) == 1 else sum(vec, [])
+
+        return '[' + ','.join(map(str, vec)) + ']'
+
     # ============================================================================
     # Core Search Methods
     # ============================================================================
@@ -225,13 +247,15 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         Uses <=> operator (cosine distance) from pgvector.
         Score = 1 - distance (0=dissimilar, 1=identical)
         """
-        query_list = query_vec.tolist()
+        # Convert query vector to PostgreSQL-compatible string format
+        query_str = self._vector_to_pgvector_string(query_vec)
 
         # Build SQL query with layer-specific columns
-        # Layer 1 (documents) does not have section_id, section_title, hierarchical_path
+        # Layer 1 (documents) does not have section_id, section_title
         # Layers 2-3 (sections/chunks) have these columns
+        # All layers have hierarchical_path
         section_columns = (
-            "section_id, section_title, hierarchical_path,"
+            "section_id, section_title,"
             if layer > 1
             else ""
         )
@@ -251,13 +275,14 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                         metadata,
                         content,
                         {section_columns}
+                        hierarchical_path,
                         1 - (embedding <=> $1::vector) AS score
                     FROM vectors.layer{layer}
                     WHERE document_id = $2
                     ORDER BY embedding <=> $1::vector
                     LIMIT $3
                 """
-                rows = await conn.fetch(sql, query_list, document_filter, k)
+                rows = await conn.fetch(sql, query_str, document_filter, k)
             else:
                 sql = f"""
                     SELECT
@@ -266,12 +291,13 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                         metadata,
                         content,
                         {section_columns}
+                        hierarchical_path,
                         1 - (embedding <=> $1::vector) AS score
                     FROM vectors.layer{layer}
                     ORDER BY embedding <=> $1::vector
                     LIMIT $2
                 """
-                rows = await conn.fetch(sql, query_list, k)
+                rows = await conn.fetch(sql, query_str, k)
 
         # Convert rows to dicts
         results = []
@@ -285,8 +311,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 "section_title": row.get("section_title"),
                 "hierarchical_path": row.get("hierarchical_path"),
             }
-            # Merge JSONB metadata
-            if row["metadata"]:
+            # Merge JSONB metadata (PostgreSQL returns JSONB as dict)
+            if row["metadata"] and isinstance(row["metadata"], dict):
                 result.update(row["metadata"])
             results.append(result)
 
@@ -307,11 +333,13 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         RRF (Reciprocal Rank Fusion): score = 1/(k + rank)
         k=60 (standard parameter from research)
         """
-        query_list = query_vec.tolist()
+        # Convert query vector to PostgreSQL-compatible string format
+        query_str = self._vector_to_pgvector_string(query_vec)
 
-        # Layer-specific columns (Layer 1 doesn't have section columns)
+        # Layer-specific columns (Layer 1 doesn't have section_id, section_title)
+        # All layers have hierarchical_path
         section_columns = (
-            "l.section_id, l.section_title, l.hierarchical_path,"
+            "l.section_id, l.section_title,"
             if layer > 1
             else ""
         )
@@ -349,6 +377,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     l.content,
                     l.metadata,
                     {section_columns}
+                    l.hierarchical_path,
                     f.rrf_score AS score
                 FROM fused f
                 JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
@@ -357,7 +386,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             """
             # Preprocess query text for tsquery (replace spaces with &)
             tsquery = query_text.replace(" ", " & ")
-            rows = await conn.fetch(sql, query_list, tsquery, document_filter, k)
+            rows = await conn.fetch(sql, query_str, tsquery, document_filter, k)
         else:
             # Same query without document filter
             sql = f"""
@@ -389,6 +418,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     l.content,
                     l.metadata,
                     {section_columns}
+                    l.hierarchical_path,
                     f.rrf_score AS score
                 FROM fused f
                 JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
@@ -396,7 +426,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 LIMIT $3
             """
             tsquery = query_text.replace(" ", " & ")
-            rows = await conn.fetch(sql, query_list, tsquery, k)
+            rows = await conn.fetch(sql, query_str, tsquery, k)
 
         # Convert to dicts
         results = []
@@ -410,7 +440,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 "section_title": row.get("section_title"),
                 "hierarchical_path": row.get("hierarchical_path"),
             }
-            if row["metadata"]:
+            # Merge JSONB metadata (PostgreSQL returns JSONB as dict)
+            if row["metadata"] and isinstance(row["metadata"], dict):
                 result.update(row["metadata"])
             results.append(result)
 
@@ -517,14 +548,24 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
     async def _load_metadata(self, layer: int) -> List[Dict]:
         """Load all metadata for a layer (expensive, use sparingly)."""
         async with self.pool.acquire() as conn:
-            rows = await conn.fetch(
-                f"""
-                SELECT chunk_id, document_id, metadata, content,
-                       section_id, section_title, hierarchical_path
-                FROM vectors.layer{layer}
-                ORDER BY id
+            # Layer 1 (documents) doesn't have section_id, section_title
+            # Layers 2-3 (sections/chunks) have these columns
+            # All layers have hierarchical_path
+            if layer == 1:
+                sql = f"""
+                    SELECT chunk_id, document_id, metadata, content, hierarchical_path
+                    FROM vectors.layer{layer}
+                    ORDER BY id
                 """
-            )
+            else:
+                sql = f"""
+                    SELECT chunk_id, document_id, metadata, content,
+                           section_id, section_title, hierarchical_path
+                    FROM vectors.layer{layer}
+                    ORDER BY id
+                """
+
+            rows = await conn.fetch(sql)
 
             results = []
             for row in rows:
@@ -532,11 +573,15 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     "chunk_id": row["chunk_id"],
                     "document_id": row["document_id"],
                     "content": row["content"],
-                    "section_id": row.get("section_id"),
-                    "section_title": row.get("section_title"),
                     "hierarchical_path": row.get("hierarchical_path"),
                 }
-                if row["metadata"]:
+                # Only add section columns for layers 2-3
+                if layer > 1:
+                    result["section_id"] = row.get("section_id")
+                    result["section_title"] = row.get("section_title")
+
+                # Merge JSONB metadata (PostgreSQL returns JSONB as dict)
+                if row["metadata"] and isinstance(row["metadata"], dict):
                     result.update(row["metadata"])
                 results.append(result)
 

@@ -15,10 +15,6 @@ export function useChat() {
     storageService.getCurrentConversationId()
   );
   const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(() =>
-    // Load from localStorage, or use Gemini 2.5 Flash Lite as default
-    storageService.getSelectedModel() || 'gemini-2.5-flash-latest-exp-1206'
-  );
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
 
@@ -43,28 +39,6 @@ export function useChat() {
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
-
-  // Initialize and verify model
-  useEffect(() => {
-    const savedModel = storageService.getSelectedModel();
-
-    // If no saved model, save the default
-    if (!savedModel) {
-      storageService.setSelectedModel('gemini-2.5-flash-latest-exp-1206');
-    }
-
-    // Verify model is available on backend
-    apiService.getModels().then((data) => {
-      const currentModel = savedModel || 'gemini-2.5-flash-latest-exp-1206';
-
-      // If current model is not available, fallback to backend default
-      if (!data.models.some((m: any) => m.id === currentModel)) {
-        const defaultModel = data.defaultModel || 'gemini-2.5-flash-latest-exp-1206';
-        setSelectedModel(defaultModel);
-        storageService.setSelectedModel(defaultModel);
-      }
-    }).catch(console.error);
-  }, []);
 
   /**
    * Clean invalid/incomplete messages from conversation
@@ -93,8 +67,8 @@ export function useChat() {
       id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       title: 'New Conversation',
       messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     setConversations((prev) => [...prev, newConversation]);
@@ -159,21 +133,21 @@ export function useChat() {
           id: `msg_${Date.now()}_user`,
           role: 'user',
           content: content.trim(),
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         };
 
         // Add user message to conversation
         updatedConversation = {
           ...conversation,
           messages: [...conversation.messages, userMessage],
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
           title: conversation.messages.length === 0 ? content.slice(0, 50) : conversation.title,
         };
       } else {
         // Regenerate/edit mode - use conversation as-is
         updatedConversation = {
           ...conversation,
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         };
       }
 
@@ -187,7 +161,7 @@ export function useChat() {
         id: `msg_${Date.now()}_assistant`,
         role: 'assistant',
         content: '',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         toolCalls: [],
         agentProgress: {
           currentAgent: null,
@@ -204,11 +178,8 @@ export function useChat() {
         // Stream response from backend
         for await (const event of apiService.streamChat(
           content,
-          conversation.id,
-          selectedModel
+          conversation.id
         )) {
-          console.log('📨 FRONTEND: Received event:', event.event);
-
           // Handle agent progress events
           if (event.event === 'agent_start') {
             if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
@@ -224,7 +195,7 @@ export function useChat() {
               currentMessageRef.current.agentProgress.currentMessage = event.data.message;
               currentMessageRef.current.agentProgress.activeTools = [];
 
-              // Update UI
+              // Update UI - IMPORTANT: Deep copy agentProgress to trigger React re-render
               setConversations((prev) =>
                 prev.map((c) => {
                   if (c.id !== updatedConversation.id) return c;
@@ -232,10 +203,22 @@ export function useChat() {
                   const messages = [...c.messages];
                   const lastMsg = messages[messages.length - 1];
 
+                  // Deep copy message with agentProgress to ensure React detects changes
+                  const updatedMessage = {
+                    ...currentMessageRef.current!,
+                    agentProgress: currentMessageRef.current!.agentProgress
+                      ? {
+                          ...currentMessageRef.current!.agentProgress,
+                          activeTools: [...(currentMessageRef.current!.agentProgress.activeTools || [])],
+                          completedAgents: [...(currentMessageRef.current!.agentProgress.completedAgents || [])]
+                        }
+                      : undefined
+                  };
+
                   if (lastMsg?.role === 'assistant') {
-                    messages[messages.length - 1] = { ...currentMessageRef.current! };
+                    messages[messages.length - 1] = updatedMessage;
                   } else {
-                    messages.push({ ...currentMessageRef.current! });
+                    messages.push(updatedMessage);
                   }
 
                   return { ...c, messages };
@@ -528,22 +511,8 @@ export function useChat() {
         currentToolCallsRef.current = new Map();
       }
     },
-    [isStreaming, createConversation, selectedModel, currentConversationId, conversations]
+    [isStreaming, createConversation, currentConversationId, conversations]
   );
-
-  /**
-   * Switch model
-   */
-  const switchModel = useCallback(async (model: string) => {
-    try {
-      await apiService.switchModel(model);
-      setSelectedModel(model);
-      storageService.setSelectedModel(model);
-    } catch (error) {
-      console.error('Failed to switch model:', error);
-      throw error;
-    }
-  }, []);
 
   /**
    * Edit a user message and resend
@@ -713,7 +682,7 @@ export function useChat() {
         id: `msg_${Date.now()}_assistant`,
         role: 'assistant',
         content: '',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         toolCalls: [],
       };
       currentToolCallsRef.current = new Map();
@@ -838,14 +807,12 @@ export function useChat() {
     conversations,
     currentConversation,
     isStreaming,
-    selectedModel,
     clarificationData,
     awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
     sendMessage,
-    switchModel,
     editMessage,
     regenerateMessage,
     submitClarification,

@@ -156,8 +156,8 @@ CREATE TABLE IF NOT EXISTS vectors.layer3 (
 -- GRAPHS SCHEMA: Apache AGE Property Graph + Mirror Tables
 -- ============================================================================
 
--- Create graph in Apache AGE
-SELECT create_graph('knowledge_graph');
+-- Create graph in Apache AGE (DISABLED - AGE not installed)
+-- SELECT create_graph('knowledge_graph');
 
 -- Entities mirror table (for efficient SQL queries without Cypher)
 CREATE TABLE IF NOT EXISTS graphs.entities (

@@ -187,9 +187,41 @@ export function ChatMessage({
           </div>
         ) : (
           <>
-            {/* Agent progress for assistant messages */}
+            {/* Agent progress for assistant messages - collapsible */}
             {!isUser && message.agentProgress && (
-              <AgentProgress progress={message.agentProgress} />
+              <details className={cn(
+                'mb-3 group',
+                'border border-accent-200 dark:border-accent-700',
+                'rounded-lg overflow-hidden',
+                'transition-colors'
+              )}>
+                <summary className={cn(
+                  'px-3 py-2 cursor-pointer',
+                  'bg-accent-50 dark:bg-accent-900/50',
+                  'hover:bg-accent-100 dark:hover:bg-accent-800',
+                  'text-accent-600 dark:text-accent-400',
+                  'text-xs font-medium',
+                  'flex items-center gap-2',
+                  'select-none',
+                  'transition-colors',
+                  '[&::-webkit-details-marker]:hidden' // Hide default marker
+                )}>
+                  <span className={cn(
+                    'text-accent-500 dark:text-accent-500',
+                    'transition-transform duration-200',
+                    'group-open:rotate-90'
+                  )}>▸</span>
+                  <span className="group-open:hidden">Show agent progress</span>
+                  <span className="hidden group-open:inline">Hide agent progress</span>
+                </summary>
+
+                <div className={cn(
+                  'bg-white dark:bg-accent-950',
+                  'border-t border-accent-200 dark:border-accent-700'
+                )}>
+                  <AgentProgress progress={message.agentProgress} />
+                </div>
+              </details>
             )}
 
             {/* Message content */}
@@ -425,57 +457,102 @@ export function ChatMessage({
           </>
         )}
 
-        {/* Cost information */}
-        {message.cost && message.cost.totalCost !== undefined && (
-          <div className={cn(
-            'mt-3 flex items-center gap-4 text-xs',
-            'text-accent-500 dark:text-accent-400'
+        {/* Collapsible metadata section (cost, duration, tool usage) */}
+        {!isUser && (message.cost?.totalCost !== undefined || responseDurationMs !== undefined || (message.toolCalls && message.toolCalls.length > 0)) && (
+          <details className={cn(
+            'mt-3 group',
+            'border border-accent-200 dark:border-accent-700',
+            'rounded-lg overflow-hidden',
+            'transition-colors'
           )}>
-            <span className="flex items-center gap-1">
-              <DollarSign size={12} />
-              ${message.cost.totalCost.toFixed(4)}
-            </span>
-            {message.cost.inputTokens !== undefined && message.cost.outputTokens !== undefined && (
-              <span>
-                {message.cost.inputTokens.toLocaleString()} in /{' '}
-                {message.cost.outputTokens.toLocaleString()} out
-              </span>
-            )}
-            {message.cost.cachedTokens !== undefined && message.cost.cachedTokens > 0 && (
+            <summary className={cn(
+              'px-3 py-2 cursor-pointer',
+              'bg-accent-50 dark:bg-accent-900/50',
+              'hover:bg-accent-100 dark:hover:bg-accent-800',
+              'text-accent-600 dark:text-accent-400',
+              'text-xs font-medium',
+              'flex items-center gap-2',
+              'select-none',
+              'transition-colors',
+              '[&::-webkit-details-marker]:hidden' // Hide default marker
+            )}>
               <span className={cn(
-                'text-accent-600 dark:text-accent-400'
-              )}>
-                {message.cost.cachedTokens.toLocaleString()} cached
-              </span>
-            )}
-            {/* Show tool usage count */}
-            {message.toolCalls && message.toolCalls.length > 0 && (
-              <span className={cn(
-                'text-accent-600 dark:text-accent-400'
-              )}>
-                tools used: {message.toolCalls.length}
-              </span>
-            )}
-          </div>
+                'text-accent-500 dark:text-accent-500',
+                'transition-transform duration-200',
+                'group-open:rotate-90'
+              )}>▸</span>
+              <span className="group-open:hidden">Show execution details</span>
+              <span className="hidden group-open:inline">Hide execution details</span>
+            </summary>
+
+            <div className={cn(
+              'px-3 py-2 space-y-2',
+              'bg-white dark:bg-accent-950',
+              'border-t border-accent-200 dark:border-accent-700'
+            )}>
+              {/* Cost information */}
+              {message.cost && message.cost.totalCost !== undefined && (
+                <div className={cn(
+                  'flex items-center gap-4 text-xs',
+                  'text-accent-500 dark:text-accent-400'
+                )}>
+                  <span className="flex items-center gap-1">
+                    <DollarSign size={12} />
+                    ${message.cost.totalCost.toFixed(4)}
+                  </span>
+                  {message.cost.inputTokens !== undefined && message.cost.outputTokens !== undefined && (
+                    <span>
+                      {message.cost.inputTokens.toLocaleString()} in /{' '}
+                      {message.cost.outputTokens.toLocaleString()} out
+                    </span>
+                  )}
+                  {message.cost.cachedTokens !== undefined && message.cost.cachedTokens > 0 && (
+                    <span className={cn(
+                      'text-accent-600 dark:text-accent-400'
+                    )}>
+                      {message.cost.cachedTokens.toLocaleString()} cached
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Response Duration */}
+              {responseDurationMs !== undefined && (
+                <div className={cn(
+                  'flex items-center gap-1 text-xs',
+                  'text-accent-400 dark:text-accent-500'
+                )}>
+                  <Clock size={12} />
+                  Response time: {(responseDurationMs / 1000).toFixed(2)}s
+                </div>
+              )}
+
+              {/* Tool usage count */}
+              {message.toolCalls && message.toolCalls.length > 0 && (
+                <div className={cn(
+                  'text-xs',
+                  'text-accent-600 dark:text-accent-400'
+                )}>
+                  Tools used: {message.toolCalls.length}
+                </div>
+              )}
+            </div>
+          </details>
         )}
 
-        {/* Timestamp or Response Duration */}
-        <div className={cn(
-          'mt-2 flex items-center gap-1 text-xs',
-          'text-accent-400 dark:text-accent-500'
-        )}>
-          <Clock size={12} />
-          {!isUser && responseDurationMs !== undefined ? (
-            // Show response duration for assistant messages
-            `${(responseDurationMs / 1000).toFixed(2)}s`
-          ) : (
-            // Show timestamp for user messages
-            (() => {
+        {/* Timestamp (always visible for user messages) */}
+        {isUser && (
+          <div className={cn(
+            'mt-2 flex items-center gap-1 text-xs',
+            'text-accent-400 dark:text-accent-500'
+          )}>
+            <Clock size={12} />
+            {(() => {
               const date = message.timestamp ? new Date(message.timestamp) : new Date();
               return !isNaN(date.getTime()) ? date.toLocaleTimeString() : 'Just now';
-            })()
-          )}
-        </div>
+            })()}
+          </div>
+        )}
       </div>
     </div>
   );

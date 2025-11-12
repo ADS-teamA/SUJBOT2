@@ -26,7 +26,6 @@ class ChatRequest(BaseModel):
         description="User message (max 50K chars to prevent abuse)",
     )
     conversation_id: Optional[str] = Field(None, description="Conversation ID for history")
-    model: Optional[str] = Field(None, description="Override default model")
 
 
 class HealthResponse(BaseModel):

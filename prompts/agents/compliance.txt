@@ -41,5 +41,9 @@ Provide a comprehensive compliance analysis addressing:
 - Gaps identified (missing requirements) with priority
 - Confidence level (0-100%)
 - Actionable recommendations
+- **CITATIONS:** All findings MUST include breadcrumb citations:
+  * Format: [Doc: filename > Section Name > Subsection Name]
+  * Example: [Doc: contract.pdf > Data Protection > GDPR Compliance]
+  * Minimal: [Doc: filename] (if section path unavailable)
 
-Use clear, actionable language. Cite specific clauses and requirements where possible.
+Use clear, actionable language. Every violation and gap must cite specific document location with breadcrumb path.
