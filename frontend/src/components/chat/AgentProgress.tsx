@@ -14,10 +14,21 @@ interface AgentProgressProps {
 export const AgentProgress: React.FC<AgentProgressProps> = ({ progress }) => {
   const { currentAgent, currentMessage, completedAgents, activeTools } = progress;
 
+  // Debug logging
+  console.log('🔍 AgentProgress render:', {
+    currentAgent,
+    currentMessage,
+    completedAgents: completedAgents?.length || 0,
+    activeTools: activeTools?.length || 0
+  });
+
   // Don't show anything if no agent is running
   if (!currentAgent && completedAgents.length === 0) {
+    console.log('❌ AgentProgress: Not rendering (no agent)');
     return null;
   }
+
+  console.log('✅ AgentProgress: Rendering!');
 
   return (
     <div style={{

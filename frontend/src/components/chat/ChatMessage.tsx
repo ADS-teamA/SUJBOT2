@@ -189,7 +189,10 @@ export function ChatMessage({
           <>
             {/* Agent progress for assistant messages */}
             {!isUser && message.agentProgress && (
-              <AgentProgress progress={message.agentProgress} />
+              <>
+                {console.log('📊 Rendering AgentProgress for message:', message.id, message.agentProgress)}
+                <AgentProgress progress={message.agentProgress} />
+              </>
             )}
 
             {/* Message content */}

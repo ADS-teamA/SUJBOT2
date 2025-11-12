@@ -211,6 +211,7 @@ export function useChat() {
 
           // Handle agent progress events
           if (event.event === 'agent_start') {
+            console.log('🚀 agent_start event:', event.data);
             if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
               // Mark previous agent as completed
               if (currentMessageRef.current.agentProgress.currentAgent) {
@@ -223,6 +224,8 @@ export function useChat() {
               currentMessageRef.current.agentProgress.currentAgent = event.data.agent;
               currentMessageRef.current.agentProgress.currentMessage = event.data.message;
               currentMessageRef.current.agentProgress.activeTools = [];
+
+              console.log('📝 Updated agentProgress:', currentMessageRef.current.agentProgress);
 
               // Update UI
               setConversations((prev) =>
