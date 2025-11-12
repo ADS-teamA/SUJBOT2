@@ -47,7 +47,7 @@ class QueryExpander:
     def __init__(
         self,
         provider: str = "openai",
-        model: str = "gpt-5-nano",
+        model: str = "gpt-4o-mini",
         anthropic_api_key: Optional[str] = None,
         openai_api_key: Optional[str] = None,
     ):
@@ -56,7 +56,7 @@ class QueryExpander:
 
         Args:
             provider: "openai" or "anthropic"
-            model: LLM model name (default: gpt-5-nano for speed/cost)
+            model: LLM model name (default: gpt-4o-mini for stability/cost per CLAUDE.md)
             anthropic_api_key: Anthropic API key (if provider="anthropic")
             openai_api_key: OpenAI API key (if provider="openai")
         """

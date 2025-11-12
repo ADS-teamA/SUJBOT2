@@ -25,7 +25,7 @@ class GetToolHelpInput(ToolInput):
     """Input for get_tool_help tool."""
 
     tool_name: str = Field(
-        ..., description="Name of tool to get help for (e.g., 'search', 'compare_documents')"
+        ..., description="Name of tool to get help for (e.g., 'search', 'multi_doc_synthesizer')"
     )
 
 
@@ -817,7 +817,7 @@ class ListAvailableToolsTool(BaseTool):
                         "entity_focused": "Use 'search' with entity names, or multi_hop_search if KG available",
                         "specific_document": "Use exact_match_search or filtered_search with document_id filter",
                         "multi_hop_reasoning": "multi_hop_search (requires KG)",
-                        "comparison": "compare_documents",
+                        "comparison": "multi_doc_synthesizer",
                         "temporal_info": "filtered_search with filter_type='temporal' or timeline_view",
                     },
                 },

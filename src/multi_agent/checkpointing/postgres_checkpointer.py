@@ -163,11 +163,15 @@ class PostgresCheckpointer:
             logger.info("PostgreSQL checkpointer initialized successfully")
 
         except Exception as e:
+            # Use safe attribute access (may not be set when using connection_string_env)
+            database = getattr(self, 'database', 'database')
+            user = getattr(self, 'user', 'user')
+
             logger.error(
-                f"Failed to initialize checkpointer tables in {self.database}.{self.table_name}: "
+                f"Failed to initialize checkpointer tables in {database}.{self.table_name}: "
                 f"{type(e).__name__}: {e}. "
-                f"Check: (1) User {self.user} has CREATE TABLE permission, "
-                f"(2) Database {self.database} exists, (3) No conflicting table schemas.",
+                f"Check: (1) User {user} has CREATE TABLE permission, "
+                f"(2) Database {database} exists, (3) No conflicting table schemas.",
                 exc_info=True
             )
             raise
