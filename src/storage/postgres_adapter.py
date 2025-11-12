@@ -227,7 +227,15 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         """
         query_list = query_vec.tolist()
 
-        # Build SQL query
+        # Build SQL query with layer-specific columns
+        # Layer 1 (documents) does not have section_id, section_title, hierarchical_path
+        # Layers 2-3 (sections/chunks) have these columns
+        section_columns = (
+            "section_id, section_title, hierarchical_path,"
+            if layer > 1
+            else ""
+        )
+
         if query_text:
             # Hybrid search: Dense (pgvector) + Sparse (full-text)
             return await self._hybrid_search_layer(
@@ -242,9 +250,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                         document_id,
                         metadata,
                         content,
-                        section_id,
-                        section_title,
-                        hierarchical_path,
+                        {section_columns}
                         1 - (embedding <=> $1::vector) AS score
                     FROM vectors.layer{layer}
                     WHERE document_id = $2
@@ -259,9 +265,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                         document_id,
                         metadata,
                         content,
-                        section_id,
-                        section_title,
-                        hierarchical_path,
+                        {section_columns}
                         1 - (embedding <=> $1::vector) AS score
                     FROM vectors.layer{layer}
                     ORDER BY embedding <=> $1::vector
@@ -305,6 +309,13 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         """
         query_list = query_vec.tolist()
 
+        # Layer-specific columns (Layer 1 doesn't have section columns)
+        section_columns = (
+            "l.section_id, l.section_title, l.hierarchical_path,"
+            if layer > 1
+            else ""
+        )
+
         # Build hybrid search with RRF fusion
         if document_filter:
             sql = f"""
@@ -337,9 +348,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     l.document_id,
                     l.content,
                     l.metadata,
-                    l.section_id,
-                    l.section_title,
-                    l.hierarchical_path,
+                    {section_columns}
                     f.rrf_score AS score
                 FROM fused f
                 JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
@@ -379,9 +388,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     l.document_id,
                     l.content,
                     l.metadata,
-                    l.section_id,
-                    l.section_title,
-                    l.hierarchical_path,
+                    {section_columns}
                     f.rrf_score AS score
                 FROM fused f
                 JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
