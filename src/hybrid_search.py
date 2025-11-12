@@ -1,27 +1,38 @@
 """
-PHASE 5B: Hybrid Search (BM25 + Dense + RRF)
+PHASE 5B: Hybrid Search (BM25 + Dense + RRF) with Universal Language Support
 
 Implements hybrid retrieval combining:
 - Dense retrieval (FAISS): Semantic similarity via embeddings
 - Sparse retrieval (BM25): Keyword/exact match via term frequency
 - Reciprocal Rank Fusion (RRF): Combines both rankings
 
-Based on research:
+Universal Language Support:
+- Auto-detection: Automatically detects document language
+- 20+ languages via spaCy (with lemmatization + stop words)
+- 16+ languages via NLTK (with stop words only)
+- Universal fallback: Basic tokenization for any language
+
+Research basis:
 - LegalBench-RAG: Hybrid search +23% precision over dense-only
+- Stop words critical for BM25: +20-30% precision improvement
 - RRF formula: score = 1/(k + rank), k=60 (research-optimal)
 - Contextual indexing: Index same text as FAISS (context + raw_content)
 
 Architecture:
-1. BM25Index: Single-layer BM25 index (L1, L2, or L3)
-2. BM25Store: Multi-layer wrapper (3 BM25 indexes)
+1. BM25Index: Single-layer BM25 index with language processing
+2. BM25Store: Multi-layer wrapper (3 BM25 indexes) with language config
 3. HybridVectorStore: Orchestrates FAISS + BM25 with RRF fusion
 
 Usage:
     from hybrid_search import BM25Store, HybridVectorStore
     from faiss_vector_store import FAISSVectorStore
 
-    # Build BM25 indexes
-    bm25_store = BM25Store()
+    # Option 1: Auto-detect language (recommended)
+    bm25_store = BM25Store(lang="auto")
+    bm25_store.build_from_chunks(chunks)  # Language detected from content
+
+    # Option 2: Explicit language
+    bm25_store = BM25Store(lang="cs")  # Czech documents
     bm25_store.build_from_chunks(chunks)
 
     # Create hybrid store
@@ -33,17 +44,57 @@ Usage:
 
     # Search with both text and embedding
     results = hybrid_store.hierarchical_search(
-        query_text="safety requirements",
+        query_text="požadavky na bezpečnost",  # Works in any language!
         query_embedding=embedding,
         k_layer3=6
     )
+
+Installation:
+    # Install language support dependencies
+    uv sync --extra language-support
+    # OR: pip install spacy>=3.7.0 langdetect>=1.0.9 nltk>=3.8.0
+
+    # For English support (recommended)
+    python -m spacy download en_core_web_sm
+    python -c "import nltk; nltk.download('stopwords')"
+
+    # For Czech: spaCy model NOT available in 3.8, uses NLTK fallback
+    # NLTK Czech stopwords also unavailable - will use basic tokenization
+
+    # For other languages (24 available in spaCy 3.8):
+    # ca, zh, hr, da, nl, fi, fr, de, el, it, ja, ko, lt, mk, nb, pl, pt, ro, ru, sl, es, sv, uk
+    python -m spacy download {lang}_core_news_sm
 """
 
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 from collections import defaultdict
 import numpy as np
+import warnings
+
+# --- spaCy support for advanced tokenization ---
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+except ImportError:
+    SPACY_AVAILABLE = False
+
+# --- NLTK support for fallback stop words ---
+try:
+    from nltk.corpus import stopwords
+    from nltk.tokenize import word_tokenize
+    import nltk
+    NLTK_AVAILABLE = True
+except ImportError:
+    NLTK_AVAILABLE = False
+
+# --- Language detection for auto mode ---
+try:
+    from langdetect import detect, LangDetectException
+    LANGDETECT_AVAILABLE = True
+except ImportError:
+    LANGDETECT_AVAILABLE = False
 
 try:
     from rank_bm25 import BM25Okapi
@@ -58,6 +109,169 @@ from src.utils.persistence import PersistenceManager
 logger = logging.getLogger(__name__)
 
 
+# ==============================================================================
+# Language Configuration and Utilities
+# ==============================================================================
+
+# Mapping of language codes to spaCy models (spaCy 3.8 trained models only)
+# NOTE: Czech (cs) is NOT available - will fall back to NLTK stopwords
+SPACY_MODELS = {
+    "en": "en_core_web_sm",       # English
+    "ca": "ca_core_news_sm",      # Catalan
+    "zh": "zh_core_web_sm",       # Chinese
+    "hr": "hr_core_news_sm",      # Croatian
+    "da": "da_core_news_sm",      # Danish
+    "nl": "nl_core_news_sm",      # Dutch
+    "fi": "fi_core_news_sm",      # Finnish
+    "fr": "fr_core_news_sm",      # French
+    "de": "de_core_news_sm",      # German
+    "el": "el_core_news_sm",      # Greek
+    "it": "it_core_news_sm",      # Italian
+    "ja": "ja_core_news_sm",      # Japanese
+    "ko": "ko_core_news_sm",      # Korean
+    "lt": "lt_core_news_sm",      # Lithuanian
+    "mk": "mk_core_news_sm",      # Macedonian
+    "nb": "nb_core_news_sm",      # Norwegian Bokmål
+    "pl": "pl_core_news_sm",      # Polish
+    "pt": "pt_core_news_sm",      # Portuguese
+    "ro": "ro_core_news_sm",      # Romanian
+    "ru": "ru_core_news_sm",      # Russian
+    "sl": "sl_core_news_sm",      # Slovenian
+    "es": "es_core_news_sm",      # Spanish
+    "sv": "sv_core_news_sm",      # Swedish
+    "uk": "uk_core_news_sm",      # Ukrainian
+}
+
+# NLTK stop words support (fallback if spaCy unavailable)
+NLTK_LANGUAGES = {
+    "cs": "czech",
+    "en": "english",
+    "de": "german",
+    "es": "spanish",
+    "fr": "french",
+    "it": "italian",
+    "pt": "portuguese",
+    "nl": "dutch",
+    "no": "norwegian",
+    "sv": "swedish",
+    "fi": "finnish",
+    "da": "danish",
+    "hu": "hungarian",
+    "ro": "romanian",
+    "ru": "russian",
+    "tr": "turkish",
+}
+
+# Czech stop words (hardcoded - NLTK doesn't have Czech corpus)
+# Source: https://github.com/stopwords-iso/stopwords-cs
+CZECH_STOP_WORDS = {
+    "a", "aby", "ahoj", "aj", "ale", "anebo", "ani", "aniž", "ano", "asi", "aspoň", "atd", "atp",
+    "az", "ačkoli", "až", "bez", "beze", "blízko", "bohužel", "brzo", "bude", "budem", "budeme",
+    "budes", "budete", "budeš", "budou", "budu", "by", "byl", "byla", "byli", "bylo", "byly", "bys",
+    "byt", "být", "během", "chce", "chceme", "chcete", "chceš", "chci", "chtít", "chtějí", "chut",
+    "chuti", "ci", "clanek", "clanku", "clanky", "co", "coz", "což", "cz", "daleko", "dalsi", "další",
+    "den", "deset", "design", "devatenáct", "devět", "dnes", "do", "dobrý", "docela", "dva", "dvacet",
+    "dvanáct", "dvě", "dál", "dále", "děkovat", "děkujeme", "děkuji", "email", "ho", "hodně", "i",
+    "jak", "jakmile", "jako", "jakož", "jde", "je", "jeden", "jedenáct", "jedna", "jedno", "jednou",
+    "jedou", "jeho", "jehož", "jej", "jeji", "jejich", "její", "jelikož", "jemu", "jen", "jenom",
+    "jenž", "jeste", "jestli", "jestliže", "ještě", "jež", "ji", "jich", "jimi", "jinak", "jine",
+    "jiné", "jiz", "již", "jsem", "jses", "jseš", "jsi", "jsme", "jsou", "jste", "já", "jí", "jím",
+    "jíž", "jšte", "k", "kam", "každý", "kde", "kdo", "kdy", "kdyz", "když", "ke", "kolik", "kromě",
+    "ktera", "ktere", "kteri", "kterou", "ktery", "která", "které", "který", "kteří", "ku", "kvůli",
+    "ma", "mají", "mate", "me", "mezi", "mi", "mit", "mne", "mnou", "mně", "moc", "mohl", "mohou",
+    "moje", "moji", "možná", "muj", "musí", "muze", "my", "má", "málo", "mám", "máme", "máte", "máš",
+    "mé", "mí", "mít", "mě", "můj", "může", "na", "nad", "nade", "nam", "napiste", "napište",
+    "naproti", "nas", "nasi", "načež", "naše", "naši", "ne", "nebo", "nebyl", "nebyla", "nebyli",
+    "nebyly", "nechť", "nedělají", "nedělá", "nedělám", "neděláme", "neděláte", "neděláš", "neg",
+    "nejsi", "nejsou", "nemají", "nemáme", "nemáte", "neměl", "neni", "není", "nestačí", "nevadí",
+    "nez", "než", "nic", "nich", "nimi", "nove", "novy", "nové", "nový", "nula", "ná", "nám", "námi",
+    "nás", "náš", "ní", "ním", "ně", "něco", "nějak", "někde", "někdo", "němu", "němuž", "o", "od",
+    "ode", "on", "ona", "oni", "ono", "ony", "osm", "osmnáct", "pak", "patnáct", "po", "pod", "podle",
+    "pokud", "potom", "pouze", "pozdě", "pořád", "prave", "pravé", "pred", "pres", "pri", "pro",
+    "proc", "prostě", "prosím", "proti", "proto", "protoze", "protože", "proč", "prvni", "první",
+    "práve", "pta", "pět", "před", "přede", "přes", "přese", "při", "přičemž", "re", "rovně", "s",
+    "se", "sedm", "sedmnáct", "si", "sice", "skoro", "smí", "smějí", "snad", "spolu", "sta", "sto",
+    "strana", "sté", "sve", "svych", "svym", "svymi", "své", "svých", "svým", "svými", "svůj", "ta",
+    "tady", "tak", "take", "takhle", "taky", "takze", "také", "takže", "tam", "tamhle", "tamhleto",
+    "tamto", "tato", "te", "tebe", "tebou", "ted", "tedy", "tema", "ten", "tento", "teto", "ti", "tim",
+    "timto", "tipy", "tisíc", "tisíce", "to", "tobě", "tohle", "toho", "tohoto", "tom", "tomto",
+    "tomu", "tomuto", "toto", "trošku", "tu", "tuto", "tvoje", "tvá", "tvé", "tvůj", "ty", "tyto",
+    "téma", "této", "tím", "tímto", "tě", "těm", "těma", "těmu", "třeba", "tři", "třináct", "u",
+    "určitě", "uz", "už", "v", "vam", "vas", "vase", "vaše", "vaši", "ve", "vedle", "večer", "vice",
+    "vlastně", "vsak", "vy", "vám", "vámi", "vás", "váš", "více", "však", "všechen", "všechno",
+    "všichni", "vůbec", "vždy", "z", "za", "zatímco", "zač", "zda", "zde", "ze", "zpet", "zpravy",
+    "zprávy", "zpět", "čau", "či", "článek", "článku", "články", "čtrnáct", "čtyři", "šest",
+    "šestnáct", "že"
+}
+
+
+def detect_language(text: str, fallback: str = "en") -> str:
+    """
+    Detect language of text using langdetect.
+
+    Args:
+        text: Text to analyze
+        fallback: Fallback language if detection fails
+
+    Returns:
+        ISO 639-1 language code (e.g., 'cs', 'en')
+    """
+    if not LANGDETECT_AVAILABLE:
+        logger.warning("langdetect not available, using fallback language")
+        return fallback
+
+    try:
+        # Use first 1000 chars for faster detection
+        sample = text[:1000] if len(text) > 1000 else text
+        detected = detect(sample)
+        logger.info(f"Detected language: {detected}")
+        return detected
+    except (LangDetectException, Exception) as e:
+        logger.warning(f"Language detection failed: {e}, using fallback: {fallback}")
+        return fallback
+
+
+def load_nltk_stopwords(lang: str) -> Set[str]:
+    """
+    Load NLTK stop words for language (fallback when spaCy unavailable).
+
+    For Czech, uses hardcoded stop words (NLTK corpus unavailable).
+
+    Args:
+        lang: ISO 639-1 language code
+
+    Returns:
+        Set of stop words, or empty set if unavailable
+    """
+    # Special case: Czech uses hardcoded stop words (NLTK doesn't have Czech corpus)
+    if lang == "cs":
+        logger.info(f"Using hardcoded Czech stop words ({len(CZECH_STOP_WORDS)} words)")
+        return CZECH_STOP_WORDS.copy()
+
+    if not NLTK_AVAILABLE:
+        return set()
+
+    nltk_lang = NLTK_LANGUAGES.get(lang)
+    if not nltk_lang:
+        logger.warning(f"No NLTK stop words for language '{lang}'")
+        return set()
+
+    try:
+        # Try to download if not already present
+        try:
+            nltk.data.find('corpora/stopwords')
+        except LookupError:
+            logger.info("Downloading NLTK stopwords corpus...")
+            nltk.download('stopwords', quiet=True)
+
+        stops = set(stopwords.words(nltk_lang))
+        logger.info(f"Loaded {len(stops)} NLTK stop words for {nltk_lang}")
+        return stops
+    except Exception as e:
+        logger.warning(f"Failed to load NLTK stop words for {nltk_lang}: {e}")
+        return set()
+
+
 class BM25Index:
     """
     BM25 sparse index for a single layer (L1, L2, or L3).
@@ -68,16 +282,31 @@ class BM25Index:
     Based on BM25Okapi algorithm with default parameters:
     - k1=1.5 (term frequency saturation)
     - b=0.75 (length normalization)
+
+    Supports advanced tokenization:
+    - spaCy: Lemmatization + stop words (20+ languages)
+    - NLTK: Stop words fallback (16 languages)
+    - Basic: Whitespace splitting (universal fallback)
     """
 
-    def __init__(self):
-        """Initialize empty BM25 index."""
+    def __init__(self, nlp_model=None, stop_words: Optional[Set[str]] = None):
+        """
+        Initialize empty BM25 index with optional language processing.
+
+        Args:
+            nlp_model: Optional spaCy model for lemmatization
+            stop_words: Optional set of stop words (NLTK fallback or custom)
+        """
         self.bm25: Optional[BM25Okapi] = None
         self.corpus: List[str] = []
         self.tokenized_corpus: List[List[str]] = []
         self.chunk_ids: List[str] = []
         self.metadata: List[Dict] = []
         self.doc_id_map: Dict[str, List[int]] = {}  # For document filtering
+
+        # Language processing components
+        self.nlp = nlp_model
+        self.stop_words = stop_words if stop_words is not None else set()
 
     def build_from_chunks(self, chunks: List) -> None:
         """
@@ -134,20 +363,63 @@ class BM25Index:
 
     def _tokenize(self, text: str) -> List[str]:
         """
-        Simple tokenization (whitespace splitting with lowercasing).
+        Advanced multi-level tokenization with automatic fallback.
 
-        Can be enhanced with:
-        - Stemming (Porter stemmer)
-        - Stopword removal
-        - Legal-specific tokenization
+        Tries in order:
+        1. spaCy: Lemmatization + stop word removal + POS filtering (best quality)
+        2. NLTK: Stop word removal (good quality)
+        3. Basic: Whitespace splitting (universal fallback)
 
         Args:
             text: Text to tokenize
 
         Returns:
-            List of tokens
+            List of cleaned tokens
         """
-        return text.lower().split()
+        # Strategy 1: spaCy (best - lemmatization + stop words + POS filtering)
+        if self.nlp is not None:
+            try:
+                doc = self.nlp(text)
+
+                tokens = [
+                    token.lemma_.lower()  # Lemmatization for better matching
+                    for token in doc
+                    if not token.is_stop       # Remove stop words
+                       and not token.is_punct  # Remove punctuation
+                       and not token.is_space  # Remove whitespace
+                       and len(token.lemma_) > 1  # Remove single chars
+                ]
+
+                return tokens
+
+            except Exception as e:
+                logger.error(f"spaCy tokenization failed: {e}. Falling back to NLTK/basic.")
+                # Fall through to next strategy
+
+        # Strategy 2: NLTK stop words (good - stop word removal only)
+        if self.stop_words:
+            try:
+                # Basic tokenization + stop word filtering
+                words = text.lower().split()
+                tokens = [
+                    word.strip(".,!?;:()[]{}\"'")  # Strip punctuation first
+                    for word in words
+                    if word.strip(".,!?;:()[]{}\"'") not in self.stop_words  # Check after stripping
+                       and len(word.strip(".,!?;:()[]{}\"'")) > 1
+                       and word.strip(".,!?;:()[]{}\"'").isalnum()  # Check alphanumeric after stripping
+                ]
+                return tokens
+
+            except Exception as e:
+                logger.error(f"NLTK tokenization failed: {e}. Falling back to basic.")
+                # Fall through to basic
+
+        # Strategy 3: Basic tokenization (universal fallback)
+        # Strip punctuation for consistency with other strategies
+        return [
+            word.strip(".,!?;:()[]{}\"'") for word in text.lower().split()
+            if len(word.strip(".,!?;:()[]{}\"'")) > 1  # Filter single chars after stripping
+        ]
 
     def search(self, query: str, k: int = 50, document_filter: Optional[str] = None) -> List[Dict]:
         """
@@ -201,12 +473,22 @@ class BM25Index:
 
         Args:
             other: Another BM25Index to merge
+
+        Raises:
+            Warning: If NLP models don't match
         """
         if not other.corpus:
             logger.warning("Other BM25Index is empty, skipping merge")
             return
 
         logger.info(f"Merging BM25 index with {len(other.corpus)} documents...")
+
+        # Warn if NLP models differ
+        if self.nlp != other.nlp:
+            logger.warning(
+                "Merging BM25 indexes with different NLP models! "
+                "This may cause inconsistent tokenization."
+            )
 
         # Track base index for doc_id mapping
         base_idx = len(self.metadata)
@@ -323,25 +605,120 @@ class BM25Store:
     - Layer 1: Document-level (1 per document)
     - Layer 2: Section-level (N per document)
     - Layer 3: Chunk-level (M per document) - PRIMARY
+
+    Supports universal language processing:
+    - Auto-detection from document content
+    - 20+ languages via spaCy (lemmatization + stop words)
+    - 16+ languages via NLTK (stop words only)
+    - Universal fallback (basic tokenization)
     """
 
-    def __init__(self):
-        """Initialize empty BM25 stores for 3 layers."""
-        self.index_layer1 = BM25Index()
-        self.index_layer2 = BM25Index()
-        self.index_layer3 = BM25Index()
+    def __init__(self, lang: str = "auto"):
+        """
+        Initialize BM25 stores with language support.
 
-        logger.info("BM25Store initialized: 3 layers")
+        Args:
+            lang: Language code ('cs', 'en', etc.) or 'auto' for detection
+                  Supports: cs, en, de, es, fr, it, pt, nl, pl, ru, ja, zh, ...
+                  Default: 'auto' (automatic detection from first document)
+        """
+        self.lang = lang
+        self.nlp_model = None
+        self.stop_words: Set[str] = set()
+
+        # Will be initialized in build_from_chunks() if lang='auto'
+        if lang != "auto":
+            self._init_language_processing(lang)
+
+        # Create 3 indexes (will share nlp_model and stop_words)
+        self.index_layer1 = BM25Index(nlp_model=self.nlp_model, stop_words=self.stop_words)
+        self.index_layer2 = BM25Index(nlp_model=self.nlp_model, stop_words=self.stop_words)
+        self.index_layer3 = BM25Index(nlp_model=self.nlp_model, stop_words=self.stop_words)
+
+        logger.info(f"BM25Store initialized: 3 layers, language='{lang}'")
+
+    def _init_language_processing(self, lang: str) -> None:
+        """
+        Initialize language-specific processing (spaCy or NLTK).
+
+        Tries in order:
+        1. spaCy model (lemmatization + stop words)
+        2. NLTK stop words (stop words only)
+        3. No-op (basic tokenization)
+
+        Args:
+            lang: Language code (e.g., 'cs', 'en')
+        """
+        # Try spaCy first (best quality)
+        model_name = SPACY_MODELS.get(lang)
+        if SPACY_AVAILABLE and model_name:
+            try:
+                # Load with minimal pipeline for performance
+                self.nlp_model = spacy.load(model_name, disable=["parser", "ner"])
+                logger.info(f"Loaded spaCy model '{model_name}' for language '{lang}'")
+                return  # Success!
+
+            except (OSError, Exception) as e:
+                logger.warning(
+                    f"spaCy model '{model_name}' not available: {e}. "
+                    f"Trying NLTK fallback. To install: python -m spacy download {model_name}"
+                )
+                warnings.warn(
+                    f"spaCy model '{model_name}' not found. BM25 accuracy will be reduced. "
+                    f"Install with: python -m spacy download {model_name}"
+                )
+
+        # Fallback to NLTK stop words
+        if NLTK_AVAILABLE:
+            self.stop_words = load_nltk_stopwords(lang)
+            if self.stop_words:
+                logger.info(f"Using NLTK stop words for language '{lang}' ({len(self.stop_words)} words)")
+                return
+
+        # No language processing available
+        logger.warning(
+            f"No language processing available for '{lang}'. "
+            "Using basic tokenization. Consider installing spaCy or NLTK."
+        )
 
     def build_from_chunks(self, chunks_dict: Dict[str, List]) -> None:
         """
         Build all 3 BM25 indexes from chunks dict.
+
+        If lang='auto', detects language from first document.
 
         Args:
             chunks_dict: Dict with keys 'layer1', 'layer2', 'layer3'
         """
         logger.info("Building BM25 indexes for all layers...")
 
+        # Auto-detect language if needed
+        if self.lang == "auto":
+            logger.info("Auto-detecting document language...")
+
+            # Use first layer3 chunk for detection (most reliable content)
+            if chunks_dict.get("layer3"):
+                sample_text = chunks_dict["layer3"][0].content
+                detected_lang = detect_language(sample_text, fallback="en")
+                logger.info(f"Detected language: {detected_lang}")
+
+                # Initialize language processing
+                self.lang = detected_lang
+                self._init_language_processing(detected_lang)
+
+                # Update all 3 indexes with new language models
+                self.index_layer1.nlp = self.nlp_model
+                self.index_layer1.stop_words = self.stop_words
+                self.index_layer2.nlp = self.nlp_model
+                self.index_layer2.stop_words = self.stop_words
+                self.index_layer3.nlp = self.nlp_model
+                self.index_layer3.stop_words = self.stop_words
+            else:
+                logger.warning("No chunks for language detection, using English")
+                self.lang = "en"
+                self._init_language_processing("en")
+
+        # Build indexes
         self.index_layer1.build_from_chunks(chunks_dict["layer1"])
         self.index_layer2.build_from_chunks(chunks_dict["layer2"])
         self.index_layer3.build_from_chunks(chunks_dict["layer3"])
@@ -350,7 +727,8 @@ class BM25Store:
             f"BM25 indexes built: "
             f"L1={len(self.index_layer1.corpus)}, "
             f"L2={len(self.index_layer2.corpus)}, "
-            f"L3={len(self.index_layer3.corpus)}"
+            f"L3={len(self.index_layer3.corpus)}, "
+            f"language={self.lang}"
         )
 
     def search_layer1(self, query: str, k: int = 1) -> List[Dict]:
@@ -375,7 +753,17 @@ class BM25Store:
 
         Args:
             other: Another BM25Store to merge
+
+        Raises:
+            Warning: If languages don't match
         """
+        if self.lang != other.lang:
+            logger.warning(
+                f"Merging BM25Stores with different languages! "
+                f"('{self.lang}' vs '{other.lang}'). "
+                f"Using this store's language: {self.lang}"
+            )
+
         logger.info("Merging BM25 stores...")
 
         self.index_layer1.merge(other.index_layer1)
@@ -386,7 +774,7 @@ class BM25Store:
 
     def save(self, output_dir: Path) -> None:
         """
-        Save all 3 BM25 indexes.
+        Save all 3 BM25 indexes with language configuration.
 
         Args:
             output_dir: Directory to save indexes
@@ -396,16 +784,24 @@ class BM25Store:
 
         logger.info(f"Saving BM25 store to {output_dir}")
 
+        # Save indexes
         self.index_layer1.save(output_dir / "bm25_layer1.pkl")
         self.index_layer2.save(output_dir / "bm25_layer2.pkl")
         self.index_layer3.save(output_dir / "bm25_layer3.pkl")
 
-        logger.info("BM25 store saved")
+        # Save language configuration
+        config = {
+            "lang": self.lang,
+            "format_version": "2.0"  # v2.0 with language support
+        }
+        PersistenceManager.save_json(output_dir / "bm25_store_config.json", config)
+
+        logger.info(f"BM25 store saved (language={self.lang})")
 
     @classmethod
     def load(cls, input_dir: Path) -> "BM25Store":
         """
-        Load all 3 BM25 indexes.
+        Load all 3 BM25 indexes with language configuration.
 
         Args:
             input_dir: Directory containing indexes
@@ -416,12 +812,47 @@ class BM25Store:
         input_dir = Path(input_dir)
         logger.info(f"Loading BM25 store from {input_dir}")
 
-        store = cls()
+        # Load language configuration
+        config_path = input_dir / "bm25_store_config.json"
+        if config_path.exists():
+            config = PersistenceManager.load_json(config_path)
+            lang = config.get("lang", "en")  # Default to English
+        else:
+            lang = "en"  # Backward compatibility
+            logger.warning(
+                "BM25 config 'bm25_store_config.json' not found. "
+                "Assuming English. Consider re-saving indexes."
+            )
+
+        # Create store with correct language
+        store = cls(lang=lang)
+
+        # Load index data
         store.index_layer1 = BM25Index.load(input_dir / "bm25_layer1.pkl")
         store.index_layer2 = BM25Index.load(input_dir / "bm25_layer2.pkl")
         store.index_layer3 = BM25Index.load(input_dir / "bm25_layer3.pkl")
 
-        logger.info("BM25 store loaded")
+        # CRITICAL: Re-inject language models into loaded indexes
+        logger.info(f"Re-injecting language processing ({lang}) into loaded indexes...")
+        for index in [store.index_layer1, store.index_layer2, store.index_layer3]:
+            index.nlp = store.nlp_model
+            index.stop_words = store.stop_words
+
+        # Re-tokenize and rebuild BM25 with correct language processing
+        logger.info("Re-tokenizing and rebuilding BM25 models with language processing...")
+        for layer_name, index in [
+            ("L1", store.index_layer1),
+            ("L2", store.index_layer2),
+            ("L3", store.index_layer3)
+        ]:
+            index.tokenized_corpus = [index._tokenize(doc) for doc in index.corpus]
+            if index.tokenized_corpus:
+                index.bm25 = BM25Okapi(index.tokenized_corpus)
+            else:
+                index.bm25 = None
+            logger.info(f"Rebuilt BM25 for {layer_name} ({len(index.corpus)} docs)")
+
+        logger.info(f"BM25 store loaded successfully (language={lang})")
 
         return store
 

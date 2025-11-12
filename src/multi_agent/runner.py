@@ -15,7 +15,7 @@ Replaces the old single-agent CLI (src/agent/cli.py).
 import logging
 import asyncio
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, AsyncGenerator
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -29,6 +29,7 @@ from .observability import setup_langsmith
 from .hitl.config import HITLConfig
 from .hitl.quality_detector import QualityDetector
 from .hitl.clarification_generator import ClarificationGenerator
+from .core.event_bus import EventBus, Event, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -462,15 +463,17 @@ class MultiAgentRunner:
             api_key=self.config.get("api_keys", {}).get("anthropic_api_key", ""),
         )
 
-    async def run_query(self, query: str) -> Dict[str, Any]:
+    async def run_query(self, query: str, stream_progress: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Run query through multi-agent system.
 
         Args:
             query: User query
+            stream_progress: If True, yields intermediate progress updates
 
-        Returns:
-            Dict with final_answer and metadata
+        Yields:
+            Dict events with type 'progress', 'tool_call', or 'final'.
+            Final event has type='final' and contains final_answer and metadata.
         """
         logger.info(f"Running query: {query[:100]}...")
 
@@ -491,11 +494,16 @@ class MultiAgentRunner:
         )
 
         try:
+            # Initialize EventBus for real-time progress streaming
+            event_bus = EventBus(max_queue_size=1000)
+
             # Step 1: Run orchestrator for complexity analysis
             logger.info("Step 1: Analyzing query complexity...")
             orchestrator = self.agent_registry.get_agent("orchestrator")
 
             state_dict = state.model_dump()
+            # Inject EventBus into state (internal infrastructure, not serialized)
+            state_dict["_event_bus"] = event_bus
             state_dict = await orchestrator.execute(state_dict)
 
             # Update state
@@ -505,7 +513,7 @@ class MultiAgentRunner:
             # When no agents are needed, orchestrator returns final_answer directly
             if hasattr(state, 'final_answer') and state.final_answer and not state.agent_sequence:
                 logger.info("Orchestrator provided direct answer without agents")
-                return {
+                direct_result = {
                     "success": True,
                     "final_answer": state.final_answer,
                     "complexity_score": state.complexity_score or 0,
@@ -516,6 +524,9 @@ class MultiAgentRunner:
                     "total_cost_cents": 0.0,
                     "errors": [],
                 }
+                # Always yield result (function is now always a generator)
+                yield {"type": "final", **direct_result}
+                return  # End generator
 
             # Step 3: Build workflow from agent sequence
             agent_sequence = state.agent_sequence
@@ -523,7 +534,7 @@ class MultiAgentRunner:
 
             if not agent_sequence:
                 logger.error("Empty agent sequence without final_answer from orchestrator")
-                return {
+                error_result = {
                     "success": False,
                     "final_answer": "Query routing failed: Orchestrator did not provide agent sequence or final answer. Please try rephrasing your query.",
                     "complexity_score": 0,
@@ -534,28 +545,102 @@ class MultiAgentRunner:
                     "total_cost_cents": 0.0,
                     "errors": ["Empty agent sequence without direct answer"],
                 }
+                yield {"type": "final", **error_result}
+                return
 
             workflow = self.workflow_builder.build_workflow(
                 agent_sequence=agent_sequence, enable_parallel=False
             )
 
-            # Step 3: Execute workflow
-            logger.info("Step 3: Executing workflow...")
+            # Step 3: Execute workflow with streaming
+            logger.info("Step 3: Executing workflow with streaming...")
             state.execution_phase = ExecutionPhase.AGENT_EXECUTION
 
-            # Run workflow with LangSmith tracing
+            # Re-inject EventBus into state dict for workflow execution
+            state_dict = state.model_dump()
+            state_dict["_event_bus"] = event_bus
+
+            # Run workflow with streaming to get intermediate state updates
+            config = {"configurable": {"thread_id": thread_id}}
+            final_result = None
+
             if self.langsmith and self.langsmith.is_enabled():
                 with self.langsmith.trace_workflow(f"query_{thread_id}"):
-                    result = await workflow.ainvoke(state.model_dump(), {"thread_id": thread_id})
+                    async for state_chunk in workflow.astream(state_dict, config):
+                        # state_chunk is a dict with node results
+                        # Keep the latest chunk as final result
+                        final_result = state_chunk
+                        logger.debug(f"Workflow state update: {list(state_chunk.keys())}")
+
+                        # If streaming progress, yield intermediate state
+                        if stream_progress:
+                            # Extract actual state from node dict
+                            # astream() returns {"node_name": {state}}, need to unwrap
+                            actual_state = next(iter(state_chunk.values())) if state_chunk else {}
+
+                            # Extract current agent from actual state
+                            current_agent = actual_state.get("current_agent")
+                            if current_agent:
+                                yield {
+                                    "type": "progress",
+                                    "agent": current_agent,
+                                    "status": "running"
+                                }
+
+                            # Yield pending events from EventBus
+                            events = await event_bus.get_pending_events(timeout=0.0)
+                            for event in events:
+                                yield self._convert_event_to_sse(event)
             else:
-                result = await workflow.ainvoke(state.model_dump(), {"thread_id": thread_id})
+                async for state_chunk in workflow.astream(state_dict, config):
+                    final_result = state_chunk
+                    logger.debug(f"Workflow state update: {list(state_chunk.keys())}")
+
+                    # If streaming progress, yield intermediate state
+                    if stream_progress:
+                        # Extract actual state from node dict
+                        # astream() returns {"node_name": {state}}, need to unwrap
+                        actual_state = next(iter(state_chunk.values())) if state_chunk else {}
+
+                        # Extract current agent from actual state
+                        current_agent = actual_state.get("current_agent")
+                        if current_agent:
+                            yield {
+                                "type": "progress",
+                                "agent": current_agent,
+                                "status": "running"
+                            }
+
+                        # Yield pending events from EventBus
+                        events = await event_bus.get_pending_events(timeout=0.0)
+                        for event in events:
+                            yield self._convert_event_to_sse(event)
+
+            if not final_result:
+                raise RuntimeError("Workflow produced no output")
+
+            # Extract result - astream() returns dict where keys are node names
+            # The final state is in the last yielded chunk
+            # Get the actual state from within the node dict
+            if final_result:
+                # Extract state from node dict (astream returns {"node_name": {state}})
+                # Get the first (and should be only) value from the dict
+                result = next(iter(final_result.values())) if final_result else {}
+            else:
+                result = {}
+
+            # Debug: Log what we got from astream
+            logger.info(f"Final result node keys: {list(final_result.keys())}")
+            logger.info(f"Extracted state keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
+            logger.info(f"Final answer in result: {result.get('final_answer', 'NOT FOUND')[:100] if result.get('final_answer') else 'NOT FOUND'}")
 
             # Step 4: Extract final answer
             final_answer = result.get("final_answer", "No answer generated")
 
             logger.info("Query execution completed successfully")
 
-            return {
+            # Build final result dict
+            final_result_dict = {
                 "success": True,
                 "final_answer": final_answer,
                 "complexity_score": result.get("complexity_score", 0),
@@ -566,6 +651,10 @@ class MultiAgentRunner:
                 "total_cost_cents": result.get("total_cost_cents", 0.0),
                 "errors": result.get("errors", []),
             }
+
+            # Always yield final result (function is now always a generator)
+            yield {"type": "final", **final_result_dict}
+            return
 
         except Exception as e:
             # Check if this is a GraphInterrupt (HITL clarification needed)
@@ -581,8 +670,9 @@ class MultiAgentRunner:
                         interrupt_value = interrupts[0].value
 
                 if interrupt_value and interrupt_value.get("type") == "clarification_needed":
-                    # Return clarification result
-                    return {
+                    # Yield clarification result
+                    yield {
+                        "type": "final",
                         "success": False,
                         "clarification_needed": True,
                         "thread_id": thread_id,
@@ -593,6 +683,7 @@ class MultiAgentRunner:
                         "query_type": state.query_type.value if hasattr(state.query_type, "value") else str(state.query_type),
                         "agent_sequence": state.agent_sequence,  # Needed for resume
                     }
+                    return
                 # If not clarification interrupt, fall through to error handling below
 
             # Handle all other exceptions (including unknown GraphInterrupt types)
@@ -626,13 +717,15 @@ class MultiAgentRunner:
             else:
                 error_message += f"Error: {type(e).__name__}. {str(e)[:200]}"
 
-            return {
+            yield {
+                "type": "final",
                 "success": False,
                 "final_answer": error_message,
                 "errors": [f"[{error_id}] {str(e)}"],
                 "error_id": error_id,
                 "error_type": type(e).__name__,
             }
+            return
 
     async def resume_with_clarification(
         self, thread_id: str, user_response: str, original_state: Dict[str, Any]
@@ -699,6 +792,40 @@ class MultiAgentRunner:
                 "errors": [str(e)],
             }
 
+    def _convert_event_to_sse(self, event: Event) -> Dict[str, Any]:
+        """
+        Convert EventBus event to SSE format for frontend.
+
+        Args:
+            event: Event from EventBus
+
+        Returns:
+            Dict in SSE format expected by frontend
+        """
+        if event.event_type == EventType.TOOL_CALL_START:
+            return {
+                "type": "tool_call",
+                "agent": event.agent_name,
+                "tool": event.tool_name,
+                "status": "running",
+                "timestamp": event.timestamp.isoformat()
+            }
+        elif event.event_type == EventType.TOOL_CALL_COMPLETE:
+            return {
+                "type": "tool_call",
+                "agent": event.agent_name,
+                "tool": event.tool_name,
+                "status": "completed" if event.data.get("success") else "failed",
+                "timestamp": event.timestamp.isoformat()
+            }
+        else:
+            # Unknown event type - pass through with basic formatting
+            return {
+                "type": event.event_type.value,
+                "data": event.data,
+                "timestamp": event.timestamp.isoformat()
+            }
+
     def shutdown(self) -> None:
         """Shutdown and cleanup resources."""
         logger.info("Shutting down multi-agent system...")
@@ -753,8 +880,16 @@ async def main():
 
     # Run query or interactive mode
     if args.query:
-        # Single query mode
-        result = await runner.run_query(args.query)
+        # Single query mode - consume async generator
+        result = None
+        async for event in runner.run_query(args.query):
+            if event.get("type") == "final":
+                result = event
+                break
+
+        if not result:
+            print("Error: No result returned from query")
+            return
 
         print("\n" + "=" * 80)
         print("FINAL ANSWER:")
@@ -783,11 +918,19 @@ async def main():
                 if not query:
                     continue
 
-                result = await runner.run_query(query)
+                # Consume async generator
+                result = None
+                async for event in runner.run_query(query):
+                    if event.get("type") == "final":
+                        result = event
+                        break
 
-                print("\n" + "-" * 80)
-                print(result["final_answer"])
-                print("-" * 80)
+                if result:
+                    print("\n" + "-" * 80)
+                    print(result["final_answer"])
+                    print("-" * 80)
+                else:
+                    print("\nError: No result returned")
 
             except KeyboardInterrupt:
                 print("\nInterrupted")

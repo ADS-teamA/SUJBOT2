@@ -182,13 +182,19 @@ export function useChat() {
       );
       storageService.saveConversation(updatedConversation);
 
-      // Initialize assistant message
+      // Initialize assistant message with agent progress
       currentMessageRef.current = {
         id: `msg_${Date.now()}_assistant`,
         role: 'assistant',
         content: '',
         timestamp: new Date(),
         toolCalls: [],
+        agentProgress: {
+          currentAgent: null,
+          currentMessage: null,
+          completedAgents: [],
+          activeTools: []
+        }
       };
       currentToolCallsRef.current = new Map();
 
@@ -202,9 +208,95 @@ export function useChat() {
           selectedModel
         )) {
           console.log('📨 FRONTEND: Received event:', event.event);
-          if (event.event === 'text_delta') {
+
+          // Handle agent progress events
+          if (event.event === 'agent_start') {
+            if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
+              // Mark previous agent as completed
+              if (currentMessageRef.current.agentProgress.currentAgent) {
+                currentMessageRef.current.agentProgress.completedAgents.push(
+                  currentMessageRef.current.agentProgress.currentAgent
+                );
+              }
+
+              // Set new current agent and clear activeTools
+              currentMessageRef.current.agentProgress.currentAgent = event.data.agent;
+              currentMessageRef.current.agentProgress.currentMessage = event.data.message;
+              currentMessageRef.current.agentProgress.activeTools = [];
+
+              // Update UI
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== updatedConversation.id) return c;
+
+                  const messages = [...c.messages];
+                  const lastMsg = messages[messages.length - 1];
+
+                  if (lastMsg?.role === 'assistant') {
+                    messages[messages.length - 1] = { ...currentMessageRef.current! };
+                  } else {
+                    messages.push({ ...currentMessageRef.current! });
+                  }
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          }
+          else if (event.event === 'tool_call') {
+            // Tool call event (running/completed/failed)
+            if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
+              const { tool, status, timestamp } = event.data;
+
+              if (status === 'running') {
+                // Add new tool to activeTools
+                currentMessageRef.current.agentProgress.activeTools.push({
+                  tool,
+                  status,
+                  timestamp
+                });
+              } else if (status === 'completed' || status === 'failed') {
+                // Update status of existing tool
+                const toolIndex = currentMessageRef.current.agentProgress.activeTools.findIndex(
+                  t => t.tool === tool && t.status === 'running'
+                );
+                if (toolIndex >= 0) {
+                  currentMessageRef.current.agentProgress.activeTools[toolIndex].status = status;
+                }
+              }
+
+              // Update UI
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== updatedConversation.id) return c;
+
+                  const messages = [...c.messages];
+                  const lastMsg = messages[messages.length - 1];
+
+                  if (lastMsg?.role === 'assistant') {
+                    messages[messages.length - 1] = { ...currentMessageRef.current! };
+                  } else {
+                    messages.push({ ...currentMessageRef.current! });
+                  }
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          }
+          else if (event.event === 'text_delta') {
             // Append text delta
             if (currentMessageRef.current) {
+              // Mark all agents as completed when text starts arriving
+              if (currentMessageRef.current.agentProgress && currentMessageRef.current.agentProgress.currentAgent) {
+                currentMessageRef.current.agentProgress.completedAgents.push(
+                  currentMessageRef.current.agentProgress.currentAgent
+                );
+                currentMessageRef.current.agentProgress.currentAgent = null;
+                currentMessageRef.current.agentProgress.currentMessage = null;
+                currentMessageRef.current.agentProgress.activeTools = [];
+              }
+
               currentMessageRef.current.content += event.data.content;
 
               // Update UI

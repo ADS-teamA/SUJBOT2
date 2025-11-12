@@ -11,6 +11,7 @@ import { cn } from '../../design-system/utils/cn';
 import { useSlideIn } from '../../design-system/animations/hooks/useSlideIn';
 import type { Message } from '../../types';
 import { ToolCallDisplay } from './ToolCallDisplay';
+import { AgentProgress } from './AgentProgress';
 
 interface ChatMessageProps {
   message: Message;
@@ -186,6 +187,11 @@ export function ChatMessage({
           </div>
         ) : (
           <>
+            {/* Agent progress for assistant messages */}
+            {!isUser && message.agentProgress && (
+              <AgentProgress progress={message.agentProgress} />
+            )}
+
             {/* Message content */}
             <div className="prose dark:prose-invert prose-sm max-w-none">
               {(() => {

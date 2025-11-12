@@ -51,7 +51,7 @@ Production-ready RAG system based on 4 research papers implementing state-of-the
 - **PHASE 2:** Generic summary generation (150 chars, proven better than expert summaries)
 - **PHASE 3:** RCTS chunking (500 chars) + SAC (58% DRM reduction)
 - **PHASE 4:** Multi-layer indexing (3 separate FAISS indexes)
-- **PHASE 5:** Hybrid search (BM25+Dense+RRF) + Knowledge graph + Cross-encoder reranking + Query expansion
+- **PHASE 5:** Hybrid search (BM25+Dense+RRF) + Universal language support (Czech, 24+ languages) + Knowledge graph + Cross-encoder reranking + Query expansion
 - **PHASE 6:** Context assembly with citations
 
 **Agent (PHASE 7) - Multi-Agent System:**
@@ -237,6 +237,10 @@ Document (PDF/DOCX)
 [PHASE 5] Hybrid Search + Knowledge Graph + Reranking + Query Expansion
     ├─ Query expansion (optional, num_expands=0-5)
     ├─ BM25 + Dense retrieval + RRF fusion
+    │   ├─ Universal language support (auto-detection)
+    │   ├─ Czech stop words (422 words, hardcoded)
+    │   ├─ spaCy lemmatization (24 languages)
+    │   └─ NLTK stop words fallback (16 languages)
     ├─ Entity/relationship extraction (NetworkX)
     └─ Cross-encoder reranking (NOT Cohere - hurts legal docs)
     ↓

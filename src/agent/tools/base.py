@@ -21,6 +21,38 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 
+def _convert_enums_recursive(obj: Any) -> Any:
+    """
+    Recursively convert enum keys and values to strings for JSON serialization.
+
+    Handles the case where dict keys are enum types (which json.dumps can't handle).
+    Also converts enum values to their string representation.
+
+    Args:
+        obj: Object to convert (dict, list, enum, or primitive)
+
+    Returns:
+        Object with all enums converted to strings
+    """
+    from enum import Enum
+
+    if isinstance(obj, Enum):
+        # Convert enum to its string value
+        return obj.value
+    elif isinstance(obj, dict):
+        # Convert both keys and values recursively
+        return {
+            (k.value if isinstance(k, Enum) else k): _convert_enums_recursive(v)
+            for k, v in obj.items()
+        }
+    elif isinstance(obj, (list, tuple)):
+        # Convert list/tuple elements recursively
+        return type(obj)(_convert_enums_recursive(item) for item in obj)
+    else:
+        # Return primitives as-is
+        return obj
+
+
 def estimate_tokens_from_result(result_data: Any) -> int:
     """
     Estimate token count from tool result data.
@@ -35,8 +67,12 @@ def estimate_tokens_from_result(result_data: Any) -> int:
         Estimated token count
     """
     try:
+        # Convert enums to strings recursively (defensive - handles enum keys/values)
+        # This prevents "keys must be str, int, float, bool or None, not EntityType" errors
+        safe_data = _convert_enums_recursive(result_data)
+
         # Serialize to JSON string
-        json_str = json.dumps(result_data, ensure_ascii=False, default=str)
+        json_str = json.dumps(safe_data, ensure_ascii=False, default=str)
 
         # Estimate tokens: ~4 chars per token (approximation)
         # Actual ratio varies: 3-4 for English, 4-6 for code/JSON

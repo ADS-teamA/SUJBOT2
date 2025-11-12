@@ -207,7 +207,16 @@ class MultiAgentBenchmarkRunner:
     async def _get_agent_response(self, query_example: QueryExample) -> Dict[str, Any]:
         """Get multi-agent response, handling errors based on fail_fast setting."""
         try:
-            result = await self.agent_runner.run_query(query_example.query)
+            # Consume async generator to get final result
+            result = None
+            async for event in self.agent_runner.run_query(query_example.query):
+                if event.get("type") == "final":
+                    result = event
+                    break
+
+            if not result:
+                raise RuntimeError("No final result returned from multi-agent system")
+
             return result
         except Exception as e:
             error_msg = f"Multi-agent failed for query {query_example.query_id}: {e}"

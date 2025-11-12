@@ -209,9 +209,57 @@ class AgentAdapter:
             }
             await asyncio.sleep(0)
 
-            # Execute multi-agent workflow
-            logger.info("Starting multi-agent query execution...")
-            result = await self.runner.run_query(query)
+            # Execute multi-agent workflow with progress streaming
+            logger.info("Starting multi-agent query execution with streaming...")
+
+            # Stream progress events from runner
+            result = None
+            async for event in self.runner.run_query(query, stream_progress=True):
+                if event.get("type") == "progress":
+                    # Agent progress event
+                    agent_name = event.get("agent", "unknown")
+
+                    # Map agent name to user-friendly role
+                    agent_roles = {
+                        "extractor": "Searching documents",
+                        "classifier": "Classifying query",
+                        "compliance": "Checking compliance",
+                        "risk_verifier": "Verifying risks",
+                        "citation_auditor": "Auditing citations",
+                        "gap_synthesizer": "Synthesizing information",
+                        "report_generator": "Generating report"
+                    }
+                    message = agent_roles.get(agent_name, f"Running {agent_name}")
+
+                    yield {
+                        "event": "agent_start",
+                        "data": {
+                            "agent": agent_name,
+                            "message": message
+                        }
+                    }
+                    await asyncio.sleep(0)
+
+                elif event.get("type") == "tool_call":
+                    # Tool call event (running/completed/failed)
+                    yield {
+                        "event": "tool_call",
+                        "data": {
+                            "agent": event.get("agent"),
+                            "tool": event.get("tool"),
+                            "status": event.get("status"),
+                            "timestamp": event.get("timestamp")
+                        }
+                    }
+                    await asyncio.sleep(0)
+
+                elif event.get("type") == "final":
+                    # Final result
+                    result = event
+                    break
+
+            if not result:
+                raise RuntimeError("Workflow produced no result")
 
             # Check if clarification is needed (HITL)
             if result.get("clarification_needed", False):
