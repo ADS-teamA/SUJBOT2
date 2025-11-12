@@ -540,6 +540,13 @@ class MultiAgentRunner:
 
             if not agent_sequence:
                 logger.error("Empty agent sequence without final_answer from orchestrator")
+
+                # Get accurate cost from CostTracker (model-specific pricing)
+                from ...cost_tracker import get_global_tracker
+                tracker = get_global_tracker()
+                total_cost_usd = tracker.get_total_cost()
+                total_cost_cents = total_cost_usd * 100.0
+
                 error_result = {
                     "success": False,
                     "final_answer": "Query routing failed: Orchestrator did not provide agent sequence or final answer. Please try rephrasing your query.",
@@ -548,7 +555,7 @@ class MultiAgentRunner:
                     "agent_sequence": [],
                     "documents": [],
                     "citations": [],
-                    "total_cost_cents": 0.0,
+                    "total_cost_cents": total_cost_cents,
                     "errors": ["Empty agent sequence without direct answer"],
                 }
                 yield {"type": "final", **error_result}
