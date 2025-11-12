@@ -15,10 +15,6 @@ export function useChat() {
     storageService.getCurrentConversationId()
   );
   const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(() =>
-    // Load from localStorage, or use Gemini 2.5 Flash Lite as default
-    storageService.getSelectedModel() || 'gemini-2.5-flash-latest-exp-1206'
-  );
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
 
@@ -43,28 +39,6 @@ export function useChat() {
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
-
-  // Initialize and verify model
-  useEffect(() => {
-    const savedModel = storageService.getSelectedModel();
-
-    // If no saved model, save the default
-    if (!savedModel) {
-      storageService.setSelectedModel('gemini-2.5-flash-latest-exp-1206');
-    }
-
-    // Verify model is available on backend
-    apiService.getModels().then((data) => {
-      const currentModel = savedModel || 'gemini-2.5-flash-latest-exp-1206';
-
-      // If current model is not available, fallback to backend default
-      if (!data.models.some((m: any) => m.id === currentModel)) {
-        const defaultModel = data.defaultModel || 'gemini-2.5-flash-latest-exp-1206';
-        setSelectedModel(defaultModel);
-        storageService.setSelectedModel(defaultModel);
-      }
-    }).catch(console.error);
-  }, []);
 
   /**
    * Clean invalid/incomplete messages from conversation
@@ -204,14 +178,10 @@ export function useChat() {
         // Stream response from backend
         for await (const event of apiService.streamChat(
           content,
-          conversation.id,
-          selectedModel
+          conversation.id
         )) {
-          console.log('📨 FRONTEND: Received event:', event.event);
-
           // Handle agent progress events
           if (event.event === 'agent_start') {
-            console.log('🚀 agent_start event:', event.data);
             if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
               // Mark previous agent as completed
               if (currentMessageRef.current.agentProgress.currentAgent) {
@@ -225,9 +195,7 @@ export function useChat() {
               currentMessageRef.current.agentProgress.currentMessage = event.data.message;
               currentMessageRef.current.agentProgress.activeTools = [];
 
-              console.log('📝 Updated agentProgress:', currentMessageRef.current.agentProgress);
-
-              // Update UI
+              // Update UI - IMPORTANT: Deep copy agentProgress to trigger React re-render
               setConversations((prev) =>
                 prev.map((c) => {
                   if (c.id !== updatedConversation.id) return c;
@@ -235,10 +203,22 @@ export function useChat() {
                   const messages = [...c.messages];
                   const lastMsg = messages[messages.length - 1];
 
+                  // Deep copy message with agentProgress to ensure React detects changes
+                  const updatedMessage = {
+                    ...currentMessageRef.current!,
+                    agentProgress: currentMessageRef.current!.agentProgress
+                      ? {
+                          ...currentMessageRef.current!.agentProgress,
+                          activeTools: [...(currentMessageRef.current!.agentProgress.activeTools || [])],
+                          completedAgents: [...(currentMessageRef.current!.agentProgress.completedAgents || [])]
+                        }
+                      : undefined
+                  };
+
                   if (lastMsg?.role === 'assistant') {
-                    messages[messages.length - 1] = { ...currentMessageRef.current! };
+                    messages[messages.length - 1] = updatedMessage;
                   } else {
-                    messages.push({ ...currentMessageRef.current! });
+                    messages.push(updatedMessage);
                   }
 
                   return { ...c, messages };
@@ -531,22 +511,8 @@ export function useChat() {
         currentToolCallsRef.current = new Map();
       }
     },
-    [isStreaming, createConversation, selectedModel, currentConversationId, conversations]
+    [isStreaming, createConversation, currentConversationId, conversations]
   );
-
-  /**
-   * Switch model
-   */
-  const switchModel = useCallback(async (model: string) => {
-    try {
-      await apiService.switchModel(model);
-      setSelectedModel(model);
-      storageService.setSelectedModel(model);
-    } catch (error) {
-      console.error('Failed to switch model:', error);
-      throw error;
-    }
-  }, []);
 
   /**
    * Edit a user message and resend
@@ -841,14 +807,12 @@ export function useChat() {
     conversations,
     currentConversation,
     isStreaming,
-    selectedModel,
     clarificationData,
     awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
     sendMessage,
-    switchModel,
     editMessage,
     regenerateMessage,
     submitClarification,

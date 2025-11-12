@@ -29,14 +29,12 @@ function App() {
     conversations,
     currentConversation,
     isStreaming,
-    selectedModel,
     clarificationData,
     awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
     sendMessage,
-    switchModel,
     editMessage,
     regenerateMessage,
     submitClarification,
@@ -76,8 +74,6 @@ function App() {
       <Header
         theme={theme}
         onToggleTheme={toggleTheme}
-        selectedModel={selectedModel}
-        onModelChange={switchModel}
         onToggleSidebar={toggleSidebar}
         sidebarOpen={sidebarOpen}
       />

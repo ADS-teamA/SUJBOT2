@@ -52,5 +52,9 @@ Provide a comprehensive risk assessment addressing:
 - Overall risk score with interpretation
 - Prioritized mitigation recommendations
 - Critical items requiring immediate attention
+- **CITATIONS:** All risk findings MUST include breadcrumb citations:
+  * Format: [Doc: filename > Section Name > Subsection Name]
+  * Example: [Doc: contract.pdf > Liability > Indemnification Clause]
+  * Minimal: [Doc: filename] (if section path unavailable)
 
-Use clear, actionable language. Cite specific clauses and contract sections where possible.
+Use clear, actionable language. Every risk must cite specific document location with breadcrumb path showing where the risk originates.

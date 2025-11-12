@@ -148,6 +148,12 @@ class MultiAgentState(BaseModel):
     clarification_round: int = 0  # Track multi-round clarifications
     awaiting_user_input: bool = False  # Signal frontend to pause
 
+    # === INTERNAL INFRASTRUCTURE (excluded from serialization) ===
+    # EventBus for real-time progress streaming (NOT persisted to checkpoints)
+    # Note: Internal field prefixed with underscore in dict keys, but Pydantic doesn't allow
+    # leading underscores, so we use "event_bus" here and map to "_event_bus" in dict conversions
+    event_bus: Optional[Any] = Field(default=None, exclude=True)
+
     @field_validator("complexity_score")
     @classmethod
     def validate_complexity(cls, v):

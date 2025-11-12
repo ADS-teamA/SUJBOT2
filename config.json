@@ -310,7 +310,7 @@
         "temperature": 0.3,
         "timeout_seconds": 30,
         "enable_prompt_caching": false,
-        "tools": ["list_available_tools", "get_stats"],
+        "tools": ["list_available_tools"],
         "system_prompt_file": "prompts/agents/report_generator.txt"
       }
     },

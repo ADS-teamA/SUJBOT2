@@ -17,8 +17,7 @@ export class ApiService {
    */
   async *streamChat(
     message: string,
-    conversationId?: string,
-    model?: string
+    conversationId?: string
   ): AsyncGenerator<SSEEvent, void, unknown> {
     let response;
     try {
@@ -30,7 +29,6 @@ export class ApiService {
         body: JSON.stringify({
           message,
           conversation_id: conversationId,
-          model,
         }),
       });
     } catch (error) {

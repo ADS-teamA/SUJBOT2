@@ -174,7 +174,7 @@ class AgentAdapter:
 
         Yields SSE events in format:
         {
-            "event": "progress" | "agent_start" | "agent_complete" | "tool_call" | "text_delta" | "cost_update" | "done" | "error",
+            "event": "progress" | "agent_start" | "agent_complete" | "tool_call" | "text_delta" | "done" | "error",
             "data": {...}
         }
 
@@ -183,9 +183,10 @@ class AgentAdapter:
         - agent_start: Agent execution started
         - agent_complete: Agent execution completed
         - text_delta: Final answer text (streamed after workflow completes)
-        - cost_update: Token usage and cost information
         - done: Stream completed successfully
         - error: Error occurred during execution
+
+        Note: Cost tracking is done internally but not shown to users
 
         Args:
             query: User query
@@ -370,23 +371,10 @@ class AgentAdapter:
                     }
                 }
 
-            # Send final cost update (use CostTracker for accurate model-specific pricing)
-            tracker = get_global_tracker()
-            total_cost_usd = tracker.get_total_cost()
-            total_cost_cents = total_cost_usd * 100.0
-
-            yield {
-                "event": "cost_update",
-                "data": {
-                    "summary": {
-                        "total_cost_cents": total_cost_cents,
-                        "total_cost_usd": total_cost_usd,
-                    },
-                    "total_cost": total_cost_usd,
-                    "complexity_score": complexity_score,
-                    "agents_used": len(agent_sequence),
-                }
-            }
+            # Cost tracking (internal only - not shown to users)
+            # tracker = get_global_tracker()
+            # total_cost_usd = tracker.get_total_cost()
+            # Cost is tracked internally but not displayed to users per requirements
 
             # Signal completion
             yield {
@@ -585,17 +573,9 @@ class AgentAdapter:
                     }
                     await asyncio.sleep(0.05)
 
-            # Emit cost update (use CostTracker for accurate model-specific pricing)
-            cost_summary = tracker.get_summary()
-            total_cost_usd = tracker.get_total_cost()
-
-            yield {
-                "event": "cost_update",
-                "data": {
-                    "summary": cost_summary,
-                    "total_cost": total_cost_usd,
-                },
-            }
+            # Cost tracking (internal only - not shown to users)
+            # tracker = get_global_tracker()
+            # Cost is tracked internally but not displayed to users per requirements
 
             # Emit done
             yield {"event": "done", "data": {}}

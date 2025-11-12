@@ -502,12 +502,21 @@ class MultiAgentRunner:
             orchestrator = self.agent_registry.get_agent("orchestrator")
 
             state_dict = state.model_dump()
-            # Inject EventBus into state (internal infrastructure, not serialized)
-            state_dict["_event_bus"] = event_bus
+            # Inject EventBus into state (internal infrastructure, excluded from serialization)
+            # Note: Use "event_bus" key (no underscore) to match MultiAgentState field name
+            state_dict["event_bus"] = event_bus
             state_dict = await orchestrator.execute(state_dict)
+
+            # Extract and preserve EventBus before converting back to Pydantic model
+            # (event_bus field has exclude=True, so it won't be in model_dump() output)
+            preserved_event_bus = state_dict.pop("event_bus", None)
 
             # Update state
             state = MultiAgentState(**state_dict)
+
+            # Restore EventBus for later use (will be re-injected before workflow execution)
+            if preserved_event_bus:
+                event_bus = preserved_event_bus
 
             # Step 2: Check if orchestrator provided direct answer (for greetings/simple queries)
             # When no agents are needed, orchestrator returns final_answer directly
@@ -570,8 +579,10 @@ class MultiAgentRunner:
             state.execution_phase = ExecutionPhase.AGENT_EXECUTION
 
             # Re-inject EventBus into state dict for workflow execution
+            # Note: MultiAgentState has field named "event_bus" (without underscore)
+            # to comply with Pydantic V2 (no leading underscores allowed)
             state_dict = state.model_dump()
-            state_dict["_event_bus"] = event_bus
+            state_dict["event_bus"] = event_bus
 
             # Run workflow with streaming to get intermediate state updates
             config = {"configurable": {"thread_id": thread_id}}

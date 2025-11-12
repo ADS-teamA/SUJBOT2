@@ -324,7 +324,21 @@ class BaseAgent(ABC):
                     # Summarize output (don't dump full chunks)
                     if isinstance(output, dict):
                         summary = {k: v for k, v in output.items() if k not in ['chunks', 'expanded_results']}
-                        context_parts.append(str(summary)[:500])
+
+                        # CRITICAL: Always show full citations (don't truncate)
+                        if 'citations' in output:
+                            citations = output.get('citations', [])
+                            # Show metadata without citations first
+                            summary_without_citations = {k: v for k, v in summary.items() if k != 'citations'}
+                            context_parts.append(str(summary_without_citations)[:500])
+                            # Then show ALL citations in full
+                            if citations:
+                                context_parts.append(f"\nCITATIONS ({len(citations)} total):")
+                                for citation in citations:
+                                    context_parts.append(f"  {citation}")
+                        else:
+                            # No citations - use normal truncation
+                            context_parts.append(str(summary)[:500])
             context_parts.append("")
 
         # Add retrieved documents summary (if available)
@@ -405,7 +419,8 @@ class BaseAgent(ABC):
         tool_schemas = self._get_available_tool_schemas()
 
         # Get EventBus from state (injected by runner for real-time progress streaming)
-        event_bus: Optional[EventBus] = state.get("_event_bus")
+        # Note: Key is "event_bus" (no underscore) to match MultiAgentState Pydantic field
+        event_bus: Optional[EventBus] = state.get("event_bus")
         if not event_bus:
             self.logger.warning("No EventBus in state - events will not be streamed")
 
@@ -542,7 +557,8 @@ class BaseAgent(ABC):
                         "tool": tool_name,
                         "input": tool_input,
                         "success": result.get("success", False),
-                        "api_cost_usd": tool_cost  # Track cost per tool call
+                        "api_cost_usd": tool_cost,  # Track cost per tool call
+                        "result": result  # CRITICAL: Store full result for downstream agents (includes citations!)
                     })
 
                 # Add assistant message + tool results to conversation

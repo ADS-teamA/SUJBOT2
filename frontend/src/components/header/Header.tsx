@@ -1,19 +1,14 @@
 /**
- * Header Component - Top navigation with model selector, theme toggle, and sidebar control
+ * Header Component - Top navigation with theme toggle and sidebar control
  */
 
-import { useState, useEffect } from 'react';
-import { Sun, Moon, Settings, Menu } from 'lucide-react';
-import { apiService } from '../../services/api';
+import { Sun, Moon, Menu } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 import { useHover } from '../../design-system/animations/hooks/useHover';
-import type { Model } from '../../types';
 
 interface HeaderProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
-  selectedModel: string;
-  onModelChange: (model: string) => void;
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
 }
@@ -21,46 +16,12 @@ interface HeaderProps {
 export function Header({
   theme,
   onToggleTheme,
-  selectedModel,
-  onModelChange,
   onToggleSidebar,
   sidebarOpen,
 }: HeaderProps) {
-  const [models, setModels] = useState<Model[]>([]);
-  const [showModelSelector, setShowModelSelector] = useState(false);
-  const [modelError, setModelError] = useState<string | null>(null);
-
   // Animation hooks
   const hamburgerHover = useHover({ scale: true });
   const themeHover = useHover({ scale: true });
-
-  // Load available models on mount
-  useEffect(() => {
-    apiService
-      .getModels()
-      .then((data) => {
-        setModels(data.models);
-        setModelError(null);
-      })
-      .catch((error) => {
-        console.error('Failed to load models:', error);
-        setModelError(`Failed to load models: ${error.message}. Using default model.`);
-      });
-  }, []);
-
-  const handleModelChange = async (modelId: string) => {
-    try {
-      await onModelChange(modelId);
-      setShowModelSelector(false);
-      setModelError(null);
-    } catch (error) {
-      console.error('Failed to switch model:', error);
-      setModelError(`Failed to switch to model: ${(error as Error).message}`);
-      // Keep selector open for retry
-    }
-  };
-
-  const currentModel = models.find((m) => m.id === selectedModel);
 
   return (
     <header className={cn(
@@ -115,77 +76,6 @@ export function Header({
 
         {/* Controls */}
         <div className="flex items-center gap-3">
-          {/* Model selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowModelSelector(!showModelSelector)}
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-lg',
-                'border border-accent-300 dark:border-accent-600',
-                'hover:bg-accent-100 dark:hover:bg-accent-800',
-                'transition-all duration-150',
-                'hover:scale-105'
-              )}
-            >
-              <Settings size={16} />
-              <span className="text-sm font-medium">
-                {currentModel?.name || 'Select Model'}
-              </span>
-            </button>
-
-            {/* Dropdown */}
-            {showModelSelector && (
-              <div className={cn(
-                'absolute right-0 mt-2 w-80',
-                'bg-white dark:bg-accent-900',
-                'border border-accent-200 dark:border-accent-800',
-                'rounded-lg shadow-lg overflow-hidden z-50',
-                'animate-scale-in'
-              )}>
-                {/* Error message */}
-                {modelError && (
-                  <div className={cn(
-                    'px-4 py-3 border-b',
-                    'bg-red-50 dark:bg-red-900/20',
-                    'border-red-200 dark:border-red-800',
-                    'text-red-800 dark:text-red-200 text-xs'
-                  )}>
-                    {modelError}
-                  </div>
-                )}
-
-                {models.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => handleModelChange(model.id)}
-                    className={cn(
-                      'w-full text-left px-4 py-3',
-                      'hover:bg-accent-100 dark:hover:bg-accent-800',
-                      'transition-colors duration-150',
-                      'border-b border-accent-100 dark:border-accent-800',
-                      'last:border-b-0',
-                      selectedModel === model.id && 'bg-accent-200 dark:bg-accent-800/50'
-                    )}
-                  >
-                    <div className="font-medium text-sm">{model.name}</div>
-                    <div className={cn(
-                      'text-xs mt-0.5',
-                      'text-accent-500 dark:text-accent-400'
-                    )}>
-                      {model.description}
-                    </div>
-                    <div className={cn(
-                      'text-xs mt-1',
-                      'text-accent-400 dark:text-accent-500'
-                    )}>
-                      {model.provider}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Theme toggle */}
           <button
             onClick={onToggleTheme}

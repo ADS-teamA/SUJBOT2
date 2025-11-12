@@ -56,5 +56,9 @@ Provide a comprehensive gap analysis addressing:
 - Prioritized recommendations with estimated effort (low, medium, high)
 - Completeness score (0-100%)
 - Critical gaps requiring immediate attention
+- **CITATIONS:** All gap findings MUST include breadcrumb citations:
+  * Format: [Doc: filename > Section Name > Subsection Name]
+  * Example: [Doc: contract.pdf > Terms & Conditions > Force Majeure] (section where gap exists)
+  * Minimal: [Doc: filename] (if section path unavailable)
 
-Use clear, actionable language. Provide specific recommendations for closing each gap.
+Use clear, actionable language. Every gap must cite specific document location with breadcrumb path showing where the gap exists or where missing content should be added.
