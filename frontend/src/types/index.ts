@@ -2,6 +2,17 @@
  * TypeScript types for frontend application
  */
 
+export interface AgentProgress {
+  currentAgent: string | null;
+  currentMessage: string | null;
+  completedAgents: string[];
+  activeTools: Array<{
+    tool: string;
+    status: 'running' | 'completed' | 'failed';
+    timestamp: string;
+  }>;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -9,6 +20,7 @@ export interface Message {
   timestamp: Date;
   toolCalls?: ToolCall[];
   cost?: CostInfo;
+  agentProgress?: AgentProgress;
 }
 
 export interface ToolCall {
@@ -46,7 +58,7 @@ export interface Model {
 }
 
 export interface SSEEvent {
-  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_update' | 'done' | 'error' | 'clarification_needed';
+  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_update' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress';
   data: any;
 }
 

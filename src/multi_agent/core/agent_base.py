@@ -399,6 +399,10 @@ class BaseAgent(ABC):
         # Get tool schemas
         tool_schemas = self._get_available_tool_schemas()
 
+        # Initialize tool call events list in state (for real-time progress streaming)
+        if "tool_call_events" not in state:
+            state["tool_call_events"] = []
+
         messages = [{"role": "user", "content": user_message}]
         tool_call_history = []
         total_tool_cost = 0.0  # Track cumulative API cost for all tool calls
@@ -427,8 +431,19 @@ class BaseAgent(ABC):
                 for tool_use in tool_uses:
                     tool_name = tool_use.get('name')
                     tool_input = tool_use.get('input', {})
+                    tool_use_id = tool_use.get('id')
 
                     self.logger.info(f"Calling tool: {tool_name}")
+
+                    # Emit tool call start event (for real-time progress streaming)
+                    state["tool_call_events"].append({
+                        "agent": self.config.name,
+                        "tool": tool_name,
+                        "status": "running",
+                        "tool_use_id": tool_use_id,
+                        "input": tool_input,
+                        "timestamp": datetime.now().isoformat()
+                    })
 
                     result = await tool_adapter.execute(
                         tool_name=tool_name,
@@ -439,6 +454,17 @@ class BaseAgent(ABC):
                     # Extract API cost from result metadata
                     tool_cost = result.get("metadata", {}).get("api_cost_usd", 0.0) if isinstance(result, dict) else 0.0
                     total_tool_cost += tool_cost
+
+                    # Emit tool call completion event (for real-time progress streaming)
+                    tool_success = result.get("success", False)
+                    state["tool_call_events"].append({
+                        "agent": self.config.name,
+                        "tool": tool_name,
+                        "status": "completed" if tool_success else "failed",
+                        "tool_use_id": tool_use_id,
+                        "success": tool_success,
+                        "timestamp": datetime.now().isoformat()
+                    })
 
                     # Check for critical tool failures and surface them to user
                     if not result.get("success", False):

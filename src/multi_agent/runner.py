@@ -462,15 +462,16 @@ class MultiAgentRunner:
             api_key=self.config.get("api_keys", {}).get("anthropic_api_key", ""),
         )
 
-    async def run_query(self, query: str) -> Dict[str, Any]:
+    async def run_query(self, query: str, stream_progress: bool = False):
         """
         Run query through multi-agent system.
 
         Args:
             query: User query
+            stream_progress: If True, yields intermediate progress updates
 
         Returns:
-            Dict with final_answer and metadata
+            Dict with final_answer and metadata (or yields intermediate + final)
         """
         logger.info(f"Running query: {query[:100]}...")
 
@@ -505,7 +506,7 @@ class MultiAgentRunner:
             # When no agents are needed, orchestrator returns final_answer directly
             if hasattr(state, 'final_answer') and state.final_answer and not state.agent_sequence:
                 logger.info("Orchestrator provided direct answer without agents")
-                return {
+                direct_result = {
                     "success": True,
                     "final_answer": state.final_answer,
                     "complexity_score": state.complexity_score or 0,
@@ -516,6 +517,9 @@ class MultiAgentRunner:
                     "total_cost_cents": 0.0,
                     "errors": [],
                 }
+                # Always yield result (function is now always a generator)
+                yield {"type": "final", **direct_result}
+                return  # End generator
 
             # Step 3: Build workflow from agent sequence
             agent_sequence = state.agent_sequence
@@ -523,7 +527,7 @@ class MultiAgentRunner:
 
             if not agent_sequence:
                 logger.error("Empty agent sequence without final_answer from orchestrator")
-                return {
+                error_result = {
                     "success": False,
                     "final_answer": "Query routing failed: Orchestrator did not provide agent sequence or final answer. Please try rephrasing your query.",
                     "complexity_score": 0,
@@ -534,28 +538,95 @@ class MultiAgentRunner:
                     "total_cost_cents": 0.0,
                     "errors": ["Empty agent sequence without direct answer"],
                 }
+                yield {"type": "final", **error_result}
+                return
 
             workflow = self.workflow_builder.build_workflow(
                 agent_sequence=agent_sequence, enable_parallel=False
             )
 
-            # Step 3: Execute workflow
-            logger.info("Step 3: Executing workflow...")
+            # Step 3: Execute workflow with streaming
+            logger.info("Step 3: Executing workflow with streaming...")
             state.execution_phase = ExecutionPhase.AGENT_EXECUTION
 
-            # Run workflow with LangSmith tracing
+            # Run workflow with streaming to get intermediate state updates
+            config = {"configurable": {"thread_id": thread_id}}
+            final_result = None
+
+            # Track tool call events for incremental yielding
+            last_tool_event_count = 0
+
             if self.langsmith and self.langsmith.is_enabled():
                 with self.langsmith.trace_workflow(f"query_{thread_id}"):
-                    result = await workflow.ainvoke(state.model_dump(), {"thread_id": thread_id})
+                    async for state_chunk in workflow.astream(state.model_dump(), config):
+                        # state_chunk is a dict with node results
+                        # Keep the latest chunk as final result
+                        final_result = state_chunk
+                        logger.debug(f"Workflow state update: {list(state_chunk.keys())}")
+
+                        # If streaming progress, yield intermediate state
+                        if stream_progress:
+                            # Extract current agent from state
+                            current_agent = state_chunk.get("current_agent")
+                            if current_agent:
+                                yield {
+                                    "type": "progress",
+                                    "agent": current_agent,
+                                    "status": "running"
+                                }
+
+                            # Yield new tool call events
+                            tool_events = state_chunk.get("tool_call_events", [])
+                            if len(tool_events) > last_tool_event_count:
+                                for event in tool_events[last_tool_event_count:]:
+                                    yield {
+                                        "type": "tool_call",
+                                        **event  # agent, tool, status, etc.
+                                    }
+                                last_tool_event_count = len(tool_events)
             else:
-                result = await workflow.ainvoke(state.model_dump(), {"thread_id": thread_id})
+                async for state_chunk in workflow.astream(state.model_dump(), config):
+                    final_result = state_chunk
+                    logger.debug(f"Workflow state update: {list(state_chunk.keys())}")
+
+                    # If streaming progress, yield intermediate state
+                    if stream_progress:
+                        current_agent = state_chunk.get("current_agent")
+                        if current_agent:
+                            yield {
+                                "type": "progress",
+                                "agent": current_agent,
+                                "status": "running"
+                            }
+
+                        # Yield new tool call events
+                        tool_events = state_chunk.get("tool_call_events", [])
+                        if len(tool_events) > last_tool_event_count:
+                            for event in tool_events[last_tool_event_count:]:
+                                yield {
+                                    "type": "tool_call",
+                                    **event  # agent, tool, status, etc.
+                                }
+                            last_tool_event_count = len(tool_events)
+
+            if not final_result:
+                raise RuntimeError("Workflow produced no output")
+
+            # Extract result - astream() returns dict where keys are node names
+            # The final state is in the last yielded chunk
+            result = final_result
+
+            # Debug: Log what we got from astream
+            logger.info(f"Final result keys: {list(result.keys())}")
+            logger.info(f"Final answer in result: {result.get('final_answer', 'NOT FOUND')[:100] if result.get('final_answer') else 'NOT FOUND'}")
 
             # Step 4: Extract final answer
             final_answer = result.get("final_answer", "No answer generated")
 
             logger.info("Query execution completed successfully")
 
-            return {
+            # Build final result dict
+            final_result_dict = {
                 "success": True,
                 "final_answer": final_answer,
                 "complexity_score": result.get("complexity_score", 0),
@@ -566,6 +637,10 @@ class MultiAgentRunner:
                 "total_cost_cents": result.get("total_cost_cents", 0.0),
                 "errors": result.get("errors", []),
             }
+
+            # Always yield final result (function is now always a generator)
+            yield {"type": "final", **final_result_dict}
+            return
 
         except Exception as e:
             # Check if this is a GraphInterrupt (HITL clarification needed)
@@ -581,8 +656,9 @@ class MultiAgentRunner:
                         interrupt_value = interrupts[0].value
 
                 if interrupt_value and interrupt_value.get("type") == "clarification_needed":
-                    # Return clarification result
-                    return {
+                    # Yield clarification result
+                    yield {
+                        "type": "final",
                         "success": False,
                         "clarification_needed": True,
                         "thread_id": thread_id,
@@ -593,6 +669,7 @@ class MultiAgentRunner:
                         "query_type": state.query_type.value if hasattr(state.query_type, "value") else str(state.query_type),
                         "agent_sequence": state.agent_sequence,  # Needed for resume
                     }
+                    return
                 # If not clarification interrupt, fall through to error handling below
 
             # Handle all other exceptions (including unknown GraphInterrupt types)
@@ -626,13 +703,15 @@ class MultiAgentRunner:
             else:
                 error_message += f"Error: {type(e).__name__}. {str(e)[:200]}"
 
-            return {
+            yield {
+                "type": "final",
                 "success": False,
                 "final_answer": error_message,
                 "errors": [f"[{error_id}] {str(e)}"],
                 "error_id": error_id,
                 "error_type": type(e).__name__,
             }
+            return
 
     async def resume_with_clarification(
         self, thread_id: str, user_response: str, original_state: Dict[str, Any]
