@@ -67,8 +67,8 @@ export function useChat() {
       id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       title: 'New Conversation',
       messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     setConversations((prev) => [...prev, newConversation]);
@@ -133,21 +133,21 @@ export function useChat() {
           id: `msg_${Date.now()}_user`,
           role: 'user',
           content: content.trim(),
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         };
 
         // Add user message to conversation
         updatedConversation = {
           ...conversation,
           messages: [...conversation.messages, userMessage],
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
           title: conversation.messages.length === 0 ? content.slice(0, 50) : conversation.title,
         };
       } else {
         // Regenerate/edit mode - use conversation as-is
         updatedConversation = {
           ...conversation,
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         };
       }
 
@@ -161,7 +161,7 @@ export function useChat() {
         id: `msg_${Date.now()}_assistant`,
         role: 'assistant',
         content: '',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         toolCalls: [],
         agentProgress: {
           currentAgent: null,
@@ -682,7 +682,7 @@ export function useChat() {
         id: `msg_${Date.now()}_assistant`,
         role: 'assistant',
         content: '',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         toolCalls: [],
       };
       currentToolCallsRef.current = new Map();

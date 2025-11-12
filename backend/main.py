@@ -168,9 +168,10 @@ async def chat_stream(request: ChatRequest):
     - text_delta: Streaming text chunks from agent response
     - tool_call: Tool execution started (streamed immediately when detected)
     - tool_calls_summary: Summary of all tool calls with results (sent after completion)
-    - cost_update: Token usage and cost update
     - done: Stream completed
     - error: Error occurred
+
+    Note: Cost tracking is performed internally but not exposed to users.
 
     Example event format:
     ```
@@ -182,9 +183,6 @@ async def chat_stream(request: ChatRequest):
 
     event: tool_calls_summary
     data: {"tool_calls": [...], "count": 2}
-
-    event: cost_update
-    data: {"summary": "...", "total_cost": 0.001, ...}
 
     event: done
     data: {}
@@ -282,9 +280,10 @@ async def chat_clarify(request: ClarificationRequest):
     Events (SSE):
     - progress: Resume progress updates
     - text_delta: Streaming text chunks from final answer
-    - cost_update: Token usage and cost update
     - done: Stream completed
     - error: Error occurred
+
+    Note: Cost tracking is performed internally but not exposed to users.
 
     Example usage:
     ```

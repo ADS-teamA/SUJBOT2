@@ -605,8 +605,10 @@ class AgentAdapter:
                 }
 
             # Check vector store (skip for PostgreSQL backend)
-            import os
-            storage_backend = os.getenv("STORAGE_BACKEND", "faiss")
+            # Read storage backend from config.json (SSOT principle)
+            from src.config import get_config
+            full_config = get_config()
+            storage_backend = full_config.storage.get("backend", "faiss")
 
             if storage_backend == "faiss":
                 vector_store_exists = self.config.vector_store_path.exists()

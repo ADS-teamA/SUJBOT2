@@ -17,7 +17,7 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
+  timestamp: string;  // ISO 8601 format (NOT Date object) for JSON serialization safety
   toolCalls?: ToolCall[];
   cost?: CostInfo;
   agentProgress?: AgentProgress;
@@ -46,8 +46,8 @@ export interface Conversation {
   id: string;
   title: string;
   messages: Message[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;  // ISO 8601 format for JSON serialization safety
+  updatedAt: string;  // ISO 8601 format for JSON serialization safety
 }
 
 export interface Model {
