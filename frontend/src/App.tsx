@@ -30,6 +30,8 @@ function App() {
     currentConversation,
     isStreaming,
     selectedModel,
+    clarificationData,
+    awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
@@ -37,6 +39,8 @@ function App() {
     switchModel,
     editMessage,
     regenerateMessage,
+    submitClarification,
+    cancelClarification,
   } = useChat();
 
   const { theme, toggleTheme } = useTheme();
@@ -121,6 +125,10 @@ function App() {
           onSendMessage={sendMessage}
           onEditMessage={editMessage}
           onRegenerateMessage={regenerateMessage}
+          clarificationData={clarificationData}
+          awaitingClarification={awaitingClarification}
+          onSubmitClarification={submitClarification}
+          onCancelClarification={cancelClarification}
         />
       </div>
     </div>

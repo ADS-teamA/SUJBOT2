@@ -1,8 +1,8 @@
 # CLAUDE.md - Navigation Guide
 
-**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + multi-agent orchestration.
+**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + multi-agent orchestration + Human-in-the-Loop clarifications.
 
-**Status:** MULTI-AGENT SYSTEM COMPLETE ✅ (2025-11-11)
+**Status:** MULTI-AGENT SYSTEM + HITL COMPLETE ✅ (2025-11-11)
 
 ---
 
@@ -13,6 +13,7 @@
 - [`PIPELINE.md`](PIPELINE.md) - Complete pipeline specification with research papers
 - [`INSTALL.md`](INSTALL.md) - Platform-specific setup (Windows/macOS/Linux)
 - [`docs/agent/README.md`](docs/agent/README.md) - Agent CLI documentation
+- [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md) - Human-in-the-Loop clarification system
 - Visual docs: [`indexing_pipeline.html`](indexing_pipeline.html), [`user_search_pipeline.html`](user_search_pipeline.html)
 
 **Common commands:**
@@ -36,6 +37,105 @@ uv run pytest tests/ -v
 ## ⚠️ CRITICAL CONSTRAINTS (NEVER CHANGE)
 
 These are research-backed decisions. **DO NOT modify** without explicit approval:
+
+### 0. AUTONOMOUS AGENTIC ARCHITECTURE (MANDATORY) 🤖
+
+**CRITICAL: Agents MUST be autonomous LLM-driven, NOT hardcoded workflows!**
+
+```
+❌ WRONG (Hardcoded):
+class ComplianceAgent:
+    def execute():
+        step1 = call_tool_a()  # Hardcoded sequence
+        step2 = call_tool_b()
+        return synthesize(step1, step2)
+
+✅ CORRECT (Autonomous):
+class ComplianceAgent:
+    def execute():
+        # LLM autonomously decides which tools to call and when
+        return llm.run(
+            system_prompt="You are compliance expert...",
+            tools=[search, graph_search, assess_confidence, ...],
+            messages=[user_query]
+        )
+```
+
+**Principles:**
+1. **LLM decides tool calling** - Agent provides system prompt + tools, LLM autonomously calls them
+2. **No hardcoded flows** - No predefined "step 1, step 2, step 3" logic
+3. **Tools are capabilities** - Agent defines WHAT tools are available, LLM decides HOW to use them
+4. **Orchestrator exception** - ONLY Orchestrator has hardcoded logic (routing), all other agents are autonomous
+5. **System prompts guide behavior** - Control agent behavior via prompts, NOT code
+
+**Technical Implementation:**
+
+All agents inherit from `BaseAgent` which provides the autonomous tool calling loop:
+
+```python
+# src/multi_agent/core/agent_base.py
+async def _run_autonomous_tool_loop(
+    self,
+    system_prompt: str,
+    state: Dict[str, Any],
+    max_iterations: int = 10
+) -> Dict[str, Any]:
+    """
+    Core autonomous agentic behavior:
+    1. LLM sees state/query + available tools
+    2. LLM decides to call tools or provide final answer
+    3. Tool results fed back to LLM
+    4. Loop continues until LLM provides final answer
+    """
+```
+
+**How it works:**
+1. Agent calls `_run_autonomous_tool_loop()` with system prompt and state
+2. Loop builds context from state (query + previous agent outputs)
+3. LLM receives: system prompt + context + tool schemas
+4. LLM decides: call tools (→ execute tools → feed results back) OR provide final answer
+5. Loop continues until LLM returns final answer or max_iterations reached
+6. Result contains: final_answer, tool_calls history, iterations count
+
+**Tool Schema Conversion:**
+- `ToolAdapter.get_tool_schema()` converts Pydantic schemas to LLM format (Anthropic/OpenAI)
+- Agents automatically get schemas for their configured tools from `config.json`
+- LLM sees tool name, description, and input schema for each available tool
+
+**Prompt Design Pattern:**
+Every agent prompt (in `prompts/agents/`) follows this structure:
+1. **ROLE** - Agent's responsibility
+2. **DOMAIN KNOWLEDGE** - Risk categories, compliance frameworks, etc.
+3. **AVAILABLE TOOLS (use autonomously as needed)** - Explicit tool listing
+4. **AUTONOMOUS WORKFLOW** - "Typical approach" guidance (NOT prescription)
+5. **IMPORTANT** - Reinforces autonomy: "YOU decide which tools to use"
+6. **FINAL ANSWER FORMAT** - Expected output structure
+
+**Benefits vs Hardcoded:**
+- ✅ ~70% code reduction per agent (~200 lines → ~60 lines)
+- ✅ LLM adapts to query complexity (simple → calls 1-2 tools, complex → calls 5+ tools)
+- ✅ Emergent reasoning (LLM discovers tool combinations we didn't explicitly program)
+- ✅ Behavior changes via prompts (no code changes needed)
+- ✅ Single implementation in BaseAgent (changes propagate automatically)
+- ❌ Requires proper tool schemas and clear prompts
+- ❌ LLM cost per agent execution (tool calling loop)
+
+**Files:**
+- `src/multi_agent/core/agent_base.py` - Autonomous agent base class with `_run_autonomous_tool_loop()`
+- `src/multi_agent/tools/adapter.py` - Tool schema conversion (`get_tool_schema()`)
+- `src/multi_agent/agents/*.py` - All 7 agents use autonomous pattern (extractor, classifier, compliance, risk_verifier, citation_auditor, gap_synthesizer, report_generator)
+- `prompts/agents/*.txt` - System prompts guide autonomous behavior
+
+**Testing:**
+```bash
+# Test single autonomous agent
+uv run python test_autonomous.py
+
+# Test full multi-agent workflow
+uv run python -m src.multi_agent.runner --query "Your query here"
+```
+
+**Why:** True agentic system enables emergent behavior, better reasoning, and flexibility without code changes. LLM can discover optimal tool calling strategies we didn't explicitly program.
 
 ### 1. Hierarchical Document Summary (MANDATORY)
 ```
@@ -75,6 +175,21 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 - BM25 + Dense + RRF fusion
 - **+23% precision** vs dense-only
 - RRF k=60 (optimal)
+
+### 8. **AUTONOMOUS AGENT RESPONSES (CRITICAL - NO HARDCODED TEMPLATES)**
+- **NEVER use rule-based conditional responses** (if greeting → template)
+- **ALL communication generated by LLM agents** - no hardcoded strings
+- **Orchestrator returns `final_answer` directly** when no specialized agents needed (greetings, chitchat, meta queries)
+- **Why this matters:**
+  - Enables contextual awareness and natural conversation flow
+  - Eliminates brittle template logic that fails on edge cases
+  - Allows agent to adapt responses based on conversation history
+  - Modern LLM-based architecture principle
+- **Implementation:**
+  - Orchestrator: Returns `{"agent_sequence": [], "final_answer": "<LLM-generated response>"}` for greetings
+  - Runner: Checks for `final_answer` in orchestrator output, returns directly without building workflow
+  - NO if/else conditional logic for response generation anywhere in codebase
+- **Files:** `src/multi_agent/runner.py`, `src/multi_agent/agents/orchestrator.py`, `prompts/agents/orchestrator.txt`
 
 ---
 
@@ -126,6 +241,19 @@ Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
 - `tests/test_phase*.py` - Pipeline tests
 - `tests/agent/` - Agent tests (49 tests)
 - `tests/graph/` - Knowledge graph tests
+- `tests/multi_agent/integration/` - HITL integration tests
+
+**Human-in-the-Loop (HITL) System:**
+- `src/multi_agent/hitl/` - HITL components (4 files)
+  - `config.py` - Configuration with quality thresholds
+  - `quality_detector.py` - Multi-metric quality detection
+  - `clarification_generator.py` - LLM-based question generation
+  - `context_enricher.py` - Query enrichment with user response
+- `backend/main.py` - `/chat/clarify` endpoint for clarification submission
+- `backend/agent_adapter.py` - `resume_clarification()` method
+- `frontend/src/components/chat/ClarificationModal.tsx` - React modal component
+- **Enabled by default** - Configure in `config_multi_agent_extension.json` under `clarification`
+- **See:** [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md) for complete documentation
 
 ---
 
@@ -378,7 +506,7 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-**Last Updated:** 2025-01-11
-**Version:** PHASE 1-7 COMPLETE + Multi-Doc Synthesis + Contextual Chunk Enrichment (16 tools)
+**Last Updated:** 2025-11-11
+**Version:** PHASE 1-7 COMPLETE + Multi-Agent System + HITL Clarifications (16 tools, 8 agents)
 
 **Note:** `vector_db/` is tracked in git (contains merged vector stores) - DO NOT add to `.gitignore`

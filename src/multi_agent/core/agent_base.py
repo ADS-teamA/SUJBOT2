@@ -63,7 +63,8 @@ class AgentConfig:
         """Validate agent configuration."""
         if not self.name:
             raise ValueError("Agent name is required")
-        if not self.tools:
+        # Orchestrator doesn't need tools (it only does LLM-based routing)
+        if not self.tools and self.role != AgentRole.ORCHESTRATE:
             raise ValueError(f"Agent {self.name} has no tools assigned")
         if self.max_tokens <= 0:
             raise ValueError(f"max_tokens must be positive, got {self.max_tokens}")
@@ -106,21 +107,17 @@ class BaseAgent(ABC):
         self.total_time_ms = 0.0
         self.error_count = 0
 
-    @abstractmethod
-    def build_graph(self) -> StateGraph:
+    def build_graph(self) -> Optional[StateGraph]:
         """
-        Build LangGraph graph for this agent.
+        Build LangGraph graph for this agent (optional).
 
-        Each agent implements its own workflow:
-        - Tool selection logic
-        - Parallel/sequential execution
-        - Error handling
-        - State transitions
+        Agents can optionally implement internal LangGraph workflows.
+        Most agents use execute_impl() directly and don't need internal graphs.
 
         Returns:
-            StateGraph: Compiled LangGraph graph
+            StateGraph: Compiled LangGraph graph, or None if not implemented
         """
-        pass
+        return None
 
     @abstractmethod
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -287,3 +284,206 @@ class BaseAgent(ABC):
             f"role={self.config.role.value} "
             f"tools={len(self.config.tools)}>"
         )
+
+    # ========================================================================
+    # AUTONOMOUS AGENTIC PATTERN (CLAUDE.md CONSTRAINT #0)
+    # ========================================================================
+    # Methods for building truly autonomous agents where LLM decides tool calling
+
+    def _build_agent_context(self, state: Dict[str, Any]) -> str:
+        """
+        Build context string from state for agent.
+
+        Includes:
+        - Original query
+        - Previous agent outputs
+        - Retrieved documents/chunks
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Formatted context string
+        """
+        context_parts = []
+
+        # Add query
+        query = state.get("query", "")
+        if query:
+            context_parts.append(f"**User Query:**\n{query}\n")
+
+        # Add previous agent outputs
+        agent_outputs = state.get("agent_outputs", {})
+        if agent_outputs:
+            context_parts.append("**Previous Agent Outputs:**")
+            for agent_name, output in agent_outputs.items():
+                if agent_name != self.config.name:  # Don't include self
+                    context_parts.append(f"\n[{agent_name}]")
+                    # Summarize output (don't dump full chunks)
+                    if isinstance(output, dict):
+                        summary = {k: v for k, v in output.items() if k not in ['chunks', 'expanded_results']}
+                        context_parts.append(str(summary)[:500])
+            context_parts.append("")
+
+        # Add retrieved documents summary (if available)
+        documents = state.get("documents", [])
+        if documents:
+            context_parts.append(f"**Available Documents:** {len(documents)} documents")
+            for doc in documents[:5]:  # Show first 5
+                if hasattr(doc, 'filename'):
+                    context_parts.append(f"- {doc.filename}")
+            context_parts.append("")
+
+        return "\n".join(context_parts)
+
+    def _get_available_tool_schemas(self):
+        """
+        Get tool schemas for this agent from tool adapter.
+
+        Returns:
+            List of tool schemas in format expected by LLM providers
+        """
+        from ..tools.adapter import get_tool_adapter
+
+        tool_adapter = get_tool_adapter()
+        tool_schemas = []
+
+        for tool_name in self.config.tools:
+            schema = tool_adapter.get_tool_schema(tool_name)
+            if schema:
+                tool_schemas.append(schema)
+
+        return tool_schemas
+
+    async def _run_autonomous_tool_loop(
+        self,
+        system_prompt: str,
+        state: Dict[str, Any],
+        max_iterations: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Run autonomous tool calling loop where LLM decides which tools to call.
+
+        This is the core of autonomous agentic behavior:
+        1. LLM sees state/query + available tools
+        2. LLM decides to call tools or provide final answer
+        3. Tool results fed back to LLM
+        4. Loop continues until LLM provides final answer
+
+        Args:
+            system_prompt: System prompt defining agent role/behavior
+            state: Current workflow state
+            max_iterations: Max tool calling rounds
+
+        Returns:
+            Dict with:
+                - final_answer: LLM's final response
+                - tool_calls: List of tools called
+                - reasoning: LLM's reasoning trace
+        """
+        from ..tools.adapter import get_tool_adapter
+
+        tool_adapter = get_tool_adapter()
+
+        # Use agent's provider (already initialized in __init__)
+        if not hasattr(self, 'provider'):
+            raise ValueError(f"Agent {self.config.name} does not have a provider initialized. "
+                           "Autonomous agents must initialize self.provider in __init__")
+
+        provider = self.provider
+
+        # Build initial context
+        context = self._build_agent_context(state)
+        user_message = f"{context}\n\nPlease analyze this information and provide your expert assessment."
+
+        # Get tool schemas
+        tool_schemas = self._get_available_tool_schemas()
+
+        messages = [{"role": "user", "content": user_message}]
+        tool_call_history = []
+        total_tool_cost = 0.0  # Track cumulative API cost for all tool calls
+
+        for iteration in range(max_iterations):
+            self.logger.info(f"Autonomous loop iteration {iteration + 1}/{max_iterations}")
+
+            # Call LLM with tools
+            response = provider.create_message(
+                messages=messages,
+                tools=tool_schemas,
+                system=system_prompt,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature
+            )
+
+            # Check if LLM wants to call tools
+            if hasattr(response, 'stop_reason') and response.stop_reason == 'tool_use':
+                # LLM decided to call tools (content is list of dicts)
+                tool_uses = [block for block in response.content if isinstance(block, dict) and block.get('type') == 'tool_use']
+
+                self.logger.info(f"LLM requesting {len(tool_uses)} tool calls")
+
+                # Execute requested tools
+                tool_results = []
+                for tool_use in tool_uses:
+                    tool_name = tool_use.get('name')
+                    tool_input = tool_use.get('input', {})
+
+                    self.logger.info(f"Calling tool: {tool_name}")
+
+                    result = await tool_adapter.execute(
+                        tool_name=tool_name,
+                        inputs=tool_input,
+                        agent_name=self.config.name
+                    )
+
+                    # Extract API cost from result metadata
+                    tool_cost = result.get("metadata", {}).get("api_cost_usd", 0.0)
+                    total_tool_cost += tool_cost
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use.get('id'),
+                        "content": str(result.get("data", "")) if result["success"] else f"Error: {result.get('error', 'Unknown')}"
+                    })
+
+                    tool_call_history.append({
+                        "tool": tool_name,
+                        "input": tool_input,
+                        "success": result["success"],
+                        "api_cost_usd": tool_cost  # Track cost per tool call
+                    })
+
+                # Add assistant message + tool results to conversation
+                messages.append({"role": "assistant", "content": response.content})
+                messages.append({"role": "user", "content": tool_results})
+
+            else:
+                # LLM provided final answer (no more tools)
+                self.logger.info(
+                    f"LLM provided final answer after {iteration + 1} iterations "
+                    f"(total tool cost: ${total_tool_cost:.6f})"
+                )
+
+                final_text = response.text if hasattr(response, 'text') else str(response.content)
+
+                return {
+                    "final_answer": final_text,
+                    "tool_calls": tool_call_history,
+                    "iterations": iteration + 1,
+                    "reasoning": "Autonomous tool calling completed",
+                    "total_tool_cost_usd": total_tool_cost  # Total API cost for all tool calls
+                }
+
+        # Max iterations reached
+        self.logger.warning(
+            f"Max iterations ({max_iterations}) reached, forcing completion "
+            f"(total tool cost: ${total_tool_cost:.6f})"
+        )
+
+        return {
+            "final_answer": "Analysis incomplete - maximum reasoning steps reached. Please rephrase your query for a more focused response.",
+            "tool_calls": tool_call_history,
+            "iterations": max_iterations,
+            "reasoning": "Max iterations reached",
+            "total_tool_cost_usd": total_tool_cost
+        }

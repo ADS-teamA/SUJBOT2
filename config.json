@@ -5,6 +5,17 @@
     "embedding_model": "text-embedding-3-large",
     "embedding_provider": "openai"
   },
+  "storage": {
+    "backend": "faiss",
+    "postgresql": {
+      "connection_string_env": "DATABASE_URL",
+      "pool_size": 20,
+      "dimensions": 3072
+    },
+    "faiss": {
+      "path": "vector_db"
+    }
+  },
   "extraction": {
     "enable_ocr": true,
     "ocr_engine": "tesseract",
@@ -111,7 +122,7 @@
     "enable": true,
     "llm_provider": "openai",
     "llm_model": "gpt-4o-mini",
-    "backend": "simple",
+    "backend": "neo4j",
     "export_path": "./output/graphs/knowledge_graph.json",
     "verbose": true,
     "min_entity_confidence": 0.6,
@@ -151,9 +162,10 @@
     "enabled_types": null
   },
   "neo4j": {
-    "uri": "neo4j+s://7ebf6f12.databases.neo4j.io",
-    "username": "neo4j",
-    "password": "M9FrwX37OQU4a3ktaWneFgG6g4VISWiCvqd1Zfifx0s",
+    "enabled": false,
+    "uri_env": "NEO4J_URI",
+    "username_env": "NEO4J_USERNAME",
+    "password_env": "NEO4J_PASSWORD",
     "database": "neo4j",
     "max_connection_lifetime": 3600,
     "max_connection_pool_size": 50,
@@ -200,7 +212,7 @@
   },
   "agent_tools": {
     "default_k": 6,
-    "enable_reranking": true,
+    "enable_reranking": false,
     "reranker_candidates": 50,
     "reranker_model": "bge-reranker-large",
     "enable_graph_boost": true,
@@ -227,5 +239,175 @@
     "log_file": "logs/pipeline.log",
     "data_dir": "data",
     "output_dir": "output"
+  },
+  "multi_agent": {
+    "enabled": true,
+    "orchestrator": {
+      "model": "claude-haiku-4-5",
+      "max_tokens": 1024,
+      "temperature": 0.1,
+      "enable_prompt_caching": false,
+      "system_prompt_file": "prompts/agents/orchestrator.txt"
+    },
+    "agents": {
+      "extractor": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 2048,
+        "temperature": 0.3,
+        "timeout_seconds": 30,
+        "enable_prompt_caching": false,
+        "tools": ["search", "expand_context", "get_document_info"],
+        "system_prompt_file": "prompts/agents/extractor.txt"
+      },
+      "classifier": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 1024,
+        "temperature": 0.2,
+        "timeout_seconds": 20,
+        "enable_prompt_caching": false,
+        "tools": ["filtered_search", "explain_results", "get_document_list"],
+        "system_prompt_file": "prompts/agents/classifier.txt"
+      },
+      "compliance": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 2048,
+        "temperature": 0.1,
+        "timeout_seconds": 45,
+        "enable_prompt_caching": false,
+        "tools": ["graph_search", "assess_confidence", "exact_match_search"],
+        "system_prompt_file": "prompts/agents/compliance.txt"
+      },
+      "risk_verifier": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 2048,
+        "temperature": 0.2,
+        "timeout_seconds": 45,
+        "enable_prompt_caching": false,
+        "tools": ["multi_doc_synthesizer", "similarity_search", "get_chunk_context"],
+        "system_prompt_file": "prompts/agents/risk_verifier.txt"
+      },
+      "citation_auditor": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 1024,
+        "temperature": 0.1,
+        "timeout_seconds": 15,
+        "enable_prompt_caching": false,
+        "tools": ["get_document_info", "exact_match_search", "get_chunk_context"],
+        "system_prompt_file": "prompts/agents/citation_auditor.txt"
+      },
+      "gap_synthesizer": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 3072,
+        "temperature": 0.4,
+        "timeout_seconds": 60,
+        "enable_prompt_caching": false,
+        "tools": ["browse_entities", "graph_search", "multi_doc_synthesizer"],
+        "system_prompt_file": "prompts/agents/gap_synthesizer.txt"
+      },
+      "report_generator": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 4096,
+        "temperature": 0.3,
+        "timeout_seconds": 30,
+        "enable_prompt_caching": false,
+        "tools": ["list_available_tools", "get_stats"],
+        "system_prompt_file": "prompts/agents/report_generator.txt"
+      }
+    },
+    "routing": {
+      "complexity_threshold_low": 30,
+      "complexity_threshold_high": 70,
+      "enable_parallel_execution": false,
+      "max_parallel_agents": 3,
+      "complexity_model": "claude-haiku-4-5-20251001"
+    },
+    "caching": {
+      "enable_regulatory_cache": true,
+      "enable_contract_cache": true,
+      "enable_system_cache": true,
+      "cache_ttl_hours": 24,
+      "regulatory_docs_path": "data/regulatory_templates",
+      "contract_templates_path": "data/contract_templates"
+    },
+    "checkpointing": {
+      "backend": "none",
+      "postgresql": {
+        "connection_string_env": "DATABASE_URL",
+        "table_name": "agent_checkpoints"
+      },
+      "enable_state_snapshots": false,
+      "snapshot_interval_queries": 5,
+      "recovery_window_hours": 24
+    },
+    "langsmith": {
+      "enabled": false,
+      "api_key": "",
+      "project_name": "sujbot2-multi-agent",
+      "trace_logging_level": "INFO",
+      "sample_rate": 1.0
+    },
+    "clarification": {
+      "enabled": false,
+      "policy": {
+        "trigger_after_agent": "extractor",
+        "quality_threshold": 0.60,
+        "min_complexity_score": 40,
+        "always_ask_if_zero_results": true,
+        "never_ask_for_simple_queries": true,
+        "max_clarifications_per_query": 2
+      },
+      "quality_detection": {
+        "require_multiple_failures": true,
+        "min_failing_metrics": 2,
+        "metrics": {
+          "retrieval_score": {
+            "enabled": true,
+            "weight": 0.30,
+            "threshold": 0.65
+          },
+          "semantic_coherence": {
+            "enabled": true,
+            "weight": 0.25,
+            "threshold": 0.30
+          },
+          "query_pattern": {
+            "enabled": true,
+            "weight": 0.25,
+            "threshold": 0.50
+          },
+          "document_diversity": {
+            "enabled": true,
+            "weight": 0.20,
+            "threshold": 5.0
+          }
+        }
+      },
+      "question_generation": {
+        "model": "claude-haiku-4-5-20251001",
+        "temperature": 0.4,
+        "max_tokens": 512,
+        "min_questions": 2,
+        "max_questions": 5,
+        "enable_prompt_caching": true
+      },
+      "user_interaction": {
+        "timeout_seconds": 300,
+        "allow_skip": true,
+        "enable_multi_round": true,
+        "max_rounds": 2
+      },
+      "query_enrichment": {
+        "strategy": "append_with_context",
+        "template": "{original_query}\\n\\n[Context]: {user_response}",
+        "max_enriched_length": 500
+      }
+    },
+    "cost_optimization": {
+      "enable_cost_tracking": true,
+      "enable_model_selection": false,
+      "budget_cents_per_query": 100,
+      "model_preference": "cost",
+      "fallback_model": "claude-haiku-4-5-20251001"
+    }
   }
 }

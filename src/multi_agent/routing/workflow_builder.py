@@ -300,6 +300,11 @@ class WorkflowBuilder:
                 return final_state
 
             except Exception as e:
+                # Check if this is an Interrupt (not an error)
+                if e.__class__.__name__ == "Interrupt":
+                    # Re-raise interrupt (this is expected behavior)
+                    raise
+
                 logger.error(f"HITL gate error: {e}", exc_info=True)
                 # On error, continue without clarification
                 if hasattr(state, "model_dump"):

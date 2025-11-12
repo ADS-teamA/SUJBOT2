@@ -40,12 +40,28 @@ class PostgresCheckpointer:
         """
         self.config = config
 
-        # Extract connection parameters
-        self.host = config.get("host", "localhost")
-        self.port = config.get("port", 5432)
-        self.user = config.get("user", "postgres")
-        self.password = config.get("password")
-        self.database = config.get("database", "sujbot_agents")
+        # Check if using connection_string_env (Docker-friendly approach)
+        connection_string_env = config.get("connection_string_env")
+        if connection_string_env:
+            import os
+            self.connection_string = os.getenv(connection_string_env)
+            if not self.connection_string:
+                raise ValueError(
+                    f"Environment variable '{connection_string_env}' not set. "
+                    f"Please configure DATABASE_URL in your environment."
+                )
+            logger.info(f"Using connection string from environment variable: {connection_string_env}")
+        else:
+            # Extract connection parameters (legacy approach)
+            self.host = config.get("host", "localhost")
+            self.port = config.get("port", 5432)
+            self.user = config.get("user", "postgres")
+            self.password = config.get("password")
+            self.database = config.get("database", "sujbot_agents")
+
+            # Connection string
+            self.connection_string = self._build_connection_string()
+
         self.table_name = config.get("table_name", "agent_checkpoints")
 
         # State snapshot configuration
@@ -53,16 +69,11 @@ class PostgresCheckpointer:
         self.snapshot_interval = config.get("snapshot_interval_queries", 5)
         self.recovery_window_hours = config.get("recovery_window_hours", 24)
 
-        # Connection string
-        self.connection_string = self._build_connection_string()
-
         # LangGraph PostgresSaver (will be initialized lazily)
         self._saver: Optional[PostgresSaver] = None
         self._connection: Optional[Connection] = None
 
-        logger.info(
-            f"PostgresCheckpointer initialized for {self.host}:{self.port}/{self.database}"
-        )
+        logger.info(f"PostgresCheckpointer initialized (table={self.table_name})")
 
     def _build_connection_string(self) -> str:
         """Build PostgreSQL connection string."""
@@ -82,8 +93,7 @@ class PostgresCheckpointer:
             yield conn
         except Exception as e:
             logger.error(
-                f"Database connection failed to {self.host}:{self.port}/{self.database} "
-                f"(user={self.user}): {type(e).__name__}: {e}. "
+                f"Database connection failed: {type(e).__name__}: {e}. "
                 f"Check: (1) PostgreSQL is running, (2) credentials are correct, (3) database exists."
             )
             if conn:

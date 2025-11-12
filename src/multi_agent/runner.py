@@ -17,6 +17,7 @@ import asyncio
 import json
 from typing import Optional, Dict, Any
 from pathlib import Path
+from dotenv import load_dotenv
 
 from .core.state import MultiAgentState, ExecutionPhase
 from .core.agent_registry import AgentRegistry
@@ -57,6 +58,7 @@ class MultiAgentRunner:
         self.agent_registry = None
         self.complexity_analyzer = None
         self.workflow_builder = None
+        self.vector_store = None  # Store vector store for orchestrator
 
         # HITL components
         self.hitl_config = None
@@ -85,10 +87,13 @@ class MultiAgentRunner:
             # 3. Initialize caching (prompt caching for cost savings)
             self.cache_manager = create_cache_manager(self.multi_agent_config)
 
-            # 4. Initialize agent registry
+            # 4. Initialize tool registry with RAG components (BEFORE agents)
+            await self._initialize_tools()
+
+            # 4.5. Initialize agent registry
             self.agent_registry = AgentRegistry()
 
-            # Register all 8 agents
+            # Register all 8 agents (orchestrator needs vector_store from tools)
             await self._register_agents()
 
             # 5. Initialize routing components
@@ -174,7 +179,11 @@ class MultiAgentRunner:
 
         # Register orchestrator (special - used for initial analysis)
         orchestrator_cfg = self._build_agent_config("orchestrator", orchestrator_config)
-        orchestrator = OrchestratorAgent(orchestrator_cfg)
+        orchestrator = OrchestratorAgent(
+            orchestrator_cfg,
+            vector_store=self.vector_store,
+            agent_registry=self.agent_registry
+        )
         self.agent_registry.register(orchestrator)
 
         # Register other agents
@@ -195,12 +204,252 @@ class MultiAgentRunner:
 
         logger.info(f"Registered {len(agent_classes) + 1} agents")
 
+    async def _initialize_tools(self) -> None:
+        """Initialize tool registry with RAG components."""
+        from ..agent.tools.registry import get_registry
+        from ..storage import load_vector_store_adapter
+        from ..embedding_generator import EmbeddingGenerator
+        from ..reranker import CrossEncoderReranker
+        from ..agent.config import ToolConfig
+        import os
+
+        logger.info("Initializing tool registry with RAG components...")
+
+        # Get storage backend from config
+        storage_config = self.config.get("storage", {})
+        backend = storage_config.get("backend", "postgresql")
+
+        try:
+            # Load vector store adapter (PostgreSQL or FAISS)
+            if backend == "postgresql":
+                # PostgreSQL backend - load from database
+                connection_string = os.getenv(
+                    storage_config.get("postgresql", {}).get("connection_string_env", "DATABASE_URL")
+                )
+                if not connection_string:
+                    logger.error(
+                        "PostgreSQL connection string not found in environment. "
+                        "Set DATABASE_URL in .env file."
+                    )
+                    registry = get_registry()
+                    logger.info("Tool registry initialized with 0 tools (no database connection)")
+                    return
+
+                logger.info("Loading PostgreSQL vector store adapter...")
+                vector_store = await load_vector_store_adapter(
+                    backend="postgresql",
+                    connection_string=connection_string,
+                    pool_size=storage_config.get("postgresql", {}).get("pool_size", 20),
+                    dimensions=storage_config.get("postgresql", {}).get("dimensions", 3072)
+                )
+                logger.info("PostgreSQL adapter loaded successfully")
+
+            else:  # FAISS backend
+                vector_store_path = Path(self.config.get("vector_store_path", "vector_db"))
+
+                # Check if FAISS files exist
+                if not vector_store_path.exists():
+                    logger.warning(
+                        f"Vector store not found at {vector_store_path}. "
+                        f"Tools requiring vector search will be unavailable. "
+                        f"Run indexing pipeline first: uv run python run_pipeline.py data/"
+                    )
+                    registry = get_registry()
+                    logger.info("Tool registry initialized with 0 tools (no vector store)")
+                    return
+
+                logger.info(f"Loading FAISS vector store adapter from {vector_store_path}")
+                vector_store = await load_vector_store_adapter(
+                    backend="faiss",
+                    path=str(vector_store_path)
+                )
+                logger.info("FAISS adapter loaded successfully")
+
+            self.vector_store = vector_store  # Store for orchestrator
+
+            # Initialize embedder (avoid circular dependency - construct config directly)
+            from ..config import EmbeddingConfig, ModelConfig
+
+            # Get model info from already-loaded config (self.config was loaded at MultiAgentRunner init)
+            # We can't call get_config() here because it might be in the middle of loading
+            # Instead, use the root config that was already loaded
+            model_name = self.config.get("models", {}).get("embedding_model", "bge-m3")
+            model_provider = self.config.get("models", {}).get("embedding_provider", "huggingface")
+
+            # Create EmbeddingConfig with provider/model explicitly set
+            # This avoids triggering __post_init__ which would call get_config() recursively
+            embedding_config = EmbeddingConfig(
+                provider=model_provider,
+                model=model_name,
+                batch_size=64,
+                normalize=True,
+                enable_multi_layer=True,
+                cache_enabled=True,
+                cache_max_size=1000
+            )
+            embedder = EmbeddingGenerator(embedding_config)
+            logger.info(f"Embedder initialized: {model_provider}/{model_name}")
+
+            # Initialize reranker (conditional on config - check agent_tools.enable_reranking)
+            agent_tools_config_temp = self.config.get("agent_tools", {})
+            enable_reranking = agent_tools_config_temp.get("enable_reranking", True)
+
+            reranker = None
+            if enable_reranking:
+                try:
+                    reranker = CrossEncoderReranker()
+                    logger.info("Reranker initialized (enable_reranking=True)")
+                except Exception as e:
+                    logger.warning(f"Reranker unavailable: {e}. Tools will use base retrieval.")
+                    reranker = None
+            else:
+                logger.info("Reranking DISABLED in config (enable_reranking=False)")
+
+            # Knowledge graph (optional) - supports both Neo4j and JSON backends
+            knowledge_graph = None
+            kg_config = self.config.get("knowledge_graph", {})
+            kg_backend = kg_config.get("backend", "simple")
+
+            if kg_config.get("enable", True):
+                try:
+                    if kg_backend == "neo4j":
+                        # Load from Neo4j database
+                        from ..graph.config import Neo4jConfig
+                        from ..graph.neo4j_manager import Neo4jManager
+                        from ..graph.models import KnowledgeGraph, Entity
+                        from datetime import datetime
+
+                        neo4j_cfg = self.config.get("neo4j", {})
+                        neo4j_config = Neo4jConfig(
+                            uri=neo4j_cfg.get("uri", "bolt://localhost:7687"),
+                            username=neo4j_cfg.get("username", "neo4j"),
+                            password=neo4j_cfg.get("password", ""),
+                            database=neo4j_cfg.get("database", "neo4j"),
+                        )
+
+                        neo4j_manager = Neo4jManager(neo4j_config)
+
+                        # Query all entities from Neo4j
+                        cypher = "MATCH (e:Entity) RETURN e"
+                        result = neo4j_manager.execute(cypher)
+
+                        entities = []
+                        for record in result:
+                            node = record["e"]
+                            entities.append(Entity(
+                                id=node.get("id", ""),
+                                type=node.get("type", ""),
+                                value=node.get("value", ""),
+                                normalized_value=node.get("normalized_value", node.get("value", "")),
+                                confidence=node.get("confidence", 1.0),
+                                metadata=dict(node),
+                            ))
+
+                        # Create KnowledgeGraph from Neo4j entities
+                        knowledge_graph = KnowledgeGraph(
+                            source_document_id="neo4j_unified",
+                            created_at=datetime.now(),
+                        )
+                        knowledge_graph.entities = entities
+
+                        neo4j_manager.close()
+                        logger.info(f"✓ KG loaded from Neo4j: {len(entities)} entities")
+
+                    else:
+                        # Load from JSON file (simple backend)
+                        kg_path = Path("vector_db/unified_kg.json")
+                        if not kg_path.exists():
+                            kg_path = Path("output/knowledge_graph.json")  # Fallback
+
+                        if kg_path.exists():
+                            from ..graph.models import KnowledgeGraph
+                            knowledge_graph = KnowledgeGraph.load_json(str(kg_path))
+                            logger.info(f"✓ KG loaded from {kg_path.name}: {len(knowledge_graph.entities)} entities")
+
+                except Exception as e:
+                    logger.warning(f"Failed to load knowledge graph from {kg_backend}: {e}")
+
+            # Context assembler (optional)
+            context_assembler = None
+            try:
+                from ..context_assembly import ContextAssembler
+                context_assembler = ContextAssembler()
+                logger.info("Context assembler initialized")
+            except Exception as e:
+                logger.warning(f"Context assembler unavailable: {e}")
+
+            # Tool config from config.json (not hardcoded defaults)
+            agent_tools_config = self.config.get("agent_tools", {})
+            tool_config = ToolConfig(
+                default_k=agent_tools_config.get("default_k", 6),
+                enable_reranking=agent_tools_config.get("enable_reranking", True),
+                reranker_candidates=agent_tools_config.get("reranker_candidates", 50),
+                reranker_model=agent_tools_config.get("reranker_model", "bge-reranker-large"),
+                enable_graph_boost=agent_tools_config.get("enable_graph_boost", True),
+                graph_boost_weight=agent_tools_config.get("graph_boost_weight", 0.3),
+                max_document_compare=agent_tools_config.get("max_document_compare", 3),
+                compliance_threshold=agent_tools_config.get("compliance_threshold", 0.7),
+                context_window=agent_tools_config.get("context_window", 2),
+                lazy_load_reranker=agent_tools_config.get("lazy_load_reranker", False),
+                lazy_load_graph=agent_tools_config.get("lazy_load_graph", True),
+                cache_embeddings=agent_tools_config.get("cache_embeddings", True),
+            )
+
+            # Initialize tools in registry
+            registry = get_registry()
+            registry.initialize_tools(
+                vector_store=vector_store,
+                embedder=embedder,
+                reranker=reranker,
+                graph_retriever=None,  # Not used in multi-agent system
+                knowledge_graph=knowledge_graph,
+                context_assembler=context_assembler,
+                config=tool_config,
+            )
+
+            # Log results
+            total_tools = len(registry)
+            unavailable = registry.get_unavailable_tools() if hasattr(registry, 'get_unavailable_tools') else []
+            available = total_tools - len(unavailable)
+
+            if unavailable:
+                logger.info(f"Tool registry initialized: {available}/{total_tools} tools available")
+                logger.info(f"Unavailable tools: {list(unavailable.keys())}")
+            else:
+                logger.info(f"Tool registry initialized: {total_tools} tools available")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize tool registry: {e}", exc_info=True)
+            raise ValueError(
+                f"Tool initialization failed: {e}. "
+                f"Ensure vector store/database is configured and dependencies are installed."
+            )
+
     def _build_agent_config(self, agent_name: str, config: Dict[str, Any]):
         """Build agent config object."""
-        from .core.agent_base import AgentConfig
+        from .core.agent_base import AgentConfig, AgentRole, AgentTier
+
+        # Map agent names to their roles and tiers
+        agent_metadata = {
+            "orchestrator": {"role": AgentRole.ORCHESTRATE, "tier": AgentTier.ORCHESTRATOR},
+            "extractor": {"role": AgentRole.EXTRACT, "tier": AgentTier.WORKER},
+            "classifier": {"role": AgentRole.CLASSIFY, "tier": AgentTier.SPECIALIST},
+            "compliance": {"role": AgentRole.VERIFY, "tier": AgentTier.SPECIALIST},
+            "risk_verifier": {"role": AgentRole.VERIFY, "tier": AgentTier.SPECIALIST},
+            "citation_auditor": {"role": AgentRole.AUDIT, "tier": AgentTier.WORKER},
+            "gap_synthesizer": {"role": AgentRole.SYNTHESIZE, "tier": AgentTier.SPECIALIST},
+            "report_generator": {"role": AgentRole.REPORT, "tier": AgentTier.WORKER},
+        }
+
+        if agent_name not in agent_metadata:
+            raise ValueError(f"Unknown agent name: {agent_name}")
+
+        metadata = agent_metadata[agent_name]
 
         return AgentConfig(
             name=agent_name,
+            role=metadata["role"],
+            tier=metadata["tier"],
             model=config.get("model", "claude-sonnet-4-5-20250929"),
             max_tokens=config.get("max_tokens", 2048),
             temperature=config.get("temperature", 0.3),
@@ -249,9 +498,39 @@ class MultiAgentRunner:
             # Update state
             state = MultiAgentState(**state_dict)
 
-            # Step 2: Build workflow from agent sequence
+            # Step 2: Check if orchestrator provided direct answer (for greetings/simple queries)
+            # When no agents are needed, orchestrator returns final_answer directly
+            if hasattr(state, 'final_answer') and state.final_answer and not state.agent_sequence:
+                logger.info("Orchestrator provided direct answer without agents")
+                return {
+                    "success": True,
+                    "final_answer": state.final_answer,
+                    "complexity_score": state.complexity_score or 0,
+                    "query_type": state.query_type.value if hasattr(state.query_type, "value") else str(state.query_type or "direct"),
+                    "agent_sequence": [],
+                    "documents": [],
+                    "citations": [],
+                    "total_cost_cents": 0.0,
+                    "errors": [],
+                }
+
+            # Step 3: Build workflow from agent sequence
             agent_sequence = state.agent_sequence
-            logger.info(f"Step 2: Building workflow with sequence: {agent_sequence}")
+            logger.info(f"Step 3: Building workflow with sequence: {agent_sequence}")
+
+            if not agent_sequence:
+                logger.error("Empty agent sequence without final_answer from orchestrator")
+                return {
+                    "success": False,
+                    "final_answer": "Query routing failed: Orchestrator did not provide agent sequence or final answer. Please try rephrasing your query.",
+                    "complexity_score": 0,
+                    "query_type": "error",
+                    "agent_sequence": [],
+                    "documents": [],
+                    "citations": [],
+                    "total_cost_cents": 0.0,
+                    "errors": ["Empty agent sequence without direct answer"],
+                }
 
             workflow = self.workflow_builder.build_workflow(
                 agent_sequence=agent_sequence, enable_parallel=False
@@ -286,6 +565,34 @@ class MultiAgentRunner:
             }
 
         except Exception as e:
+            # Check if this is a GraphInterrupt (HITL clarification needed)
+            if e.__class__.__name__ == "GraphInterrupt":
+                logger.info("HITL: Workflow interrupted for clarification")
+
+                # Extract interrupt data
+                interrupt_value = None
+                if hasattr(e, "args") and len(e.args) > 0:
+                    # GraphInterrupt contains tuple of Interrupt objects
+                    interrupts = e.args[0] if isinstance(e.args[0], tuple) else (e.args[0],)
+                    if interrupts and hasattr(interrupts[0], "value"):
+                        interrupt_value = interrupts[0].value
+
+                if interrupt_value and interrupt_value.get("type") == "clarification_needed":
+                    # Return clarification result
+                    return {
+                        "success": False,
+                        "clarification_needed": True,
+                        "thread_id": thread_id,
+                        "questions": interrupt_value.get("questions", []),
+                        "quality_metrics": interrupt_value.get("quality_metrics", {}),
+                        "original_query": query,
+                        "complexity_score": state.complexity_score,
+                        "query_type": state.query_type.value if hasattr(state.query_type, "value") else str(state.query_type),
+                        "agent_sequence": state.agent_sequence,  # Needed for resume
+                    }
+                # If not clarification interrupt, fall through to error handling below
+
+            # Handle all other exceptions (including unknown GraphInterrupt types)
             from .core.error_tracker import track_error, ErrorSeverity
 
             error_id = track_error(
@@ -324,6 +631,71 @@ class MultiAgentRunner:
                 "error_type": type(e).__name__,
             }
 
+    async def resume_with_clarification(
+        self, thread_id: str, user_response: str, original_state: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Resume interrupted workflow with user clarification.
+
+        Args:
+            thread_id: Thread ID from interrupted workflow
+            user_response: User's clarification response
+            original_state: Original state dict from before interrupt
+
+        Returns:
+            Dict with final_answer and metadata
+        """
+        logger.info(f"Resuming workflow {thread_id} with user clarification...")
+
+        try:
+            # Load original state and add user clarification
+            state_dict = dict(original_state)
+            state_dict["user_clarification"] = user_response
+
+            # Rebuild workflow (must use same agent sequence as before)
+            agent_sequence = state_dict.get("agent_sequence", [])
+            logger.info(f"Rebuilding workflow with sequence: {agent_sequence}")
+
+            workflow = self.workflow_builder.build_workflow(
+                agent_sequence=agent_sequence, enable_parallel=False
+            )
+
+            # Resume workflow with same thread_id (will load from checkpoint)
+            logger.info("Resuming workflow execution...")
+
+            if self.langsmith and self.langsmith.is_enabled():
+                with self.langsmith.trace_workflow(f"resume_{thread_id}"):
+                    result = await workflow.ainvoke(state_dict, {"thread_id": thread_id})
+            else:
+                result = await workflow.ainvoke(state_dict, {"thread_id": thread_id})
+
+            # Extract final answer
+            final_answer = result.get("final_answer", "No answer generated")
+
+            logger.info("Resumed workflow completed successfully")
+
+            return {
+                "success": True,
+                "final_answer": final_answer,
+                "complexity_score": result.get("complexity_score", 0),
+                "query_type": result.get("query_type", "unknown"),
+                "agent_sequence": result.get("agent_sequence", []),
+                "documents": result.get("documents", []),
+                "citations": result.get("citations", []),
+                "total_cost_cents": result.get("total_cost_cents", 0.0),
+                "errors": result.get("errors", []),
+                "enriched_query": result.get("enriched_query"),
+            }
+
+        except Exception as e:
+            logger.error(f"Resume failed: {e}", exc_info=True)
+
+            return {
+                "success": False,
+                "final_answer": f"Error resuming workflow: {str(e)}",
+                "errors": [str(e)],
+            }
+
     def shutdown(self) -> None:
         """Shutdown and cleanup resources."""
         logger.info("Shutting down multi-agent system...")
@@ -340,6 +712,9 @@ class MultiAgentRunner:
 async def main():
     """Main CLI entry point."""
     import argparse
+
+    # Load environment variables from .env file
+    load_dotenv()
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description="SUJBOT2 Multi-Agent System")

@@ -46,8 +46,29 @@ export interface Model {
 }
 
 export interface SSEEvent {
-  event: 'text_delta' | 'tool_call' | 'tool_result' | 'cost_update' | 'done' | 'error';
+  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_update' | 'done' | 'error' | 'clarification_needed';
   data: any;
+}
+
+export interface ClarificationQuestion {
+  id: string;
+  text: string;
+  type: string;
+}
+
+export interface ClarificationData {
+  thread_id: string;
+  questions: ClarificationQuestion[];
+  quality_metrics: {
+    retrieval_score?: number;
+    semantic_coherence?: number;
+    query_pattern_score?: number;
+    document_diversity?: number;
+    overall_quality?: number;
+  };
+  original_query: string;
+  complexity_score: number;
+  timeout_seconds: number;
 }
 
 export interface HealthStatus {

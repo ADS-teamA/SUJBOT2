@@ -13,8 +13,6 @@ import logging
 from typing import Any, Dict, List, Optional
 import re
 
-from anthropic import Anthropic
-
 from ..core.agent_base import BaseAgent
 from ..core.state import QueryType, MultiAgentState
 from ..core.agent_registry import register_agent
@@ -32,12 +30,25 @@ class OrchestratorAgent(BaseAgent):
     based on complexity scoring rubric and routing rules.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, vector_store=None, agent_registry=None):
         """Initialize orchestrator with config."""
         super().__init__(config)
 
-        # Initialize Anthropic client
-        self.client = Anthropic(api_key=config.api_key)
+        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
+        # Provider factory loads API keys from environment variables
+        try:
+            from src.agent.providers.factory import create_provider
+
+            # Provider factory auto-detects provider from model name
+            # and loads appropriate API key from environment
+            self.provider = create_provider(model=config.model)
+            logger.info(f"Initialized provider for model: {config.model}")
+        except Exception as e:
+            logger.error(f"Failed to create provider: {e}")
+            raise ValueError(
+                f"Failed to initialize LLM provider for model {config.model}. "
+                f"Ensure API keys are configured in environment and model name is valid."
+            ) from e
 
         # Load system prompt
         prompt_loader = get_prompt_loader()
@@ -46,6 +57,13 @@ class OrchestratorAgent(BaseAgent):
         # Routing configuration
         self.complexity_threshold_low = 30
         self.complexity_threshold_high = 70
+
+        # Initialize orchestrator-specific tools
+        from ..tools.orchestrator_tools import create_orchestrator_tools
+        self.orchestrator_tool_schemas, self.orchestrator_tools_instance = create_orchestrator_tools(
+            vector_store=vector_store,
+            agent_registry=agent_registry
+        )
 
         logger.info(f"OrchestratorAgent initialized with model: {config.model}")
 
@@ -81,13 +99,20 @@ class OrchestratorAgent(BaseAgent):
             state["query_type"] = routing_decision["query_type"]
             state["agent_sequence"] = routing_decision["agent_sequence"]
 
+            # If orchestrator provided final_answer directly (for greetings/simple queries),
+            # store it in state so runner can return it without building workflow
+            if "final_answer" in routing_decision and routing_decision["final_answer"]:
+                state["final_answer"] = routing_decision["final_answer"]
+                logger.info("Orchestrator provided direct answer without agents")
+
             # Track orchestrator output
             state["agent_outputs"] = state.get("agent_outputs", {})
             state["agent_outputs"]["orchestrator"] = {
                 "complexity_score": routing_decision["complexity_score"],
                 "query_type": routing_decision["query_type"],
                 "agent_sequence": routing_decision["agent_sequence"],
-                "reasoning": routing_decision.get("reasoning", "")
+                "reasoning": routing_decision.get("reasoning", ""),
+                "final_answer": routing_decision.get("final_answer")
             }
 
             logger.info(
@@ -150,33 +175,113 @@ Query: {query}
 
 Provide your analysis in the exact JSON format specified in the system prompt."""
 
-        # Call Anthropic API
+        # Call LLM provider (Anthropic/OpenAI/Google via unified interface)
         try:
-            # Prepare API parameters
-            api_params = {
-                "model": self.config.model,
-                "max_tokens": self.config.max_tokens,
-                "temperature": self.config.temperature,
-                "system": self.system_prompt,
-                "messages": [
-                    {"role": "user", "content": user_message}
-                ]
-            }
-
-            # Add prompt caching if enabled
+            # Prepare system prompt (with caching if enabled)
             if self.config.enable_prompt_caching:
-                api_params["system"] = [
+                # Anthropic-style prompt caching
+                system = [
                     {
                         "type": "text",
                         "text": self.system_prompt,
                         "cache_control": {"type": "ephemeral"}
                     }
                 ]
+            else:
+                system = self.system_prompt
 
-            response = self.client.messages.create(**api_params)
+            # Tool execution loop - orchestrator may call tools before making routing decision
+            messages = [{"role": "user", "content": user_message}]
+            max_tool_iterations = 3  # Prevent infinite loops
 
-            # Extract text response
-            response_text = response.content[0].text
+            for iteration in range(max_tool_iterations):
+                # Call provider's unified create_message API
+                response = self.provider.create_message(
+                    messages=messages,
+                    tools=self.orchestrator_tool_schemas,
+                    system=system,
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature
+                )
+
+                # Log response structure for debugging
+                content_types = [block.get("type") if isinstance(block, dict) else getattr(block, "type", "unknown")
+                                for block in response.content]
+                logger.info(f"Iteration {iteration}: stop_reason={response.stop_reason}, content_blocks={content_types}, text_length={len(response.text)}")
+
+                # Check if LLM wants to use tools
+                if response.stop_reason == "tool_use":
+                    # Extract tool calls from response (content is list of dicts)
+                    tool_calls = [
+                        block for block in response.content
+                        if isinstance(block, dict) and block.get("type") == "tool_use"
+                    ]
+
+                    if not tool_calls:
+                        # No actual tool calls despite stop_reason - treat as text response
+                        response_text = response.text if hasattr(response, 'text') else ""
+                        logger.debug(f"Empty tool_calls list, extracted text: {response_text[:200]}")
+                        break
+
+                    # Add assistant message with tool calls
+                    messages.append({
+                        "role": "assistant",
+                        "content": response.content
+                    })
+
+                    # Execute tools and collect results
+                    tool_results = []
+                    for tool_call in tool_calls:
+                        tool_name = tool_call.get("name")
+                        tool_input = tool_call.get("input", {})
+
+                        logger.info(f"Orchestrator calling tool: {tool_name}")
+
+                        # Execute tool using tools instance
+                        try:
+                            if tool_name == "list_available_documents":
+                                result = self.orchestrator_tools_instance.list_available_documents()
+                            elif tool_name == "list_available_agents":
+                                result = self.orchestrator_tools_instance.list_available_agents()
+                            else:
+                                logger.warning(f"Unknown tool: {tool_name}")
+                                result = {"error": f"Unknown tool: {tool_name}"}
+
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_call.get("id"),
+                                "content": json.dumps(result)
+                            })
+                            logger.debug(f"Tool {tool_name} result: {result}")
+                        except Exception as e:
+                            logger.error(f"Tool {tool_name} failed: {e}")
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_call.get("id"),
+                                "content": json.dumps({"error": str(e)}),
+                                "is_error": True
+                            })
+
+                    # Add tool results to conversation
+                    messages.append({
+                        "role": "user",
+                        "content": tool_results
+                    })
+
+                    # Continue loop to get next response
+                    continue
+
+                # LLM provided text response - extract routing decision
+                response_text = response.text
+                logger.debug(f"Text response received: {response_text[:200]}")
+                break
+
+            else:
+                # Max iterations reached without final answer
+                raise ValueError(
+                    f"Orchestrator exceeded max tool iterations ({max_tool_iterations}). "
+                    f"LLM did not provide routing decision."
+                )
 
             # Parse JSON response
             routing_decision = self._parse_routing_response(response_text)
@@ -221,7 +326,7 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
 
         except Exception as e:
             logger.error(f"Failed to parse routing response: {e}")
-            logger.debug(f"Response text: {response_text}")
+            logger.error(f"Response text was: {response_text[:500]}")  # Log first 500 chars
             raise ValueError(f"Could not parse routing decision: {e}")
 
     def _validate_routing_decision(self, decision: Dict[str, Any]) -> None:
@@ -245,13 +350,20 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
         if not isinstance(score, (int, float)) or score < 0 or score > 100:
             raise ValueError(f"Invalid complexity_score: {score} (must be 0-100)")
 
-        # Validate agent sequence is non-empty list
+        # Validate agent sequence is list (can be empty for direct answers)
         sequence = decision["agent_sequence"]
-        if not isinstance(sequence, list) or len(sequence) == 0:
-            raise ValueError(f"Invalid agent_sequence: {sequence} (must be non-empty list)")
+        if not isinstance(sequence, list):
+            raise ValueError(f"Invalid agent_sequence: {sequence} (must be a list)")
+
+        # If agent_sequence is empty, final_answer must be provided
+        if len(sequence) == 0 and "final_answer" not in decision:
+            raise ValueError(
+                "Empty agent_sequence requires final_answer field "
+                "(for direct responses without agent pipeline)"
+            )
 
         # Validate query type
-        valid_types = ["compliance", "risk", "synthesis", "search", "reporting"]
+        valid_types = ["simple_search", "cross_doc", "compliance", "risk", "synthesis", "reporting", "unknown"]
         query_type = decision["query_type"]
         if query_type not in valid_types:
             logger.warning(
@@ -275,50 +387,5 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
         else:
             return "complex"
 
-    def get_agent_capabilities(self) -> Dict[str, List[str]]:
-        """
-        Get capabilities of each agent for routing decisions.
-
-        Returns:
-            Dict mapping agent names to their capabilities/keywords
-        """
-        return {
-            "extractor": ["retrieve", "find", "search", "locate", "get"],
-            "classifier": ["categorize", "organize", "classify", "type", "sort"],
-            "compliance": ["compliance", "gdpr", "ccpa", "hipaa", "regulation", "legal"],
-            "risk_verifier": ["risk", "safety", "liability", "impact", "assess"],
-            "citation_auditor": ["citation", "source", "reference", "verify", "validate"],
-            "gap_synthesizer": ["gap", "missing", "complete", "comprehensive", "coverage"],
-            "report_generator": ["report", "summary", "compile", "generate", "final"]
-        }
-
-    def suggest_agents_for_query(self, query: str) -> List[str]:
-        """
-        Suggest agents based on keyword matching (fallback method).
-
-        Args:
-            query: User query
-
-        Returns:
-            List of suggested agent names
-        """
-        query_lower = query.lower()
-        capabilities = self.get_agent_capabilities()
-
-        suggested = []
-
-        # Check for keyword matches
-        for agent, keywords in capabilities.items():
-            if any(keyword in query_lower for keyword in keywords):
-                if agent not in suggested:
-                    suggested.append(agent)
-
-        # Always include extractor at start (unless already present)
-        if "extractor" not in suggested:
-            suggested.insert(0, "extractor")
-
-        # Always include report_generator at end (unless already present)
-        if "report_generator" not in suggested:
-            suggested.append("report_generator")
-
-        return suggested
+    # Removed rule-based fallback methods (get_agent_capabilities, suggest_agents_for_query)
+    # All routing decisions are now made autonomously by the LLM orchestrator

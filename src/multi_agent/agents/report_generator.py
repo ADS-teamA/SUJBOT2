@@ -15,7 +15,6 @@ import logging
 from typing import Any, Dict
 from datetime import datetime
 
-from anthropic import Anthropic
 
 from ..core.agent_base import BaseAgent
 from ..core.agent_registry import register_agent
@@ -44,8 +43,18 @@ class ReportGeneratorAgent(BaseAgent):
         """Initialize report generator with config."""
         super().__init__(config)
 
-        # Initialize Anthropic client
-        self.client = Anthropic(api_key=config.api_key)
+        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
+        try:
+            from src.agent.providers.factory import create_provider
+
+            self.provider = create_provider(model=config.model)
+            logger.info(f"Initialized provider for model: {config.model}")
+        except Exception as e:
+            logger.error(f"Failed to create provider: {e}")
+            raise ValueError(
+                f"Failed to initialize LLM provider for model {config.model}. "
+                f"Ensure API keys are configured in environment and model name is valid."
+            ) from e
 
         # Load system prompt
         prompt_loader = get_prompt_loader()
@@ -58,235 +67,126 @@ class ReportGeneratorAgent(BaseAgent):
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Generate comprehensive final report.
+        Generate comprehensive report (AUTONOMOUS).
+
+        LLM autonomously decides which tools to call for report generation.
 
         Args:
-            state: Complete workflow state with all agent outputs
+            state: Current workflow state
 
         Returns:
-            Updated state with final_answer containing Markdown report
+            Updated state with formatted report
         """
         query = state.get("query", "")
-        agent_outputs = state.get("agent_outputs", {})
+        extractor_output = state.get("agent_outputs", {}).get("extractor", {})
 
-        if not agent_outputs:
-            logger.warning("No agent outputs to compile into report")
-            state["final_answer"] = "No analysis results available to generate report."
+        if not extractor_output:
+            logger.warning("No extractor output found, skipping report generator")
             return state
 
-        logger.info("Generating final report...")
+        logger.info("Running autonomous report generator...")
 
         try:
-            # Get tool usage statistics
-            tool_stats = await self._get_tool_stats()
-
-            # Generate report using LLM
-            report = await self._generate_report(
-                query=query,
-                agent_outputs=agent_outputs,
-                tool_stats=tool_stats,
-                state=state
+            # Run autonomous tool calling loop
+            # LLM decides which tools to call
+            result = await self._run_autonomous_tool_loop(
+                system_prompt=self.system_prompt,
+                state=state,
+                max_iterations=10
             )
 
-            # Update state with final answer
-            state["final_answer"] = report
+            # Parse result from autonomous loop
+            final_answer = result.get("final_answer", "")
+            tool_calls = result.get("tool_calls", [])
+            report_gen_cost = result.get("total_tool_cost_usd", 0.0)
 
-            # Store report in agent outputs
-            state["agent_outputs"]["report_generator"] = {
-                "report_generated": True,
-                "report_length": len(report),
-                "timestamp": datetime.now().isoformat()
+            # Aggregate costs from ALL agents (including report_generator)
+            total_cost = report_gen_cost  # Start with report_generator's own cost
+            agent_costs = {"report_generator": report_gen_cost}
+
+            # Sum costs from previous agents
+            for agent_name, agent_output in state.get("agent_outputs", {}).items():
+                if agent_name != "report_generator" and isinstance(agent_output, dict):
+                    agent_cost = agent_output.get("total_tool_cost_usd", 0.0)
+                    if agent_cost > 0:
+                        agent_costs[agent_name] = agent_cost
+                        total_cost += agent_cost
+
+            # Store output
+            output = {
+                "analysis": final_answer,
+                "tool_calls_made": [t["tool"] for t in tool_calls],
+                "iterations": result.get("iterations", 0),
+                "total_tool_cost_usd": report_gen_cost,
+                "workflow_total_cost_usd": total_cost,  # Total for entire workflow
+                "agent_costs": agent_costs  # Per-agent cost breakdown
             }
 
-            logger.info(f"Report generated successfully ({len(report)} characters)")
+            # Update state
+            state["agent_outputs"] = state.get("agent_outputs", {})
+            state["agent_outputs"]["report_generator"] = output
+
+            # Append cost summary to final answer
+            cost_summary = self._format_cost_summary(total_cost, agent_costs)
+            final_answer_with_cost = f"{final_answer}\n\n{cost_summary}"
+
+            # Set final_answer at top level for runner extraction
+            state["final_answer"] = final_answer_with_cost
+
+            logger.info(
+                f"Autonomous report generator complete: "
+                f"tools_used={len(tool_calls)}, iterations={result.get('iterations', 0)}, "
+                f"total_workflow_cost=${total_cost:.6f}"
+            )
 
             return state
 
         except Exception as e:
-            logger.error(f"Report generation failed: {e}", exc_info=True)
+            logger.error(f"Autonomous report generator failed: {e}", exc_info=True)
             state["errors"] = state.get("errors", [])
-            state["errors"].append(f"Report generation error: {str(e)}")
-
-            # Generate fallback report
-            state["final_answer"] = self._generate_fallback_report(query, agent_outputs)
-
+            state["errors"].append(f"report generator error: {str(e)}")
             return state
 
-    async def _get_tool_stats(self) -> Dict[str, Any]:
-        """Get execution statistics from tool adapter."""
-        try:
-            result = await self.tool_adapter.execute(
-                tool_name="get_stats",
-                inputs={},
-                agent_name=self.config.name
-            )
+    def _format_cost_summary(self, total_cost: float, agent_costs: dict) -> str:
+        """
+        Format cost summary for display to user.
 
-            return result.get("data", {}) if result["success"] else {}
+        Args:
+            total_cost: Total workflow cost in USD
+            agent_costs: Dict mapping agent names to costs
 
-        except Exception as e:
-            logger.warning(f"Failed to get tool stats: {e}")
-            return {}
+        Returns:
+            Formatted markdown cost summary
+        """
+        lines = [
+            "---",
+            "## 💰 API Cost Summary",
+            f"**Total Workflow Cost:** ${total_cost:.6f}",
+            ""
+        ]
 
-    async def _generate_report(
-        self,
-        query: str,
-        agent_outputs: Dict[str, Any],
-        tool_stats: Dict[str, Any],
-        state: Dict[str, Any]
-    ) -> str:
-        """Generate report using LLM."""
-        # Prepare comprehensive report generation prompt
-        user_message = f"""Generate a comprehensive final report for the following analysis:
+        # Per-agent breakdown
+        if agent_costs:
+            lines.append("**Per-Agent Breakdown:**")
+            # Sort by cost descending
+            sorted_agents = sorted(agent_costs.items(), key=lambda x: x[1], reverse=True)
+            for agent_name, cost in sorted_agents:
+                if cost > 0:
+                    lines.append(f"- {agent_name}: ${cost:.6f}")
+            lines.append("")
 
-**QUERY:**
-{query}
+        # Cost interpretation
+        if total_cost < 0.01:
+            lines.append("_Cost: Minimal (< $0.01)_")
+        elif total_cost < 0.05:
+            lines.append("_Cost: Low ($0.01 - $0.05)_")
+        elif total_cost < 0.20:
+            lines.append("_Cost: Moderate ($0.05 - $0.20)_")
+        else:
+            lines.append("_Cost: High (> $0.20)_")
 
-**ORCHESTRATOR OUTPUT:**
-- Complexity Score: {state.get('complexity_score', 'N/A')}
-- Query Type: {state.get('query_type', 'N/A')}
-- Agent Sequence: {', '.join(state.get('agent_sequence', []))}
+        lines.append("---")
 
-**EXTRACTOR OUTPUT:**
-{self._format_extractor_output(agent_outputs.get('extractor', {}))}
+        return "\n".join(lines)
 
-**CLASSIFIER OUTPUT:**
-{self._format_classifier_output(agent_outputs.get('classifier', {}))}
-
-**COMPLIANCE OUTPUT:**
-{self._format_compliance_output(agent_outputs.get('compliance', {}))}
-
-**RISK VERIFIER OUTPUT:**
-{self._format_risk_output(agent_outputs.get('risk_verifier', {}))}
-
-**CITATION AUDITOR OUTPUT:**
-{self._format_citation_output(agent_outputs.get('citation_auditor', {}))}
-
-**GAP SYNTHESIZER OUTPUT:**
-{self._format_gap_output(agent_outputs.get('gap_synthesizer', {}))}
-
-**EXECUTION METADATA:**
-- Total Cost: ${state.get('total_cost_cents', 0) / 100:.2f}
-- Documents Analyzed: {len(state.get('documents', []))}
-- Citations: {len(state.get('citations', []))}
-- Tool Executions: {tool_stats.get('total_executions', 0)}
-
-**CITATIONS:**
-{self._format_citations(state.get('citations', []))}
-
-Generate a comprehensive Markdown report following the structure specified in the system prompt."""
-
-        try:
-            api_params = {
-                "model": self.config.model,
-                "max_tokens": self.config.max_tokens,
-                "temperature": self.config.temperature,
-                "system": self.system_prompt,
-                "messages": [{"role": "user", "content": user_message}]
-            }
-
-            if self.config.enable_prompt_caching:
-                api_params["system"] = [
-                    {
-                        "type": "text",
-                        "text": self.system_prompt,
-                        "cache_control": {"type": "ephemeral"}
-                    }
-                ]
-
-            response = self.client.messages.create(**api_params)
-            report = response.content[0].text
-
-            return report
-
-        except Exception as e:
-            logger.error(f"Report generation LLM call failed: {e}", exc_info=True)
-            raise
-
-    def _format_extractor_output(self, extractor: Dict[str, Any]) -> str:
-        """Format extractor output for report prompt."""
-        if not extractor:
-            return "No extraction performed"
-
-        return f"""- Chunks Retrieved: {extractor.get('num_chunks_retrieved', 0)}
-- Documents: {extractor.get('num_documents', 0)}
-- Retrieval Method: {extractor.get('retrieval_method', 'Unknown')}"""
-
-    def _format_classifier_output(self, classifier: Dict[str, Any]) -> str:
-        """Format classifier output."""
-        if not classifier:
-            return "No classification performed"
-
-        return f"""- Document Type: {classifier.get('document_type', 'Unknown')}
-- Domain: {classifier.get('domain', 'Unknown')}
-- Complexity: {classifier.get('complexity', 'Unknown')}
-- Confidence: {classifier.get('confidence', 0)}%"""
-
-    def _format_compliance_output(self, compliance: Dict[str, Any]) -> str:
-        """Format compliance output."""
-        if not compliance:
-            return "No compliance check performed"
-
-        violations = compliance.get('violations', [])
-        gaps = compliance.get('gaps', [])
-
-        return f"""- Framework: {compliance.get('framework', 'Unknown')}
-- Violations Found: {len(violations)}
-- Gaps Identified: {len(gaps)}
-- Confidence: {compliance.get('confidence', 0)}%"""
-
-    def _format_risk_output(self, risk: Dict[str, Any]) -> str:
-        """Format risk output."""
-        if not risk:
-            return "No risk assessment performed"
-
-        risks = risk.get('risks', [])
-
-        return f"""- Risks Identified: {len(risks)}
-- Overall Risk Score: {risk.get('overall_risk_score', 0)}
-- Critical Items: {len(risk.get('critical_items', []))}"""
-
-    def _format_citation_output(self, citation: Dict[str, Any]) -> str:
-        """Format citation audit output."""
-        if not citation:
-            return "No citation audit performed"
-
-        return f"""- Total Citations: {citation.get('total_citations', 0)}
-- Verified: {citation.get('verified_citations', 0)}
-- Verification Rate: {citation.get('verification_rate', 0)}%
-- Quality Score: {citation.get('quality_score', 0)}%"""
-
-    def _format_gap_output(self, gap: Dict[str, Any]) -> str:
-        """Format gap analysis output."""
-        if not gap:
-            return "No gap analysis performed"
-
-        gaps = gap.get('gaps', [])
-
-        return f"""- Gaps Identified: {len(gaps)}
-- Completeness Score: {gap.get('completeness_score', 0)}%
-- Critical Gaps: {len(gap.get('critical_gaps', []))}"""
-
-    def _format_citations(self, citations: list) -> str:
-        """Format citations list."""
-        if not citations:
-            return "No citations"
-
-        return "\n".join([f"{i+1}. {cite}" for i, cite in enumerate(citations[:20])])
-
-    def _generate_fallback_report(
-        self,
-        query: str,
-        agent_outputs: Dict[str, Any]
-    ) -> str:
-        """Generate fallback report if LLM generation fails."""
-        return f"""# Analysis Report (Fallback)
-
-## Query
-{query}
-
-## Error
-Report generation encountered an error. Here is a basic summary of agent outputs:
-
-{', '.join(agent_outputs.keys())} agents completed.
-
-Please review logs for detailed information."""
+    # Old hardcoded methods removed - autonomous pattern handles everything via LLM

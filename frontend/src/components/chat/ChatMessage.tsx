@@ -2,7 +2,7 @@
  * ChatMessage Component - Displays a single message (user or assistant)
  */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -288,7 +288,7 @@ export function ChatMessage({
               //   2. Multiple calls to same tool must be matched in order (usedToolCallIndices tracking)
               //   3. If tool call missing for marker, we skip silently (defensive - shouldn't happen)
               const toolMarkerRegex = /\[Using ([^\]]+)\.\.\.\]\n*/g;
-              const parts: JSX.Element[] = [];
+              const parts: React.JSX.Element[] = [];
               let lastIndex = 0;
               let match;
 
@@ -420,7 +420,7 @@ export function ChatMessage({
         )}
 
         {/* Cost information */}
-        {message.cost && (
+        {message.cost && message.cost.totalCost !== undefined && (
           <div className={cn(
             'mt-3 flex items-center gap-4 text-xs',
             'text-accent-500 dark:text-accent-400'
@@ -429,11 +429,13 @@ export function ChatMessage({
               <DollarSign size={12} />
               ${message.cost.totalCost.toFixed(4)}
             </span>
-            <span>
-              {message.cost.inputTokens.toLocaleString()} in /{' '}
-              {message.cost.outputTokens.toLocaleString()} out
-            </span>
-            {message.cost.cachedTokens > 0 && (
+            {message.cost.inputTokens !== undefined && message.cost.outputTokens !== undefined && (
+              <span>
+                {message.cost.inputTokens.toLocaleString()} in /{' '}
+                {message.cost.outputTokens.toLocaleString()} out
+              </span>
+            )}
+            {message.cost.cachedTokens !== undefined && message.cost.cachedTokens > 0 && (
               <span className={cn(
                 'text-accent-600 dark:text-accent-400'
               )}>

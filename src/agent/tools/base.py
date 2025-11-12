@@ -75,12 +75,17 @@ class ToolResult:
     citations: List[str] = field(default_factory=list)
     execution_time_ms: float = 0.0
     estimated_tokens: int = 0  # Estimated token count of result data
+    api_cost_usd: float = 0.0  # Estimated API cost in USD
 
     def __post_init__(self):
         """Validate ToolResult invariants."""
         # Validate execution time
         if self.execution_time_ms < 0:
             raise ValueError(f"Execution time cannot be negative: {self.execution_time_ms}")
+
+        # Validate API cost
+        if self.api_cost_usd < 0:
+            raise ValueError(f"API cost cannot be negative: {self.api_cost_usd}")
 
         # Validate success/error relationship
         if self.success and self.error is not None:
@@ -173,7 +178,7 @@ class BaseTool(ABC):
         Flow:
         1. Validate inputs via Pydantic schema
         2. Execute tool logic with timing
-        3. Track statistics
+        3. Track statistics and API costs
         4. Handle errors gracefully
 
         Args:
@@ -183,6 +188,11 @@ class BaseTool(ABC):
             ToolResult
         """
         start_time = time.time()
+
+        # Track API cost delta (before tool execution)
+        from ...cost_tracker import get_global_tracker
+        cost_tracker = get_global_tracker()
+        cost_before = cost_tracker.get_total_cost()
 
         try:
             # Track which parameters were explicitly provided by the model (before validation)
@@ -195,6 +205,11 @@ class BaseTool(ABC):
             # Execute tool logic
             result = self.execute_impl(**validated_dict)
 
+            # Calculate API cost delta (after tool execution)
+            cost_after = cost_tracker.get_total_cost()
+            api_cost_delta = max(0.0, cost_after - cost_before)
+            result.api_cost_usd = api_cost_delta
+
             # Track statistics
             elapsed_ms = (time.time() - start_time) * 1000
             self.execution_count += 1
@@ -203,6 +218,7 @@ class BaseTool(ABC):
             result.metadata["tool_name"] = self.name
             result.metadata["tier"] = self.tier
             result.metadata["explicit_params"] = explicit_params  # Track model-specified params
+            result.metadata["api_cost_usd"] = api_cost_delta
 
             # Estimate token count from result data
             result.estimated_tokens = estimate_tokens_from_result(result.data)
@@ -210,7 +226,7 @@ class BaseTool(ABC):
 
             logger.info(
                 f"Tool '{self.name}' executed in {elapsed_ms:.0f}ms "
-                f"(success={result.success}, ~{result.estimated_tokens} tokens)"
+                f"(success={result.success}, ~{result.estimated_tokens} tokens, ${api_cost_delta:.6f})"
             )
 
             return result

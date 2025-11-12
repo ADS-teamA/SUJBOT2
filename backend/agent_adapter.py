@@ -104,6 +104,9 @@ class AgentAdapter:
                 "google_api_key": self.config.google_api_key,
             },
             "vector_store_path": str(self.config.vector_store_path),
+            "models": full_config.get("models", {}),  # Add models section for embedding config
+            "storage": full_config.get("storage", {}),  # Add storage section for backend selection
+            "agent_tools": full_config.get("agent_tools", {}),  # Add agent_tools for reranking config
             "multi_agent": multi_agent_config,
         }
 
@@ -113,6 +116,10 @@ class AgentAdapter:
 
         # Track degraded components for health endpoint
         self.degraded_components = []
+
+        # HITL: In-memory storage for pending clarifications
+        # TODO: In production, use Redis or database for multi-instance deployments
+        self._pending_clarifications: Dict[str, Dict[str, Any]] = {}
 
         # Store current model
         self.current_model = model or multi_agent_config.get("orchestrator", {}).get("model", "claude-sonnet-4-5-20250929")
@@ -206,6 +213,38 @@ class AgentAdapter:
             logger.info("Starting multi-agent query execution...")
             result = await self.runner.run_query(query)
 
+            # Check if clarification is needed (HITL)
+            if result.get("clarification_needed", False):
+                logger.info("HITL: Clarification needed, emitting event...")
+
+                thread_id = result.get("thread_id")
+
+                # Store clarification state for resume
+                self._pending_clarifications[thread_id] = {
+                    "original_query": result.get("original_query"),
+                    "complexity_score": result.get("complexity_score"),
+                    "query_type": result.get("query_type"),
+                    "questions": result.get("questions", []),
+                    "quality_metrics": result.get("quality_metrics", {}),
+                    # Need to store agent_sequence for resume
+                    "agent_sequence": result.get("agent_sequence", []),
+                }
+
+                yield {
+                    "event": "clarification_needed",
+                    "data": {
+                        "thread_id": thread_id,
+                        "questions": result.get("questions", []),
+                        "quality_metrics": result.get("quality_metrics", {}),
+                        "original_query": result.get("original_query"),
+                        "complexity_score": result.get("complexity_score"),
+                        "query_type": result.get("query_type"),
+                    }
+                }
+
+                # Don't emit "done" - waiting for user response
+                return
+
             # Check if execution was successful
             if not result.get("success", False):
                 error_msg = result.get("final_answer", "Unknown error")
@@ -238,7 +277,7 @@ class AgentAdapter:
             await asyncio.sleep(0)
 
             # Extract final answer
-            final_answer = result.get("final_answer", "No answer generated")
+            final_answer = result.get("final_answer") or "No answer generated"
 
             # Stream final answer as text chunks (simulate streaming for UX consistency)
             # Split into paragraphs for progressive display
@@ -384,6 +423,137 @@ class AgentAdapter:
             f"(Note: Individual agents use their configured models)"
         )
 
+    async def resume_clarification(
+        self, thread_id: str, user_response: str
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Resume interrupted workflow with user clarification.
+
+        Args:
+            thread_id: Thread ID from clarification_needed event
+            user_response: User's free-form clarification text
+
+        Yields:
+            SSE events (same format as stream_response)
+        """
+        # Reset cost tracker
+        reset_global_tracker()
+        tracker = get_global_tracker()
+
+        try:
+            # Retrieve pending clarification
+            if thread_id not in self._pending_clarifications:
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": f"No pending clarification found for thread {thread_id}",
+                        "type": "NotFoundError",
+                    }
+                }
+                return
+
+            clarification_data = self._pending_clarifications[thread_id]
+
+            # Emit resume event
+            yield {
+                "event": "progress",
+                "data": {
+                    "message": "Resuming workflow with clarification...",
+                    "stage": "resume",
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Build original state from clarification data
+            original_state = {
+                "query": clarification_data["original_query"],
+                "complexity_score": clarification_data["complexity_score"],
+                "query_type": clarification_data["query_type"],
+                "agent_sequence": clarification_data["agent_sequence"],
+                "execution_phase": "agent_execution",
+                "agent_outputs": {},
+                "tool_executions": [],
+                "documents": [],
+                "citations": [],
+                "total_cost_cents": 0.0,
+                "errors": [],
+            }
+
+            # Resume workflow
+            result = await self.runner.resume_with_clarification(
+                thread_id=thread_id,
+                user_response=user_response,
+                original_state=original_state,
+            )
+
+            # Clean up pending clarification
+            del self._pending_clarifications[thread_id]
+
+            # Check if successful
+            if not result.get("success", False):
+                error_msg = result.get("final_answer", "Resume failed")
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": error_msg,
+                        "type": "ResumeError",
+                        "errors": result.get("errors", []),
+                    }
+                }
+                return
+
+            # Extract workflow metadata
+            complexity_score = result.get("complexity_score", 0)
+            query_type = result.get("query_type", "unknown")
+            agent_sequence = result.get("agent_sequence", [])
+
+            # Emit workflow summary
+            yield {
+                "event": "progress",
+                "data": {
+                    "message": f"Workflow completed: {', '.join(agent_sequence)}",
+                    "stage": "complete",
+                    "complexity_score": complexity_score,
+                    "query_type": query_type,
+                    "agents_used": len(agent_sequence),
+                    "enriched_query": result.get("enriched_query"),
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Stream final answer (same as stream_response)
+            final_answer = result.get("final_answer") or "No answer generated"
+            paragraphs = final_answer.split("\n\n")
+
+            for i, paragraph in enumerate(paragraphs):
+                if paragraph.strip():
+                    chunk = paragraph + ("\n\n" if i < len(paragraphs) - 1 else "")
+                    yield {
+                        "event": "text_delta",
+                        "data": {"content": chunk},
+                    }
+                    await asyncio.sleep(0.05)
+
+            # Emit cost update
+            cost_summary = tracker.get_summary()
+            yield {
+                "event": "cost_update",
+                "data": {
+                    "summary": cost_summary,
+                    "total_cost": result.get("total_cost_cents", 0) / 100,
+                },
+            }
+
+            # Emit done
+            yield {"event": "done", "data": {}}
+
+        except Exception as e:
+            logger.error(f"Resume error: {e}", exc_info=True)
+            yield {
+                "event": "error",
+                "data": {"error": str(e), "type": type(e).__name__},
+            }
+
     def get_health_status(self) -> Dict[str, Any]:
         """
         Get agent health status.
@@ -440,8 +610,9 @@ class AgentAdapter:
                     "has_anthropic_key": has_anthropic_key,
                     "has_openai_key": has_openai_key,
                     "has_google_key": has_google_key,
-                    "agents_registered": len(self.runner.agent_registry.agents) if hasattr(self.runner, 'agent_registry') and self.runner.agent_registry else 0,
-                },"degraded_components": self.degraded_components
+                    "agents_registered": len(self.runner.agent_registry._agent_instances) if hasattr(self.runner, 'agent_registry') and self.runner.agent_registry else 0,
+                },
+                "degraded_components": self.degraded_components
             }
 
         except Exception as e:

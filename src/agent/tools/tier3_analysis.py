@@ -91,20 +91,24 @@ class GetStatsTool(BaseTool):
                 vs_stats = self.vector_store.get_stats()
                 stats["vector_store"] = vs_stats
 
-                # Count unique documents
-                sample_results = self.vector_store.hierarchical_search(
-                    query_text="",
-                    query_embedding=None,
-                    k_layer1=100,
-                )
+                # Get unique documents count from stats (FAISS provides this)
+                if "documents" in vs_stats:
+                    stats["unique_documents"] = vs_stats["documents"]
 
-                unique_docs = set()
-                for doc in sample_results.get("layer1", []):
-                    doc_id = doc.get("document_id") or doc.get("doc_id", "Unknown")
-                    unique_docs.add(doc_id)
-
-                stats["unique_documents"] = len(unique_docs)
-                stats["document_list"] = sorted(list(unique_docs))
+                # Try to get document list from FAISS metadata (if available)
+                try:
+                    from src.faiss_vector_store import FAISSVectorStore
+                    if isinstance(self.vector_store.vector_store, FAISSVectorStore):
+                        # Extract document IDs from layer1 metadata (document summaries)
+                        unique_docs = set()
+                        for metadata in self.vector_store.vector_store.metadata_layer1:
+                            doc_id = metadata.get("document_id") or metadata.get("doc_id", "Unknown")
+                            unique_docs.add(doc_id)
+                        stats["document_list"] = sorted(list(unique_docs))
+                except Exception as e:
+                    # If we can't get document list, skip it (non-critical)
+                    logger.debug(f"Could not extract document list: {e}")
+                    stats["document_list"] = []
 
             if stat_scope in ["corpus", "entity", "index"]:
                 # Get knowledge graph statistics
@@ -114,10 +118,10 @@ class GetStatsTool(BaseTool):
                     entity_types = Counter()
                     relationship_types = Counter()
 
-                    for entity in self.knowledge_graph.entities.values():
+                    for entity in self.knowledge_graph.entities:
                         entity_types[entity.type] += 1
 
-                    for rel in self.knowledge_graph.relationships.values():
+                    for rel in self.knowledge_graph.relationships:
                         relationship_types[rel.type] += 1
 
                     stats["knowledge_graph"] = {
@@ -132,7 +136,7 @@ class GetStatsTool(BaseTool):
                         stats["knowledge_graph"]["top_entities"] = [
                             {"id": e.id, "name": e.name, "type": e.type}
                             for e in sorted(
-                                self.knowledge_graph.entities.values(),
+                                self.knowledge_graph.entities,
                                 key=lambda x: x.confidence,
                                 reverse=True,
                             )[:10]

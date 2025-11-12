@@ -299,6 +299,64 @@ class ToolAdapter:
 
         return stats
 
+    def get_tool_schema(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get tool schema in LLM-compatible format (Anthropic/OpenAI).
+
+        Converts Pydantic input schema to tool calling format.
+
+        Args:
+            tool_name: Name of tool
+
+        Returns:
+            Tool schema dict with:
+                - name: Tool name
+                - description: Tool description
+                - input_schema: JSON schema from Pydantic model
+            Returns None if tool not found
+        """
+        tool = self.registry.get_tool(tool_name)
+        if tool is None:
+            logger.warning(f"Tool not found for schema: {tool_name}")
+            return None
+
+        try:
+            # Get Pydantic schema from input_schema class
+            if hasattr(tool, 'input_schema') and tool.input_schema:
+                # Pydantic v2 has model_json_schema() method
+                if hasattr(tool.input_schema, 'model_json_schema'):
+                    pydantic_schema = tool.input_schema.model_json_schema()
+                else:
+                    # Fallback for older Pydantic versions
+                    pydantic_schema = tool.input_schema.schema()
+
+                # Convert to Anthropic/OpenAI format
+                return {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": {
+                        "type": "object",
+                        "properties": pydantic_schema.get("properties", {}),
+                        "required": pydantic_schema.get("required", [])
+                    }
+                }
+            else:
+                # Tool has no input schema (shouldn't happen, but handle gracefully)
+                logger.warning(f"Tool {tool_name} has no input_schema")
+                return {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
+                }
+
+        except Exception as e:
+            logger.error(f"Failed to get schema for tool {tool_name}: {e}", exc_info=True)
+            return None
+
     def clear_history(self) -> None:
         """Clear execution history (for testing)."""
         self.execution_history.clear()

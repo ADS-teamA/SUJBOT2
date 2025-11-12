@@ -5,10 +5,11 @@
 import { useEffect, useRef } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
+import { ClarificationModal } from './ClarificationModal';
 import { FileText } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 import { useFadeIn } from '../../design-system/animations/hooks/useFadeIn';
-import type { Conversation } from '../../types';
+import type { Conversation, ClarificationData } from '../../types';
 
 interface ChatContainerProps {
   conversation: Conversation | undefined;
@@ -16,6 +17,10 @@ interface ChatContainerProps {
   onSendMessage: (message: string) => void;
   onEditMessage: (messageId: string, newContent: string) => void;
   onRegenerateMessage: (messageId: string) => void;
+  clarificationData: ClarificationData | null;
+  awaitingClarification: boolean;
+  onSubmitClarification: (response: string) => void;
+  onCancelClarification: () => void;
 }
 
 export function ChatContainer({
@@ -24,6 +29,10 @@ export function ChatContainer({
   onSendMessage,
   onEditMessage,
   onRegenerateMessage,
+  clarificationData,
+  awaitingClarification,
+  onSubmitClarification,
+  onCancelClarification,
 }: ChatContainerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -138,9 +147,9 @@ export function ChatContainer({
                             duration
                           });
                           // Don't show negative durations (clock skew issue)
-                        } else if (duration > 300000) {
-                          // Backend took > 5 minutes - this indicates performance issues
-                          console.error('⚠️ Backend response took > 5 minutes:', {
+                        } else if (duration > 600000) {
+                          // Backend took > 10 minutes - this indicates performance issues
+                          console.error('⚠️ Backend response took > 10 minutes:', {
                             duration,
                             messageId: message.id,
                             durationMinutes: (duration / 60000).toFixed(1)
@@ -148,7 +157,7 @@ export function ChatContainer({
                           // Still show duration to user so they know backend is slow
                           responseDurationMs = duration;
                         } else if (duration > 50) {
-                          // Normal duration: > 50ms, < 5 minutes
+                          // Normal duration: > 50ms, < 10 minutes
                           responseDurationMs = duration;
                         }
                         // Else: duration <= 50ms (likely cached/instant), don't show
@@ -176,6 +185,15 @@ export function ChatContainer({
 
       {/* Input area */}
       <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+
+      {/* HITL Clarification Modal */}
+      <ClarificationModal
+        isOpen={awaitingClarification}
+        clarificationData={clarificationData}
+        onSubmit={onSubmitClarification}
+        onCancel={onCancelClarification}
+        disabled={isStreaming}
+      />
     </div>
   );
 }

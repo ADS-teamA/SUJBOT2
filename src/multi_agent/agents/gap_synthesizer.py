@@ -12,7 +12,6 @@ Responsibilities:
 import logging
 from typing import Any, Dict, List
 
-from anthropic import Anthropic
 
 from ..core.agent_base import BaseAgent
 from ..core.agent_registry import register_agent
@@ -35,8 +34,18 @@ class GapSynthesizerAgent(BaseAgent):
         """Initialize gap synthesizer with config."""
         super().__init__(config)
 
-        # Initialize Anthropic client
-        self.client = Anthropic(api_key=config.api_key)
+        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
+        try:
+            from src.agent.providers.factory import create_provider
+
+            self.provider = create_provider(model=config.model)
+            logger.info(f"Initialized provider for model: {config.model}")
+        except Exception as e:
+            logger.error(f"Failed to create provider: {e}")
+            raise ValueError(
+                f"Failed to initialize LLM provider for model {config.model}. "
+                f"Ensure API keys are configured in environment and model name is valid."
+            ) from e
 
         # Load system prompt
         prompt_loader = get_prompt_loader()
@@ -49,207 +58,62 @@ class GapSynthesizerAgent(BaseAgent):
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Identify knowledge gaps and completeness issues.
+        Synthesize gaps between requirements (AUTONOMOUS).
+
+        LLM autonomously decides which tools to call for gap analysis.
 
         Args:
             state: Current workflow state
 
         Returns:
-            Updated state with gap analysis
+            Updated state with identified gaps
         """
         query = state.get("query", "")
-        agent_outputs = state.get("agent_outputs", {})
+        extractor_output = state.get("agent_outputs", {}).get("extractor", {})
 
-        logger.info("Analyzing knowledge gaps...")
+        if not extractor_output:
+            logger.warning("No extractor output found, skipping gap synthesizer")
+            return state
+
+        logger.info("Running autonomous gap synthesizer...")
 
         try:
-            # Browse knowledge graph entities to find missing connections
-            entity_analysis = await self._analyze_entity_coverage()
-
-            # Perform multi-hop graph traversal for relationship gaps
-            relationship_gaps = await self._find_relationship_gaps(query)
-
-            # Compare documents to identify coverage gaps
-            coverage_gaps = await self._analyze_coverage_gaps(
-                agent_outputs.get("extractor", {})
+            # Run autonomous tool calling loop
+            # LLM decides which tools to call
+            result = await self._run_autonomous_tool_loop(
+                system_prompt=self.system_prompt,
+                state=state,
+                max_iterations=10
             )
 
-            # Synthesize all gap findings using LLM
-            gap_analysis = await self._synthesize_gaps(
-                query=query,
-                agent_outputs=agent_outputs,
-                entity_analysis=entity_analysis,
-                relationship_gaps=relationship_gaps,
-                coverage_gaps=coverage_gaps
-            )
+            # Parse result from autonomous loop
+            final_answer = result.get("final_answer", "")
+            tool_calls = result.get("tool_calls", [])
+            agent_cost = result.get("total_tool_cost_usd", 0.0)
+
+            # Store output
+            output = {
+                "analysis": final_answer,
+                "tool_calls_made": [t["tool"] for t in tool_calls],
+                "iterations": result.get("iterations", 0),
+                "total_tool_cost_usd": agent_cost
+            }
 
             # Update state
             state["agent_outputs"] = state.get("agent_outputs", {})
-            state["agent_outputs"]["gap_synthesizer"] = gap_analysis
+            state["agent_outputs"]["gap_synthesizer"] = output
 
             logger.info(
-                f"Gap analysis complete: {len(gap_analysis.get('gaps', []))} gaps identified, "
-                f"completeness_score={gap_analysis.get('completeness_score', 0)}"
+                f"Autonomous gap synthesizer complete: "
+                f"tools_used={len(tool_calls)}, iterations={result.get('iterations', 0)}"
             )
 
             return state
 
         except Exception as e:
-            logger.error(f"Gap synthesis failed: {e}", exc_info=True)
+            logger.error(f"Autonomous gap synthesizer failed: {e}", exc_info=True)
             state["errors"] = state.get("errors", [])
-            state["errors"].append(f"Gap synthesis error: {str(e)}")
+            state["errors"].append(f"gap synthesizer error: {str(e)}")
             return state
 
-    async def _analyze_entity_coverage(self) -> Dict[str, Any]:
-        """Browse knowledge graph entities to assess coverage."""
-        try:
-            result = await self.tool_adapter.execute(
-                tool_name="browse_entities",
-                inputs={
-                    "entity_types": ["regulation", "requirement", "clause", "standard"],
-                    "limit": 50
-                },
-                agent_name=self.config.name
-            )
-
-            return result.get("data", {}) if result["success"] else {}
-
-        except Exception as e:
-            logger.warning(f"Entity coverage analysis failed: {e}")
-            return {}
-
-    async def _find_relationship_gaps(self, query: str) -> List[Dict[str, Any]]:
-        """Find relationship gaps using multi-hop graph traversal."""
-        try:
-            result = await self.tool_adapter.execute(
-                tool_name="graph_search",
-                inputs={
-                    "query": query,
-                    "max_hops": 3,
-                    "find_missing_links": True
-                },
-                agent_name=self.config.name
-            )
-
-            return result.get("data", {}).get("missing_links", []) if result["success"] else []
-
-        except Exception as e:
-            logger.warning(f"Relationship gap analysis failed: {e}")
-            return []
-
-    async def _analyze_coverage_gaps(
-        self,
-        extractor_output: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Analyze coverage gaps by comparing documents."""
-        document_summaries = extractor_output.get("document_summaries", [])
-
-        if len(document_summaries) < 2:
-            return {}
-
-        try:
-            doc_ids = [doc.get("document_id") for doc in document_summaries[:3]]
-
-            result = await self.tool_adapter.execute(
-                tool_name="compare_documents",
-                inputs={
-                    "document_ids": doc_ids,
-                    "comparison_type": "coverage_gaps"
-                },
-                agent_name=self.config.name
-            )
-
-            return result.get("data", {}) if result["success"] else {}
-
-        except Exception as e:
-            logger.warning(f"Coverage gap analysis failed: {e}")
-            return {}
-
-    async def _synthesize_gaps(
-        self,
-        query: str,
-        agent_outputs: Dict[str, Any],
-        entity_analysis: Dict[str, Any],
-        relationship_gaps: List[Dict[str, Any]],
-        coverage_gaps: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Synthesize gap analysis using LLM."""
-        # Prepare synthesis prompt
-        compliance_output = agent_outputs.get("compliance", {})
-        risk_output = agent_outputs.get("risk_verifier", {})
-        citation_output = agent_outputs.get("citation_auditor", {})
-
-        user_message = f"""Analyze knowledge gaps in the following context:
-
-Query: {query}
-
-Compliance Findings:
-- Violations: {len(compliance_output.get('violations', []))}
-- Gaps: {len(compliance_output.get('gaps', []))}
-
-Risk Assessment:
-- Overall Risk Score: {risk_output.get('overall_risk_score', 'N/A')}
-- Critical Items: {len(risk_output.get('critical_items', []))}
-
-Citation Audit:
-- Broken Citations: {len(citation_output.get('broken_citations', []))}
-- Quality Score: {citation_output.get('quality_score', 'N/A')}
-
-Knowledge Graph Analysis:
-- Entity Coverage: {str(entity_analysis)[:500]}
-- Relationship Gaps: {len(relationship_gaps)} missing links found
-
-Coverage Gaps:
-{str(coverage_gaps)[:500]}
-
-Provide comprehensive gap analysis in the JSON format specified in the system prompt."""
-
-        try:
-            api_params = {
-                "model": self.config.model,
-                "max_tokens": self.config.max_tokens,
-                "temperature": self.config.temperature,
-                "system": self.system_prompt,
-                "messages": [{"role": "user", "content": user_message}]
-            }
-
-            if self.config.enable_prompt_caching:
-                api_params["system"] = [
-                    {
-                        "type": "text",
-                        "text": self.system_prompt,
-                        "cache_control": {"type": "ephemeral"}
-                    }
-                ]
-
-            response = self.client.messages.create(**api_params)
-            response_text = response.content[0].text
-
-            # Parse gap analysis
-            import json
-            import re
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                analysis = json.loads(json_match.group(0))
-                return analysis
-            else:
-                raise ValueError("No JSON found in gap analysis response")
-
-        except Exception as e:
-            logger.error(f"Gap synthesis LLM call failed: {e}", exc_info=True)
-            return self._get_fallback_gap_analysis()
-
-    def _get_fallback_gap_analysis(self) -> Dict[str, Any]:
-        """Fallback gap analysis."""
-        return {
-            "gaps": [],
-            "completeness_score": 60,
-            "critical_gaps": [],
-            "recommended_actions": [
-                {
-                    "action": "Manual review recommended due to processing error",
-                    "priority": 5,
-                    "estimated_effort": "medium"
-                }
-            ]
-        }
+    # Old hardcoded methods removed - autonomous pattern handles everything via LLM

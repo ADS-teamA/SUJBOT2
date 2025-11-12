@@ -11,8 +11,6 @@ Responsibilities:
 import logging
 from typing import Any, Dict, List
 
-from anthropic import Anthropic
-
 from ..core.agent_base import BaseAgent
 from ..core.agent_registry import register_agent
 from ..prompts.loader import get_prompt_loader
@@ -34,8 +32,18 @@ class ComplianceAgent(BaseAgent):
         """Initialize compliance agent with config."""
         super().__init__(config)
 
-        # Initialize Anthropic client
-        self.client = Anthropic(api_key=config.api_key)
+        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
+        try:
+            from src.agent.providers.factory import create_provider
+
+            self.provider = create_provider(model=config.model)
+            logger.info(f"Initialized provider for model: {config.model}")
+        except Exception as e:
+            logger.error(f"Failed to create provider: {e}")
+            raise ValueError(
+                f"Failed to initialize LLM provider for model {config.model}. "
+                f"Ensure API keys are configured in environment and model name is valid."
+            ) from e
 
         # Load system prompt
         prompt_loader = get_prompt_loader()
@@ -48,7 +56,9 @@ class ComplianceAgent(BaseAgent):
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Verify compliance with regulations.
+        Verify compliance with regulations (AUTONOMOUS).
+
+        LLM autonomously decides which tools to call based on query.
 
         Args:
             state: Current workflow state
@@ -63,157 +73,59 @@ class ComplianceAgent(BaseAgent):
             logger.warning("No extractor output found, skipping compliance check")
             return state
 
-        logger.info("Verifying regulatory compliance...")
+        logger.info("Running autonomous compliance verification...")
 
         try:
-            # Identify relevant framework from query
-            framework = self._identify_framework(query)
-
-            # Perform graph search for regulatory entities
-            graph_results = await self._search_regulatory_graph(query, framework)
-
-            # Verify compliance using LLM
-            compliance_findings = await self._verify_compliance(
-                query=query,
-                framework=framework,
-                extractor_output=extractor_output,
-                graph_results=graph_results
+            # Run autonomous tool calling loop
+            # LLM decides which tools to call (graph_search, assess_confidence, etc.)
+            result = await self._run_autonomous_tool_loop(
+                system_prompt=self.system_prompt,
+                state=state,
+                max_iterations=10
             )
 
-            # Assess confidence in findings
-            confidence_result = await self.tool_adapter.execute(
-                tool_name="assess_confidence",
-                inputs={"findings": compliance_findings},
-                agent_name=self.config.name
-            )
+            # Parse result from autonomous loop
+            final_answer = result.get("final_answer", "")
+            tool_calls = result.get("tool_calls", [])
+            agent_cost = result.get("total_tool_cost_usd", 0.0)
 
-            if confidence_result["success"]:
-                compliance_findings["confidence"] = confidence_result["data"].get("confidence", 70)
+            # Extract compliance findings from final answer if structured
+            # (for now, store raw answer - can enhance with JSON parsing later)
+            compliance_findings = {
+                "analysis": final_answer,
+                "tool_calls_made": [t["tool"] for t in tool_calls],
+                "iterations": result.get("iterations", 0),
+                "total_tool_cost_usd": agent_cost
+            }
 
             # Update state
             state["agent_outputs"] = state.get("agent_outputs", {})
             state["agent_outputs"]["compliance"] = compliance_findings
 
             logger.info(
-                f"Compliance check complete: framework={framework}, "
-                f"violations={len(compliance_findings.get('violations', []))}, "
-                f"gaps={len(compliance_findings.get('gaps', []))}"
+                f"Autonomous compliance check complete: "
+                f"tools_used={len(tool_calls)}, iterations={result.get('iterations', 0)}"
             )
+
+            # Set final answer if this is last agent in sequence
+            agent_sequence = state.get("agent_sequence", [])
+            current_index = agent_sequence.index("compliance") if "compliance" in agent_sequence else -1
+            is_last = current_index == len(agent_sequence) - 1
+            next_is_report = (
+                current_index < len(agent_sequence) - 1
+                and agent_sequence[current_index + 1] == "report_generator"
+            )
+
+            if is_last and not next_is_report:
+                logger.info("Compliance is last agent - using autonomous answer")
+                state["final_answer"] = final_answer
 
             return state
 
         except Exception as e:
-            logger.error(f"Compliance verification failed: {e}", exc_info=True)
+            logger.error(f"Autonomous compliance verification failed: {e}", exc_info=True)
             state["errors"] = state.get("errors", [])
             state["errors"].append(f"Compliance error: {str(e)}")
             return state
 
-    def _identify_framework(self, query: str) -> str:
-        """Identify relevant compliance framework from query."""
-        query_lower = query.lower()
-
-        if "gdpr" in query_lower or "data protection" in query_lower:
-            return "GDPR"
-        elif "ccpa" in query_lower or "california" in query_lower:
-            return "CCPA"
-        elif "hipaa" in query_lower or "healthcare" in query_lower or "phi" in query_lower:
-            return "HIPAA"
-        elif "sox" in query_lower or "sarbanes" in query_lower:
-            return "SOX"
-        else:
-            return "General"
-
-    async def _search_regulatory_graph(
-        self,
-        query: str,
-        framework: str
-    ) -> Dict[str, Any]:
-        """Search knowledge graph for regulatory entities."""
-        try:
-            result = await self.tool_adapter.execute(
-                tool_name="graph_search",
-                inputs={
-                    "query": f"{framework} {query}",
-                    "entity_types": ["regulation", "requirement", "clause"]
-                },
-                agent_name=self.config.name
-            )
-
-            return result.get("data", {}) if result["success"] else {}
-
-        except Exception as e:
-            logger.warning(f"Graph search failed: {e}")
-            return {}
-
-    async def _verify_compliance(
-        self,
-        query: str,
-        framework: str,
-        extractor_output: Dict[str, Any],
-        graph_results: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Verify compliance using LLM."""
-        # Prepare verification prompt
-        chunks = extractor_output.get("chunks", [])[:10]
-        chunks_text = "\n\n".join([
-            f"Chunk {i+1}: {chunk.get('text', '')[:500]}"
-            for i, chunk in enumerate(chunks)
-        ])
-
-        user_message = f"""Verify compliance with {framework}:
-
-Query: {query}
-
-Extracted Content:
-{chunks_text}
-
-Knowledge Graph Results:
-{str(graph_results)[:500]}
-
-Provide compliance analysis in the JSON format specified in the system prompt."""
-
-        try:
-            api_params = {
-                "model": self.config.model,
-                "max_tokens": self.config.max_tokens,
-                "temperature": self.config.temperature,
-                "system": self.system_prompt,
-                "messages": [{"role": "user", "content": user_message}]
-            }
-
-            if self.config.enable_prompt_caching:
-                api_params["system"] = [
-                    {
-                        "type": "text",
-                        "text": self.system_prompt,
-                        "cache_control": {"type": "ephemeral"}
-                    }
-                ]
-
-            response = self.client.messages.create(**api_params)
-            response_text = response.content[0].text
-
-            # Parse compliance findings
-            import json
-            import re
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                findings = json.loads(json_match.group(0))
-                findings["framework"] = framework
-                return findings
-            else:
-                raise ValueError("No JSON found in compliance response")
-
-        except Exception as e:
-            logger.error(f"Compliance verification LLM call failed: {e}", exc_info=True)
-            return self._get_fallback_compliance(framework)
-
-    def _get_fallback_compliance(self, framework: str) -> Dict[str, Any]:
-        """Fallback compliance result."""
-        return {
-            "framework": framework,
-            "violations": [],
-            "gaps": [],
-            "confidence": 40,
-            "recommendations": ["Manual review recommended due to processing error"]
-        }
+    # Old hardcoded methods removed - autonomous pattern handles everything via LLM
