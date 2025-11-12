@@ -127,14 +127,14 @@ class GetStatsTool(BaseTool):
                     stats["knowledge_graph"] = {
                         "total_entities": len(self.knowledge_graph.entities),
                         "total_relationships": len(self.knowledge_graph.relationships),
-                        "entity_types": dict(entity_types),
-                        "relationship_types": dict(relationship_types),
+                        "entity_types": {k.value: v for k, v in entity_types.items()},
+                        "relationship_types": {k.value: v for k, v in relationship_types.items()},
                     }
 
                     if stat_scope == "index":
                         # Add top entities for index scope
                         stats["knowledge_graph"]["top_entities"] = [
-                            {"id": e.id, "name": e.name, "type": e.type}
+                            {"id": e.id, "name": e.value, "type": e.type.value}
                             for e in sorted(
                                 self.knowledge_graph.entities,
                                 key=lambda x: x.confidence,

@@ -15,6 +15,8 @@ import logging
 from pydantic import BaseModel
 from langgraph.graph import StateGraph
 
+from .event_bus import EventBus, EventType
+
 logger = logging.getLogger(__name__)
 
 
@@ -399,9 +401,10 @@ class BaseAgent(ABC):
         # Get tool schemas
         tool_schemas = self._get_available_tool_schemas()
 
-        # Initialize tool call events list in state (for real-time progress streaming)
-        if "tool_call_events" not in state:
-            state["tool_call_events"] = []
+        # Get EventBus from state (injected by runner for real-time progress streaming)
+        event_bus: Optional[EventBus] = state.get("_event_bus")
+        if not event_bus:
+            self.logger.warning("No EventBus in state - events will not be streamed")
 
         messages = [{"role": "user", "content": user_message}]
         tool_call_history = []
@@ -435,15 +438,17 @@ class BaseAgent(ABC):
 
                     self.logger.info(f"Calling tool: {tool_name}")
 
-                    # Emit tool call start event (for real-time progress streaming)
-                    state["tool_call_events"].append({
-                        "agent": self.config.name,
-                        "tool": tool_name,
-                        "status": "running",
-                        "tool_use_id": tool_use_id,
-                        "input": tool_input,
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    # Emit tool call start event via EventBus (for real-time progress streaming)
+                    if event_bus:
+                        await event_bus.emit(
+                            event_type=EventType.TOOL_CALL_START,
+                            data={
+                                "tool_use_id": tool_use_id,
+                                "input": tool_input
+                            },
+                            agent_name=self.config.name,
+                            tool_name=tool_name
+                        )
 
                     result = await tool_adapter.execute(
                         tool_name=tool_name,
@@ -455,16 +460,18 @@ class BaseAgent(ABC):
                     tool_cost = result.get("metadata", {}).get("api_cost_usd", 0.0) if isinstance(result, dict) else 0.0
                     total_tool_cost += tool_cost
 
-                    # Emit tool call completion event (for real-time progress streaming)
+                    # Emit tool call completion event via EventBus (for real-time progress streaming)
                     tool_success = result.get("success", False)
-                    state["tool_call_events"].append({
-                        "agent": self.config.name,
-                        "tool": tool_name,
-                        "status": "completed" if tool_success else "failed",
-                        "tool_use_id": tool_use_id,
-                        "success": tool_success,
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    if event_bus:
+                        await event_bus.emit(
+                            event_type=EventType.TOOL_CALL_COMPLETE,
+                            data={
+                                "tool_use_id": tool_use_id,
+                                "success": tool_success
+                            },
+                            agent_name=self.config.name,
+                            tool_name=tool_name
+                        )
 
                     # Check for critical tool failures and surface them to user
                     if not result.get("success", False):

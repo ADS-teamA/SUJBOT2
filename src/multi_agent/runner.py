@@ -29,6 +29,7 @@ from .observability import setup_langsmith
 from .hitl.config import HITLConfig
 from .hitl.quality_detector import QualityDetector
 from .hitl.clarification_generator import ClarificationGenerator
+from .core.event_bus import EventBus, Event, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -492,11 +493,16 @@ class MultiAgentRunner:
         )
 
         try:
+            # Initialize EventBus for real-time progress streaming
+            event_bus = EventBus(max_queue_size=1000)
+
             # Step 1: Run orchestrator for complexity analysis
             logger.info("Step 1: Analyzing query complexity...")
             orchestrator = self.agent_registry.get_agent("orchestrator")
 
             state_dict = state.model_dump()
+            # Inject EventBus into state (internal infrastructure, not serialized)
+            state_dict["_event_bus"] = event_bus
             state_dict = await orchestrator.execute(state_dict)
 
             # Update state
@@ -549,16 +555,17 @@ class MultiAgentRunner:
             logger.info("Step 3: Executing workflow with streaming...")
             state.execution_phase = ExecutionPhase.AGENT_EXECUTION
 
+            # Re-inject EventBus into state dict for workflow execution
+            state_dict = state.model_dump()
+            state_dict["_event_bus"] = event_bus
+
             # Run workflow with streaming to get intermediate state updates
             config = {"configurable": {"thread_id": thread_id}}
             final_result = None
 
-            # Track tool call events for incremental yielding
-            last_tool_event_count = 0
-
             if self.langsmith and self.langsmith.is_enabled():
                 with self.langsmith.trace_workflow(f"query_{thread_id}"):
-                    async for state_chunk in workflow.astream(state.model_dump(), config):
+                    async for state_chunk in workflow.astream(state_dict, config):
                         # state_chunk is a dict with node results
                         # Keep the latest chunk as final result
                         final_result = state_chunk
@@ -575,17 +582,12 @@ class MultiAgentRunner:
                                     "status": "running"
                                 }
 
-                            # Yield new tool call events
-                            tool_events = state_chunk.get("tool_call_events", [])
-                            if len(tool_events) > last_tool_event_count:
-                                for event in tool_events[last_tool_event_count:]:
-                                    yield {
-                                        "type": "tool_call",
-                                        **event  # agent, tool, status, etc.
-                                    }
-                                last_tool_event_count = len(tool_events)
+                            # Yield pending events from EventBus
+                            events = await event_bus.get_pending_events(timeout=0.0)
+                            for event in events:
+                                yield self._convert_event_to_sse(event)
             else:
-                async for state_chunk in workflow.astream(state.model_dump(), config):
+                async for state_chunk in workflow.astream(state_dict, config):
                     final_result = state_chunk
                     logger.debug(f"Workflow state update: {list(state_chunk.keys())}")
 
@@ -599,25 +601,27 @@ class MultiAgentRunner:
                                 "status": "running"
                             }
 
-                        # Yield new tool call events
-                        tool_events = state_chunk.get("tool_call_events", [])
-                        if len(tool_events) > last_tool_event_count:
-                            for event in tool_events[last_tool_event_count:]:
-                                yield {
-                                    "type": "tool_call",
-                                    **event  # agent, tool, status, etc.
-                                }
-                            last_tool_event_count = len(tool_events)
+                        # Yield pending events from EventBus
+                        events = await event_bus.get_pending_events(timeout=0.0)
+                        for event in events:
+                            yield self._convert_event_to_sse(event)
 
             if not final_result:
                 raise RuntimeError("Workflow produced no output")
 
             # Extract result - astream() returns dict where keys are node names
             # The final state is in the last yielded chunk
-            result = final_result
+            # Get the actual state from within the node dict
+            if final_result:
+                # Extract state from node dict (astream returns {"node_name": {state}})
+                # Get the first (and should be only) value from the dict
+                result = next(iter(final_result.values())) if final_result else {}
+            else:
+                result = {}
 
             # Debug: Log what we got from astream
-            logger.info(f"Final result keys: {list(result.keys())}")
+            logger.info(f"Final result node keys: {list(final_result.keys())}")
+            logger.info(f"Extracted state keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
             logger.info(f"Final answer in result: {result.get('final_answer', 'NOT FOUND')[:100] if result.get('final_answer') else 'NOT FOUND'}")
 
             # Step 4: Extract final answer
@@ -776,6 +780,40 @@ class MultiAgentRunner:
                 "success": False,
                 "final_answer": f"Error resuming workflow: {str(e)}",
                 "errors": [str(e)],
+            }
+
+    def _convert_event_to_sse(self, event: Event) -> Dict[str, Any]:
+        """
+        Convert EventBus event to SSE format for frontend.
+
+        Args:
+            event: Event from EventBus
+
+        Returns:
+            Dict in SSE format expected by frontend
+        """
+        if event.event_type == EventType.TOOL_CALL_START:
+            return {
+                "type": "tool_call",
+                "agent": event.agent_name,
+                "tool": event.tool_name,
+                "status": "running",
+                "timestamp": event.timestamp.isoformat()
+            }
+        elif event.event_type == EventType.TOOL_CALL_COMPLETE:
+            return {
+                "type": "tool_call",
+                "agent": event.agent_name,
+                "tool": event.tool_name,
+                "status": "completed" if event.data.get("success") else "failed",
+                "timestamp": event.timestamp.isoformat()
+            }
+        else:
+            # Unknown event type - pass through with basic formatting
+            return {
+                "type": event.event_type.value,
+                "data": event.data,
+                "timestamp": event.timestamp.isoformat()
             }
 
     def shutdown(self) -> None:
