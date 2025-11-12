@@ -106,6 +106,8 @@ async def health_check():
     Health check endpoint.
 
     Returns agent status and readiness.
+
+    # Hot reload test: Modified to verify development mode works
     """
     if agent_adapter is None:
         raise HTTPException(

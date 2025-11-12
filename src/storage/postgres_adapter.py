@@ -10,10 +10,27 @@ import asyncpg
 import numpy as np
 from typing import List, Dict, Optional, Any
 import logging
+import nest_asyncio
 
 from .vector_store_adapter import VectorStoreAdapter
 
 logger = logging.getLogger(__name__)
+
+# Enable nested event loops
+nest_asyncio.apply()
+
+
+def _run_async_safe(coro):
+    """
+    Safely run async coroutine from sync context.
+
+    Uses asyncio.run() with nest-asyncio to handle nested event loops.
+    nest_asyncio patches asyncio.run() to work even when called from within
+    an existing event loop (e.g., FastAPI's loop).
+    """
+    # With nest_asyncio.apply() at module level, asyncio.run() works
+    # even when called from within FastAPI's async context
+    return asyncio.run(coro)
 
 
 class PostgresVectorStoreAdapter(VectorStoreAdapter):
@@ -130,7 +147,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         4. Apply similarity threshold filtering
         5. Search Layer 2 (section-level) for context
         """
-        return asyncio.run(
+        return _run_async_safe(
             self._async_hierarchical_search(
                 query_embedding,
                 k_layer3,
@@ -400,7 +417,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         similarity_threshold: Optional[float] = None,
     ) -> List[Dict]:
         """Direct Layer 3 search."""
-        return asyncio.run(
+        return _run_async_safe(
             self._async_search_layer3(query_embedding, k, document_filter, similarity_threshold)
         )
 
@@ -427,7 +444,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
 
     def get_stats(self) -> Dict[str, Any]:
         """Get vector store statistics."""
-        return asyncio.run(self._async_get_stats())
+        return _run_async_safe(self._async_get_stats())
 
     async def _async_get_stats(self) -> Dict[str, Any]:
         """Async get stats."""
@@ -473,21 +490,21 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
     def metadata_layer1(self) -> List[Dict]:
         """Lazily load Layer 1 metadata."""
         if self._metadata_cache[1] is None:
-            self._metadata_cache[1] = asyncio.run(self._load_metadata(layer=1))
+            self._metadata_cache[1] = _run_async_safe(self._load_metadata(layer=1))
         return self._metadata_cache[1]
 
     @property
     def metadata_layer2(self) -> List[Dict]:
         """Lazily load Layer 2 metadata."""
         if self._metadata_cache[2] is None:
-            self._metadata_cache[2] = asyncio.run(self._load_metadata(layer=2))
+            self._metadata_cache[2] = _run_async_safe(self._load_metadata(layer=2))
         return self._metadata_cache[2]
 
     @property
     def metadata_layer3(self) -> List[Dict]:
         """Lazily load Layer 3 metadata."""
         if self._metadata_cache[3] is None:
-            self._metadata_cache[3] = asyncio.run(self._load_metadata(layer=3))
+            self._metadata_cache[3] = _run_async_safe(self._load_metadata(layer=3))
         return self._metadata_cache[3]
 
     async def _load_metadata(self, layer: int) -> List[Dict]:
@@ -526,4 +543,9 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
     def __del__(self):
         """Close connection pool on destruction."""
         if self.pool:
-            asyncio.run(self.pool.close())
+            try:
+                # Try graceful close - may fail during Python shutdown
+                _run_async_safe(self.pool.close())
+            except Exception:
+                # Ignore errors during destruction (Python may be shutting down)
+                pass

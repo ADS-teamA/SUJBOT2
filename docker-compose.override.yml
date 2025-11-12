@@ -23,6 +23,7 @@ services:
       --reload-dir /app/backend
       --reload-dir /app/src
       --log-level info
+      --loop asyncio
     environment:
       # Development settings
       STORAGE_BACKEND: postgresql  # Use PostgreSQL in dev

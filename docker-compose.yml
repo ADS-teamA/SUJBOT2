@@ -78,10 +78,10 @@ services:
     volumes:
       # Model cache (sentence-transformers, ~2-5GB)
       - model_cache:/root/.cache
+      # Configuration file (read-only, enables hot-reload)
+      - ./config.json:/app/config.json:ro
       # Document data (read-only)
       - ./data:/app/data:ro
-      # Vector database (FAISS indexes, BM25, required!)
-      - ./vector_db:/app/vector_db:ro
       # Logs (optional, for debugging)
       - ./logs:/app/logs
     ports:

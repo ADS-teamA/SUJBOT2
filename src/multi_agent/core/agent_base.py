@@ -384,8 +384,11 @@ class BaseAgent(ABC):
                 - reasoning: LLM's reasoning trace
         """
         from ..tools.adapter import get_tool_adapter
+        from ...cost_tracker import get_global_tracker
+        from ...utils.model_registry import ModelRegistry
 
         tool_adapter = get_tool_adapter()
+        cost_tracker = get_global_tracker()
 
         # Use agent's provider (already initialized in __init__)
         if not hasattr(self, 'provider'):
@@ -421,6 +424,31 @@ class BaseAgent(ABC):
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature
             )
+
+            # Track LLM usage with proper model-specific pricing
+            if hasattr(response, 'usage') and response.usage:
+                provider_name = provider.get_provider_name()
+                model_name = provider.get_model_name()
+
+                input_tokens = response.usage.get("input_tokens", 0)
+                output_tokens = response.usage.get("output_tokens", 0)
+                cache_read_tokens = response.usage.get("cache_read_tokens", 0)
+                cache_creation_tokens = response.usage.get("cache_creation_tokens", 0)
+
+                cost = cost_tracker.track_llm(
+                    provider=provider_name,
+                    model=model_name,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    operation=f"agent_{self.config.name}",
+                    cache_creation_tokens=cache_creation_tokens,
+                    cache_read_tokens=cache_read_tokens
+                )
+
+                self.logger.debug(
+                    f"Agent {self.config.name} LLM call: {input_tokens} in, {output_tokens} out, "
+                    f"cache: {cache_read_tokens} read, {cache_creation_tokens} created - ${cost:.6f}"
+                )
 
             # Check if LLM wants to call tools
             if hasattr(response, 'stop_reason') and response.stop_reason == 'tool_use':
