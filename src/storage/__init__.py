@@ -24,7 +24,14 @@ Usage:
 
 from .vector_store_adapter import VectorStoreAdapter
 from .faiss_adapter import FAISSVectorStoreAdapter
-from .postgres_adapter import PostgresVectorStoreAdapter
+
+# Optional PostgreSQL adapter (requires asyncpg)
+try:
+    from .postgres_adapter import PostgresVectorStoreAdapter
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
+    PostgresVectorStoreAdapter = None
 
 __all__ = [
     "VectorStoreAdapter",
@@ -81,6 +88,12 @@ def create_vector_store_adapter(backend: str, **kwargs) -> VectorStoreAdapter:
         return FAISSVectorStoreAdapter(faiss_store=faiss_store, bm25_store=bm25_store)
 
     elif backend == "postgresql":
+        if not POSTGRES_AVAILABLE:
+            raise ImportError(
+                "PostgreSQL backend requires 'asyncpg' package. "
+                "Install with: pip install asyncpg"
+            )
+
         connection_string = kwargs.get("connection_string")
         if not connection_string:
             raise ValueError("PostgreSQL backend requires 'connection_string' argument")
@@ -168,6 +181,12 @@ async def load_vector_store_adapter(backend: str, path: str = None, **kwargs) ->
         return FAISSVectorStoreAdapter(faiss_store=faiss_store, bm25_store=bm25_store)
 
     elif backend == "postgresql":
+        if not POSTGRES_AVAILABLE:
+            raise ImportError(
+                "PostgreSQL backend requires 'asyncpg' package. "
+                "Install with: pip install asyncpg"
+            )
+
         connection_string = kwargs.get("connection_string", path)
         if not connection_string:
             raise ValueError("PostgreSQL backend requires 'connection_string' argument")
