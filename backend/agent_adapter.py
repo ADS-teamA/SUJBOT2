@@ -216,8 +216,8 @@ class AgentAdapter:
             # Stream progress events from runner
             result = None
             async for event in self.runner.run_query(query, stream_progress=True):
-                if event.get("type") == "progress":
-                    # Agent progress event
+                if event.get("type") == "agent_start":
+                    # Agent start event (new format from runner.py)
                     agent_name = event.get("agent", "unknown")
 
                     # Map agent name to user-friendly role
@@ -238,6 +238,14 @@ class AgentAdapter:
                             "agent": agent_name,
                             "message": message
                         }
+                    }
+                    await asyncio.sleep(0)
+
+                elif event.get("type") == "progress":
+                    # Legacy progress event (workflow init/complete)
+                    yield {
+                        "event": "progress",
+                        "data": event
                     }
                     await asyncio.sleep(0)
 
