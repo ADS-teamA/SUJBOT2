@@ -1,11 +1,16 @@
 """
-Orchestrator Agent - Root coordinator for multi-agent workflow.
+Orchestrator Agent - Single point of user communication.
 
-Responsibilities:
+Responsibilities (Dual-Phase):
+PHASE 1 - ROUTING:
 1. Query complexity analysis (0-100 scoring)
 2. Query type classification (compliance, risk, synthesis, search, reporting)
 3. Agent sequence determination based on routing rules
-4. Workflow pattern selection (Simple, Standard, Complex)
+
+PHASE 2 - SYNTHESIS:
+4. Final answer generation from agent outputs
+5. Citation integration and language matching
+6. Cost tracking and report formatting
 """
 
 import json
@@ -24,10 +29,14 @@ logger = logging.getLogger(__name__)
 @register_agent("orchestrator")
 class OrchestratorAgent(BaseAgent):
     """
-    Orchestrator Agent - Analyzes query complexity and routes to appropriate agents.
+    Orchestrator Agent - Single point of user communication (dual-phase).
+
+    PHASE 1 (Routing): Analyzes query complexity and routes to appropriate agents.
+    PHASE 2 (Synthesis): Generates final answer from agent outputs.
 
     Uses LLM to analyze query characteristics and determine optimal agent sequence
-    based on complexity scoring rubric and routing rules.
+    based on complexity scoring rubric and routing rules. After agents complete,
+    synthesizes their outputs into final user-facing answer.
     """
 
     def __init__(self, config, vector_store=None, agent_registry=None):
@@ -69,16 +78,17 @@ class OrchestratorAgent(BaseAgent):
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Analyze query and determine routing.
+        Dual-phase execution: Routing OR Synthesis.
+
+        Detects phase based on state contents:
+        - ROUTING: state has no agent_outputs (first call)
+        - SYNTHESIS: state has agent_outputs (second call after agents complete)
 
         Args:
             state: Current workflow state with query
 
         Returns:
-            Updated state with:
-                - complexity_score (0-100)
-                - query_type (QueryType enum)
-                - agent_sequence (List[str])
+            Updated state with routing decision OR final answer
         """
         query = state.get("query", "")
 
@@ -88,7 +98,32 @@ class OrchestratorAgent(BaseAgent):
             state["errors"].append("No query provided for orchestration")
             return state
 
-        logger.info(f"Analyzing query: {query[:100]}...")
+        # Detect phase: if agent_outputs exist (and not just orchestrator), we're in SYNTHESIS phase
+        agent_outputs = state.get("agent_outputs", {})
+        has_non_orchestrator_outputs = any(
+            agent_name != "orchestrator" for agent_name in agent_outputs.keys()
+        )
+
+        if has_non_orchestrator_outputs:
+            # PHASE 2: SYNTHESIS - generate final answer from agent outputs
+            logger.info("PHASE 2: Synthesis - generating final answer from agent outputs")
+            return await self._synthesize_final_answer(state)
+        else:
+            # PHASE 1: ROUTING - analyze query and determine agent sequence
+            logger.info(f"PHASE 1: Routing - analyzing query: {query[:100]}...")
+            return await self._route_query(state)
+
+    async def _route_query(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        PHASE 1: Route query to appropriate agents.
+
+        Args:
+            state: Current workflow state with query
+
+        Returns:
+            Updated state with routing decision
+        """
+        query = state.get("query", "")
 
         try:
             # Call LLM for complexity analysis and routing
@@ -294,6 +329,189 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
         except Exception as e:
             logger.error(f"LLM analysis failed: {e}", exc_info=True)
             raise
+
+    async def _synthesize_final_answer(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        PHASE 2: Synthesize final answer from agent outputs.
+
+        Args:
+            state: Current workflow state with agent_outputs
+
+        Returns:
+            Updated state with final_answer
+        """
+        query = state.get("query", "")
+        agent_outputs = state.get("agent_outputs", {})
+        complexity_score = state.get("complexity_score", 50)
+
+        logger.info(f"Synthesizing final answer from {len(agent_outputs)} agent outputs...")
+
+        try:
+            # Build synthesis context from agent outputs
+            synthesis_context = self._build_synthesis_context(state)
+
+            # Prepare synthesis prompt
+            user_message = f"""Generate final answer for this query using agent outputs.
+
+Original Query: {query}
+Complexity Score: {complexity_score}
+
+Agent Outputs:
+{synthesis_context}
+
+Generate final answer following the synthesis instructions in your system prompt.
+Ensure language matching and proper citations."""
+
+            # Call LLM for synthesis (no tool calling in synthesis phase)
+            if self.config.enable_prompt_caching:
+                system = [
+                    {
+                        "type": "text",
+                        "text": self.system_prompt,
+                        "cache_control": {"type": "ephemeral"}
+                    }
+                ]
+            else:
+                system = self.system_prompt
+
+            response = self.provider.create_message(
+                messages=[{"role": "user", "content": user_message}],
+                tools=None,  # No tools in synthesis phase
+                system=system,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature
+            )
+
+            final_answer = response.text
+
+            # Aggregate costs from ALL agents
+            from src.cost_tracker import get_global_tracker
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+
+            # Format cost summary (append to final answer)
+            cost_summary = self._format_cost_summary(total_cost_usd, agent_outputs)
+            final_answer_with_cost = f"{final_answer}\n\n{cost_summary}"
+
+            # Update state
+            state["final_answer"] = final_answer_with_cost
+            state["agent_outputs"]["orchestrator"]["synthesis"] = {
+                "final_answer": final_answer,
+                "total_cost_usd": total_cost_usd
+            }
+
+            logger.info(f"Synthesis complete: {len(final_answer)} chars, cost=${total_cost_usd:.6f}")
+
+            return state
+
+        except Exception as e:
+            from ..core.error_tracker import track_error, ErrorSeverity
+
+            error_id = track_error(
+                error=e,
+                severity=ErrorSeverity.HIGH,
+                agent_name="orchestrator",
+                context={"query": query[:200], "num_agents": len(agent_outputs)}
+            )
+
+            logger.error(
+                f"[{error_id}] Synthesis failed: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+
+            state["errors"] = state.get("errors", [])
+            state["errors"].append(f"[{error_id}] Synthesis failed: {type(e).__name__}: {str(e)}")
+
+            # Provide fallback answer
+            state["final_answer"] = (
+                f"Answer generation failed [{error_id}]. "
+                f"Agents completed their analysis, but final synthesis encountered an error. "
+                f"Error: {type(e).__name__}. "
+                f"Please try rephrasing your query."
+            )
+
+            return state
+
+    def _build_synthesis_context(self, state: Dict[str, Any]) -> str:
+        """
+        Build synthesis context from agent outputs.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Formatted string with agent outputs
+        """
+        agent_outputs = state.get("agent_outputs", {})
+        context_parts = []
+
+        # Order agents by execution sequence (if available)
+        agent_sequence = state.get("agent_sequence", [])
+
+        # Add outputs in sequence order
+        for agent_name in agent_sequence:
+            if agent_name in agent_outputs and agent_name != "orchestrator":
+                output = agent_outputs[agent_name]
+                context_parts.append(f"### {agent_name.upper()} OUTPUT:")
+                context_parts.append(json.dumps(output, indent=2, ensure_ascii=False))
+                context_parts.append("")
+
+        # Add any remaining outputs not in sequence
+        for agent_name, output in agent_outputs.items():
+            if agent_name != "orchestrator" and agent_name not in agent_sequence:
+                context_parts.append(f"### {agent_name.upper()} OUTPUT:")
+                context_parts.append(json.dumps(output, indent=2, ensure_ascii=False))
+                context_parts.append("")
+
+        return "\n".join(context_parts)
+
+    def _format_cost_summary(self, total_cost: float, agent_outputs: dict) -> str:
+        """
+        Format cost summary for display to user.
+
+        Args:
+            total_cost: Total workflow cost in USD
+            agent_outputs: Dict mapping agent names to outputs
+
+        Returns:
+            Formatted markdown cost summary
+        """
+        lines = [
+            "---",
+            "## 💰 API Cost Summary",
+            f"**Total Workflow Cost:** ${total_cost:.6f}",
+            ""
+        ]
+
+        # Per-agent breakdown (if available)
+        agent_costs = {}
+        for agent_name, output in agent_outputs.items():
+            if isinstance(output, dict) and "total_tool_cost_usd" in output:
+                agent_cost = output["total_tool_cost_usd"]
+                if agent_cost > 0:
+                    agent_costs[agent_name] = agent_cost
+
+        if agent_costs:
+            lines.append("**Per-Agent Breakdown:**")
+            # Sort by cost descending
+            sorted_agents = sorted(agent_costs.items(), key=lambda x: x[1], reverse=True)
+            for agent_name, cost in sorted_agents:
+                lines.append(f"- {agent_name}: ${cost:.6f}")
+            lines.append("")
+
+        # Cost interpretation
+        if total_cost < 0.01:
+            lines.append("_Cost: Minimal (< $0.01)_")
+        elif total_cost < 0.05:
+            lines.append("_Cost: Low ($0.01 - $0.05)_")
+        elif total_cost < 0.20:
+            lines.append("_Cost: Moderate ($0.05 - $0.20)_")
+        else:
+            lines.append("_Cost: High (> $0.20)_")
+
+        lines.append("---")
+
+        return "\n".join(lines)
 
     def _parse_routing_response(self, response_text: str) -> Dict[str, Any]:
         """

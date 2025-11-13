@@ -19,6 +19,29 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+
+def _serialize_entity_type(entity_type) -> str:
+    """
+    Safely serialize entity type to string.
+
+    FIX: Handles both EntityType enum and string to avoid AttributeError.
+    Before this fix, code inconsistently accessed .value vs direct type.
+
+    Args:
+        entity_type: EntityType enum or string
+
+    Returns:
+        String representation of the type
+    """
+    if hasattr(entity_type, 'value'):
+        return entity_type.value
+    return str(entity_type)
+
+
+# ============================================================================
 # TIER 2 TOOLS: Advanced Retrieval
 # ============================================================================
 
@@ -273,14 +296,14 @@ class GraphSearchTool(BaseTool):
 
         # Search through all entities
         candidates = []
-        for entity in self.knowledge_graph.entities.values():
+        for entity in self.knowledge_graph.entities:
             if entity.confidence < min_confidence:
                 continue
 
             # Check type match if specified
             if entity_type:
-                # Handle both EntityType enum (entity.type.value) and string (mocks)
-                entity_type_value = entity.type.value if hasattr(entity.type, 'value') else entity.type
+                # Handle both EntityType enum (entity.type) and string (mocks)
+                entity_type_value = entity.type if hasattr(entity.type, 'value') else entity.type
                 if entity_type_value != entity_type:
                     continue
 
@@ -370,7 +393,7 @@ class GraphSearchTool(BaseTool):
                 data={
                     "entity": {
                         "id": entity.id,
-                        "type": entity.type.value,
+                        "type": entity.type,
                         "value": entity.value,
                         "confidence": entity.confidence,
                     },
@@ -380,19 +403,28 @@ class GraphSearchTool(BaseTool):
                 metadata={"mode": "entity_mentions", "entity_id": entity.id},
             )
 
-        # Retrieve actual chunks from vector store
+        # Retrieve actual chunks from vector store metadata
         chunks = []
+        # Get Layer 3 metadata (same pattern as expand_context tool)
+        layer3_chunks = []
+        if hasattr(self.vector_store, "metadata_layer3"):
+            layer3_chunks = self.vector_store.metadata_layer3
+        elif hasattr(self.vector_store, "faiss_store"):
+            layer3_chunks = self.vector_store.faiss_store.metadata_layer3
+
         for chunk_id in chunk_ids:
-            chunk = self.vector_store.get_chunk_by_id(chunk_id)
-            if chunk:
-                formatted = format_chunk_result(chunk, include_score=False)
-                chunks.append(formatted)
+            # Find chunk in metadata
+            for meta in layer3_chunks:
+                if meta.get("chunk_id") == chunk_id:
+                    formatted = format_chunk_result(meta, include_score=False)
+                    chunks.append(formatted)
+                    break
 
         # Build result
         result_data = {
             "entity": {
                 "id": entity.id,
-                "type": entity.type.value,
+                "type": entity.type,
                 "value": entity.value,
                 "normalized_value": entity.normalized_value,
                 "confidence": entity.confidence,
@@ -458,7 +490,7 @@ class GraphSearchTool(BaseTool):
 
             rel_data = {
                 "type": rel.type.value,
-                "source": {"id": source.id, "value": source.value, "type": source.type.value}
+                "source": {"id": source.id, "value": source.value, "type": source.type}
                 if source
                 else None,
                 "target": {"id": target.id, "value": target.value, "type": target.type.value}
@@ -478,11 +510,11 @@ class GraphSearchTool(BaseTool):
         result_data = {
             "entity": {
                 "id": entity.id,
-                "type": entity.type.value,
+                "type": entity.type if hasattr(entity.type, 'value') else entity.type,
                 "value": entity.value,
                 "normalized_value": entity.normalized_value,
                 "confidence": entity.confidence,
-                "source_chunk_ids": entity.source_chunk_ids,
+                "source_chunk_ids": list(entity.source_chunk_ids) if isinstance(entity.source_chunk_ids, set) else entity.source_chunk_ids,
                 "first_mention_chunk_id": entity.first_mention_chunk_id,
             },
             "relationships": formatted_relationships,
@@ -559,7 +591,7 @@ class GraphSearchTool(BaseTool):
                     "id": source.id,
                     "value": source.value,
                     "normalized_value": source.normalized_value,
-                    "type": source.type.value,
+                    "type": source.type,
                 }
                 if source
                 else None,
@@ -585,7 +617,7 @@ class GraphSearchTool(BaseTool):
         result_data = {
             "entity": {
                 "id": entity.id,
-                "type": entity.type.value,
+                "type": entity.type,  # entity.type is already a string
                 "value": entity.value,
                 "normalized_value": entity.normalized_value,
             },
@@ -728,7 +760,7 @@ class GraphSearchTool(BaseTool):
                     if chunk_id not in chunk_entities:
                         chunk_entities[chunk_id] = []
                     chunk_entities[chunk_id].append(
-                        {"value": entity.value, "type": entity.type.value, "hop": hop}
+                        {"value": entity.value, "type": entity.type, "hop": hop}
                     )
 
         # Sort chunks by score and take top k
@@ -761,7 +793,7 @@ class GraphSearchTool(BaseTool):
             "start_entity": {
                 "id": start_entity.id,
                 "value": start_entity.value,
-                "type": start_entity.type.value,
+                "type": start_entity.type,
             },
             "total_entities_discovered": len(visited_entities),
             "total_relationships_traversed": sum(len(rels) for rels in relationships_by_hop.values()),
@@ -2516,7 +2548,7 @@ class BrowseEntitiesTool(BaseTool):
             for entity in entities:
                 entity_data = {
                     "id": entity.id,
-                    "type": entity.type.value if hasattr(entity.type, "value") else str(entity.type),
+                    "type": entity.type if hasattr(entity.type, "value") else str(entity.type),
                     "value": entity.value,
                     "normalized_value": entity.normalized_value,
                     "confidence": round(entity.confidence, 3),

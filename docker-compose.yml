@@ -1,4 +1,43 @@
 services:
+  # Neo4j - Graph database for knowledge graphs
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: sujbot_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env file}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 2G
+      NEO4J_dbms_memory_pagecache_size: 1G
+    volumes:
+      # Persistent data
+      - neo4j_data:/data
+      # Import directory (for importing unified_kg.json)
+      - ./vector_db:/import:ro
+    ports:
+      # HTTP (Neo4j Browser)
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      # Bolt protocol
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
   # PostgreSQL with pgvector and Apache AGE extensions
   postgres:
     build:
@@ -141,6 +180,10 @@ services:
 volumes:
   # PostgreSQL data - CRITICAL (contains all vectors, graphs, checkpoints)
   postgres_data:
+    driver: local
+
+  # Neo4j data - CRITICAL (contains knowledge graph)
+  neo4j_data:
     driver: local
 
   # Model cache - Speeds up startup (sentence-transformers models)

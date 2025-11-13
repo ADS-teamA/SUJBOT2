@@ -79,3 +79,7 @@ data_test/*.pdf
 data_legacy/
 
 # Note: output/ is now tracked - contains indexed documents for testing
+
+# Backup files
+*.bak
+*.backup
