@@ -92,8 +92,9 @@ class AnthropicProvider(BaseProvider):
             **kwargs,
         }
 
-        # Only add tools parameter if tools are provided (not None and not empty)
-        if tools:
+        # Only add tools parameter if tools are provided (not None and not empty list)
+        # Empty list or None should NOT be passed to Anthropic API (causes BadRequestError)
+        if tools and len(tools) > 0:
             create_kwargs["tools"] = tools
 
         response = self._client.messages.create(**create_kwargs)
@@ -156,8 +157,9 @@ class AnthropicProvider(BaseProvider):
             **kwargs,
         }
 
-        # Only add tools parameter if tools are provided (not None and not empty)
-        if tools:
+        # Only add tools parameter if tools are provided (not None and not empty list)
+        # Empty list or None should NOT be passed to Anthropic API (causes BadRequestError)
+        if tools and len(tools) > 0:
             stream_kwargs["tools"] = tools
 
         return self._client.messages.stream(**stream_kwargs)

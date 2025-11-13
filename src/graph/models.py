@@ -20,6 +20,9 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 from datetime import datetime
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EntityType(Enum):
@@ -452,8 +455,10 @@ class KnowledgeGraph:
                     try:
                         entity_type_enum = EntityType(entity_type)
                     except (ValueError, KeyError):
-                        logger.warning(f"Unknown entity type '{entity_type}', no matches will be found")
-                        continue
+                        valid_types = [t.value for t in EntityType]
+                        logger.error(f"Unknown entity type '{entity_type}'. Valid types: {valid_types}")
+                        # Return empty list - no matches for invalid type
+                        return []
                 else:
                     entity_type_enum = entity_type
 

@@ -17,6 +17,7 @@ import sys
 
 try:
     from neo4j import GraphDatabase
+    import neo4j.exceptions
 except ImportError:
     print("ERROR: neo4j Python driver not installed")
     print("Install with: pip install neo4j")
@@ -244,8 +245,13 @@ def main():
         if args.clear:
             importer.clear_database()
 
+        logger.info("Creating indexes...")
         importer.create_indexes()
+
+        logger.info("Importing entities...")
         importer.import_entities(entities, batch_size=args.batch_size)
+
+        logger.info("Importing relationships...")
         importer.import_relationships(relationships, batch_size=args.batch_size)
 
         # Verify
@@ -260,14 +266,44 @@ def main():
         expected_rels = len(relationships)
         actual_rels = verification["relationship_count"]
 
+        data_loss_detected = False
+
         if actual_entities != expected_entities:
-            logger.warning(f"Entity count mismatch! Expected {expected_entities}, got {actual_entities}")
+            entity_loss = expected_entities - actual_entities
+            logger.error(f"CRITICAL: Entity count mismatch! Expected {expected_entities}, got {actual_entities}")
+            logger.error(f"Data loss: {entity_loss} entities not imported")
+            data_loss_detected = True
+
         if actual_rels != expected_rels:
-            logger.warning(f"Relationship count mismatch! Expected {expected_rels}, got {actual_rels}")
+            rel_loss = expected_rels - actual_rels
+            logger.error(f"CRITICAL: Relationship count mismatch! Expected {expected_rels}, got {actual_rels}")
+            logger.error(f"Data loss: {rel_loss} relationships not imported")
+            data_loss_detected = True
 
-        if actual_entities == expected_entities and actual_rels == expected_rels:
+        if data_loss_detected:
+            logger.error("\n✗ Import FAILED with data loss!")
+            logger.error("Database is in INCONSISTENT state - manual investigation required")
+            sys.exit(1)
+        else:
             logger.info("\n✓ Import successful! All entities and relationships imported.")
+            sys.exit(0)
 
+    except neo4j.exceptions.ServiceUnavailable as e:
+        logger.error(f"Neo4j database unavailable: {e}")
+        logger.error("Check that Neo4j is running and credentials are correct")
+        sys.exit(1)
+    except neo4j.exceptions.AuthError as e:
+        logger.error(f"Neo4j authentication failed: {e}")
+        logger.error("Verify NEO4J_USERNAME and NEO4J_PASSWORD")
+        sys.exit(1)
+    except neo4j.exceptions.CypherSyntaxError as e:
+        logger.error(f"Cypher query syntax error: {e}")
+        logger.error("This is a bug in the import script - report to developers")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Import failed with unexpected error: {e}", exc_info=True)
+        logger.error("Database may be in inconsistent state - review logs and consider rollback")
+        sys.exit(1)
     finally:
         importer.close()
 
