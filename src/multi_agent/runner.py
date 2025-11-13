@@ -174,7 +174,6 @@ class MultiAgentRunner:
             RiskVerifierAgent,
             CitationAuditorAgent,
             GapSynthesizerAgent,
-            ReportGeneratorAgent,
         )
 
         # Get agent configs
@@ -198,7 +197,6 @@ class MultiAgentRunner:
             "risk_verifier": RiskVerifierAgent,
             "citation_auditor": CitationAuditorAgent,
             "gap_synthesizer": GapSynthesizerAgent,
-            "report_generator": ReportGeneratorAgent,
         }
 
         for agent_name, agent_class in agent_classes.items():
@@ -340,13 +338,22 @@ class MultiAgentRunner:
                         entities = []
                         for record in result:
                             node = record["e"]
+                            # Convert Neo4j node to Entity
+                            # Note: source_chunk_ids in Neo4j, but Entity expects it as source_chunk_ids
+                            source_chunk_ids = node.get("source_chunk_ids", [])
+                            if not isinstance(source_chunk_ids, list):
+                                source_chunk_ids = []
+
                             entities.append(Entity(
                                 id=node.get("id", ""),
                                 type=node.get("type", ""),
                                 value=node.get("value", ""),
                                 normalized_value=node.get("normalized_value", node.get("value", "")),
                                 confidence=node.get("confidence", 1.0),
-                                metadata=dict(node),
+                                source_chunk_ids=set(source_chunk_ids),
+                                document_id=node.get("document_id", ""),
+                                first_mention_chunk_id=node.get("first_mention_chunk_id"),
+                                extraction_method=node.get("extraction_method"),
                             ))
 
                         # Create KnowledgeGraph from Neo4j entities
@@ -442,7 +449,6 @@ class MultiAgentRunner:
             "risk_verifier": {"role": AgentRole.VERIFY, "tier": AgentTier.SPECIALIST},
             "citation_auditor": {"role": AgentRole.AUDIT, "tier": AgentTier.WORKER},
             "gap_synthesizer": {"role": AgentRole.SYNTHESIZE, "tier": AgentTier.SPECIALIST},
-            "report_generator": {"role": AgentRole.REPORT, "tier": AgentTier.WORKER},
         }
 
         if agent_name not in agent_metadata:

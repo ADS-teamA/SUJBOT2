@@ -425,16 +425,53 @@ class KnowledgeGraph:
         """Get relationships where entity is the target."""
         return [rel for rel in self.relationships if rel.target_entity_id == entity_id]
 
+    def find_entities(
+        self,
+        entity_type: Optional[str] = None,
+        value_contains: Optional[str] = None,
+        min_confidence: float = 0.0,
+    ) -> List[Entity]:
+        """
+        Find entities matching filter criteria.
+
+        Args:
+            entity_type: Filter by entity type (e.g., 'organization', 'regulation')
+            value_contains: Filter by substring in value (case-insensitive)
+            min_confidence: Minimum confidence threshold
+
+        Returns:
+            List of matching Entity objects
+        """
+        results = []
+        for entity in self.entities:
+            # Filter by type
+            if entity_type and entity.type != entity_type:
+                continue
+
+            # Filter by value substring
+            if value_contains and value_contains.lower() not in entity.value.lower():
+                continue
+
+            # Filter by confidence
+            if entity.confidence < min_confidence:
+                continue
+
+            results.append(entity)
+
+        return results
+
     def compute_stats(self) -> Dict[str, Any]:
         """Compute statistics about the graph."""
         entity_type_counts = {}
         for entity in self.entities:
-            entity_type_counts[entity.type.value] = entity_type_counts.get(entity.type.value, 0) + 1
+            # entity.type is already a string
+            entity_type_counts[entity.type] = entity_type_counts.get(entity.type, 0) + 1
 
         relationship_type_counts = {}
         for rel in self.relationships:
-            relationship_type_counts[rel.type.value] = (
-                relationship_type_counts.get(rel.type.value, 0) + 1
+            # rel.type is already a string
+            relationship_type_counts[rel.type] = (
+                relationship_type_counts.get(rel.type, 0) + 1
             )
 
         # Average confidence

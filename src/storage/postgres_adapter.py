@@ -158,16 +158,25 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         use_doc_filtering: bool = True,
         similarity_threshold_offset: float = 0.25,
         query_text: Optional[str] = None,
+        document_filter: Optional[str] = None,
     ) -> Dict[str, List[Dict]]:
         """
         Hierarchical 3-layer search using PostgreSQL.
 
         Strategy:
-        1. Search Layer 1 (document-level) → find top document
+        1. Search Layer 1 (document-level) → find top document (unless document_filter provided)
         2. Use document_id to filter Layer 3 search
         3. Retrieve top-k chunks from Layer 3
         4. Apply similarity threshold filtering
         5. Search Layer 2 (section-level) for context
+
+        Args:
+            query_embedding: Query embedding vector
+            k_layer3: Number of layer3 chunks to retrieve
+            use_doc_filtering: Enable document filtering (ignored if document_filter provided)
+            similarity_threshold_offset: Threshold offset for filtering
+            query_text: Original query text (for logging)
+            document_filter: Explicit document ID to filter by (overrides use_doc_filtering)
         """
         return _run_async_safe(
             self._async_hierarchical_search(
@@ -176,6 +185,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 use_doc_filtering,
                 similarity_threshold_offset,
                 query_text,
+                document_filter,
             )
         )
 
@@ -186,21 +196,27 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         use_doc_filtering: bool,
         similarity_threshold_offset: float,
         query_text: Optional[str],
+        document_filter: Optional[str] = None,
     ) -> Dict[str, List[Dict]]:
         """Async implementation of hierarchical search."""
         query_vec = self._normalize_vector(query_embedding)
 
         async with self.pool.acquire() as conn:
-            # Step 1: Search Layer 1 (find top document)
-            layer1_results = await self._search_layer(
-                conn, layer=1, query_vec=query_vec, k=1
-            )
+            # Step 1: Search Layer 1 (find top document) - skip if document_filter provided
+            if document_filter:
+                # Explicit document filter provided - skip layer1 search
+                layer1_results = []
+                logger.debug(f"Using explicit document filter: {document_filter}")
+            else:
+                # Search Layer 1 to find top document
+                layer1_results = await self._search_layer(
+                    conn, layer=1, query_vec=query_vec, k=1
+                )
 
-            # Get document filter
-            document_filter = None
-            if use_doc_filtering and layer1_results:
-                document_filter = layer1_results[0]["document_id"]
-                logger.debug(f"Document filter: {document_filter}")
+                # Get document filter from layer1 results
+                if use_doc_filtering and layer1_results:
+                    document_filter = layer1_results[0]["document_id"]
+                    logger.debug(f"Document filter from layer1: {document_filter}")
 
             # Step 2: Search Layer 3 (PRIMARY retrieval)
             layer3_results = await self._search_layer(

@@ -183,6 +183,86 @@ class WorkflowBuilder:
 
         logger.debug(f"Added agent node: {agent_name}")
 
+    def _add_orchestrator_synthesis_node(self, workflow: StateGraph) -> None:
+        """
+        Add orchestrator synthesis node to workflow.
+
+        This node calls the orchestrator agent in PHASE 2 (synthesis mode).
+        The orchestrator detects the phase based on presence of agent_outputs.
+
+        Args:
+            workflow: StateGraph to add node to
+        """
+        # Get orchestrator agent from registry
+        orchestrator = self.agent_registry.get_agent("orchestrator")
+
+        if orchestrator is None:
+            logger.error("Orchestrator agent not found in registry")
+            raise ValueError("Orchestrator agent required for synthesis")
+
+        async def orchestrator_synthesis_node(state: Dict[str, Any]) -> Dict[str, Any]:
+            """Execute orchestrator synthesis and update state."""
+            try:
+                # Extract EventBus if present
+                if hasattr(state, "event_bus"):
+                    event_bus = state.event_bus
+                elif isinstance(state, dict):
+                    event_bus = state.get("event_bus")
+                else:
+                    event_bus = None
+
+                # Convert to dict if needed
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
+
+                # Update execution phase
+                updated_state = {
+                    **state_dict,
+                    "execution_phase": ExecutionPhase.SYNTHESIS.value,
+                    "current_agent": "orchestrator",
+                }
+
+                # Restore EventBus
+                if event_bus:
+                    updated_state["event_bus"] = event_bus
+
+                logger.info("Executing orchestrator synthesis...")
+
+                # Execute orchestrator (will detect PHASE 2 based on agent_outputs)
+                result = await orchestrator.execute(updated_state)
+
+                logger.info("Orchestrator synthesis completed successfully")
+
+                return result
+
+            except Exception as e:
+                logger.error(f"Orchestrator synthesis failed: {e}", exc_info=True)
+
+                # Convert to dict if needed
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
+
+                # Add error to state
+                errors = state_dict.get("errors", [])
+                errors.append(f"orchestrator synthesis error: {str(e)}")
+
+                # Provide fallback final answer
+                state_dict["final_answer"] = (
+                    f"Synthesis error: {str(e)}. "
+                    f"Agents completed their analysis, but final answer generation failed."
+                )
+
+                return {**state_dict, "errors": errors}
+
+        # Add node to workflow
+        workflow.add_node("orchestrator_synthesis", orchestrator_synthesis_node)
+
+        logger.debug("Added orchestrator synthesis node")
+
     def _add_hitl_gate_node(self, workflow: StateGraph) -> None:
         """
         Add HITL quality gate node to workflow.
@@ -345,7 +425,10 @@ class WorkflowBuilder:
         """
         Add edges to connect agents in workflow.
 
-        Inserts HITL gate after extractor if enabled.
+        Workflow pattern:
+        1. Execute agent sequence (with optional HITL gate after extractor)
+        2. Call orchestrator for synthesis (generates final answer)
+        3. End
 
         Args:
             workflow: StateGraph to add edges to
@@ -361,6 +444,11 @@ class WorkflowBuilder:
             and self.hitl_config.enabled
             and "extractor" in agent_sequence
         )
+
+        # Add orchestrator synthesis node (called AFTER all agents complete)
+        # This is the SAME orchestrator agent, but called in PHASE 2 (synthesis)
+        # It will detect the phase based on presence of agent_outputs
+        self._add_orchestrator_synthesis_node(workflow)
 
         # Sequential execution (default)
         if not enable_parallel:
@@ -378,11 +466,14 @@ class WorkflowBuilder:
                     workflow.add_edge(current_agent, next_agent)
                     logger.debug(f"Added edge: {current_agent} → {next_agent}")
 
-            # Last agent goes to END
+            # Last agent in sequence goes to orchestrator synthesis
             last_agent = agent_sequence[-1]
-            workflow.add_edge(last_agent, END)
+            workflow.add_edge(last_agent, "orchestrator_synthesis")
+            logger.debug(f"Added edge: {last_agent} → orchestrator_synthesis")
 
-            logger.debug(f"Added edge: {last_agent} → END")
+            # Orchestrator synthesis goes to END (final answer generated)
+            workflow.add_edge("orchestrator_synthesis", END)
+            logger.debug(f"Added edge: orchestrator_synthesis → END")
 
         else:
             # Parallel execution (advanced - not implemented yet)

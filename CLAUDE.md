@@ -2,7 +2,7 @@
 
 **SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + multi-agent orchestration + Human-in-the-Loop clarifications + Docker-based web interface.
 
-**Status:** MULTI-AGENT SYSTEM + HITL + WEB UI COMPLETE ✅ (2025-11-12)
+**Status:** ORCHESTRATOR-CENTRIC ARCHITECTURE ✅ (2025-11-13)
 
 ---
 
@@ -471,13 +471,22 @@ cat backup.sql | docker exec -i sujbot_postgres psql -U postgres sujbot
 - `backend/agent_adapter.py` - Adapter between FastAPI and multi-agent system
 - `backend/models.py` - Pydantic request/response models
 
-**Multi-Agent System:**
+**Multi-Agent System (Orchestrator-Centric):**
 - `src/multi_agent/runner.py` - Main orchestrator (query routing, workflow execution)
-- `src/multi_agent/agents/*.py` - 8 agents (orchestrator, extractor, classifier, compliance, risk_verifier, citation_auditor, gap_synthesizer, report_generator)
+- `src/multi_agent/agents/*.py` - 7 agents:
+  - **orchestrator** - Dual-phase: routing (PHASE 1) + synthesis/report generation (PHASE 2)
+  - **extractor** - Document retrieval
+  - **classifier** - Content categorization
+  - **compliance** - Regulatory compliance verification
+  - **risk_verifier** - Risk assessment
+  - **citation_auditor** - Citation verification
+  - **gap_synthesizer** - Knowledge gap analysis
 - `src/multi_agent/core/agent_base.py` - Base class with autonomous tool calling loop
 - `src/multi_agent/core/event_bus.py` - Real-time event system (agent progress, tool calls)
 - `src/multi_agent/tools/adapter.py` - Tool schema conversion (Pydantic → LLM format)
-- `prompts/agents/*.txt` - System prompts (guide autonomous agent behavior)
+- `src/multi_agent/routing/workflow_builder.py` - Builds workflow with orchestrator synthesis node
+- `prompts/agents/orchestrator.txt` - Dual-phase prompt (routing + synthesis instructions)
+- `prompts/agents/*.txt` - Other agent system prompts
 
 **Human-in-the-Loop (HITL):**
 - `src/multi_agent/hitl/` - HITL components (4 files)
@@ -846,8 +855,15 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-**Last Updated:** 2025-11-12
-**Version:** PHASE 1-7 COMPLETE + Multi-Agent System + HITL + Docker Web UI (16 tools, 8 agents, real-time progress visualization)
+**Last Updated:** 2025-11-13
+**Version:** PHASE 1-7 COMPLETE + Orchestrator-Centric Multi-Agent + HITL + Docker Web UI (16 tools, 7 agents, real-time progress visualization)
+
+**Recent Changes (2025-11-13):**
+- ✅ Removed `report_generator` agent (redundant with orchestrator)
+- ✅ Orchestrator now handles BOTH routing (PHASE 1) and synthesis/report generation (PHASE 2)
+- ✅ Single point of user communication - orchestrator is the only agent that talks to users
+- ✅ Cleaner architecture: 7 agents instead of 8, orchestrator called twice per query
+- ✅ Workflow pattern: agents → orchestrator_synthesis → END
 
 **Notes:**
 - `vector_db/` is tracked in git (contains FAISS + BM25 indexes) - DO NOT add to `.gitignore`

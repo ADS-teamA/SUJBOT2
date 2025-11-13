@@ -107,6 +107,8 @@ class AgentAdapter:
             "models": full_config.get("models", {}),  # Add models section for embedding config
             "storage": full_config.get("storage", {}),  # Add storage section for backend selection
             "agent_tools": full_config.get("agent_tools", {}),  # Add agent_tools for reranking config
+            "knowledge_graph": full_config.get("knowledge_graph", {}),  # Add knowledge_graph config
+            "neo4j": full_config.get("neo4j", {}),  # Add neo4j connection config
             "multi_agent": multi_agent_config,
         }
 
@@ -613,10 +615,9 @@ class AgentAdapter:
                 }
 
             # Check vector store (skip for PostgreSQL backend)
-            # Read storage backend from config.json (SSOT principle)
-            from src.config import get_config
-            full_config = get_config()
-            storage_backend = full_config.storage.get("backend", "faiss")
+            # Read storage backend from environment variable (set in docker-compose.yml)
+            import os
+            storage_backend = os.getenv("STORAGE_BACKEND", "faiss")
 
             if storage_backend == "faiss":
                 vector_store_exists = self.config.vector_store_path.exists()

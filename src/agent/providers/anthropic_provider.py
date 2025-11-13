@@ -82,15 +82,21 @@ class AnthropicProvider(BaseProvider):
         Returns:
             ProviderResponse with content, usage, etc.
         """
-        response = self._client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages,
-            tools=tools if tools else None,
+        # Build kwargs dynamically - only include tools if provided
+        create_kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system,
+            "messages": messages,
             **kwargs,
-        )
+        }
+
+        # Only add tools parameter if tools are provided (not None and not empty)
+        if tools:
+            create_kwargs["tools"] = tools
+
+        response = self._client.messages.create(**create_kwargs)
 
         return ProviderResponse(
             content=[
@@ -140,15 +146,21 @@ class AnthropicProvider(BaseProvider):
             >>>         if event.type == "content_block_delta":
             >>>             print(event.delta.text)
         """
-        return self._client.messages.stream(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages,
-            tools=tools if tools else None,
+        # Build kwargs dynamically - only include tools if provided
+        stream_kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system,
+            "messages": messages,
             **kwargs,
-        )
+        }
+
+        # Only add tools parameter if tools are provided (not None and not empty)
+        if tools:
+            stream_kwargs["tools"] = tools
+
+        return self._client.messages.stream(**stream_kwargs)
 
     def supports_feature(self, feature: str) -> bool:
         """

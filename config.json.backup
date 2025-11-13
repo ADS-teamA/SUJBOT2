@@ -164,17 +164,6 @@
     "cache_embeddings": true,
     "create_constraints": true
   },
-  "neo4j": {
-    "uri": "bolt://neo4j:7687",
-    "username": "neo4j",
-    "password": "sujbot_neo4j_2025",
-    "database": "neo4j",
-    "max_connection_lifetime": 3600,
-    "max_connection_pool_size": 50,
-    "connection_timeout": 30,
-    "create_indexes": true,
-    "create_constraints": true
-  },
   "graph_storage": {
     "backend": "simple",
     "simple_store_path": "./data/graphs/simple_graph.json",
@@ -233,12 +222,10 @@
     "enabled": true,
     "orchestrator": {
       "model": "claude-haiku-4-5",
-      "max_tokens": 4096,
-      "temperature": 0.3,
-      "timeout_seconds": 60,
+      "max_tokens": 1024,
+      "temperature": 0.1,
       "enable_prompt_caching": false,
-      "system_prompt_file": "prompts/agents/orchestrator.txt",
-      "comment": "Orchestrator handles routing (PHASE 1) and synthesis (PHASE 2). Higher max_tokens for synthesis."
+      "system_prompt_file": "prompts/agents/orchestrator.txt"
     },
     "agents": {
       "extractor": {
@@ -247,11 +234,7 @@
         "temperature": 0.3,
         "timeout_seconds": 30,
         "enable_prompt_caching": false,
-        "tools": [
-          "search",
-          "expand_context",
-          "get_document_info"
-        ],
+        "tools": ["search", "expand_context", "get_document_info"],
         "system_prompt_file": "prompts/agents/extractor.txt"
       },
       "classifier": {
@@ -260,11 +243,7 @@
         "temperature": 0.2,
         "timeout_seconds": 20,
         "enable_prompt_caching": false,
-        "tools": [
-          "filtered_search",
-          "explain_results",
-          "get_document_list"
-        ],
+        "tools": ["filtered_search", "explain_results", "get_document_list"],
         "system_prompt_file": "prompts/agents/classifier.txt"
       },
       "compliance": {
@@ -273,11 +252,7 @@
         "temperature": 0.1,
         "timeout_seconds": 45,
         "enable_prompt_caching": false,
-        "tools": [
-          "graph_search",
-          "assess_confidence",
-          "exact_match_search"
-        ],
+        "tools": ["graph_search", "assess_confidence", "exact_match_search"],
         "system_prompt_file": "prompts/agents/compliance.txt"
       },
       "risk_verifier": {
@@ -286,11 +261,7 @@
         "temperature": 0.2,
         "timeout_seconds": 45,
         "enable_prompt_caching": false,
-        "tools": [
-          "multi_doc_synthesizer",
-          "similarity_search",
-          "get_chunk_context"
-        ],
+        "tools": ["multi_doc_synthesizer", "similarity_search", "get_chunk_context"],
         "system_prompt_file": "prompts/agents/risk_verifier.txt"
       },
       "citation_auditor": {
@@ -299,11 +270,7 @@
         "temperature": 0.1,
         "timeout_seconds": 15,
         "enable_prompt_caching": false,
-        "tools": [
-          "get_document_info",
-          "exact_match_search",
-          "get_chunk_context"
-        ],
+        "tools": ["get_document_info", "exact_match_search", "get_chunk_context"],
         "system_prompt_file": "prompts/agents/citation_auditor.txt"
       },
       "gap_synthesizer": {
@@ -312,12 +279,17 @@
         "temperature": 0.4,
         "timeout_seconds": 60,
         "enable_prompt_caching": false,
-        "tools": [
-          "browse_entities",
-          "graph_search",
-          "multi_doc_synthesizer"
-        ],
+        "tools": ["browse_entities", "graph_search", "multi_doc_synthesizer"],
         "system_prompt_file": "prompts/agents/gap_synthesizer.txt"
+      },
+      "report_generator": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 4096,
+        "temperature": 0.3,
+        "timeout_seconds": 30,
+        "enable_prompt_caching": false,
+        "tools": ["list_available_tools"],
+        "system_prompt_file": "prompts/agents/report_generator.txt"
       }
     },
     "routing": {

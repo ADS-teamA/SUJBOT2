@@ -751,7 +751,7 @@ class RootConfig(BaseModel):
 
     model_config = ConfigDict(
         strict=True,  # Disable automatic type coercion
-        extra="forbid",  # Reject unknown fields
+        extra="allow",  # Allow unknown fields (for backwards compatibility with multi_agent, storage, etc.)
     )
 
     api_keys: APIKeysConfig = Field(default_factory=APIKeysConfig)
