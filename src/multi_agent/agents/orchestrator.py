@@ -230,8 +230,8 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
             max_tool_iterations = 3  # Prevent infinite loops
 
             for iteration in range(max_tool_iterations):
-                # Call provider's unified create_message API (synchronous)
-                response = self.provider.create_message(
+                # Call provider's unified create_message API (async)
+                response = await self.provider.create_message(
                     messages=messages,
                     tools=self.orchestrator_tool_schemas,
                     system=system,
@@ -374,7 +374,7 @@ Ensure language matching and proper citations."""
             else:
                 system = self.system_prompt
 
-            response = self.provider.create_message(
+            response = await self.provider.create_message(
                 messages=[{"role": "user", "content": user_message}],
                 tools=None,  # No tools in synthesis phase
                 system=system,
