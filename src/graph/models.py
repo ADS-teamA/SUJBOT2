@@ -445,8 +445,20 @@ class KnowledgeGraph:
         results = []
         for entity in self.entities:
             # Filter by type
-            if entity_type and entity.type != entity_type:
-                continue
+            # FIX: Convert string entity_type to EntityType enum for comparison (was always failing)
+            if entity_type:
+                # Handle both string and EntityType enum inputs
+                if isinstance(entity_type, str):
+                    try:
+                        entity_type_enum = EntityType(entity_type)
+                    except (ValueError, KeyError):
+                        logger.warning(f"Unknown entity type '{entity_type}', no matches will be found")
+                        continue
+                else:
+                    entity_type_enum = entity_type
+
+                if entity.type != entity_type_enum:
+                    continue
 
             # Filter by value substring
             if value_contains and value_contains.lower() not in entity.value.lower():

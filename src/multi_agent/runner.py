@@ -329,42 +329,63 @@ class MultiAgentRunner:
                             database=neo4j_cfg.get("database", "neo4j"),
                         )
 
+                        # Use try/finally to ensure Neo4j connection is always closed
                         neo4j_manager = Neo4jManager(neo4j_config)
 
-                        # Query all entities from Neo4j
-                        cypher = "MATCH (e:Entity) RETURN e"
-                        result = neo4j_manager.execute(cypher)
+                        try:
+                            # Query all entities from Neo4j
+                            cypher = "MATCH (e:Entity) RETURN e"
+                            result = neo4j_manager.execute(cypher)
 
-                        entities = []
-                        for record in result:
-                            node = record["e"]
-                            # Convert Neo4j node to Entity
-                            # Note: source_chunk_ids in Neo4j, but Entity expects it as source_chunk_ids
-                            source_chunk_ids = node.get("source_chunk_ids", [])
-                            if not isinstance(source_chunk_ids, list):
-                                source_chunk_ids = []
+                            entities = []
+                            for record in result:
+                                node = record["e"]
 
-                            entities.append(Entity(
-                                id=node.get("id", ""),
-                                type=node.get("type", ""),
-                                value=node.get("value", ""),
-                                normalized_value=node.get("normalized_value", node.get("value", "")),
-                                confidence=node.get("confidence", 1.0),
-                                source_chunk_ids=set(source_chunk_ids),
-                                document_id=node.get("document_id", ""),
-                                first_mention_chunk_id=node.get("first_mention_chunk_id"),
-                                extraction_method=node.get("extraction_method"),
-                            ))
+                                # Validate required fields
+                                entity_id = node.get("id", "")
+                                entity_type_str = node.get("type", "")
 
-                        # Create KnowledgeGraph from Neo4j entities
-                        knowledge_graph = KnowledgeGraph(
-                            source_document_id="neo4j_unified",
-                            created_at=datetime.now(),
-                        )
-                        knowledge_graph.entities = entities
+                                if not entity_id or not entity_type_str:
+                                    logger.warning(f"Skipping malformed Neo4j entity: id={entity_id}, type={entity_type_str}")
+                                    continue
 
-                        neo4j_manager.close()
-                        logger.info(f"✓ KG loaded from Neo4j: {len(entities)} entities")
+                                # Convert Neo4j node to Entity
+                                # FIX: Convert string type to EntityType enum (was causing AttributeError)
+                                try:
+                                    from src.graph.models import EntityType
+                                    entity_type = EntityType(entity_type_str)
+                                except (ValueError, KeyError):
+                                    logger.warning(f"Unknown entity type '{entity_type_str}', using UNKNOWN")
+                                    entity_type = EntityType.UNKNOWN
+
+                                # FIX: source_chunk_ids should be List[str], not set (type annotation mismatch)
+                                source_chunk_ids = node.get("source_chunk_ids", [])
+                                if not isinstance(source_chunk_ids, list):
+                                    source_chunk_ids = [] if source_chunk_ids is None else list(source_chunk_ids)
+
+                                entities.append(Entity(
+                                    id=entity_id,
+                                    type=entity_type,  # ✓ Now EntityType enum
+                                    value=node.get("value", ""),
+                                    normalized_value=node.get("normalized_value", node.get("value", "")),
+                                    confidence=node.get("confidence", 1.0),
+                                    source_chunk_ids=source_chunk_ids,  # ✓ Now List[str]
+                                    document_id=node.get("document_id", ""),
+                                    first_mention_chunk_id=node.get("first_mention_chunk_id"),
+                                    extraction_method=node.get("extraction_method"),
+                                ))
+
+                            # Create KnowledgeGraph from Neo4j entities
+                            knowledge_graph = KnowledgeGraph(
+                                source_document_id="neo4j_unified",
+                                created_at=datetime.now(),
+                            )
+                            knowledge_graph.entities = entities
+                            logger.info(f"✓ KG loaded from Neo4j: {len(entities)} entities")
+
+                        finally:
+                            # FIX: Always close Neo4j connection, even if exception occurs (resource leak)
+                            neo4j_manager.close()
 
                     else:
                         # Load from JSON file (simple backend)

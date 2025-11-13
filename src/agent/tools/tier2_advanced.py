@@ -19,6 +19,29 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+
+def _serialize_entity_type(entity_type) -> str:
+    """
+    Safely serialize entity type to string.
+
+    FIX: Handles both EntityType enum and string to avoid AttributeError.
+    Before this fix, code inconsistently accessed .value vs direct type.
+
+    Args:
+        entity_type: EntityType enum or string
+
+    Returns:
+        String representation of the type
+    """
+    if hasattr(entity_type, 'value'):
+        return entity_type.value
+    return str(entity_type)
+
+
+# ============================================================================
 # TIER 2 TOOLS: Advanced Retrieval
 # ============================================================================
 

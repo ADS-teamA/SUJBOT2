@@ -85,13 +85,17 @@ class OpenAIProvider(BaseProvider):
         openai_messages = self._convert_messages_to_openai(messages, system)
         openai_tools = self._translator.to_openai(tools) if tools else None
 
-        # Prepare API parameters (GPT-5 has specific requirements)
+        # FIX: Build kwargs dynamically - only include tools if provided (same pattern as Anthropic)
+        # Before: Always included "tools": openai_tools (could be None, causing BadRequestError)
         api_params = {
             "model": self.model,
             "messages": openai_messages,
-            "tools": openai_tools,
             **kwargs,
         }
+
+        # Only add tools parameter if tools are provided (not None and not empty)
+        if openai_tools:
+            api_params["tools"] = openai_tools
 
         # GPT-5/o1/o3 only support default temperature (1.0)
         if not self._requires_default_temperature():
