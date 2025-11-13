@@ -401,3 +401,117 @@ async def test_classifies_query_types_correctly(orchestrator, mock_provider, moc
         # Should include query type in result
         query_type = result.get("query_type", "unknown")
         assert query_type in ["retrieval", "analysis", "comparison", "risk_assessment", "unknown"]
+
+
+# ============================================================================
+# Test: Orchestrator Synthesis Phase (PHASE 2)
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_synthesizes_final_answer_from_agent_outputs(orchestrator, mock_provider, mock_llm_response):
+    """
+    PHASE 2: Should generate final answer from agent outputs.
+
+    Critical: Orchestrator is called TWICE per query:
+    1. PHASE 1 (routing): No agent_outputs → routes to specialized agents
+    2. PHASE 2 (synthesis): agent_outputs present → synthesizes final answer
+
+    This test verifies PHASE 2 behavior.
+    """
+    # State after agents have completed (PHASE 2)
+    state = {
+        "query": "What are GDPR compliance requirements?",
+        "agent_outputs": {
+            "orchestrator": {"agent_sequence": ["extractor", "compliance"]},
+            "extractor": {
+                "success": True,
+                "data": {"chunks": [{"content": "GDPR Article 5 requires..."}]}
+            },
+            "compliance": {
+                "success": True,
+                "data": {"compliance_status": "compliant"},
+                "final_answer": "GDPR compliance requires: 1) Data minimization..."
+            }
+        }
+    }
+
+    # Mock LLM synthesis response
+    mock_provider.create_message.return_value = mock_llm_response(
+        text="Based on the compliance analysis, GDPR compliance requires: "
+             "1) Data minimization, 2) Purpose limitation, 3) Storage limitation..."
+    )
+
+    # Execute orchestrator in PHASE 2
+    with patch("src.multi_agent.tools.adapter.get_tool_adapter", return_value=Mock()):
+        result = await orchestrator.execute(state)
+
+    # Verify PHASE 2 behavior
+    assert "final_answer" in result, "Synthesis phase must provide final_answer"
+    assert "GDPR compliance" in result["final_answer"], "Final answer should mention GDPR"
+
+    # Verify LLM was called with tools=None (synthesis has no tools)
+    call_kwargs = mock_provider.create_message.call_args[1]
+    assert call_kwargs.get("tools") is None, "Synthesis phase should call provider with tools=None"
+
+
+@pytest.mark.asyncio
+async def test_synthesis_calls_provider_without_tools(orchestrator, mock_provider, mock_llm_response):
+    """
+    CRITICAL: Synthesis should call provider with tools=None.
+
+    This verifies the fix for PR #102 - Anthropic BadRequestError.
+    Orchestrator synthesis phase calls provider with tools=None,
+    which must be handled correctly by AnthropicProvider.
+    """
+    state = {
+        "query": "Test query",
+        "agent_outputs": {
+            "orchestrator": {"agent_sequence": ["extractor"]},
+            "extractor": {"success": True, "data": {"result": "test"}}
+        }
+    }
+
+    mock_provider.create_message.return_value = mock_llm_response(text="Final answer")
+
+    with patch("src.multi_agent.tools.adapter.get_tool_adapter", return_value=Mock()):
+        await orchestrator.execute(state)
+
+    # Verify provider called with tools=None
+    assert mock_provider.create_message.called, "Provider should be called in synthesis"
+    call_kwargs = mock_provider.create_message.call_args[1]
+    assert call_kwargs.get("tools") is None, "tools should be None in synthesis phase"
+
+
+@pytest.mark.asyncio
+async def test_synthesis_with_empty_agent_outputs(orchestrator, mock_provider, mock_llm_response):
+    """
+    Edge case: agent_outputs exists but only contains orchestrator's routing result.
+
+    This should still trigger PHASE 1 (routing), not PHASE 2 (synthesis).
+    """
+    state = {
+        "query": "Test query",
+        "agent_outputs": {
+            "orchestrator": {"agent_sequence": ["extractor"]}
+        }
+    }
+
+    # Mock routing response (must include all required fields)
+    mock_provider.create_message.return_value = mock_llm_response(
+        text=json.dumps({
+            "agent_sequence": ["extractor"],
+            "reasoning": "Need to extract data",
+            "complexity_score": 30,
+            "query_type": "simple_search"
+        })
+    )
+
+    with patch("src.multi_agent.tools.adapter.get_tool_adapter", return_value=Mock()):
+        result = await orchestrator.execute(state)
+
+    # Should route (PHASE 1), not synthesize (PHASE 2)
+    assert "agent_sequence" in result, "Should produce routing decision"
+    # Note: final_answer may be present as fallback but should be empty or error message
+    if "final_answer" in result:
+        assert result["final_answer"] == "" or "error" in result["final_answer"].lower(), \
+            "Should not synthesize meaningful answer in PHASE 1"
