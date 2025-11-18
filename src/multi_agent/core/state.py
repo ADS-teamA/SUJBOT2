@@ -16,7 +16,7 @@ class QueryType(str, Enum):
     """Classification of user query."""
     SIMPLE_SEARCH = "simple_search"       # Single doc lookup
     CROSS_DOC_ANALYSIS = "cross_doc"      # Compare multiple docs
-    COMPLIANCE_CHECK = "compliance"        # Regulatory compliance
+    COMPLIANCE_CHECK = "compliance"        # Regulatory compliance (always includes requirement extraction → verification)
     RISK_ASSESSMENT = "risk"               # Risk analysis
     SYNTHESIS = "synthesis"                # Knowledge synthesis
     REPORTING = "reporting"                # Generate report
@@ -29,7 +29,8 @@ class ExecutionPhase(str, Enum):
     AGENT_EXECUTION = "agent_execution"  # Agent executing task
     EXTRACTION = "extraction"        # Extract from docs
     CLASSIFICATION = "classification" # Classify content
-    VERIFICATION = "verification"    # Verify accuracy
+    REQUIREMENT_EXTRACTION = "requirement_extraction"  # Extract atomic legal requirements
+    VERIFICATION = "verification"    # Verify accuracy (compliance checking)
     SYNTHESIS = "synthesis"          # Synthesize results
     REPORTING = "reporting"          # Generate report
     COMPLETE = "complete"            # Workflow complete

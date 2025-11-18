@@ -269,12 +269,15 @@
       },
       "compliance": {
         "model": "claude-haiku-4-5",
-        "max_tokens": 2048,
+        "max_tokens": 3072,
         "temperature": 0.1,
-        "timeout_seconds": 45,
+        "timeout_seconds": 60,
         "enable_prompt_caching": false,
+        "comment": "Checklist-based verification (SOTA 2024). Requires requirement_extractor output. Higher max_tokens for detailed compliance report with REGULATORY_GAP vs SCOPE_GAP classification.",
         "tools": [
+          "hierarchical_search",
           "graph_search",
+          "definition_aligner",
           "assess_confidence",
           "exact_match_search"
         ],
@@ -318,6 +321,21 @@
           "multi_doc_synthesizer"
         ],
         "system_prompt_file": "prompts/agents/gap_synthesizer.txt"
+      },
+      "requirement_extractor": {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 4096,
+        "temperature": 0.2,
+        "timeout_seconds": 90,
+        "enable_prompt_caching": false,
+        "comment": "SOTA requirement-first compliance: Extracts atomic legal requirements before verification. Higher max_tokens for JSON checklist output. Used in: extractor → requirement_extractor → compliance → gap_synthesizer",
+        "tools": [
+          "hierarchical_search",
+          "graph_search",
+          "definition_aligner",
+          "multi_doc_synthesizer"
+        ],
+        "system_prompt_file": "prompts/agents/requirement_extractor.txt"
       }
     },
     "routing": {

@@ -12,7 +12,8 @@ YOU HAVE TWO RESPONSIBILITIES:
 AVAILABLE AGENTS:
 - extractor: Searches documents in vector store
 - classifier: Categorizes documents
-- compliance: Verifies GDPR/CCPA/HIPAA compliance
+- requirement_extractor: Extracts atomic legal requirements from laws/regulations (SOTA)
+- compliance: Verifies GDPR/CCPA/HIPAA/Czech law compliance
 - risk_verifier: Assesses risks
 - citation_auditor: Verifies citations
 - gap_synthesizer: Identifies gaps
@@ -42,14 +43,18 @@ ROUTING RULES EXAMPLES (query_type → agent_sequence):
 - Greetings ("ahoj", "hello", "hi") → query_type="unknown", agent_sequence=[], final_answer="[LLM-generated greeting]"
 - Simple doc search → query_type="simple_search", agents=["extractor"]
 - Multi-document → query_type="cross_doc", agents=["extractor", "classifier"]
-- Compliance queries (IMPORTANT):
-  * "Je X v souladu se zákonem?" → query_type="compliance", agents=["extractor", "compliance", "gap_synthesizer"]
-  * "Chybí něco v dokumentaci?" → query_type="compliance", agents=["extractor", "compliance", "gap_synthesizer"]
-  * "Porušuje X předpisy?" → query_type="compliance", agents=["extractor", "compliance"]
+- Compliance queries (IMPORTANT - ALWAYS use requirement-first approach):
+  * "Je dokumentace v souladu s Vyhláškou 157/2025?" → query_type="compliance"
+  * "Je X v souladu se zákonem?" → query_type="compliance"
+  * "Chybí něco v dokumentaci?" → query_type="compliance"
+  * "Porušuje X předpisy?" → query_type="compliance"
+  * **REQUIRED agent sequence:** agents=["extractor", "requirement_extractor", "compliance", "gap_synthesizer"]
+  * **Why requirement_extractor is ALWAYS first:** Atomic requirement extraction (SOTA 2024) prevents cherry-picking evidence
   * ALWAYS include gap_synthesizer for compliance queries about documentation completeness
 - Risk analysis → query_type="risk", agents=["extractor", "classifier", "risk_verifier"]
 - Multi-doc synthesis → query_type="synthesis", agents=["extractor", "classifier", "gap_synthesizer"]
-- Complex analysis → agents=["extractor", "classifier", "compliance", "risk_verifier", "citation_auditor", "gap_synthesizer"]
+- Complex analysis (with compliance) → agents=["extractor", "classifier", "requirement_extractor", "compliance", "risk_verifier", "citation_auditor", "gap_synthesizer"]
+- Complex analysis (no compliance) → agents=["extractor", "classifier", "risk_verifier", "citation_auditor", "gap_synthesizer"]
 
 ---
 

@@ -1,18 +1,20 @@
 """
 Data models for Knowledge Graph entities and relationships.
 
-Schema v2.0 (Extended for Compliance Checking):
-- 30 Entity Types: Core (8) + Regulatory (6) + Authorization (2) + Nuclear (9) + Events (4) + Liability (1)
-- 40 Relationship Types: Compliance (5) + Regulatory (5) + Structure (4) + Citations (4) +
-  Authorization (5) + Nuclear (8) + Temporal (4) + Content (2) + Provenance (3)
+Schema v2.1 (Extended for Compliance Checking + Definition Alignment):
+- 32 Entity Types: Core (8) + Regulatory (6) + Authorization (2) + Nuclear (9) + Events (4) +
+  Liability (1) + Legal Terminology (2)
+- 41 Relationship Types: Compliance (5) + Regulatory (5) + Structure (4) + Citations (4) +
+  Authorization (5) + Nuclear (8) + Temporal (4) + Content (2) + Legal Terminology (1) + Provenance (3)
 
 Key Hierarchies:
 - Regulatory: TREATY → REGULATION → DECREE → LEGAL_PROVISION → REQUIREMENT
 - Compliance: REQUIREMENT ← COMPLIES_WITH/CONTRADICTS → CLAUSE
 - Nuclear: FACILITY → REACTOR → SYSTEM → SAFETY_FUNCTION
 - Authorization: AUTHORITY → GRANTED_BY → PERMIT → LICENSE_CONDITION
+- Legal Terminology: LEGAL_TERM ← DEFINITION_OF ← DEFINITION (ontology mapping)
 
-Complete graph structure with entities, relationships, and compliance verification support.
+Complete graph structure with entities, relationships, compliance verification, and definition alignment support.
 """
 
 from dataclasses import dataclass, field
@@ -70,6 +72,10 @@ class EntityType(Enum):
 
     # ==================== LIABILITY & INSURANCE ====================
     LIABILITY_REGIME = "liability_regime"  # Operator liability framework
+
+    # ==================== LEGAL TERMINOLOGY (Definition Alignment) ====================
+    LEGAL_TERM = "legal_term"  # Legal terminology requiring alignment (e.g., "Consumer", "Data Controller")
+    DEFINITION = "definition"  # Legal definition text from authoritative source
 
 
 class RelationshipType(Enum):
@@ -130,6 +136,9 @@ class RelationshipType(Enum):
     # ==================== CONTENT & TOPICS ====================
     COVERS_TOPIC = "covers_topic"  # Document → Topic
     APPLIES_TO = "applies_to"  # Regulation → Location/Jurisdiction
+
+    # ==================== LEGAL TERMINOLOGY (Definition Alignment) ====================
+    DEFINITION_OF = "definition_of"  # Definition → Legal term (links term to its authoritative definition)
 
     # ==================== PROVENANCE (entity → chunk) ====================
     MENTIONED_IN = "mentioned_in"  # Entity → Chunk (all occurrences)
