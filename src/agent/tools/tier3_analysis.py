@@ -280,6 +280,7 @@ class DefinitionAlignerTool(BaseTool):
             if not term_sanitized or not term_sanitized.strip():
                 return ToolResult(
                     success=False,
+                    data=None,
                     error="Invalid term: contains only special characters or is empty after sanitization"
                 )
 
