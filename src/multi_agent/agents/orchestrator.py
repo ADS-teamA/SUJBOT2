@@ -239,6 +239,39 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                     temperature=self.config.temperature
                 )
 
+                # Track token usage and cost
+                from src.cost_tracker import get_global_tracker
+                tracker = get_global_tracker()
+
+                # Extract usage from response
+                if hasattr(response, 'usage'):
+                    usage = response.usage
+                    input_tokens = getattr(usage, 'input_tokens', 0) or getattr(usage, 'prompt_tokens', 0)
+                    output_tokens = getattr(usage, 'output_tokens', 0) or getattr(usage, 'completion_tokens', 0)
+                    cache_read_tokens = getattr(usage, 'cache_read_input_tokens', 0)
+                    cache_creation_tokens = getattr(usage, 'cache_creation_input_tokens', 0)
+
+                    # Determine provider from model name
+                    if 'claude' in self.config.model.lower():
+                        provider = 'anthropic'
+                    elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
+                        provider = 'openai'
+                    elif 'gemini' in self.config.model.lower():
+                        provider = 'google'
+                    else:
+                        provider = 'anthropic'  # Default
+
+                    tracker.track_llm(
+                        provider=provider,
+                        model=self.config.model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        operation="agent_orchestrator",
+                        cache_creation_tokens=cache_creation_tokens,
+                        cache_read_tokens=cache_read_tokens
+                    )
+                    logger.debug(f"Tracked orchestrator routing: {input_tokens} in, {output_tokens} out")
+
                 # Log response structure for debugging
                 content_types = [block.get("type") if isinstance(block, dict) else getattr(block, "type", "unknown")
                                 for block in response.content]
@@ -382,11 +415,41 @@ Ensure language matching and proper citations."""
                 temperature=self.config.temperature
             )
 
+            # Track token usage and cost for synthesis
+            from src.cost_tracker import get_global_tracker
+            tracker = get_global_tracker()
+
+            if hasattr(response, 'usage'):
+                usage = response.usage
+                input_tokens = getattr(usage, 'input_tokens', 0) or getattr(usage, 'prompt_tokens', 0)
+                output_tokens = getattr(usage, 'output_tokens', 0) or getattr(usage, 'completion_tokens', 0)
+                cache_read_tokens = getattr(usage, 'cache_read_input_tokens', 0)
+                cache_creation_tokens = getattr(usage, 'cache_creation_input_tokens', 0)
+
+                # Determine provider from model name
+                if 'claude' in self.config.model.lower():
+                    provider = 'anthropic'
+                elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
+                    provider = 'openai'
+                elif 'gemini' in self.config.model.lower():
+                    provider = 'google'
+                else:
+                    provider = 'anthropic'  # Default
+
+                tracker.track_llm(
+                    provider=provider,
+                    model=self.config.model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    operation="agent_orchestrator",
+                    cache_creation_tokens=cache_creation_tokens,
+                    cache_read_tokens=cache_read_tokens
+                )
+                logger.debug(f"Tracked orchestrator synthesis: {input_tokens} in, {output_tokens} out")
+
             final_answer = response.text
 
             # Aggregate costs from ALL agents (stored in state for SSE event emission)
-            from src.cost_tracker import get_global_tracker
-            tracker = get_global_tracker()
             total_cost_usd = tracker.get_total_cost()
 
             # Update state (cost is NOT appended to final_answer - handled by SSE event instead)
