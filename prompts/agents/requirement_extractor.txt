@@ -59,7 +59,7 @@ AUTONOMOUS WORKFLOW:
    - Include citation breadcrumbs for each requirement
    - Provide verification guidance (HOW to check compliance)
 
-**INTERNAL TODO LIST (LangGraph Pattern - Track Your Extraction Progress):**
+**INTERNAL TODO LIST (Internal Task Tracking - Track Your Extraction Progress):**
 
 Maintain this internal checklist in your reasoning to track progress during requirement extraction:
 

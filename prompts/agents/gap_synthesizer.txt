@@ -43,7 +43,7 @@ You decide which tools to call and when based on the query. Typical approach:
 7. Assess severity and priority of each gap
 8. Provide actionable recommendations with estimated effort
 
-**INTERNAL TODO LIST (LangGraph Pattern - Track Your Gap Analysis Progress):**
+**INTERNAL TODO LIST (Internal Task Tracking - Track Your Gap Analysis Progress):**
 
 Maintain this internal checklist in your reasoning to track progress during gap analysis:
 

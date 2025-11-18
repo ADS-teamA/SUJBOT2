@@ -274,11 +274,20 @@ class DefinitionAlignerTool(BaseTool):
         include_related_terms: bool = True
     ) -> ToolResult:
         try:
+            # Sanitize input to prevent injection attacks
+            # Remove special characters that could affect graph queries or regex matching
+            term_sanitized = re.sub(r'[^\w\s\-_]', '', term)
+            if not term_sanitized or not term_sanitized.strip():
+                return ToolResult(
+                    success=False,
+                    error="Invalid term: contains only special characters or is empty after sanitization"
+                )
+
             alignments = []
 
             # PHASE 1: Knowledge Graph Search for Definitions
-            # Find term entity in KG with related definitions
-            kg_definitions = self._search_kg_definitions(term, reference_laws)
+            # Find term entity in KG with related definitions (use sanitized term)
+            kg_definitions = self._search_kg_definitions(term_sanitized, reference_laws)
 
             for kg_def in kg_definitions:
                 alignments.append({
@@ -288,14 +297,14 @@ class DefinitionAlignerTool(BaseTool):
                     "document": kg_def["document_id"],
                     "breadcrumb": kg_def.get("breadcrumb", "[Unknown]"),
                     "confidence": kg_def["confidence"],
-                    "alignment_type": "exact_match" if kg_def["term"].lower() == term.lower() else "graph_related"
+                    "alignment_type": "exact_match" if kg_def["term"].lower() == term_sanitized.lower() else "graph_related"
                 })
 
             # PHASE 2: Semantic Search via pgvector
-            # Find semantically similar terms using embedding similarity
+            # Find semantically similar terms using embedding similarity (use sanitized term)
             if include_related_terms:
                 semantic_matches = self._search_semantic_definitions(
-                    term,
+                    term_sanitized,
                     context_document_id,
                     reference_laws,
                     similarity_threshold
@@ -318,11 +327,12 @@ class DefinitionAlignerTool(BaseTool):
             # Sort by confidence descending
             alignments.sort(key=lambda x: x["confidence"], reverse=True)
 
-            # Generate alignment summary
-            summary = self._generate_alignment_summary(term, alignments)
+            # Generate alignment summary (use sanitized term)
+            summary = self._generate_alignment_summary(term_sanitized, alignments)
 
             result_data = {
-                "query_term": term,
+                "query_term": term_sanitized,  # Return sanitized term
+                "original_term": term,  # Keep original for transparency
                 "alignments": alignments,
                 "summary": summary,
                 "total_alignments": len(alignments),

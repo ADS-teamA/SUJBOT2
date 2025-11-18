@@ -241,16 +241,18 @@ Compliance queries → query_type="compliance"
 
 ## 🔬 Research Foundations
 
-### 1. Legal AI Atomization (Cornell 2024)
-**Citation:** Cornell Legal AI Research Lab (2024). "Atomic Legal Obligations in Compliance Verification"
+### 1. Atomic Legal Requirements (Implementation Pattern)
+**Design Principle:** Requirements should be independently verifiable units that can be checked without subjective interpretation.
 
-**Key Principle:** Atomic requirements = independently verifiable obligations
-- ✅ GOOD: "Temperature monitoring must record readings every 60 seconds"
-- ❌ BAD: "Temperature system must comply with safety requirements" (too vague)
+**Rationale:**
+- ✅ GOOD: "Temperature monitoring must record readings every 60 seconds" (objective, testable)
+- ❌ BAD: "Temperature system must comply with safety requirements" (vague, requires interpretation)
 
 **Implementation:**
 - RequirementExtractor decomposes complex provisions into atomic units
 - Each requirement has `success_criteria` field for unambiguous verification
+
+**Status:** Implementation pattern based on legal compliance best practices. Performance metrics pending real-world validation.
 
 ### 2. Plan-and-Solve Pattern (Zhou et al., 2023)
 **Citation:** Zhou, D., et al. (2023). "Least-to-Most Prompting Enables Complex Reasoning in Large Language Models"
@@ -261,24 +263,29 @@ Compliance queries → query_type="compliance"
 - PHASE 1 (RequirementExtractor): Extract requirements → Generate checklist
 - PHASE 2 (ComplianceAgent): Verify each requirement → Classify gaps
 
-### 3. Contextual Retrieval (Anthropic, 2024)
-**Citation:** Anthropic AI (2024). "Contextual Retrieval: Reducing Context Drift by 58%"
+### 3. Contextual Retrieval (Anthropic Blog Post, 2024)
+**Source:** Anthropic AI (2024). "Introducing Contextual Retrieval" (Blog post, not peer-reviewed research)
+**Link:** https://www.anthropic.com/news/contextual-retrieval
 
-**Key Principle:** Prepend document/section context to chunks before embedding
+**Key Principle:** Prepend document/section context to chunks before embedding to reduce context drift
 
 **Implementation:**
 - DefinitionAlignerTool uses contextual embeddings for semantic search
 - Prevents false matches: "client" (legal term) vs "client" (software term)
 
-### 4. Requirement-First Compliance (Legal AI 2024)
-**Citation:** Legal AI Research Consortium (2024). "Requirement-First vs Evidence-First Compliance Checking"
+**Note:** Performance claims (-58% context drift) from Anthropic's internal testing, not independently verified.
 
-**Key Finding:** Evidence-first → 40-60% false positives | Requirement-first → 5-10% false positives
+### 4. Requirement-First Compliance (Design Decision)
+**Design Principle:** Extract legal requirements BEFORE searching documentation to reduce confirmation bias and false positives.
+
+**Hypothesis:** Evidence-first approach (search documentation → find requirements) may lead to higher false positive rates due to cherry-picking evidence that confirms desired outcomes.
 
 **Implementation:**
-- Extract WHAT law requires FIRST (RequirementExtractor)
-- Then search documentation FOR EACH requirement (ComplianceAgent)
-- Prevents cherry-picking evidence that confirms desired outcome
+- PHASE 1: Extract WHAT law requires (RequirementExtractor) - independent of documentation
+- PHASE 2: Search documentation FOR EACH requirement (ComplianceAgent) - systematic verification
+- Prevents confirmation bias: Requirements defined objectively before checking compliance
+
+**Status:** Untested hypothesis - performance improvements (claimed: 40-60% → 5-10% false positives) pending real-world validation with benchmark datasets.
 
 ---
 

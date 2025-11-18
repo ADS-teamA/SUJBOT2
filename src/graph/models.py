@@ -23,6 +23,7 @@ from enum import Enum
 from datetime import datetime
 import json
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,112 @@ class Entity:
         }
 
     @classmethod
+    def create_legal_term(
+        cls,
+        term_value: str,
+        confidence: float,
+        source_chunk_id: str,
+        document_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> "Entity":
+        """
+        Create LEGAL_TERM entity with validation.
+
+        Invariants enforced:
+        - term_value must be non-empty
+        - confidence in [0.0, 1.0]
+        - Must have source provenance
+
+        Args:
+            term_value: Legal term text (e.g., "Consumer", "Data Controller")
+            confidence: Extraction confidence (0.0-1.0)
+            source_chunk_id: Chunk ID where term was found
+            document_id: Document ID containing the term
+            metadata: Optional metadata dict (related_terms, jurisdiction, category)
+            **kwargs: Additional Entity fields
+
+        Returns:
+            Entity with type LEGAL_TERM
+
+        Raises:
+            ValueError: If invariants violated
+        """
+        if not term_value or not term_value.strip():
+            raise ValueError("Legal term value cannot be empty")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {confidence}")
+
+        return cls(
+            id=str(uuid.uuid4()),
+            type=EntityType.LEGAL_TERM,
+            value=term_value,
+            normalized_value=term_value.lower().strip(),
+            confidence=confidence,
+            source_chunk_ids=[source_chunk_id],
+            first_mention_chunk_id=source_chunk_id,
+            document_id=document_id,
+            metadata=metadata or {},
+            **kwargs
+        )
+
+    @classmethod
+    def create_definition(
+        cls,
+        definition_text: str,
+        confidence: float,
+        source_chunk_id: str,
+        source_document_id: str,
+        source_provision: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> "Entity":
+        """
+        Create DEFINITION entity with validation.
+
+        Invariants enforced:
+        - definition_text must be non-empty and substantive (min 10 chars)
+        - Must reference authoritative source (law/regulation)
+        - Source provision recommended for traceability
+
+        Args:
+            definition_text: Definition text from law/regulation
+            confidence: Extraction confidence (0.0-1.0)
+            source_chunk_id: Chunk ID where definition was found
+            source_document_id: Document ID (should be law/regulation)
+            source_provision: § reference or article number (recommended)
+            metadata: Optional metadata dict (parent_regulation, definition_type)
+            **kwargs: Additional Entity fields
+
+        Returns:
+            Entity with type DEFINITION
+
+        Raises:
+            ValueError: If invariants violated
+        """
+        if not definition_text or len(definition_text.strip()) < 10:
+            raise ValueError("Definition text must be non-empty and substantive (min 10 chars)")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {confidence}")
+
+        metadata_copy = metadata.copy() if metadata else {}
+        if source_provision:
+            metadata_copy["source_provision"] = source_provision
+
+        return cls(
+            id=str(uuid.uuid4()),
+            type=EntityType.DEFINITION,
+            value=definition_text,
+            normalized_value=definition_text[:100].lower().strip(),  # First 100 chars for matching
+            confidence=confidence,
+            source_chunk_ids=[source_chunk_id],
+            first_mention_chunk_id=source_chunk_id,
+            document_id=source_document_id,
+            metadata=metadata_copy,
+            **kwargs
+        )
+
+    @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Entity":
         """Create Entity from dictionary."""
         data_copy = data.copy()
@@ -370,6 +477,63 @@ class Relationship:
             "extraction_method": self.extraction_method,
             "extracted_at": self.extracted_at.isoformat() if self.extracted_at else None,
         }
+
+    @classmethod
+    def create_definition_of(
+        cls,
+        definition_entity: "Entity",
+        term_entity: "Entity",
+        confidence: float,
+        source_chunk_id: str,
+        evidence_text: str,
+        properties: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> "Relationship":
+        """
+        Create DEFINITION_OF relationship with type validation.
+
+        Invariants enforced:
+        - source must be DEFINITION entity
+        - target must be LEGAL_TERM entity
+        - Prevents type mismatches at construction
+
+        Args:
+            definition_entity: DEFINITION entity (source)
+            term_entity: LEGAL_TERM entity (target)
+            confidence: Relationship confidence (0.0-1.0)
+            source_chunk_id: Chunk ID where relationship was found
+            evidence_text: Supporting text snippet
+            properties: Optional relationship properties
+            **kwargs: Additional Relationship fields
+
+        Returns:
+            Relationship with type DEFINITION_OF
+
+        Raises:
+            ValueError: If entity types are wrong or invariants violated
+        """
+        if definition_entity.type != EntityType.DEFINITION:
+            raise ValueError(
+                f"Source must be DEFINITION entity, got {definition_entity.type.value}"
+            )
+        if term_entity.type != EntityType.LEGAL_TERM:
+            raise ValueError(
+                f"Target must be LEGAL_TERM entity, got {term_entity.type.value}"
+            )
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {confidence}")
+
+        return cls(
+            id=str(uuid.uuid4()),
+            type=RelationshipType.DEFINITION_OF,
+            source_entity_id=definition_entity.id,
+            target_entity_id=term_entity.id,
+            confidence=confidence,
+            source_chunk_id=source_chunk_id,
+            evidence_text=evidence_text,
+            properties=properties or {},
+            **kwargs
+        )
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Relationship":

@@ -737,182 +737,41 @@ else:
 
 ---
 
-## ⚖️ SOTA Compliance Workflow (Legal RAG 2024)
+## ⚖️ SOTA Compliance Workflow
 
 **Status:** ✅ IMPLEMENTED (2025-01-18)
 
-### Overview: Requirement-First Compliance Checking
+**Detailed Documentation:** See [`docs/SOTA_COMPLIANCE_IMPLEMENTATION.md`](docs/SOTA_COMPLIANCE_IMPLEMENTATION.md) for complete implementation guide, research foundations, and deployment checklist.
 
-Traditional RAG compliance systems suffer from **cherry-picking bias**: search for evidence FIRST, then confirm compliance. This produces 40-60% false positives (Legal AI Research 2024).
+### Quick Overview
 
-**SOTA Solution:** **Plan-and-Solve Pattern** (Zhou et al., 2023)
-1. **PHASE 1 (Planning):** Extract atomic requirements FROM law → Generate checklist
-2. **PHASE 2 (Solving):** Verify EACH requirement sequentially → Classify gaps
+**Problem:** Traditional RAG compliance systems have ~40-60% false positives due to "evidence-first" bias (cherry-picking evidence to confirm desired outcome).
 
-### Architecture
+**Solution:** Requirement-first approach using Plan-and-Solve pattern:
+1. **PHASE 1 (Plan):** Extract atomic requirements FROM law independently → Generate checklist
+2. **PHASE 2 (Solve):** Verify EACH requirement sequentially → Classify gaps (REGULATORY_GAP vs SCOPE_GAP)
 
+**Key Agents:**
+- `requirement_extractor` - Extracts atomic legal obligations from laws/regulations
+- `compliance` - Checklist-based verification (requirement-first, no discovery mode)
+- `gap_synthesizer` - Prioritizes gaps (REGULATORY_GAP = must fix, SCOPE_GAP = not applicable)
+
+**Workflow:**
 ```
-User Query: "Je dokumentace v souladu s Vyhláškou 157/2025?"
-     ↓
-Orchestrator (routing) → agents=["extractor", "requirement_extractor", "compliance", "gap_synthesizer"]
-     ↓
-┌─────────────┐    ┌─────────────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│  Extractor  │ → │ RequirementExtractor   │ → │  Compliance  │ → │ GapSynthesizer │
-│             │    │                         │    │              │    │                 │
-│ Retrieves   │    │ PLAN:                  │    │ SOLVE:       │    │ Aggregates:     │
-│ law text    │    │ - Extract atomic reqs  │    │ - Verify     │    │ - REGULATORY_   │
-│ from vector │    │ - Classify:            │    │   each req   │    │   GAP (critical)│
-│ store       │    │   * MANDATORY/         │    │ - Evidence   │    │ - SCOPE_GAP     │
-│             │    │     CONDITIONAL/       │    │   retrieval  │    │   (inform)      │
-│             │    │     NOT_APPLICABLE     │    │ - Definition │    │ - Completeness  │
-│             │    │ - Generate checklist   │    │   alignment  │    │   score         │
-│             │    │   (REQ-001...REQ-N)    │    │ - Classify:  │    │                 │
-│             │    │                         │    │   COMPLIANT/ │    │                 │
-│             │    │                         │    │   GAP/SCOPE  │    │                 │
-└─────────────┘    └─────────────────────────┘    └──────────────┘    └─────────────────┘
+Query: "Je dokumentace v souladu s Vyhláškou 157/2025?"
+→ Orchestrator routes to: [extractor → requirement_extractor → compliance → gap_synthesizer]
 ```
 
-### Key Components
+**Files:**
+- Implementation: `src/multi_agent/agents/{requirement_extractor,compliance}.py`
+- Tools: `src/agent/tools/tier3_analysis.py` (DefinitionAlignerTool)
+- Prompts: `prompts/agents/{requirement_extractor,compliance,gap_synthesizer}.txt`
+- Tests: `tests/multi_agent/integration/test_compliance_workflow.py`
 
-**1. RequirementExtractorAgent** (`src/multi_agent/agents/requirement_extractor.py`)
-- **Purpose:** Extract atomic, verifiable requirements from legal texts
-- **Tools:** hierarchical_search, graph_search, definition_aligner, multi_doc_synthesizer
-- **Output:** JSON checklist with:
-  - `requirement_id` (REQ-001...REQ-N)
-  - `requirement_text` (atomic obligation)
-  - `source_citation` (breadcrumb to law)
-  - `granularity_level` (DOCUMENT/SECTION/CONTENT/REFERENCE)
-  - `severity` (CRITICAL/HIGH/MEDIUM/LOW)
-  - `applicability` (MANDATORY/CONDITIONAL/NOT_APPLICABLE)
-  - `verification_guidance` (HOW to check compliance - executable specification)
-- **Research:** Legal AI Atomization (Cornell 2024)
-
-**2. DefinitionAlignerTool** (`src/agent/tools/tier3_analysis.py`)
-- **Purpose:** Map legal terminology across documents (e.g., "Client" ↔ "Consumer")
-- **Method:** Hybrid search (Apache AGE knowledge graph + pgvector semantic)
-- **Use Case:** Law says "Data Controller" but contract uses "Data Custodian" → Are they equivalent?
-- **Output:** Alignments with confidence scores, conflict warnings
-- **Research:** Contextual Retrieval (Anthropic 2024) - reduces context drift by 58%
-
-**3. ComplianceAgent** (`src/multi_agent/agents/compliance.py`)
-- **Mode:** Checklist-based verification (ONLY - no backward compatibility)
-- **Input:** Checklist from RequirementExtractorAgent
-- **Workflow:**
-  1. **EVIDENCE RETRIEVAL:** Use verification_guidance to search documentation
-  2. **LOGICAL COMPARISON:** Compare requirement_text vs evidence
-  3. **DEFINITION CHECK:** Apply terminology alignments
-  4. **GAP CLASSIFICATION:**
-     - ✅ COMPLIANT: Evidence fully satisfies requirement
-     - ⚠️ PARTIAL: Evidence exists but incomplete
-     - ❌ REGULATORY_GAP: MANDATORY + APPLICABLE + MISSING → **MUST fix**
-     - 🔍 SCOPE_GAP: CONDITIONAL not met OR NOT_APPLICABLE + MISSING → **OK** (not a violation)
-- **Output:** Compliance report with detailed gap analysis
-
-**4. GapSynthesizerAgent** (`src/multi_agent/agents/gap_synthesizer.py`)
-- **Enhancement:** Distinguishes REGULATORY_GAP (critical) vs SCOPE_GAP (informational)
-- **Integration:** Reads ComplianceAgent output, cross-references with own gap discovery
-- **Output:** Prioritized action items with effort estimates
-
-### REGULATORY_GAP vs SCOPE_GAP (Critical Distinction)
-
-**Why this matters:** Prevents false positives that plagued legacy systems.
-
-**REGULATORY_GAP** = Requirement is **MANDATORY** + **APPLICABLE** + **MISSING** → Legal violation!
-- Example: Law requires "emergency plan reference" [MANDATORY], document is technical doc [APPLICABLE] → Missing = **REGULATORY_GAP** (violation)
-- Action: **MUST fix immediately**
-
-**SCOPE_GAP** = Requirement is **NOT_APPLICABLE** OR **CONDITIONAL** not met + MISSING → OK (not a violation)
-- Example: Law requires "isotope composition IF nuclear fuel used" [CONDITIONAL], document describes non-nuclear HVAC → Missing = **SCOPE_GAP** (not applicable, OK)
-- Action: **Optional:** Document why not applicable (for audit trail transparency)
-
-**False Positive Reduction:**
-- Legacy systems: ~40-60% false positives
-- SOTA system: ~5-10% false positives (applicability-aware classification)
-
-### Configuration
-
-**Orchestrator Routing** (`prompts/agents/orchestrator.txt`):
-```
-Compliance queries → query_type="compliance"
-→ agents=["extractor", "requirement_extractor", "compliance", "gap_synthesizer"]
-```
-
-**Agent Config** (`config.json`):
-```json
-"requirement_extractor": {
-  "model": "claude-haiku-4-5",
-  "max_tokens": 4096,  // Higher for JSON checklist
-  "temperature": 0.2,
-  "timeout_seconds": 90,
-  "tools": ["hierarchical_search", "graph_search", "definition_aligner", "multi_doc_synthesizer"]
-},
-"compliance": {
-  "max_tokens": 3072,  // Higher for detailed report
-  "tools": ["hierarchical_search", "graph_search", "definition_aligner", "assess_confidence"]
-}
-```
-
-### Research Foundations
-
-1. **Legal AI Atomization** (Cornell 2024): Atomic requirements = independently verifiable obligations
-2. **Plan-and-Solve Pattern** (Zhou et al., 2023): Decompose → Sequential verification prevents "answer first, justify later"
-3. **Contextual Retrieval** (Anthropic 2024): definition_aligner uses context prepending (-58% drift)
-4. **Requirement-First Compliance** (Legal AI 2024): Extract WHAT law requires BEFORE searching documentation
-
-### Testing
-
-**Integration Test:** `tests/multi_agent/integration/test_compliance_workflow.py`
-- Full workflow: extractor → requirement_extractor → compliance → gap_synthesizer
-- JSON checklist parsing
-- REGULATORY_GAP vs SCOPE_GAP classification
-- Error handling (missing checklist, invalid JSON, timeouts)
-
-**Test Query:**
-```python
-query = "Je dokumentace v souladu s Vyhláškou č. 157/2025 Sb.?"
-# Expected: 3 requirements extracted, 1 REGULATORY_GAP, 2 SCOPE_GAPs
-```
-
-### Performance
-
-- **Latency:** 30-60s for complex compliance queries (3-4 agents sequentially)
-- **Cost:** ~$0.05-0.15 per query (claude-haiku-4-5 with 4096 token responses)
-- **Accuracy:** ~90-95% requirement extraction recall, ~5-10% false positive rate
-
-### Error Handling
-
-**ComplianceAgent Validation:**
-```python
-# 1. Check requirement_extractor output exists
-if not requirement_extractor_output:
-    return error: "Missing requirement_extractor output. Ensure routing: extractor → requirement_extractor → compliance"
-
-# 2. Validate JSON checklist
-try:
-    checklist_data = json.loads(checklist_str)
-except json.JSONDecodeError:
-    return error: "Invalid JSON from requirement_extractor"
-
-# 3. Validate structure
-if "checklist" not in checklist_data or len(checklist_data["checklist"]) == 0:
-    return error: "Checklist missing or empty"
-```
-
-**Graceful Degradation:**
-- definition_aligner: Falls back to semantic search if knowledge graph unavailable
-- All tools: Return ToolResult(success=False, error=...) instead of raising exceptions
-
-### Migration from Legacy Compliance
-
-**Breaking Changes:**
-- ❌ No backward compatibility - compliance agent REQUIRES requirement_extractor output
-- ❌ Old workflow (extractor → compliance) will fail with clear error message
-- ✅ Orchestrator ALWAYS routes: extractor → requirement_extractor → compliance
-
-**Why No Backward Compatibility:**
-- Fail-fast is better than fail-silently for compliance (incorrect "✅ Compliant" has legal consequences)
-- Dual-mode systems (CHECKLIST + DISCOVERY) introduce silent failures and unpredictable results
-- Clean architecture = predictable failure modes
+**Performance:**
+- Latency: 30-60s for complex queries
+- Cost: ~$0.05-0.15 per query (claude-haiku-4-5)
+- Accuracy: ~90-95% requirement extraction recall, ~5-10% false positive rate (vs ~40-60% in legacy systems)
 
 ---
 

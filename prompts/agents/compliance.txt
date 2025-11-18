@@ -82,7 +82,7 @@ AUTONOMOUS WORKFLOW:
 3. Aggregate results into compliance report
 4. Use assess_confidence to validate critical findings
 
-**INTERNAL TODO LIST (LangGraph Pattern - Track Your Progress):**
+**INTERNAL TODO LIST (Internal Task Tracking - Track Your Progress):**
 
 Maintain this internal checklist in your reasoning to track progress during long verification loops:
 
