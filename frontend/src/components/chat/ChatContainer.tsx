@@ -180,13 +180,16 @@ export function ChatContainer({
       {/* Input area with animation */}
       <div
         className={cn(
-          'transition-all duration-600 ease-out',
           !hasMessages && 'absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl px-4'
         )}
         style={
           hasMessages && inputAnimated
             ? {
                 animation: 'slideDown 1.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              }
+            : !hasMessages
+            ? {
+                animation: 'fadeInScale 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
               }
             : undefined
         }

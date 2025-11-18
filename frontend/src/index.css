@@ -215,6 +215,18 @@ button:hover, a:hover {
   }
 }
 
+/* Fade in with scale animation for welcome search bar */
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* Complex message extraction animation - User message (travels right) */
 @keyframes messageExtractUser {
   /* Phase 1: Extract from center input (0-20%) */

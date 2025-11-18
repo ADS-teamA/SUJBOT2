@@ -42,7 +42,7 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
   return (
     <div className={cn(
       'flex-1 flex flex-col items-center justify-start',
-      'px-6 pt-8 pb-32 overflow-hidden'
+      'px-6 pt-12 pb-32 overflow-hidden'
     )}>
       {/* Gradient background */}
       <div

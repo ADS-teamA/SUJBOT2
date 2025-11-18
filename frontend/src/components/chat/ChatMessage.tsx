@@ -67,7 +67,7 @@ export function ChatMessage({
         isUser ? 'justify-end' : 'justify-start'
       )}
       style={{
-        animation: `fadeInUp 1.0s cubic-bezier(0.16, 1, 0.3, 1) ${animationDelay}ms backwards`,
+        animation: `${isUser ? 'messageExtractUser' : 'messageExtractAssistant'} 1.4s cubic-bezier(0.16, 1, 0.3, 1) ${animationDelay}ms backwards`,
       }}
     >
       <div
