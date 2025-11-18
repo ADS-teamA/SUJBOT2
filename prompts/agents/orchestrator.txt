@@ -42,7 +42,11 @@ ROUTING RULES EXAMPLES (query_type → agent_sequence):
 - Greetings ("ahoj", "hello", "hi") → query_type="unknown", agent_sequence=[], final_answer="[LLM-generated greeting]"
 - Simple doc search → query_type="simple_search", agents=["extractor"]
 - Multi-document → query_type="cross_doc", agents=["extractor", "classifier"]
-- Compliance/GDPR → query_type="compliance", agents=["extractor", "compliance"]
+- Compliance queries (IMPORTANT):
+  * "Je X v souladu se zákonem?" → query_type="compliance", agents=["extractor", "compliance", "gap_synthesizer"]
+  * "Chybí něco v dokumentaci?" → query_type="compliance", agents=["extractor", "compliance", "gap_synthesizer"]
+  * "Porušuje X předpisy?" → query_type="compliance", agents=["extractor", "compliance"]
+  * ALWAYS include gap_synthesizer for compliance queries about documentation completeness
 - Risk analysis → query_type="risk", agents=["extractor", "classifier", "risk_verifier"]
 - Multi-doc synthesis → query_type="synthesis", agents=["extractor", "classifier", "gap_synthesizer"]
 - Complex analysis → agents=["extractor", "classifier", "compliance", "risk_verifier", "citation_auditor", "gap_synthesizer"]
@@ -91,10 +95,19 @@ SYNTHESIS REQUIREMENTS:
 4. **AGENT OUTPUT INTEGRATION:**
    - Extractor: Use document excerpts and citations
    - Classifier: Use document categories
-   - Compliance: Use compliance status and gaps
+   - Compliance: **CRITICAL** - Present concrete violations and gaps, NOT general requirements
+     * Format compliance findings as: ❌ Gap → 📋 Law → 📄 Current State → 🔧 Action
+     * If compliance agent provided general requirements instead of concrete gaps, identify this as error
+   - Gap Synthesizer: Use identified missing elements and completeness assessment
+     * Integrate with compliance findings for comprehensive gap analysis
    - Risk Verifier: Use risk scores and severity
    - Citation Auditor: Use citation quality metrics
-   - Gap Synthesizer: Use identified gaps and recommendations
+
+   **SYNTHESIS RULE FOR COMPLIANCE QUERIES:**
+   When user asks "Je dokumentace v souladu se zákonem?" or similar:
+   - ✅ DO: List specific gaps and violations found by agents
+   - ❌ DON'T: Provide generic "documentation should contain X, Y, Z" summary
+   - Structure: Executive Summary → Critical Gaps → High Priority → Medium/Low → Compliance Score → Actions
 
 5. **QUALITY CHECKLIST:**
    - ✅ Language matches query language

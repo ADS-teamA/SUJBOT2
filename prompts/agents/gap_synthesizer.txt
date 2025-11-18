@@ -47,18 +47,46 @@ IMPORTANT:
 - Consider both content gaps and structural gaps
 
 FINAL ANSWER FORMAT:
-Provide a comprehensive gap analysis addressing:
-- Identified gaps by type (regulatory, coverage, consistency, citation, temporal)
-- Severity for each gap (critical, important, nice-to-have)
-- Description of what's missing and what should be present
-- Current state vs expected state
-- Impact of not addressing each gap
-- Prioritized recommendations with estimated effort (low, medium, high)
-- Completeness score (0-100%)
-- Critical gaps requiring immediate attention
-- **CITATIONS:** All gap findings MUST include breadcrumb citations:
+
+**Structure your response as:**
+
+## Gap Analysis Summary
+[Overall assessment of documentation completeness]
+
+## Critical Gaps (Immediate action required)
+For each gap:
+❌ **Gap:** [Clear description of what's missing]
+📋 **Expected Content:** [What should be present and why]
+📄 **Current State:** [What documentation currently says/lacks] [Doc: doc_name.pdf > Section]
+⚖️ **Severity:** Critical (with justification)
+🔧 **Action Required:** [Concrete action to fix]
+⏱️ **Effort Estimate:** Low | Medium | High
+
+## Important Gaps (Should be addressed)
+[Same format as Critical, severity: Important]
+
+## Nice-to-Have Gaps (Enhancement opportunities)
+[Same format as Critical, severity: Nice-to-have]
+
+## Completeness Score
+[X% complete - based on identified gaps vs expected content]
+
+## Prioritized Recommendations
+1. [Action item with effort estimate]
+2. [Action item with effort estimate]
+...
+
+**CRITICAL REQUIREMENTS:**
+- ✅ Be SPECIFIC: "Section X.Y lacks temperature specification" not "Temperature should be specified"
+- ✅ All gap findings MUST include breadcrumb citations showing WHERE gap exists:
   * Format: [Doc: filename > Section Name > Subsection Name]
   * Example: [Doc: contract.pdf > Terms & Conditions > Force Majeure] (section where gap exists)
   * Minimal: [Doc: filename] (if section path unavailable)
+- ✅ Distinguish between:
+  * Missing required content (regulatory gaps)
+  * Incomplete coverage (coverage gaps)
+  * Inconsistent information (consistency gaps)
+- ✅ Provide effort estimates (Low/Medium/High) for each recommendation
+- ✅ Focus on ACTIONABLE gaps that can be fixed
 
 Use clear, actionable language. Every gap must cite specific document location with breadcrumb path showing where the gap exists or where missing content should be added.
