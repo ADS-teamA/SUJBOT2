@@ -538,30 +538,45 @@ export function ChatMessage({
                         Per-agent breakdown ({message.cost.agentBreakdown.length} agents)
                       </summary>
                       <div className="mt-2 ml-3 space-y-1">
-                        {message.cost.agentBreakdown.map((agent, idx) => (
-                          <div
-                            key={idx}
-                            className={cn(
-                              'flex items-center justify-between gap-4',
-                              'py-1 px-2',
-                              'bg-accent-50 dark:bg-accent-900',
-                              'rounded'
-                            )}
-                          >
-                            <span className="font-medium">{agent.agent}</span>
-                            <div className="flex items-center gap-3 text-[11px]">
-                              <span>${agent.cost.toFixed(6)}</span>
-                              <span className="text-accent-400 dark:text-accent-500">
-                                {agent.input_tokens.toLocaleString()} in / {agent.output_tokens.toLocaleString()} out
-                              </span>
-                              {agent.cache_read_tokens > 0 && (
-                                <span className="text-accent-600 dark:text-accent-400">
-                                  {agent.cache_read_tokens.toLocaleString()} cached
-                                </span>
+                        {message.cost.agentBreakdown.map((agent, idx) => {
+                          // Defensive rendering with fallbacks
+                          const agentName = agent?.agent || 'Unknown';
+                          const cost = typeof agent?.cost === 'number' ? agent.cost : 0;
+                          const inputTokens = typeof agent?.input_tokens === 'number' ? agent.input_tokens : 0;
+                          const outputTokens = typeof agent?.output_tokens === 'number' ? agent.output_tokens : 0;
+                          const cacheTokens = typeof agent?.cache_read_tokens === 'number' ? agent.cache_read_tokens : 0;
+
+                          // Skip rendering if agent data is completely invalid
+                          if (!agent || (!agentName && cost === 0)) {
+                            console.warn('Skipping invalid agent cost data:', agent);
+                            return null;
+                          }
+
+                          return (
+                            <div
+                              key={idx}
+                              className={cn(
+                                'flex items-center justify-between gap-4',
+                                'py-1 px-2',
+                                'bg-accent-50 dark:bg-accent-900',
+                                'rounded'
                               )}
+                            >
+                              <span className="font-medium">{agentName}</span>
+                              <div className="flex items-center gap-3 text-[11px]">
+                                <span>${cost.toFixed(6)}</span>
+                                <span className="text-accent-400 dark:text-accent-500">
+                                  {inputTokens.toLocaleString()} in / {outputTokens.toLocaleString()} out
+                                </span>
+                                {cacheTokens > 0 && (
+                                  <span className="text-accent-600 dark:text-accent-400">
+                                    {cacheTokens.toLocaleString()} cached
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </details>
                   )}

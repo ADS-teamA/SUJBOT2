@@ -246,10 +246,12 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                 # Extract usage from response
                 if hasattr(response, 'usage'):
                     usage = response.usage
-                    input_tokens = getattr(usage, 'input_tokens', 0) or getattr(usage, 'prompt_tokens', 0)
-                    output_tokens = getattr(usage, 'output_tokens', 0) or getattr(usage, 'completion_tokens', 0)
-                    cache_read_tokens = getattr(usage, 'cache_read_input_tokens', 0)
-                    cache_creation_tokens = getattr(usage, 'cache_creation_input_tokens', 0)
+                    # BUGFIX: usage is a dict, not object - use .get() instead of getattr()
+                    input_tokens = usage.get('input_tokens', 0) or usage.get('prompt_tokens', 0)
+                    output_tokens = usage.get('output_tokens', 0) or usage.get('completion_tokens', 0)
+                    # Correct field names for Anthropic API
+                    cache_read_tokens = usage.get('cache_read_input_tokens', 0)
+                    cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
 
                     # Determine provider from model name
                     if 'claude' in self.config.model.lower():
@@ -421,10 +423,12 @@ Ensure language matching and proper citations."""
 
             if hasattr(response, 'usage'):
                 usage = response.usage
-                input_tokens = getattr(usage, 'input_tokens', 0) or getattr(usage, 'prompt_tokens', 0)
-                output_tokens = getattr(usage, 'output_tokens', 0) or getattr(usage, 'completion_tokens', 0)
-                cache_read_tokens = getattr(usage, 'cache_read_input_tokens', 0)
-                cache_creation_tokens = getattr(usage, 'cache_creation_input_tokens', 0)
+                # BUGFIX: usage is a dict, not object - use .get() instead of getattr()
+                input_tokens = usage.get('input_tokens', 0) or usage.get('prompt_tokens', 0)
+                output_tokens = usage.get('output_tokens', 0) or usage.get('completion_tokens', 0)
+                # Correct field names for Anthropic API
+                cache_read_tokens = usage.get('cache_read_input_tokens', 0)
+                cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
 
                 # Determine provider from model name
                 if 'claude' in self.config.model.lower():

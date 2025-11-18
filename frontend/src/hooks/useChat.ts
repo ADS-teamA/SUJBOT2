@@ -377,13 +377,27 @@ export function useChat() {
             console.log('💰 FRONTEND: Cost summary received:', event.data);
 
             if (currentMessageRef.current) {
+              // Validate and sanitize cost data
+              const totalCost = typeof event.data.total_cost === 'number' ? event.data.total_cost : 0;
+              const inputTokens = typeof event.data.total_input_tokens === 'number' ? event.data.total_input_tokens : 0;
+              const outputTokens = typeof event.data.total_output_tokens === 'number' ? event.data.total_output_tokens : 0;
+              const agentBreakdown = Array.isArray(event.data.agent_breakdown) ? event.data.agent_breakdown : [];
+
+              // Log validation warnings
+              if (totalCost < 0 || isNaN(totalCost)) {
+                console.error('❌ Invalid cost value received:', event.data.total_cost);
+              }
+              if (inputTokens < 0 || outputTokens < 0) {
+                console.error('❌ Invalid token counts:', { inputTokens, outputTokens });
+              }
+
               currentMessageRef.current.cost = {
-                totalCost: event.data.total_cost,
-                inputTokens: event.data.total_input_tokens,
-                outputTokens: event.data.total_output_tokens,
+                totalCost: Math.max(0, totalCost),
+                inputTokens: Math.max(0, inputTokens),
+                outputTokens: Math.max(0, outputTokens),
                 cachedTokens: event.data.cache_stats?.cache_read_tokens || 0,
-                agentBreakdown: event.data.agent_breakdown || [],
-                cacheStats: event.data.cache_stats,
+                agentBreakdown,
+                cacheStats: event.data.cache_stats || { cache_read_tokens: 0, cache_creation_tokens: 0 },
               };
 
               // Update UI

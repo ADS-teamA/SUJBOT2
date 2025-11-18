@@ -386,18 +386,22 @@ class AgentAdapter:
             total_cost_usd = tracker.get_total_cost()
             agent_breakdown = tracker.get_agent_breakdown()
 
-            # Build agent breakdown array for frontend
+            # Build agent breakdown array for frontend with defensive access
             agent_costs = []
             for agent_name, stats in agent_breakdown.items():
-                agent_costs.append({
-                    "agent": agent_name,
-                    "cost": stats["cost"],
-                    "input_tokens": stats["input_tokens"],
-                    "output_tokens": stats["output_tokens"],
-                    "cache_read_tokens": stats["cache_read_tokens"],
-                    "cache_creation_tokens": stats["cache_creation_tokens"],
-                    "call_count": stats["call_count"]
-                })
+                try:
+                    agent_costs.append({
+                        "agent": agent_name,
+                        "cost": stats.get("cost", 0.0),
+                        "input_tokens": stats.get("input_tokens", 0),
+                        "output_tokens": stats.get("output_tokens", 0),
+                        "cache_read_tokens": stats.get("cache_read_tokens", 0),
+                        "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
+                        "call_count": stats.get("call_count", 0)
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)
+                    # Continue with remaining agents - partial cost data is better than none
 
             # Sort by cost descending
             agent_costs.sort(key=lambda x: x["cost"], reverse=True)
@@ -425,12 +429,27 @@ class AgentAdapter:
             }
 
         except Exception as e:
-            logger.error(f"Error during multi-agent execution: {e}", exc_info=True)
+            # Capture execution context for debugging
+            context = {
+                "query": query[:200] if query else "N/A",
+                "conversation_id": conversation_id,
+                "agent_sequence": agent_sequence if 'agent_sequence' in locals() else [],
+                "last_agent": agent_sequence[-1] if 'agent_sequence' in locals() and agent_sequence else None,
+                "error_phase": "multi_agent_execution"
+            }
+
+            logger.error(
+                f"Error during multi-agent execution: {type(e).__name__}: {e}",
+                exc_info=True,
+                extra=context
+            )
+
             yield {
                 "event": "error",
                 "data": {
                     "error": str(e),
-                    "type": type(e).__name__
+                    "type": type(e).__name__,
+                    "context": context
                 }
             }
 
@@ -616,18 +635,22 @@ class AgentAdapter:
             total_cost_usd = tracker.get_total_cost()
             agent_breakdown = tracker.get_agent_breakdown()
 
-            # Build agent breakdown array for frontend
+            # Build agent breakdown array for frontend with defensive access
             agent_costs = []
             for agent_name, stats in agent_breakdown.items():
-                agent_costs.append({
-                    "agent": agent_name,
-                    "cost": stats["cost"],
-                    "input_tokens": stats["input_tokens"],
-                    "output_tokens": stats["output_tokens"],
-                    "cache_read_tokens": stats["cache_read_tokens"],
-                    "cache_creation_tokens": stats["cache_creation_tokens"],
-                    "call_count": stats["call_count"]
-                })
+                try:
+                    agent_costs.append({
+                        "agent": agent_name,
+                        "cost": stats.get("cost", 0.0),
+                        "input_tokens": stats.get("input_tokens", 0),
+                        "output_tokens": stats.get("output_tokens", 0),
+                        "cache_read_tokens": stats.get("cache_read_tokens", 0),
+                        "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
+                        "call_count": stats.get("call_count", 0)
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)
+                    # Continue with remaining agents - partial cost data is better than none
 
             # Sort by cost descending
             agent_costs.sort(key=lambda x: x["cost"], reverse=True)
@@ -648,10 +671,26 @@ class AgentAdapter:
             yield {"event": "done", "data": {}}
 
         except Exception as e:
-            logger.error(f"Resume error: {e}", exc_info=True)
+            # Capture execution context for debugging
+            context = {
+                "query": query[:200] if query else "N/A",
+                "conversation_id": conversation_id,
+                "error_phase": "simple_mode_execution"
+            }
+
+            logger.error(
+                f"Resume error: {type(e).__name__}: {e}",
+                exc_info=True,
+                extra=context
+            )
+
             yield {
                 "event": "error",
-                "data": {"error": str(e), "type": type(e).__name__},
+                "data": {
+                    "error": str(e),
+                    "type": type(e).__name__,
+                    "context": context
+                },
             }
 
     def get_health_status(self) -> Dict[str, Any]:
