@@ -525,3 +525,84 @@ class TestCompliancePerformance:
         # Real workflow: 30-60s expected
         assert elapsed_time < 1.0  # Mocked agents are fast
         assert result is not None
+
+
+async def test_handles_empty_checklist_gracefully(mock_agent_registry_compliance):
+    """
+    Test that ComplianceAgent handles empty checklist gracefully.
+
+    Scenario: RequirementExtractor returns empty checklist (no requirements found in law).
+    Expected: Compliance agent should handle gracefully without crashing.
+    """
+    registry = mock_agent_registry_compliance
+
+    # Get requirement_extractor from registry
+    requirement_extractor = registry.get_agent("requirement_extractor")
+
+    # Mock empty checklist response
+    empty_checklist = json.dumps({
+        "requirements_extracted": 0,
+        "target_law": "Test Law",
+        "terminology_alignments": [],
+        "checklist": [],  # EMPTY - no requirements found
+        "extraction_summary": "No atomic requirements could be extracted from the provided law text."
+    })
+
+    # Override requirement_extractor to return empty checklist
+    requirement_extractor.execute = AsyncMock(
+        return_value={
+            "query": "Test query",
+            "agent_outputs": {
+                "requirement_extractor": {
+                    "checklist": [],  # Empty checklist
+                    "raw_answer": empty_checklist,
+                    "parsed_successfully": True,
+                    "parse_error": None,
+                    "tool_calls_made": ["hierarchical_search"],
+                    "iterations": 2,
+                    "total_tool_cost_usd": 0.001
+                }
+            }
+        }
+    )
+
+    # Get compliance agent
+    compliance = registry.get_agent("compliance")
+
+    # Create initial state
+    state = MultiAgentState(
+        query="Test query with empty checklist",
+        conversation_id="test-empty-checklist",
+        phase=ExecutionPhase.AGENT_EXECUTION,
+        agent_outputs={
+            "extractor": {"documents": ["doc1"]},
+            "requirement_extractor": {
+                "checklist": [],  # Empty checklist
+                "parsed_successfully": True,
+                "parse_error": None
+            }
+        },
+        tool_executions=[],
+        documents=[],
+        citations=[],
+        total_cost_cents=0.0,
+        errors=[],
+    )
+
+    # Execute compliance agent with empty checklist
+    result = await compliance.execute(state.model_dump())
+
+    # Should handle gracefully without crash
+    assert result is not None
+    assert "errors" not in result or len(result.get("errors", [])) == 0
+
+    # Should have compliance output (may be empty or informational)
+    assert "agent_outputs" in result
+    assert "compliance" in result["agent_outputs"]
+
+    # Check that compliance agent recognized empty checklist
+    compliance_output = result["agent_outputs"]["compliance"]
+
+    # Verify it handled the empty checklist case
+    # (implementation may vary, but should not crash)
+    assert compliance_output is not None
