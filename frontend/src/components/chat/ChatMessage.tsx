@@ -468,7 +468,7 @@ export function ChatMessage({
             {!isUser && (message.cost?.totalCost !== undefined || responseDurationMs !== undefined || (message.toolCalls && message.toolCalls.length > 0)) && (
               <>
                 <span className="text-accent-300 dark:text-accent-700">•</span>
-                <details className="group inline-block">
+                <details className="group relative inline-block">
                   <summary className={cn(
                     'cursor-pointer select-none',
                     'text-accent-400 dark:text-accent-600',
@@ -487,7 +487,7 @@ export function ChatMessage({
 
                 {/* Dropdown panel below */}
                 <div className={cn(
-                  'absolute mt-1 z-10',
+                  'absolute left-0 mt-1 z-10',
                   'min-w-[300px]',
                   'border border-accent-200 dark:border-accent-700',
                   'rounded-lg overflow-hidden',

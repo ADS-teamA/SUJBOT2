@@ -101,7 +101,10 @@ export function ChatContainer({
         {!hasMessages ? (
           <WelcomeScreen onPromptClick={onSendMessage} />
         ) : (
-          <div className="max-w-5xl mx-auto py-4">
+          <div
+            className="max-w-5xl mx-auto py-4"
+            style={{ animation: 'fadeIn 0.3s ease-out' }}
+          >
             {conversation?.messages
                 .filter((message) => {
                   // Show user messages always
@@ -161,15 +164,23 @@ export function ChatContainer({
                   }
 
                   return (
-                    <ChatMessage
+                    <div
                       key={message.id}
-                      message={message}
-                      animationDelay={index * 100}
-                      onEdit={onEditMessage}
-                      onRegenerate={onRegenerateMessage}
-                      disabled={isStreaming}
-                      responseDurationMs={responseDurationMs}
-                    />
+                      style={
+                        index === 0 && inputAnimated
+                          ? { animation: 'fadeInFromCenter 0.5s ease-out' }
+                          : undefined
+                      }
+                    >
+                      <ChatMessage
+                        message={message}
+                        animationDelay={index === 0 ? 0 : index * 100}
+                        onEdit={onEditMessage}
+                        onRegenerate={onRegenerateMessage}
+                        disabled={isStreaming}
+                        responseDurationMs={responseDurationMs}
+                      />
+                    </div>
                   );
                 })}
             <div ref={messagesEndRef} />
@@ -185,11 +196,11 @@ export function ChatContainer({
         style={
           hasMessages && inputAnimated
             ? {
-                animation: 'slideDown 1.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                animation: 'slideDown 0.4s ease-out',
               }
             : !hasMessages
             ? {
-                animation: 'fadeInScale 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+                animation: 'fadeInScale 0.6s ease-out',
               }
             : undefined
         }

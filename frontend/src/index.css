@@ -193,12 +193,24 @@ button:hover, a:hover {
   }
 }
 
-/* Slide down animation for input box */
-@keyframes slideDown {
+/* Simple fade in */
+@keyframes fadeIn {
   0% {
-    transform: translateY(calc(-50vh + 50%));
+    opacity: 0;
   }
   100% {
+    opacity: 1;
+  }
+}
+
+/* Slide down animation for input box (simplified) */
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
     transform: translateY(0);
   }
 }
@@ -208,6 +220,18 @@ button:hover, a:hover {
   0% {
     opacity: 0;
     transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fade in from center (for first message from search bar) */
+@keyframes fadeInFromCenter {
+  0% {
+    opacity: 0;
+    transform: translateY(-60px);
   }
   100% {
     opacity: 1;
