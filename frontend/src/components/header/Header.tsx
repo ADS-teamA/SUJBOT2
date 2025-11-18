@@ -51,12 +51,11 @@ export function Header({
 
           {/* Logo and title */}
           <div className="flex items-center gap-3">
-            {/* Icon - Inline SVG for proper currentColor support */}
+            {/* Icon - Atom + Book */}
             <svg
               width="40"
               height="40"
-              viewBox="0 0 64 64"
-              fill="none"
+              viewBox="0 0 512 512"
               xmlns="http://www.w3.org/2000/svg"
               className={cn(
                 'text-accent-900 dark:text-accent-100',
@@ -64,29 +63,41 @@ export function Header({
                 'transition-all duration-700'
               )}
             >
-              {/* Atom orbits */}
-              <g stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.8">
-                <ellipse cx="32" cy="32" rx="24" ry="8" />
-                <ellipse cx="32" cy="32" rx="24" ry="8" transform="rotate(60 32 32)" />
-                <ellipse cx="32" cy="32" rx="24" ry="8" transform="rotate(120 32 32)" />
+              {/* Atom + Book */}
+              <g transform="translate(256 256)" stroke="currentColor" strokeWidth="10" fill="none" strokeLinecap="round">
+                {/* Orbitals */}
+                <ellipse rx="185" ry="110" />
+                <ellipse rx="185" ry="110" transform="rotate(60)" />
+                <ellipse rx="185" ry="110" transform="rotate(-60)" />
+
+                {/* Electrons (4 directions) */}
+                <circle r="12" cx="185" cy="0" fill="currentColor" stroke="none" />
+                <circle r="12" cx="-185" cy="0" fill="currentColor" stroke="none" />
+                <circle r="12" cx="0" cy="-110" fill="currentColor" stroke="none" />
+                <circle r="12" cx="0" cy="110" fill="currentColor" stroke="none" />
+
+                {/* Book */}
+                <g fill="none" stroke="currentColor" strokeWidth="8" strokeLinejoin="round">
+                  {/* Open book outline */}
+                  <path d="M -75 -42
+                           L -75 42
+                           Q -37 24 0 36
+                           Q 37 24 75 42
+                           L 75 -42
+                           Q 37 -52 0 -42
+                           Q -37 -52 -75 -42 Z" />
+                  {/* Book spine */}
+                  <line x1="0" y1="-48" x2="0" y2="38" />
+                  {/* Lines on left side */}
+                  <path d="M -55 -22 L -20 -18" />
+                  <path d="M -55  -5 L -20   0" />
+                  <path d="M -55  12 L -20  17" />
+                  {/* Lines on right side */}
+                  <path d="M 20 -18 L 55 -22" />
+                  <path d="M 20   0 L 55  -5" />
+                  <path d="M 20  17 L 55  12" />
+                </g>
               </g>
-              {/* Open book */}
-              <g fill="currentColor">
-                <path d="M 26 26 L 26 38 L 32 36 L 38 38 L 38 26 Z" opacity="0.9" />
-                <line x1="32" y1="26" x2="32" y2="36" stroke="currentColor" strokeWidth="1.5" />
-                <line x1="28" y1="29" x2="31" y2="29" stroke="currentColor" strokeWidth="0.5" opacity="0.5" />
-                <line x1="28" y1="32" x2="31" y2="32" stroke="currentColor" strokeWidth="0.5" opacity="0.5" />
-                <line x1="28" y1="35" x2="31" y2="35" stroke="currentColor" strokeWidth="0.5" opacity="0.5" />
-                <line x1="33" y1="29" x2="36" y2="29" stroke="currentColor" strokeWidth="0.5" opacity="0.5" />
-                <line x1="33" y1="32" x2="36" y2="32" stroke="currentColor" strokeWidth="0.5" opacity="0.5" />
-                <line x1="33" y1="35" x2="36" y2="35" stroke="currentColor" strokeWidth="0.5" opacity="0.5" />
-              </g>
-              {/* Nucleus */}
-              <circle cx="32" cy="32" r="2.5" fill="currentColor" />
-              {/* Electrons */}
-              <circle cx="56" cy="32" r="2" fill="currentColor" opacity="0.9" />
-              <circle cx="20" cy="24" r="2" fill="currentColor" opacity="0.9" />
-              <circle cx="44" cy="44" r="2" fill="currentColor" opacity="0.9" />
             </svg>
             <div>
               <h1
