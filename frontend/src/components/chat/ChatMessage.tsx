@@ -452,38 +452,38 @@ export function ChatMessage({
           )}
 
           {/* Timestamp with inline details toggle */}
-          <div className="flex items-center gap-1.5">
-            <div
-              className={cn(
-                'flex items-center gap-1 text-xs',
-                'text-accent-400 dark:text-accent-600'
-              )}
-            >
-              <Clock size={12} />
-              {(() => {
-                const date = message.timestamp ? new Date(message.timestamp) : new Date();
-                return !isNaN(date.getTime()) ? date.toLocaleTimeString() : 'Just now';
-              })()}
-            </div>
+          <div
+            className={cn(
+              'flex items-center gap-1 text-xs',
+              'text-accent-400 dark:text-accent-600'
+            )}
+          >
+            <Clock size={12} />
+            {(() => {
+              const date = message.timestamp ? new Date(message.timestamp) : new Date();
+              return !isNaN(date.getTime()) ? date.toLocaleTimeString() : 'Just now';
+            })()}
 
             {/* Minimalist details chevron (only for assistant messages with metadata) */}
             {!isUser && (message.cost?.totalCost !== undefined || responseDurationMs !== undefined || (message.toolCalls && message.toolCalls.length > 0)) && (
-              <details className="group inline-block">
-                <summary className={cn(
-                  'cursor-pointer select-none',
-                  'text-accent-400 dark:text-accent-600',
-                  'hover:text-accent-600 dark:hover:text-accent-400',
-                  'transition-colors',
-                  'list-none [&::-webkit-details-marker]:hidden',
-                  'inline-flex items-center gap-1'
-                )}>
-                  <span className={cn(
-                    'transition-transform duration-200',
-                    'group-open:rotate-90',
-                    'text-xs'
-                  )}>▸</span>
-                  <span className="text-xs">details</span>
-                </summary>
+              <>
+                <span className="text-accent-300 dark:text-accent-700">•</span>
+                <details className="group inline-block">
+                  <summary className={cn(
+                    'cursor-pointer select-none',
+                    'text-accent-400 dark:text-accent-600',
+                    'hover:text-accent-600 dark:hover:text-accent-400',
+                    'transition-colors',
+                    'list-none [&::-webkit-details-marker]:hidden',
+                    'inline-flex items-center gap-0.5'
+                  )}>
+                    <span className={cn(
+                      'transition-transform duration-200',
+                      'group-open:rotate-90',
+                      'text-xs leading-none'
+                    )}>▸</span>
+                    <span className="text-xs leading-none">details</span>
+                  </summary>
 
                 {/* Dropdown panel below */}
                 <div className={cn(
@@ -589,7 +589,8 @@ export function ChatMessage({
                 </div>
               )}
                 </div>
-              </details>
+                </details>
+              </>
             )}
           </div>
         </div>

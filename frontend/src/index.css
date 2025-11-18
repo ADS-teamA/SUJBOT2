@@ -215,6 +215,106 @@ button:hover, a:hover {
   }
 }
 
+/* Complex message extraction animation - User message (travels right) */
+@keyframes messageExtractUser {
+  /* Phase 1: Extract from center input (0-20%) */
+  0% {
+    opacity: 0;
+    transform: translateX(-80%) translateY(-20px) scale(0.90) rotate(-3deg);
+    filter: blur(6px) brightness(0.8);
+  }
+
+  12% {
+    opacity: 0.6;
+    transform: translateX(-60%) translateY(-35px) scale(0.95) rotate(-2deg);
+    filter: blur(3px) brightness(0.9);
+  }
+
+  /* Phase 2: Arc travel to right (20-70%) */
+  25% {
+    opacity: 1;
+    transform: translateX(-40%) translateY(-45px) scale(1.0) rotate(-1deg);
+    filter: blur(0px) brightness(1.0);
+  }
+
+  45% {
+    transform: translateX(-15%) translateY(-50px) scale(1.02) rotate(0deg);
+  }
+
+  65% {
+    transform: translateX(10%) translateY(-40px) scale(1.0) rotate(1deg);
+  }
+
+  /* Phase 3: Landing with elastic bounce (70-100%) */
+  80% {
+    transform: translateX(0%) translateY(-5px) scale(1.0) rotate(0deg);
+  }
+
+  90% {
+    transform: translateX(0%) translateY(4px) scale(1.02) rotate(0deg);
+  }
+
+  97% {
+    transform: translateX(0%) translateY(-1px) scale(0.99) rotate(0deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0%) translateY(0) scale(1.0) rotate(0deg);
+    filter: blur(0px) brightness(1.0);
+  }
+}
+
+/* Complex message extraction animation - Assistant message (travels left) */
+@keyframes messageExtractAssistant {
+  /* Phase 1: Extract from center (0-20%) */
+  0% {
+    opacity: 0;
+    transform: translateX(80%) translateY(-20px) scale(0.90) rotate(3deg);
+    filter: blur(6px) brightness(0.8);
+  }
+
+  12% {
+    opacity: 0.6;
+    transform: translateX(60%) translateY(-35px) scale(0.95) rotate(2deg);
+    filter: blur(3px) brightness(0.9);
+  }
+
+  /* Phase 2: Arc travel to left (20-70%) */
+  25% {
+    opacity: 1;
+    transform: translateX(40%) translateY(-45px) scale(1.0) rotate(1deg);
+    filter: blur(0px) brightness(1.0);
+  }
+
+  45% {
+    transform: translateX(15%) translateY(-50px) scale(1.02) rotate(0deg);
+  }
+
+  65% {
+    transform: translateX(-10%) translateY(-40px) scale(1.0) rotate(-1deg);
+  }
+
+  /* Phase 3: Landing with elastic bounce (70-100%) */
+  80% {
+    transform: translateX(0%) translateY(-5px) scale(1.0) rotate(0deg);
+  }
+
+  90% {
+    transform: translateX(0%) translateY(4px) scale(1.02) rotate(0deg);
+  }
+
+  97% {
+    transform: translateX(0%) translateY(-1px) scale(0.99) rotate(0deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0%) translateY(0) scale(1.0) rotate(0deg);
+    filter: blur(0px) brightness(1.0);
+  }
+}
+
 /* Spinning animation for loaders */
 @keyframes spin {
   from {
