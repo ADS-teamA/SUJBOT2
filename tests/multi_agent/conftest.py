@@ -54,20 +54,20 @@ def mock_provider(mock_llm_response):
     """
     Mock LLM provider for agent testing.
 
-    IMPORTANT: create_message is AsyncMock.
-    When you set return_value on AsyncMock, that value is what gets returned when awaited.
+    IMPORTANT: create_message is a SYNCHRONOUS method (NOT async).
+    The real AnthropicProvider.create_message() is a regular function that returns ProviderResponse directly.
 
     Usage in tests:
         # Set return value for this test
         mock_provider.create_message.return_value = mock_llm_response(text="Custom response")
 
-        # Agent internally does: response = await provider.create_message(...)
-        # AsyncMock returns a coroutine that when awaited returns the return_value
+        # Agent internally does: response = provider.create_message(...)  # NO await
+        # Mock returns the return_value directly (synchronous call)
     """
     provider = Mock()
-    provider.create_message = AsyncMock()
+    provider.create_message = Mock()  # Synchronous mock, NOT AsyncMock
 
-    # Default return value (synchronous Mock object that is returned after await)
+    # Default return value (returned directly without await)
     provider.create_message.return_value = mock_llm_response(
         text="This is a test response from the LLM."
     )
