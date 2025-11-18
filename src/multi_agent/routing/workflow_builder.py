@@ -476,10 +476,63 @@ class WorkflowBuilder:
             logger.debug(f"Added edge: orchestrator_synthesis → END")
 
         else:
-            # Parallel execution (advanced - not implemented yet)
-            # For now, fall back to sequential
-            logger.warning("Parallel execution not yet implemented, using sequential")
-            self._add_workflow_edges(workflow, agent_sequence, enable_parallel=False)
+            # Parallel execution (Fan-Out/Fan-In pattern)
+            logger.info(f"Using parallel execution for {len(agent_sequence)} agents")
+
+            # Handle HITL gate special case:
+            # If HITL enabled and extractor in sequence, run extractor first,
+            # then HITL gate, then fan-out remaining agents in parallel
+            if should_insert_hitl and "extractor" in agent_sequence:
+                logger.info("HITL enabled: extractor → hitl_gate → [other agents parallel]")
+
+                # Entry point: extractor
+                workflow.set_entry_point("extractor")
+
+                # extractor → hitl_gate
+                workflow.add_edge("extractor", "hitl_gate")
+                logger.debug("Added edge: extractor → hitl_gate")
+
+                # Get other agents (excluding extractor)
+                other_agents = [a for a in agent_sequence if a != "extractor"]
+
+                # Fan-out: hitl_gate → other agents (parallel)
+                for agent in other_agents:
+                    workflow.add_edge("hitl_gate", agent)
+                    logger.debug(f"Added edge: hitl_gate → {agent} (parallel)")
+
+                # Fan-in: all agents → orchestrator_synthesis
+                for agent in agent_sequence:
+                    workflow.add_edge(agent, "orchestrator_synthesis")
+                    logger.debug(f"Added edge: {agent} → orchestrator_synthesis (fan-in)")
+
+            else:
+                # No HITL or extractor not in sequence: simple fan-out/fan-in
+                logger.info("No HITL: [all agents parallel] → orchestrator_synthesis")
+
+                # Create a start node that just passes through state
+                async def start_node(state: Dict[str, Any]) -> Dict[str, Any]:
+                    """Entry point for parallel execution - just passes through state."""
+                    # Convert to dict if needed
+                    if hasattr(state, "model_dump"):
+                        return state.model_dump()
+                    return dict(state)
+
+                workflow.add_node("start", start_node)
+                workflow.set_entry_point("start")
+
+                # Fan-out: start → all agents (parallel)
+                for agent in agent_sequence:
+                    workflow.add_edge("start", agent)
+                    logger.debug(f"Added edge: start → {agent} (parallel)")
+
+                # Fan-in: all agents → orchestrator_synthesis
+                for agent in agent_sequence:
+                    workflow.add_edge(agent, "orchestrator_synthesis")
+                    logger.debug(f"Added edge: {agent} → orchestrator_synthesis (fan-in)")
+
+            # Final edge: orchestrator_synthesis → END
+            workflow.add_edge("orchestrator_synthesis", END)
+            logger.debug("Added edge: orchestrator_synthesis → END")
 
     def build_conditional_workflow(
         self, complexity_score: int, agent_registry: AgentRegistry

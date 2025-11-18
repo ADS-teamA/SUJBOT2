@@ -603,7 +603,7 @@ class MultiAgentRunner:
                 return
 
             workflow = self.workflow_builder.build_workflow(
-                agent_sequence=agent_sequence, enable_parallel=False
+                agent_sequence=agent_sequence, enable_parallel=True
             )
 
             # Step 3: Execute workflow with streaming
@@ -815,7 +815,7 @@ class MultiAgentRunner:
             logger.info(f"Rebuilding workflow with sequence: {agent_sequence}")
 
             workflow = self.workflow_builder.build_workflow(
-                agent_sequence=agent_sequence, enable_parallel=False
+                agent_sequence=agent_sequence, enable_parallel=True
             )
 
             # Resume workflow with same thread_id (will load from checkpoint)
