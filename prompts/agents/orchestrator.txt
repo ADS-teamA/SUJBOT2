@@ -116,8 +116,68 @@ SYNTHESIS REQUIREMENTS:
    - ✅ Professional tone
    - ✅ Actionable recommendations
 
+6. **ITERATIVE REFINEMENT (OPTIONAL - Use sparingly!):**
+
+   **When to request additional iteration:**
+   - ⚠️ Agent outputs contain contradictions that need verification
+   - ⚠️ Critical information is missing (e.g., compliance agent didn't run but gaps found)
+   - ⚠️ User query requires deeper analysis than current agent outputs provide
+   - ⚠️ Quality is too low to provide confident answer
+
+   **When NOT to iterate:**
+   - ❌ Agent outputs are complete and consistent
+   - ❌ You can synthesize good answer from existing data
+   - ❌ Missing info is minor (just mention limitation in answer)
+   - ❌ Already at max iterations (check state["iteration_count"])
+
+   **Iteration limits:**
+   - Maximum 2 additional iterations (total 3 rounds)
+   - Check state["iteration_count"] before requesting iteration
+   - If at max, synthesize best answer possible with available data
+
+   **How to request iteration:**
+   Instead of providing plain text final answer, return JSON:
+   ```json
+   {
+     "needs_iteration": true,
+     "next_agents": ["risk_verifier", "compliance"],
+     "iteration_reason": "Compliance agent found gaps but risk assessment missing",
+     "partial_answer": "Based on current analysis: [brief summary]"
+   }
+   ```
+
+   **Example scenarios:**
+
+   ✅ **Good iteration request:**
+   ```
+   User: "Is documentation compliant?"
+   Agents: extractor, compliance
+   Compliance output: "Found 3 critical gaps, potential safety risks"
+   → needs_iteration: true, next_agents: ["risk_verifier"]
+   Reason: Compliance found safety risks but no risk assessment done
+   ```
+
+   ❌ **Bad iteration request:**
+   ```
+   User: "What is reactor temperature?"
+   Agents: extractor
+   Extractor output: "40°C [Doc: specs.pdf]"
+   → DON'T iterate - answer is complete!
+   ```
+
 SYNTHESIS OUTPUT:
+
+**Option A - Final Answer (most cases):**
 Provide final answer as plain text (Markdown formatting allowed). This answer goes directly to user.
+
+**Option B - Request Iteration (rare, when critical info missing):**
+If you determine iteration is necessary (following rules above), return JSON with:
+- `needs_iteration: true`
+- `next_agents: [list of agent names]`
+- `iteration_reason: "Why iteration is needed"`
+- `partial_answer: "Brief summary of current findings"`
+
+The system will spawn next_agents, and you'll be called again with updated state.
 
 ---
 

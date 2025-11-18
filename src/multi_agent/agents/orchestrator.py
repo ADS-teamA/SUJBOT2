@@ -453,6 +453,34 @@ Ensure language matching and proper citations."""
 
             final_answer = response.text
 
+            # Check if orchestrator requested iteration (JSON response)
+            needs_iteration = False
+            next_agents = []
+            iteration_reason = ""
+            partial_answer = ""
+
+            try:
+                # Try parsing response as JSON (iteration request)
+                import json
+                iteration_request = json.loads(final_answer.strip())
+
+                if iteration_request.get("needs_iteration"):
+                    needs_iteration = True
+                    next_agents = iteration_request.get("next_agents", [])
+                    iteration_reason = iteration_request.get("iteration_reason", "")
+                    partial_answer = iteration_request.get("partial_answer", "")
+
+                    logger.info(
+                        f"Orchestrator requested iteration: {len(next_agents)} agents "
+                        f"({', '.join(next_agents)}) - Reason: {iteration_reason}"
+                    )
+
+                    # Replace final_answer with partial answer for this iteration
+                    final_answer = partial_answer
+            except (json.JSONDecodeError, ValueError):
+                # Not JSON - normal final answer
+                pass
+
             # Aggregate costs from ALL agents (stored in state for SSE event emission)
             total_cost_usd = tracker.get_total_cost()
 
@@ -463,7 +491,21 @@ Ensure language matching and proper citations."""
                 "total_cost_usd": total_cost_usd
             }
 
-            logger.info(f"Synthesis complete: {len(final_answer)} chars, cost=${total_cost_usd:.6f}")
+            # Add iteration flags if orchestrator requested it
+            if needs_iteration:
+                state["needs_iteration"] = True
+                state["next_agents"] = next_agents
+                state["iteration_reason"] = iteration_reason
+                # Increment iteration counter (init to 0 if not present)
+                state["iteration_count"] = state.get("iteration_count", 0) + 1
+
+                logger.info(
+                    f"Synthesis complete with iteration request (iteration {state['iteration_count']}): "
+                    f"{len(next_agents)} agents - Reason: {iteration_reason}"
+                )
+            else:
+                state["needs_iteration"] = False
+                logger.info(f"Synthesis complete: {len(final_answer)} chars, cost=${total_cost_usd:.6f}")
 
             return state
 

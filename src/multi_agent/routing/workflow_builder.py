@@ -416,6 +416,122 @@ class WorkflowBuilder:
         workflow.add_node("hitl_gate", hitl_gate)
         logger.debug("Added HITL gate node")
 
+    def _add_iteration_support(self, workflow: StateGraph) -> None:
+        """
+        Add iterative refinement support to workflow.
+
+        Adds iteration_dispatcher node and conditional edge from orchestrator_synthesis
+        to support multi-round agent execution.
+
+        Args:
+            workflow: StateGraph to add iteration support to
+        """
+        # Add iteration dispatcher node
+        async def iteration_dispatcher(state: Dict[str, Any]) -> Dict[str, Any]:
+            """
+            Dispatch next_agents for iterative refinement.
+
+            Reads state["next_agents"] and executes them sequentially,
+            then returns to orchestrator_synthesis.
+            """
+            # Convert to dict if needed
+            if hasattr(state, "model_dump"):
+                state_dict = state.model_dump()
+            else:
+                state_dict = dict(state)
+
+            next_agents = state_dict.get("next_agents", [])
+            iteration_count = state_dict.get("iteration_count", 0)
+
+            logger.info(
+                f"Iteration {iteration_count}: Executing {len(next_agents)} agents - "
+                f"{', '.join(next_agents)}"
+            )
+
+            # Execute each agent in next_agents
+            for agent_name in next_agents:
+                agent = self.agent_registry.get_agent(agent_name)
+
+                if agent is None:
+                    logger.error(f"Agent not found for iteration: {agent_name}")
+                    continue
+
+                # Update current agent in state
+                state_dict["current_agent"] = agent_name
+
+                try:
+                    logger.info(f"Iteration: Executing agent {agent_name}")
+                    result = await agent.execute(state_dict)
+
+                    # Merge results back into state
+                    state_dict = {**state_dict, **result}
+
+                    logger.info(f"Iteration: Agent {agent_name} completed")
+                except Exception as e:
+                    logger.error(f"Iteration: Agent {agent_name} failed: {e}", exc_info=True)
+                    errors = state_dict.get("errors", [])
+                    errors.append(f"Iteration agent {agent_name} error: {str(e)}")
+                    state_dict["errors"] = errors
+
+            logger.info(f"Iteration {iteration_count}: All agents completed, returning to synthesis")
+
+            return state_dict
+
+        workflow.add_node("iteration_dispatcher", iteration_dispatcher)
+        logger.debug("Added iteration_dispatcher node")
+
+        # Add conditional edge for iterative refinement
+        def should_iterate(state: Dict[str, Any]) -> str:
+            """
+            Check if orchestrator requested additional iteration.
+
+            Returns:
+                - "iteration_dispatcher" if needs_iteration and under limit
+                - END if done or at max iterations
+            """
+            # Convert to dict if needed
+            if hasattr(state, "model_dump"):
+                state_dict = state.model_dump()
+            elif hasattr(state, "get"):
+                state_dict = state
+            else:
+                state_dict = dict(state)
+
+            needs_iteration = state_dict.get("needs_iteration", False)
+            iteration_count = state_dict.get("iteration_count", 0)
+            max_iterations = 3  # Total 3 rounds (1 initial + 2 additional)
+
+            if needs_iteration and iteration_count < max_iterations:
+                logger.info(
+                    f"Orchestrator requested iteration {iteration_count}/{max_iterations-1}. "
+                    f"Dispatching next agents: {state_dict.get('next_agents', [])}"
+                )
+                return "iteration_dispatcher"
+            elif needs_iteration and iteration_count >= max_iterations:
+                logger.warning(
+                    f"Max iterations ({max_iterations}) reached. "
+                    f"Ending workflow with current answer."
+                )
+                return END
+            else:
+                logger.info("Synthesis complete, no iteration needed. Ending workflow.")
+                return END
+
+        # Add conditional edge: orchestrator_synthesis → [iteration_dispatcher | END]
+        workflow.add_conditional_edges(
+            "orchestrator_synthesis",
+            should_iterate,
+            {
+                "iteration_dispatcher": "iteration_dispatcher",
+                END: END
+            }
+        )
+        logger.debug("Added conditional edge: orchestrator_synthesis → [iteration_dispatcher | END]")
+
+        # Loop back: iteration_dispatcher → orchestrator_synthesis
+        workflow.add_edge("iteration_dispatcher", "orchestrator_synthesis")
+        logger.debug("Added edge: iteration_dispatcher → orchestrator_synthesis (loop back)")
+
     def _add_workflow_edges(
         self,
         workflow: StateGraph,
@@ -471,9 +587,9 @@ class WorkflowBuilder:
             workflow.add_edge(last_agent, "orchestrator_synthesis")
             logger.debug(f"Added edge: {last_agent} → orchestrator_synthesis")
 
-            # Orchestrator synthesis goes to END (final answer generated)
-            workflow.add_edge("orchestrator_synthesis", END)
-            logger.debug(f"Added edge: orchestrator_synthesis → END")
+            # Add iterative refinement support (shared with parallel execution)
+            self._add_iteration_support(workflow)
+            logger.debug("Added iterative refinement support for sequential execution")
 
         else:
             # Parallel execution (Fan-Out/Fan-In pattern)
@@ -530,9 +646,9 @@ class WorkflowBuilder:
                     workflow.add_edge(agent, "orchestrator_synthesis")
                     logger.debug(f"Added edge: {agent} → orchestrator_synthesis (fan-in)")
 
-            # Final edge: orchestrator_synthesis → END
-            workflow.add_edge("orchestrator_synthesis", END)
-            logger.debug("Added edge: orchestrator_synthesis → END")
+            # Add iterative refinement support (shared with sequential execution)
+            self._add_iteration_support(workflow)
+            logger.debug("Added iterative refinement support for parallel execution")
 
     def build_conditional_workflow(
         self, complexity_score: int, agent_registry: AgentRegistry
