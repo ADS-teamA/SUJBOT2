@@ -33,7 +33,7 @@ Usage:
 """
 
 import logging
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -445,7 +445,7 @@ class CostTracker:
 
         return {"cache_read_tokens": cache_read, "cache_creation_tokens": cache_creation}
 
-    def get_agent_breakdown(self) -> Dict[str, Dict[str, any]]:
+    def get_agent_breakdown(self) -> Dict[str, Dict[str, Any]]:
         """
         Get per-agent cost and token breakdown.
 
@@ -466,7 +466,7 @@ class CostTracker:
                 "orchestrator": {...}
             }
         """
-        agent_stats: Dict[str, Dict[str, any]] = {}
+        agent_stats: Dict[str, Dict[str, Any]] = {}
 
         for entry in self._entries:
             # Filter for agent operations (format: "agent_<agent_name>")

@@ -112,5 +112,5 @@ IMPORTANT NOTES:
 - During ROUTING phase: return JSON with agent_sequence
 - During SYNTHESIS phase: return plain text final answer
 - You are called TWICE per query (routing → synthesis)
-- NO cost information in answers (tracked internally)
+- Cost tracking is automatic (displayed in UI metadata, not in answer text)
 - Always respond with valid JSON in routing phase. No explanations before JSON.
