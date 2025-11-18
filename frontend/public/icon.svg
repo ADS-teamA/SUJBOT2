@@ -1,0 +1,68 @@
+<svg
+    width="512"
+    height="512"
+    viewBox="0 0 512 512"
+    xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+    <!-- Pozadí -->
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1bd6ff"/>
+      <stop offset="100%" stop-color="#031623"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Zaoblený čtverec -->
+  <rect
+    x="16"
+    y="16"
+    width="480"
+    height="480"
+    rx="96"
+    ry="96"
+    fill="url(#bg-grad)"
+    stroke="#7ef0ff"
+    stroke-width="8" />
+
+  <!-- Atom + kniha -->
+  <g transform="translate(256 256)" stroke="#ffffff" stroke-width="10" fill="none" stroke-linecap="round">
+
+    <!-- Větší orbitaly, na každém jeden bod -->
+    <g>
+      <ellipse rx="185" ry="110" />
+      <circle r="12" cx="0" cy="-110" fill="#ffffff" stroke="none" />
+    </g>
+
+    <g transform="rotate(60)">
+      <ellipse rx="185" ry="110" />
+      <circle r="12" cx="0" cy="-110" fill="#ffffff" stroke="none" />
+    </g>
+
+    <g transform="rotate(-60)">
+      <ellipse rx="185" ry="110" />
+      <circle r="12" cx="0" cy="-110" fill="#ffffff" stroke="none" />
+    </g>
+
+    <!-- Kniha (zvětšená) -->
+    <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linejoin="round">
+      <!-- Obrys otevřené knihy -->
+      <path d="M -75 -42
+               L -75 42
+               Q -37 24 0 36
+               Q 37 24 75 42
+               L 75 -42
+               Q 37 -52 0 -42
+               Q -37 -52 -75 -42 Z" />
+      <!-- Hřbet knihy -->
+      <line x1="0" y1="-48" x2="0" y2="38" />
+      <!-- Linky na levé straně -->
+      <path d="M -55 -22 L -20 -18" />
+      <path d="M -55  -5 L -20   0" />
+      <path d="M -55  12 L -20  17" />
+      <!-- Linky na pravé straně -->
+      <path d="M 20 -18 L 55 -22" />
+      <path d="M 20   0 L 55  -5" />
+      <path d="M 20  17 L 55  12" />
+    </g>
+  </g>
+</svg>

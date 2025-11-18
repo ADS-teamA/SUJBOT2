@@ -381,10 +381,38 @@ class AgentAdapter:
                     }
                 }
 
-            # Cost tracking (internal only - not shown to users)
-            # tracker = get_global_tracker()
-            # total_cost_usd = tracker.get_total_cost()
-            # Cost is tracked internally but not displayed to users per requirements
+            # Emit cost summary event with per-agent breakdown
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            agent_breakdown = tracker.get_agent_breakdown()
+
+            # Build agent breakdown array for frontend
+            agent_costs = []
+            for agent_name, stats in agent_breakdown.items():
+                agent_costs.append({
+                    "agent": agent_name,
+                    "cost": stats["cost"],
+                    "input_tokens": stats["input_tokens"],
+                    "output_tokens": stats["output_tokens"],
+                    "cache_read_tokens": stats["cache_read_tokens"],
+                    "cache_creation_tokens": stats["cache_creation_tokens"],
+                    "call_count": stats["call_count"]
+                })
+
+            # Sort by cost descending
+            agent_costs.sort(key=lambda x: x["cost"], reverse=True)
+
+            yield {
+                "event": "cost_summary",
+                "data": {
+                    "total_cost": total_cost_usd,
+                    "agent_breakdown": agent_costs,
+                    "total_input_tokens": tracker.total_input_tokens,
+                    "total_output_tokens": tracker.total_output_tokens,
+                    "cache_stats": tracker.get_cache_stats()
+                }
+            }
+            await asyncio.sleep(0)
 
             # Signal completion
             yield {
@@ -583,9 +611,38 @@ class AgentAdapter:
                     }
                     await asyncio.sleep(0.05)
 
-            # Cost tracking (internal only - not shown to users)
-            # tracker = get_global_tracker()
-            # Cost is tracked internally but not displayed to users per requirements
+            # Emit cost summary event with per-agent breakdown
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            agent_breakdown = tracker.get_agent_breakdown()
+
+            # Build agent breakdown array for frontend
+            agent_costs = []
+            for agent_name, stats in agent_breakdown.items():
+                agent_costs.append({
+                    "agent": agent_name,
+                    "cost": stats["cost"],
+                    "input_tokens": stats["input_tokens"],
+                    "output_tokens": stats["output_tokens"],
+                    "cache_read_tokens": stats["cache_read_tokens"],
+                    "cache_creation_tokens": stats["cache_creation_tokens"],
+                    "call_count": stats["call_count"]
+                })
+
+            # Sort by cost descending
+            agent_costs.sort(key=lambda x: x["cost"], reverse=True)
+
+            yield {
+                "event": "cost_summary",
+                "data": {
+                    "total_cost": total_cost_usd,
+                    "agent_breakdown": agent_costs,
+                    "total_input_tokens": tracker.total_input_tokens,
+                    "total_output_tokens": tracker.total_output_tokens,
+                    "cache_stats": tracker.get_cache_stats()
+                }
+            }
+            await asyncio.sleep(0)
 
             # Emit done
             yield {"event": "done", "data": {}}

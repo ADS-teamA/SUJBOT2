@@ -384,17 +384,13 @@ Ensure language matching and proper citations."""
 
             final_answer = response.text
 
-            # Aggregate costs from ALL agents
+            # Aggregate costs from ALL agents (stored in state for SSE event emission)
             from src.cost_tracker import get_global_tracker
             tracker = get_global_tracker()
             total_cost_usd = tracker.get_total_cost()
 
-            # Format cost summary (append to final answer)
-            cost_summary = self._format_cost_summary(total_cost_usd, agent_outputs)
-            final_answer_with_cost = f"{final_answer}\n\n{cost_summary}"
-
-            # Update state
-            state["final_answer"] = final_answer_with_cost
+            # Update state (cost is NOT appended to final_answer - handled by SSE event instead)
+            state["final_answer"] = final_answer
             state["agent_outputs"]["orchestrator"]["synthesis"] = {
                 "final_answer": final_answer,
                 "total_cost_usd": total_cost_usd
@@ -467,7 +463,14 @@ Ensure language matching and proper citations."""
 
     def _format_cost_summary(self, total_cost: float, agent_outputs: dict) -> str:
         """
-        Format cost summary for display to user.
+        [DEPRECATED] Format cost summary for display to user.
+
+        This method is no longer used. Cost information is now emitted via SSE events
+        and displayed in frontend metadata section (not in message content).
+
+        See:
+        - backend/agent_adapter.py: SSE cost_summary event emission
+        - frontend/src/components/chat/ChatMessage.tsx: Cost metadata display
 
         Args:
             total_cost: Total workflow cost in USD

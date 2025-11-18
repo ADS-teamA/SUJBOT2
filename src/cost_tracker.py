@@ -445,6 +445,59 @@ class CostTracker:
 
         return {"cache_read_tokens": cache_read, "cache_creation_tokens": cache_creation}
 
+    def get_agent_breakdown(self) -> Dict[str, Dict[str, any]]:
+        """
+        Get per-agent cost and token breakdown.
+
+        Aggregates all entries with operation starting with "agent_" and returns
+        detailed breakdown for each agent.
+
+        Returns:
+            Dictionary mapping agent name to breakdown:
+            {
+                "extractor": {
+                    "cost": 0.000001,
+                    "input_tokens": 227,
+                    "output_tokens": 45,
+                    "cache_read_tokens": 0,
+                    "cache_creation_tokens": 0,
+                    "call_count": 1
+                },
+                "orchestrator": {...}
+            }
+        """
+        agent_stats: Dict[str, Dict[str, any]] = {}
+
+        for entry in self._entries:
+            # Filter for agent operations (format: "agent_<agent_name>")
+            if not entry.operation.startswith("agent_"):
+                continue
+
+            # Extract agent name (remove "agent_" prefix)
+            agent_name = entry.operation.replace("agent_", "", 1)
+
+            # Initialize agent stats if not exists
+            if agent_name not in agent_stats:
+                agent_stats[agent_name] = {
+                    "cost": 0.0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_creation_tokens": 0,
+                    "call_count": 0,
+                }
+
+            # Accumulate stats
+            stats = agent_stats[agent_name]
+            stats["cost"] += entry.cost
+            stats["input_tokens"] += entry.input_tokens
+            stats["output_tokens"] += entry.output_tokens
+            stats["cache_read_tokens"] += entry.cache_read_tokens
+            stats["cache_creation_tokens"] += entry.cache_creation_tokens
+            stats["call_count"] += 1
+
+        return agent_stats
+
     def get_session_cost_summary(self) -> str:
         """
         Get brief cost summary for current session with detailed per-message breakdown.
