@@ -40,52 +40,73 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className={cn(
-      'p-4',
-      'border-t border-accent-200 dark:border-accent-800'
-    )}>
-      <div className="max-w-4xl mx-auto flex gap-2">
-        <textarea
-          ref={textareaRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type your message... (Shift+Enter for new line)"
-          disabled={disabled}
+    <form onSubmit={handleSubmit} className="p-6">
+      <div className="max-w-4xl mx-auto">
+        <div
           className={cn(
-            'flex-1 resize-none rounded-lg px-4 py-3 text-sm',
-            'border border-accent-300 dark:border-accent-600',
+            'flex gap-3 p-2',
             'bg-white dark:bg-accent-900',
-            'focus:outline-none focus:ring-2 focus:ring-accent-600 dark:focus:ring-accent-400',
-            'focus:scale-[1.01] transition-all duration-200',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-            'placeholder:text-accent-400 dark:placeholder:text-accent-500',
-            'scrollbar-hide overflow-y-auto'
-          )}
-          rows={1}
-        />
-        <button
-          type="submit"
-          disabled={disabled || !message.trim()}
-          className={cn(
-            'px-4 py-3 rounded-lg',
-            'bg-accent-700 dark:bg-accent-300',
-            'text-white dark:text-accent-900',
-            'hover:bg-accent-800 dark:hover:bg-accent-400',
-            'hover:scale-105 active:scale-95',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-            'transition-all duration-150',
-            'flex items-center justify-center'
+            'border border-accent-200 dark:border-accent-800',
+            'rounded-2xl',
+            'shadow-lg',
+            'transition-all duration-300',
+            'hover:shadow-xl',
+            !disabled && 'hover:border-accent-300 dark:hover:border-accent-700'
           )}
         >
-          {disabled ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-        </button>
-      </div>
-      <div className={cn(
-        'max-w-4xl mx-auto mt-2 text-xs',
-        'text-accent-500 dark:text-accent-400'
-      )}>
-        Press Enter to send, Shift+Enter for new line
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about legal or technical documents..."
+            disabled={disabled}
+            className={cn(
+              'flex-1 resize-none px-4 py-3',
+              'bg-transparent',
+              'text-accent-900 dark:text-accent-100',
+              'placeholder:text-accent-400 dark:placeholder:text-accent-600',
+              'focus:outline-none',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+              'scrollbar-hide overflow-y-auto'
+            )}
+            rows={1}
+          />
+          <button
+            type="submit"
+            disabled={disabled || !message.trim()}
+            className={cn(
+              'flex-shrink-0',
+              'w-10 h-10 rounded-xl',
+              'bg-accent-900 dark:bg-accent-100',
+              'text-accent-50 dark:text-accent-900',
+              'hover:bg-accent-800 dark:hover:bg-accent-200',
+              'hover:scale-105 active:scale-95',
+              'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100',
+              'transition-all duration-200',
+              'flex items-center justify-center',
+              'shadow-md hover:shadow-lg'
+            )}
+            title={disabled ? 'Processing...' : 'Send message'}
+          >
+            {disabled ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Send size={18} />
+            )}
+          </button>
+        </div>
+        {message.length > 0 && (
+          <div
+            className={cn(
+              'mt-2 px-2 text-xs',
+              'text-accent-500 dark:text-accent-500',
+              'text-right'
+            )}
+          >
+            {message.length} characters
+          </div>
+        )}
       </div>
     </form>
   );

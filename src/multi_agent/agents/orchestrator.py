@@ -230,14 +230,49 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
             max_tool_iterations = 3  # Prevent infinite loops
 
             for iteration in range(max_tool_iterations):
-                # Call provider's unified create_message API (async)
-                response = await self.provider.create_message(
+                # Call provider's unified create_message API (synchronous)
+                response = self.provider.create_message(
                     messages=messages,
                     tools=self.orchestrator_tool_schemas,
                     system=system,
                     max_tokens=self.config.max_tokens,
                     temperature=self.config.temperature
                 )
+
+                # Track token usage and cost
+                from src.cost_tracker import get_global_tracker
+                tracker = get_global_tracker()
+
+                # Extract usage from response
+                if hasattr(response, 'usage'):
+                    usage = response.usage
+                    # BUGFIX: usage is a dict, not object - use .get() instead of getattr()
+                    input_tokens = usage.get('input_tokens', 0) or usage.get('prompt_tokens', 0)
+                    output_tokens = usage.get('output_tokens', 0) or usage.get('completion_tokens', 0)
+                    # Correct field names for Anthropic API
+                    cache_read_tokens = usage.get('cache_read_input_tokens', 0)
+                    cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
+
+                    # Determine provider from model name
+                    if 'claude' in self.config.model.lower():
+                        provider = 'anthropic'
+                    elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
+                        provider = 'openai'
+                    elif 'gemini' in self.config.model.lower():
+                        provider = 'google'
+                    else:
+                        provider = 'anthropic'  # Default
+
+                    tracker.track_llm(
+                        provider=provider,
+                        model=self.config.model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        operation="agent_orchestrator",
+                        cache_creation_tokens=cache_creation_tokens,
+                        cache_read_tokens=cache_read_tokens
+                    )
+                    logger.debug(f"Tracked orchestrator routing: {input_tokens} in, {output_tokens} out")
 
                 # Log response structure for debugging
                 content_types = [block.get("type") if isinstance(block, dict) else getattr(block, "type", "unknown")
@@ -374,7 +409,7 @@ Ensure language matching and proper citations."""
             else:
                 system = self.system_prompt
 
-            response = await self.provider.create_message(
+            response = self.provider.create_message(
                 messages=[{"role": "user", "content": user_message}],
                 tools=None,  # No tools in synthesis phase
                 system=system,
@@ -382,19 +417,47 @@ Ensure language matching and proper citations."""
                 temperature=self.config.temperature
             )
 
-            final_answer = response.text
-
-            # Aggregate costs from ALL agents
+            # Track token usage and cost for synthesis
             from src.cost_tracker import get_global_tracker
             tracker = get_global_tracker()
+
+            if hasattr(response, 'usage'):
+                usage = response.usage
+                # BUGFIX: usage is a dict, not object - use .get() instead of getattr()
+                input_tokens = usage.get('input_tokens', 0) or usage.get('prompt_tokens', 0)
+                output_tokens = usage.get('output_tokens', 0) or usage.get('completion_tokens', 0)
+                # Correct field names for Anthropic API
+                cache_read_tokens = usage.get('cache_read_input_tokens', 0)
+                cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
+
+                # Determine provider from model name
+                if 'claude' in self.config.model.lower():
+                    provider = 'anthropic'
+                elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
+                    provider = 'openai'
+                elif 'gemini' in self.config.model.lower():
+                    provider = 'google'
+                else:
+                    provider = 'anthropic'  # Default
+
+                tracker.track_llm(
+                    provider=provider,
+                    model=self.config.model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    operation="agent_orchestrator",
+                    cache_creation_tokens=cache_creation_tokens,
+                    cache_read_tokens=cache_read_tokens
+                )
+                logger.debug(f"Tracked orchestrator synthesis: {input_tokens} in, {output_tokens} out")
+
+            final_answer = response.text
+
+            # Aggregate costs from ALL agents (stored in state for SSE event emission)
             total_cost_usd = tracker.get_total_cost()
 
-            # Format cost summary (append to final answer)
-            cost_summary = self._format_cost_summary(total_cost_usd, agent_outputs)
-            final_answer_with_cost = f"{final_answer}\n\n{cost_summary}"
-
-            # Update state
-            state["final_answer"] = final_answer_with_cost
+            # Update state (cost is NOT appended to final_answer - handled by SSE event instead)
+            state["final_answer"] = final_answer
             state["agent_outputs"]["orchestrator"]["synthesis"] = {
                 "final_answer": final_answer,
                 "total_cost_usd": total_cost_usd
@@ -467,7 +530,14 @@ Ensure language matching and proper citations."""
 
     def _format_cost_summary(self, total_cost: float, agent_outputs: dict) -> str:
         """
-        Format cost summary for display to user.
+        [DEPRECATED] Format cost summary for display to user.
+
+        This method is no longer used. Cost information is now emitted via SSE events
+        and displayed in frontend metadata section (not in message content).
+
+        See:
+        - backend/agent_adapter.py: SSE cost_summary event emission
+        - frontend/src/components/chat/ChatMessage.tsx: Cost metadata display
 
         Args:
             total_cost: Total workflow cost in USD

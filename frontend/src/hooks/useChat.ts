@@ -302,52 +302,8 @@ export function useChat() {
                 })
               );
             }
-          } else if (event.event === 'tool_call') {
-            // Tool execution started
-            console.log('🔧 FRONTEND: Received tool_call event:', event.data);
-            const toolCall: ToolCall = {
-              id: event.data.call_id || `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              name: event.data.tool_name,
-              input: event.data.tool_input,
-              status: 'running',
-            };
-            console.log('🔧 FRONTEND: Created ToolCall:', toolCall);
-
-            currentToolCallsRef.current.set(toolCall.id, toolCall);
-            console.log('🔧 FRONTEND: currentToolCallsRef size:', currentToolCallsRef.current.size);
-
-            if (currentMessageRef.current) {
-              currentMessageRef.current.toolCalls = Array.from(
-                currentToolCallsRef.current.values()
-              );
-              console.log('🔧 FRONTEND: Updated currentMessageRef.toolCalls:', currentMessageRef.current.toolCalls);
-            } else {
-              console.error('❌ FRONTEND: currentMessageRef.current is NULL!');
-            }
-
-            // Update UI
-            setConversations((prev) => {
-              console.log('🔧 FRONTEND: Updating conversations state...');
-              return prev.map((c) => {
-                if (c.id !== updatedConversation.id) return c;
-
-                const messages = [...c.messages];
-                const lastMsg = messages[messages.length - 1];
-                console.log('🔧 FRONTEND: Last message role:', lastMsg?.role);
-
-                if (lastMsg?.role === 'assistant') {
-                  console.log('🔧 FRONTEND: Updating existing assistant message');
-                  messages[messages.length - 1] = { ...currentMessageRef.current! };
-                } else {
-                  console.log('🔧 FRONTEND: Adding new assistant message');
-                  messages.push({ ...currentMessageRef.current! });
-                }
-
-                console.log('🔧 FRONTEND: Updated message toolCalls:', messages[messages.length - 1]?.toolCalls);
-                return { ...c, messages };
-              });
-            });
-          } else if (event.event === 'tool_result') {
+          }
+          else if (event.event === 'tool_result') {
             // Tool execution completed
             const callId = event.data.call_id;
             const existingToolCall = currentToolCallsRef.current.get(callId);
@@ -416,15 +372,32 @@ export function useChat() {
                 })
               );
             }
-          } else if (event.event === 'cost_update') {
-            // Cost tracking update
+          } else if (event.event === 'cost_summary') {
+            // Cost tracking summary with per-agent breakdown
+            console.log('💰 FRONTEND: Cost summary received:', event.data);
+
             if (currentMessageRef.current) {
+              // Validate and sanitize cost data
+              const totalCost = typeof event.data.total_cost === 'number' ? event.data.total_cost : 0;
+              const inputTokens = typeof event.data.total_input_tokens === 'number' ? event.data.total_input_tokens : 0;
+              const outputTokens = typeof event.data.total_output_tokens === 'number' ? event.data.total_output_tokens : 0;
+              const agentBreakdown = Array.isArray(event.data.agent_breakdown) ? event.data.agent_breakdown : [];
+
+              // Log validation warnings
+              if (totalCost < 0 || isNaN(totalCost)) {
+                console.error('❌ Invalid cost value received:', event.data.total_cost);
+              }
+              if (inputTokens < 0 || outputTokens < 0) {
+                console.error('❌ Invalid token counts:', { inputTokens, outputTokens });
+              }
+
               currentMessageRef.current.cost = {
-                totalCost: event.data.total_cost,
-                inputTokens: event.data.input_tokens,
-                outputTokens: event.data.output_tokens,
-                cachedTokens: event.data.cached_tokens,
-                summary: event.data.summary,
+                totalCost: Math.max(0, totalCost),
+                inputTokens: Math.max(0, inputTokens),
+                outputTokens: Math.max(0, outputTokens),
+                cachedTokens: event.data.cache_stats?.cache_read_tokens || 0,
+                agentBreakdown,
+                cacheStats: event.data.cache_stats || { cache_read_tokens: 0, cache_creation_tokens: 0 },
               };
 
               // Update UI
@@ -488,7 +461,7 @@ export function useChat() {
                 msg.content !== undefined
               );
 
-              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date() };
+              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
 
               // Save to localStorage with final content
               storageService.saveConversation(finalConv);
@@ -547,7 +520,7 @@ export function useChat() {
         const updatedConversation: Conversation = {
           ...currentConv,
           messages: cleanedMessages,
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         };
 
         // Save to storage immediately
@@ -629,7 +602,7 @@ export function useChat() {
       const updatedConversation: Conversation = {
         ...currentConv,
         messages: cleanedMessages,
-        updatedAt: new Date(),
+        updatedAt: new Date().toISOString(),
       };
 
       // Update state
@@ -716,7 +689,7 @@ export function useChat() {
                 })
               );
             }
-          } else if (event.event === 'cost_update') {
+          } else if (event.event === 'cost_summary') {
             // Cost tracking update
             if (currentMessageRef.current) {
               currentMessageRef.current.cost = {
@@ -724,7 +697,7 @@ export function useChat() {
                 inputTokens: event.data.input_tokens,
                 outputTokens: event.data.output_tokens,
                 cachedTokens: event.data.cached_tokens,
-                summary: event.data.summary,
+                agentBreakdown: event.data.agent_breakdown,
               };
 
               setConversations((prev) =>
@@ -768,7 +741,7 @@ export function useChat() {
               }
 
               const cleanedMessages = cleanMessages(messages);
-              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date() };
+              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
 
               storageService.saveConversation(finalConv);
 

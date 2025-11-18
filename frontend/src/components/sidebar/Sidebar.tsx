@@ -30,7 +30,8 @@ export function Sidebar({
       {/* New conversation button */}
       <div className={cn(
         'p-4',
-        'border-b border-accent-200 dark:border-accent-800'
+        'border-b border-accent-200 dark:border-accent-800',
+        'transition-colors duration-700'
       )}>
         <button
           onClick={onNewConversation}
@@ -42,12 +43,12 @@ export function Sidebar({
             'bg-accent-700 dark:bg-accent-300',
             'text-white dark:text-accent-900',
             'hover:bg-accent-800 dark:hover:bg-accent-400',
-            'transition-all duration-150',
+            'transition-all duration-700',
             'font-medium'
           )}
         >
-          <Plus size={18} />
-          <span>New Chat</span>
+          <Plus size={18} className="transition-all duration-700" />
+          <span className="transition-colors duration-700">New Chat</span>
         </button>
       </div>
 
@@ -56,14 +57,15 @@ export function Sidebar({
         {conversations.length === 0 ? (
           <div className={cn(
             'text-center py-8 text-sm',
-            'text-accent-500 dark:text-accent-400'
+            'text-accent-500 dark:text-accent-400',
+            'transition-colors duration-700'
           )}>
             No conversations yet
           </div>
         ) : (
           <div className="space-y-1">
             {conversations
-              .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
               .map((conversation, index) => (
                 <ConversationItem
                   key={conversation.id}
@@ -110,18 +112,21 @@ function ConversationItem({
       onClick={() => onSelect(conversation.id)}
       className={cn(
         'group flex items-center gap-2 px-3 py-2 rounded-lg',
-        'cursor-pointer transition-all duration-150',
+        'cursor-pointer transition-all duration-700',
         isActive
           ? 'bg-accent-200 dark:bg-accent-800 text-accent-900 dark:text-accent-100'
           : 'hover:bg-accent-100 dark:hover:bg-accent-800/50 hover:translate-x-1'
       )}
     >
-      <MessageSquare size={16} className="flex-shrink-0" />
+      <MessageSquare size={16} className="flex-shrink-0 transition-all duration-700" />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{conversation.title}</div>
+        <div className="text-sm font-medium truncate transition-colors duration-700">
+          {conversation.title}
+        </div>
         <div className={cn(
           'text-xs',
-          'text-accent-500 dark:text-accent-400'
+          'text-accent-500 dark:text-accent-400',
+          'transition-colors duration-700'
         )}>
           {conversation.messages.length} messages
         </div>
@@ -137,12 +142,13 @@ function ConversationItem({
           'opacity-0 group-hover:opacity-100',
           'p-1 rounded',
           'hover:bg-accent-300 dark:hover:bg-accent-700',
-          'transition-opacity duration-150'
+          'transition-all duration-700'
         )}
         title="Delete conversation"
       >
         <Trash2 size={14} className={cn(
-          'text-accent-700 dark:text-accent-300'
+          'text-accent-700 dark:text-accent-300',
+          'transition-colors duration-700'
         )} />
       </button>
     </div>

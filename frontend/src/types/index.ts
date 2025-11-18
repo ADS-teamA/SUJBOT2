@@ -34,12 +34,26 @@ export interface ToolCall {
   explicitParams?: string[];
 }
 
+export interface AgentCostBreakdown {
+  agent: string;
+  cost: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  call_count: number;
+}
+
 export interface CostInfo {
   totalCost: number;
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
-  summary: string;
+  agentBreakdown?: AgentCostBreakdown[];
+  cacheStats?: {
+    cache_read_tokens: number;
+    cache_creation_tokens: number;
+  };
 }
 
 export interface Conversation {
@@ -58,7 +72,7 @@ export interface Model {
 }
 
 export interface SSEEvent {
-  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_update' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress';
+  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress';
   data: any;
 }
 

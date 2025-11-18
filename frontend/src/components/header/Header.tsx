@@ -27,7 +27,8 @@ export function Header({
     <header className={cn(
       'bg-white dark:bg-accent-900',
       'border-b border-accent-200 dark:border-accent-800',
-      'px-6 py-4'
+      'px-6 py-4',
+      'transition-all duration-700'
     )}>
       <div className="flex items-center justify-between">
         {/* Left side: Hamburger + Logo */}
@@ -41,34 +42,68 @@ export function Header({
               'p-2 rounded-lg',
               'text-accent-700 dark:text-accent-300',
               'hover:bg-accent-100 dark:hover:bg-accent-800',
-              'transition-colors duration-150'
+              'transition-all duration-700'
             )}
             aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
           >
-            <Menu size={20} />
+            <Menu size={20} className="transition-all duration-700" />
           </button>
 
           {/* Logo and title */}
           <div className="flex items-center gap-3">
-            <div className={cn(
-              'w-8 h-8 rounded-lg',
-              'bg-accent-700 dark:bg-accent-300',
-              'flex items-center justify-center',
-              'text-white dark:text-accent-900',
-              'font-bold'
-            )}>
-              S2
-            </div>
+            {/* Icon - Atom + Book */}
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 512 512"
+              xmlns="http://www.w3.org/2000/svg"
+              className={cn(
+                'text-accent-900 dark:text-accent-100',
+                'flex-shrink-0',
+                'transition-all duration-700'
+              )}
+            >
+              {/* Atom + Book */}
+              <g transform="translate(256 256)" stroke="currentColor" fill="none" strokeLinecap="round">
+                {/* Orbitals (thicker) */}
+                <ellipse rx="185" ry="110" strokeWidth="16" />
+                <ellipse rx="185" ry="110" strokeWidth="16" transform="rotate(60)" />
+                <ellipse rx="185" ry="110" strokeWidth="16" transform="rotate(-60)" />
+
+                {/* Electrons (3 atoms evenly distributed at 0°, 120°, 240°) */}
+                <circle r="20" cx="185" cy="0" fill="currentColor" stroke="none" />
+                <circle r="20" cx="-92.5" cy="160" fill="currentColor" stroke="none" />
+                <circle r="20" cx="-92.5" cy="-160" fill="currentColor" stroke="none" />
+
+                {/* Paragraph symbol § */}
+                <text
+                  x="0"
+                  y="35"
+                  fontSize="140"
+                  fontWeight="bold"
+                  fill="currentColor"
+                  textAnchor="middle"
+                  fontFamily="serif"
+                >§</text>
+              </g>
+            </svg>
             <div>
-              <h1 className={cn(
-                'text-lg font-bold',
-                'text-accent-900 dark:text-accent-100'
-              )}>SUJBOT2</h1>
+              <h1
+                className={cn(
+                  'text-xl font-light tracking-tight',
+                  'text-accent-900 dark:text-accent-100',
+                  'transition-colors duration-700'
+                )}
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                SUJBOT2
+              </h1>
               <p className={cn(
-                'text-xs',
-                'text-accent-500 dark:text-accent-400'
+                'text-xs font-light',
+                'text-accent-500 dark:text-accent-400',
+                'transition-colors duration-700'
               )}>
-                RAG-Powered Document Assistant
+                Legal & Technical Document Intelligence
               </p>
             </div>
           </div>
@@ -82,13 +117,42 @@ export function Header({
             {...themeHover.hoverProps}
             style={themeHover.style}
             className={cn(
-              'p-2 rounded-lg',
+              'relative p-2 rounded-lg',
               'hover:bg-accent-100 dark:hover:bg-accent-800',
-              'transition-colors duration-150'
+              'transition-all duration-700',
+              'group overflow-hidden'
             )}
             title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           >
-            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+            {/* Background glow effect */}
+            <div className={cn(
+              'absolute inset-0 rounded-lg opacity-0',
+              'group-hover:opacity-100 transition-opacity duration-700',
+              'bg-gradient-to-r from-amber-100 to-blue-100',
+              'dark:from-amber-900/20 dark:to-blue-900/20'
+            )} />
+
+            {/* Icons with rotation animation */}
+            <div className="relative">
+              <Moon
+                size={20}
+                className={cn(
+                  'absolute inset-0 transition-all duration-700',
+                  theme === 'light'
+                    ? 'opacity-100 rotate-0'
+                    : 'opacity-0 -rotate-90'
+                )}
+              />
+              <Sun
+                size={20}
+                className={cn(
+                  'transition-all duration-700',
+                  theme === 'dark'
+                    ? 'opacity-100 rotate-0'
+                    : 'opacity-0 rotate-90'
+                )}
+              />
+            </div>
           </button>
         </div>
       </div>

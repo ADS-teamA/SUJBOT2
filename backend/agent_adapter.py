@@ -381,10 +381,42 @@ class AgentAdapter:
                     }
                 }
 
-            # Cost tracking (internal only - not shown to users)
-            # tracker = get_global_tracker()
-            # total_cost_usd = tracker.get_total_cost()
-            # Cost is tracked internally but not displayed to users per requirements
+            # Emit cost summary event with per-agent breakdown
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            agent_breakdown = tracker.get_agent_breakdown()
+
+            # Build agent breakdown array for frontend with defensive access
+            agent_costs = []
+            for agent_name, stats in agent_breakdown.items():
+                try:
+                    agent_costs.append({
+                        "agent": agent_name,
+                        "cost": stats.get("cost", 0.0),
+                        "input_tokens": stats.get("input_tokens", 0),
+                        "output_tokens": stats.get("output_tokens", 0),
+                        "cache_read_tokens": stats.get("cache_read_tokens", 0),
+                        "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
+                        "call_count": stats.get("call_count", 0)
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)
+                    # Continue with remaining agents - partial cost data is better than none
+
+            # Sort by cost descending
+            agent_costs.sort(key=lambda x: x["cost"], reverse=True)
+
+            yield {
+                "event": "cost_summary",
+                "data": {
+                    "total_cost": total_cost_usd,
+                    "agent_breakdown": agent_costs,
+                    "total_input_tokens": tracker.total_input_tokens,
+                    "total_output_tokens": tracker.total_output_tokens,
+                    "cache_stats": tracker.get_cache_stats()
+                }
+            }
+            await asyncio.sleep(0)
 
             # Signal completion
             yield {
@@ -397,12 +429,27 @@ class AgentAdapter:
             }
 
         except Exception as e:
-            logger.error(f"Error during multi-agent execution: {e}", exc_info=True)
+            # Capture execution context for debugging
+            context = {
+                "query": query[:200] if query else "N/A",
+                "conversation_id": conversation_id,
+                "agent_sequence": agent_sequence if 'agent_sequence' in locals() else [],
+                "last_agent": agent_sequence[-1] if 'agent_sequence' in locals() and agent_sequence else None,
+                "error_phase": "multi_agent_execution"
+            }
+
+            logger.error(
+                f"Error during multi-agent execution: {type(e).__name__}: {e}",
+                exc_info=True,
+                extra=context
+            )
+
             yield {
                 "event": "error",
                 "data": {
                     "error": str(e),
-                    "type": type(e).__name__
+                    "type": type(e).__name__,
+                    "context": context
                 }
             }
 
@@ -583,18 +630,67 @@ class AgentAdapter:
                     }
                     await asyncio.sleep(0.05)
 
-            # Cost tracking (internal only - not shown to users)
-            # tracker = get_global_tracker()
-            # Cost is tracked internally but not displayed to users per requirements
+            # Emit cost summary event with per-agent breakdown
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            agent_breakdown = tracker.get_agent_breakdown()
+
+            # Build agent breakdown array for frontend with defensive access
+            agent_costs = []
+            for agent_name, stats in agent_breakdown.items():
+                try:
+                    agent_costs.append({
+                        "agent": agent_name,
+                        "cost": stats.get("cost", 0.0),
+                        "input_tokens": stats.get("input_tokens", 0),
+                        "output_tokens": stats.get("output_tokens", 0),
+                        "cache_read_tokens": stats.get("cache_read_tokens", 0),
+                        "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
+                        "call_count": stats.get("call_count", 0)
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)
+                    # Continue with remaining agents - partial cost data is better than none
+
+            # Sort by cost descending
+            agent_costs.sort(key=lambda x: x["cost"], reverse=True)
+
+            yield {
+                "event": "cost_summary",
+                "data": {
+                    "total_cost": total_cost_usd,
+                    "agent_breakdown": agent_costs,
+                    "total_input_tokens": tracker.total_input_tokens,
+                    "total_output_tokens": tracker.total_output_tokens,
+                    "cache_stats": tracker.get_cache_stats()
+                }
+            }
+            await asyncio.sleep(0)
 
             # Emit done
             yield {"event": "done", "data": {}}
 
         except Exception as e:
-            logger.error(f"Resume error: {e}", exc_info=True)
+            # Capture execution context for debugging
+            context = {
+                "query": query[:200] if query else "N/A",
+                "conversation_id": conversation_id,
+                "error_phase": "simple_mode_execution"
+            }
+
+            logger.error(
+                f"Resume error: {type(e).__name__}: {e}",
+                exc_info=True,
+                extra=context
+            )
+
             yield {
                 "event": "error",
-                "data": {"error": str(e), "type": type(e).__name__},
+                "data": {
+                    "error": str(e),
+                    "type": type(e).__name__,
+                    "context": context
+                },
             }
 
     def get_health_status(self) -> Dict[str, Any]:
