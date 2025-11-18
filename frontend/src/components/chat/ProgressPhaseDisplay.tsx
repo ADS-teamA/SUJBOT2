@@ -94,7 +94,7 @@ const DEFAULT_PHASE: PhaseConfig = {
 };
 
 export const ProgressPhaseDisplay: React.FC<ProgressPhaseDisplayProps> = ({ progress }) => {
-  const { currentAgent, currentMessage, completedAgents, activeTools } = progress;
+  const { currentAgent, currentMessage, activeTools } = progress;
 
   // Only show during active generation (when there's a current agent)
   // Hide completely when generation is done

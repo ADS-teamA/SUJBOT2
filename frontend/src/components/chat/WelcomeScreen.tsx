@@ -103,39 +103,27 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
               )}
             >
               {/* Atom + Book */}
-              <g transform="translate(256 256)" stroke="currentColor" strokeWidth="10" fill="none" strokeLinecap="round">
-                {/* Orbitals */}
-                <ellipse rx="185" ry="110" />
-                <ellipse rx="185" ry="110" transform="rotate(60)" />
-                <ellipse rx="185" ry="110" transform="rotate(-60)" />
+              <g transform="translate(256 256)" stroke="currentColor" fill="none" strokeLinecap="round">
+                {/* Orbitals (thicker) */}
+                <ellipse rx="185" ry="110" strokeWidth="16" />
+                <ellipse rx="185" ry="110" strokeWidth="16" transform="rotate(60)" />
+                <ellipse rx="185" ry="110" strokeWidth="16" transform="rotate(-60)" />
 
-                {/* Electrons (4 directions) */}
-                <circle r="12" cx="185" cy="0" fill="currentColor" stroke="none" />
-                <circle r="12" cx="-185" cy="0" fill="currentColor" stroke="none" />
-                <circle r="12" cx="0" cy="-110" fill="currentColor" stroke="none" />
-                <circle r="12" cx="0" cy="110" fill="currentColor" stroke="none" />
+                {/* Electrons (3 atoms evenly distributed at 0°, 120°, 240°) */}
+                <circle r="20" cx="185" cy="0" fill="currentColor" stroke="none" />
+                <circle r="20" cx="-92.5" cy="160" fill="currentColor" stroke="none" />
+                <circle r="20" cx="-92.5" cy="-160" fill="currentColor" stroke="none" />
 
-                {/* Book */}
-                <g fill="none" stroke="currentColor" strokeWidth="8" strokeLinejoin="round">
-                  {/* Open book outline */}
-                  <path d="M -75 -42
-                           L -75 42
-                           Q -37 24 0 36
-                           Q 37 24 75 42
-                           L 75 -42
-                           Q 37 -52 0 -42
-                           Q -37 -52 -75 -42 Z" />
-                  {/* Book spine */}
-                  <line x1="0" y1="-48" x2="0" y2="38" />
-                  {/* Lines on left side */}
-                  <path d="M -55 -22 L -20 -18" />
-                  <path d="M -55  -5 L -20   0" />
-                  <path d="M -55  12 L -20  17" />
-                  {/* Lines on right side */}
-                  <path d="M 20 -18 L 55 -22" />
-                  <path d="M 20   0 L 55  -5" />
-                  <path d="M 20  17 L 55  12" />
-                </g>
+                {/* Paragraph symbol § */}
+                <text
+                  x="0"
+                  y="35"
+                  fontSize="140"
+                  fontWeight="bold"
+                  fill="currentColor"
+                  textAnchor="middle"
+                  fontFamily="serif"
+                >§</text>
               </g>
             </svg>
           </div>

@@ -675,7 +675,7 @@ export function useChat() {
                 })
               );
             }
-          } else if (event.event === 'cost_update') {
+          } else if (event.event === 'cost_summary') {
             // Cost tracking update
             if (currentMessageRef.current) {
               currentMessageRef.current.cost = {
@@ -683,7 +683,7 @@ export function useChat() {
                 inputTokens: event.data.input_tokens,
                 outputTokens: event.data.output_tokens,
                 cachedTokens: event.data.cached_tokens,
-                summary: event.data.summary,
+                agentBreakdown: event.data.agent_breakdown,
               };
 
               setConversations((prev) =>

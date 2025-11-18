@@ -164,7 +164,7 @@ export function ChatContainer({
                     <ChatMessage
                       key={message.id}
                       message={message}
-                      animationDelay={index * 50}
+                      animationDelay={index * 100}
                       onEdit={onEditMessage}
                       onRegenerate={onRegenerateMessage}
                       disabled={isStreaming}

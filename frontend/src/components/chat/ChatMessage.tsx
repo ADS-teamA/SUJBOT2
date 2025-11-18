@@ -67,7 +67,7 @@ export function ChatMessage({
         isUser ? 'justify-end' : 'justify-start'
       )}
       style={{
-        animation: `fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${animationDelay}ms backwards`,
+        animation: `fadeInUp 1.0s cubic-bezier(0.16, 1, 0.3, 1) ${animationDelay}ms backwards`,
       }}
     >
       <div
@@ -451,54 +451,51 @@ export function ChatMessage({
             </div>
           )}
 
-          {/* Timestamp */}
-          <div
-            className={cn(
-              'flex items-center gap-1 text-xs',
-              'text-accent-400 dark:text-accent-600'
-            )}
-          >
-            <Clock size={12} />
-            {(() => {
-              const date = message.timestamp ? new Date(message.timestamp) : new Date();
-              return !isNaN(date.getTime()) ? date.toLocaleTimeString() : 'Just now';
-            })()}
-          </div>
-        </div>
+          {/* Timestamp with inline details toggle */}
+          <div className="flex items-center gap-1.5">
+            <div
+              className={cn(
+                'flex items-center gap-1 text-xs',
+                'text-accent-400 dark:text-accent-600'
+              )}
+            >
+              <Clock size={12} />
+              {(() => {
+                const date = message.timestamp ? new Date(message.timestamp) : new Date();
+                return !isNaN(date.getTime()) ? date.toLocaleTimeString() : 'Just now';
+              })()}
+            </div>
 
-        {/* Collapsible metadata (cost, duration, tools) */}
-        {!isUser && (message.cost?.totalCost !== undefined || responseDurationMs !== undefined || (message.toolCalls && message.toolCalls.length > 0)) && (
-          <details className={cn(
-            'mt-3 group',
-            'border border-accent-200 dark:border-accent-700',
-            'rounded-lg overflow-hidden',
-            'transition-colors'
-          )}>
-            <summary className={cn(
-              'px-3 py-2 cursor-pointer',
-              'bg-accent-50 dark:bg-accent-900/50',
-              'hover:bg-accent-100 dark:hover:bg-accent-800',
-              'text-accent-600 dark:text-accent-400',
-              'text-xs font-medium',
-              'flex items-center gap-2',
-              'select-none',
-              'transition-colors',
-              '[&::-webkit-details-marker]:hidden' // Hide default marker
-            )}>
-              <span className={cn(
-                'text-accent-500 dark:text-accent-500',
-                'transition-transform duration-200',
-                'group-open:rotate-90'
-              )}>▸</span>
-              <span className="group-open:hidden">Show execution details</span>
-              <span className="hidden group-open:inline">Hide execution details</span>
-            </summary>
+            {/* Minimalist details chevron (only for assistant messages with metadata) */}
+            {!isUser && (message.cost?.totalCost !== undefined || responseDurationMs !== undefined || (message.toolCalls && message.toolCalls.length > 0)) && (
+              <details className="group inline-block">
+                <summary className={cn(
+                  'cursor-pointer select-none',
+                  'text-accent-400 dark:text-accent-600',
+                  'hover:text-accent-600 dark:hover:text-accent-400',
+                  'transition-colors',
+                  'list-none [&::-webkit-details-marker]:hidden',
+                  'inline-flex items-center gap-1'
+                )}>
+                  <span className={cn(
+                    'transition-transform duration-200',
+                    'group-open:rotate-90',
+                    'text-xs'
+                  )}>▸</span>
+                  <span className="text-xs">details</span>
+                </summary>
 
-            <div className={cn(
-              'px-3 py-2 space-y-2',
-              'bg-white dark:bg-accent-950',
-              'border-t border-accent-200 dark:border-accent-700'
-            )}>
+                {/* Dropdown panel below */}
+                <div className={cn(
+                  'absolute mt-1 z-10',
+                  'min-w-[300px]',
+                  'border border-accent-200 dark:border-accent-700',
+                  'rounded-lg overflow-hidden',
+                  'shadow-lg',
+                  'bg-white dark:bg-accent-950',
+                  'px-3 py-2 space-y-2',
+                  'text-xs'
+                )}>
               {/* Cost information with per-agent breakdown */}
               {message.cost && message.cost.totalCost !== undefined && (
                 <div className="space-y-2">
@@ -591,9 +588,11 @@ export function ChatMessage({
                   Tools used: {message.toolCalls.length}
                 </div>
               )}
-            </div>
-          </details>
-        )}
+                </div>
+              </details>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
