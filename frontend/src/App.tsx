@@ -37,6 +37,7 @@ function App() {
     sendMessage,
     editMessage,
     regenerateMessage,
+    deleteMessage,
     submitClarification,
     cancelClarification,
   } = useChat();
@@ -121,6 +122,7 @@ function App() {
           onSendMessage={sendMessage}
           onEditMessage={editMessage}
           onRegenerateMessage={regenerateMessage}
+          onDeleteMessage={deleteMessage}
           clarificationData={clarificationData}
           awaitingClarification={awaitingClarification}
           onSubmitClarification={submitClarification}

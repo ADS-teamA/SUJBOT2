@@ -20,6 +20,7 @@ from ..core.agent_registry import AgentRegistry
 from ..hitl.config import HITLConfig
 from ..hitl.quality_detector import QualityDetector
 from ..hitl.clarification_generator import ClarificationGenerator
+from ..core.event_bus import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +157,26 @@ class WorkflowBuilder:
 
                 logger.info(f"Executing agent: {agent_name}")
 
+                # Emit agent start event
+                if event_bus:
+                    await event_bus.emit(
+                        event_type=EventType.AGENT_START,
+                        data={
+                            "agent": agent_name,
+                            "message": f"Starting {agent_name} analysis..."
+                        },
+                        agent_name=agent_name
+                    )
+
                 # Execute agent (pass dict, expect dict back)
                 result = await agent.execute(updated_state)
 
                 logger.info(f"Agent {agent_name} completed successfully")
+
+                # CRITICAL: Ensure current_agent is preserved in result for progress tracking
+                # Runner expects current_agent to emit AGENT_START events
+                if "current_agent" not in result:
+                    result["current_agent"] = agent_name
 
                 return result
 
@@ -230,10 +247,25 @@ class WorkflowBuilder:
 
                 logger.info("Executing orchestrator synthesis...")
 
+                # Emit agent start event for synthesis
+                if event_bus:
+                    await event_bus.emit(
+                        event_type=EventType.AGENT_START,
+                        data={
+                            "agent": "orchestrator",
+                            "message": "Synthesizing final answer..."
+                        },
+                        agent_name="orchestrator"
+                    )
+
                 # Execute orchestrator (will detect PHASE 2 based on agent_outputs)
                 result = await orchestrator.execute(updated_state)
 
                 logger.info("Orchestrator synthesis completed successfully")
+
+                # CRITICAL: Ensure current_agent is preserved in result for progress tracking
+                if "current_agent" not in result:
+                    result["current_agent"] = "orchestrator"
 
                 return result
 

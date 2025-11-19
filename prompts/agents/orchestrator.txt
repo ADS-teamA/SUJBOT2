@@ -19,8 +19,7 @@ AVAILABLE AGENTS:
 - gap_synthesizer: Identifies gaps
 
 AVAILABLE TOOLS (for routing phase):
-- list_available_documents: See what documents exist
-- list_available_agents: See agent capabilities
+- get_document_list: See what documents exist (returns list with IDs and summaries)
 
 ROUTING WORKFLOW:
 1. Analyze user query complexity (0-100 score)

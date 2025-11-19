@@ -541,9 +541,28 @@ cat backup.sql | docker exec -i sujbot_postgres psql -U postgres sujbot
 - **PHASE 4:** `src/embedding_generator.py`, `src/faiss_vector_store.py` (embeddings + FAISS)
 - **PHASE 5:** `src/hybrid_search.py`, `src/graph/`, `src/reranker.py` (hybrid search + graph + reranking)
 - **PHASE 6:** `src/context_assembly.py` (context prep)
-- **PHASE 7:** `src/agent/` (RAG agent, 16 tools)
+- **PHASE 7:** Multi-agent execution (see Multi-Agent System section above)
 
-**Agent Tools:**
+**Agent Infrastructure (`src/agent/`):**
+
+Architecture: INFRASTRUCTURE LAYER (tools, providers, config) used by multi-agent orchestration layer
+
+- `src/agent/config.py` - AgentConfig (API keys, paths, settings)
+- `src/agent/prompt_loader.py` - Loads prompts from `prompts/` directory
+- `src/agent/query_expander.py` - Query expansion for retrieval (used by unified_search tool)
+- `src/agent/rag_confidence.py` - Confidence scoring (used by tier1 and tier2 tools)
+
+**LLM Providers:**
+- `src/agent/providers/factory.py` - Creates LLM instances (used by ALL 8 agents)
+- `src/agent/providers/anthropic_provider.py` - Claude API client
+- `src/agent/providers/openai_provider.py` - GPT API client
+- `src/agent/providers/gemini_provider.py` - Gemini API client
+- `src/agent/providers/base.py` - Base provider interface
+- `src/agent/providers/tool_translator.py` - Tool schema translation
+
+**RAG Tools (16 tools in 3 tiers):**
+- `src/agent/tools/registry.py` - Tool registry (`get_registry()`)
+- `src/agent/tools/base.py` - `BaseTool`, `ToolResult` classes
 - `src/agent/tools/tier1_basic.py` - 5 fast tools (100-300ms)
 - `src/agent/tools/tier2_advanced.py` - 10 quality tools (500-1000ms)
   - `multi_doc_synthesizer` - Multi-document synthesis
@@ -551,6 +570,8 @@ cat backup.sql | docker exec -i sujbot_postgres psql -U postgres sujbot
 - `src/agent/tools/tier3_analysis.py` - 2 analysis tools (500ms-3s)
   - `get_stats` - Corpus/index statistics
   - `definition_aligner` - ✨ **NEW:** Legal terminology mapping (Apache AGE graph + pgvector semantic)
+- `src/agent/tools/token_manager.py` - Token tracking
+- `src/agent/tools/utils.py` - Tool utilities
 
 ### Frontend (React + TypeScript + Vite)
 
@@ -929,8 +950,15 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-**Last Updated:** 2025-11-13
+**Last Updated:** 2025-11-19
 **Version:** PHASE 1-7 COMPLETE + Orchestrator-Centric Multi-Agent + HITL + Docker Web UI (16 tools, 7 agents, real-time progress visualization)
+
+**Recent Changes (2025-11-19):**
+- ✅ Cleaned up `src/agent/` folder - removed unused modules (SSOT compliance)
+- ✅ Deleted: `graph_adapter.py`, `graph_loader.py`, `validation.py` (used only in tests)
+- ✅ Deleted: 8 obsolete test files that imported removed modules
+- ✅ Architecture clarified: `src/agent/` = INFRASTRUCTURE (tools, providers, config), `src/multi_agent/` = ORCHESTRATION (agents, workflows)
+- ✅ All production code verified working after cleanup
 
 **Recent Changes (2025-11-13):**
 - ✅ Removed `report_generator` agent (redundant with orchestrator)

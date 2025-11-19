@@ -35,6 +35,19 @@ class RequirementExtractorAgent(BaseAgent):
         """Initialize requirement extractor agent with config."""
         super().__init__(config)
 
+        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
+        try:
+            from src.agent.providers.factory import create_provider
+
+            self.provider = create_provider(model=config.model)
+            logger.info(f"Initialized provider for model: {config.model}")
+        except Exception as e:
+            logger.error(f"Failed to create provider: {e}")
+            raise ValueError(
+                f"Failed to initialize LLM provider for model {config.model}. "
+                f"Ensure API keys are configured in environment and model name is valid."
+            ) from e
+
         # Load system prompt
         prompt_loader = get_prompt_loader()
         self.system_prompt = prompt_loader.get_prompt("requirement_extractor")

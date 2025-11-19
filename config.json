@@ -223,6 +223,9 @@
     "history_file": ".agent_history",
     "max_history_items": 1000
   },
+  "storage": {
+    "backend": "postgresql"
+  },
   "pipeline": {
     "log_level": "INFO",
     "log_file": "logs/pipeline.log",

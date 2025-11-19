@@ -8,8 +8,86 @@ Ensures type safety, validation, and consistency across all 8 agents.
 from typing import Annotated, Any, Dict, List, Optional
 from datetime import datetime
 from enum import Enum
+import operator
 
 from pydantic import BaseModel, Field, field_validator
+
+
+# ============================================================================
+# REDUCER FUNCTIONS (for parallel execution / fan-in)
+# ============================================================================
+
+def keep_first(existing: Any, new: Any) -> Any:
+    """
+    Reducer that keeps the first non-empty value.
+
+    Used for immutable fields like 'query' that should not change after initial set.
+    Treats None, empty strings, and default Enum values as "no value".
+    """
+    from enum import Enum as EnumBase
+
+    # Check if existing is a default Enum value (UNKNOWN or ROUTING)
+    if isinstance(existing, EnumBase):
+        # For Enums, check if it's a default/placeholder value
+        if existing.value in ('unknown', 'routing'):
+            return new if new != existing else existing
+        # Otherwise keep existing value (already set by previous agent)
+        return existing
+
+    # For strings, None, etc: treat None and empty string as "no value"
+    if not existing:
+        return new
+    return existing
+
+
+def take_max(existing: Any, new: Any) -> Any:
+    """
+    Reducer that returns the maximum of two values.
+
+    Handles None values by treating them as negative infinity.
+    Used for numeric fields where we want to keep the highest value (e.g., complexity_score).
+    """
+    if existing is None and new is None:
+        return None
+    if existing is None:
+        return new
+    if new is None:
+        return existing
+    return max(existing, new)
+
+
+def merge_dicts(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Reducer that merges dictionaries (new values override existing).
+
+    Used for agent_outputs, shared_context, etc.
+    """
+    if existing is None:
+        return new
+    if new is None:
+        return existing
+    return {**existing, **new}
+
+
+def merge_lists_unique(existing: List[Any], new: List[Any]) -> List[Any]:
+    """
+    Reducer that merges lists and removes duplicates (preserves order).
+
+    Used for agent_sequence to avoid duplicate agent names.
+    """
+    if existing is None:
+        existing = []
+    if new is None:
+        new = []
+
+    # Combine and deduplicate while preserving order
+    seen = set()
+    result = []
+    for item in existing + new:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 class QueryType(str, Enum):
@@ -96,64 +174,70 @@ class MultiAgentState(BaseModel):
 
     Passed through LangGraph and updated by each agent.
     This is the complete state with all fields needed for the full pipeline.
+
+    IMPORTANT: Fields use Annotated with reducer functions to support parallel execution.
+    When multiple agents run in parallel (fan-out/fan-in), LangGraph needs to know how
+    to merge their state updates. Reducers define the merge strategy per field.
     """
 
-    # === INPUT ===
-    query: str = Field(..., description="Original user query")
+    # === INPUT (immutable after initial set) ===
+    # NOTE: Default empty string allows LangGraph to accept partial state updates
+    # The initial query will be set by the first state update via keep_first reducer
+    query: Annotated[str, keep_first] = Field(default="", description="Original user query")
 
     # === ROUTING ===
-    query_type: QueryType = QueryType.UNKNOWN
-    complexity_score: int = Field(default=0, ge=0, le=100)
-    execution_phase: ExecutionPhase = ExecutionPhase.ROUTING
-    agent_sequence: List[str] = Field(default_factory=list)
+    query_type: Annotated[QueryType, keep_first] = QueryType.UNKNOWN  # Orchestrator sets this once
+    complexity_score: Annotated[int, take_max] = Field(default=0, ge=0, le=100)  # Keep highest score
+    execution_phase: Annotated[ExecutionPhase, keep_first] = ExecutionPhase.ROUTING  # Set once, don't override
+    agent_sequence: Annotated[List[str], merge_lists_unique] = Field(default_factory=list)
 
     # === EXECUTION ===
-    current_agent: Optional[str] = None
-    agent_outputs: Dict[str, Any] = Field(default_factory=dict)
-    tool_executions: List[ToolExecution] = Field(default_factory=list)
+    current_agent: Annotated[Optional[str], keep_first] = None
+    agent_outputs: Annotated[Dict[str, Any], merge_dicts] = Field(default_factory=dict)
+    tool_executions: Annotated[List[ToolExecution], operator.add] = Field(default_factory=list)
 
     # === RETRIEVAL ===
-    documents: List[DocumentMetadata] = Field(default_factory=list)
-    retrieved_text: str = ""
+    documents: Annotated[List[DocumentMetadata], operator.add] = Field(default_factory=list)
+    retrieved_text: Annotated[str, operator.add] = ""  # Concatenate text from multiple agents
 
     # === CONTEXT ===
-    shared_context: Dict[str, Any] = Field(default_factory=dict)
+    shared_context: Annotated[Dict[str, Any], merge_dicts] = Field(default_factory=dict)
 
     # === RESULTS ===
-    final_answer: Optional[str] = None
-    structured_output: Dict[str, Any] = Field(default_factory=dict)
-    citations: List[str] = Field(default_factory=list)
-    confidence_score: Optional[float] = None
+    final_answer: Annotated[Optional[str], keep_first] = None  # First agent to set final answer wins
+    structured_output: Annotated[Dict[str, Any], merge_dicts] = Field(default_factory=dict)
+    citations: Annotated[List[str], operator.add] = Field(default_factory=list)
+    confidence_score: Annotated[Optional[float], take_max] = None  # Keep highest confidence
 
     # === COST TRACKING ===
-    total_cost_cents: float = 0.0
-    cost_breakdown: Dict[str, float] = Field(default_factory=dict)
+    total_cost_cents: Annotated[float, operator.add] = 0.0  # Sum costs from all agents
+    cost_breakdown: Annotated[Dict[str, float], merge_dicts] = Field(default_factory=dict)
 
     # === ERROR HANDLING ===
-    errors: List[str] = Field(default_factory=list)
+    errors: Annotated[List[str], operator.add] = Field(default_factory=list)
 
     # === METADATA ===
-    session_id: str = Field(default="default")
-    user_id: str = Field(default="default")
-    created_at: datetime = Field(default_factory=datetime.now)
-    checkpoints: List[str] = Field(default_factory=list)  # Checkpoint IDs
+    session_id: Annotated[str, keep_first] = Field(default="default")  # Immutable session identifier
+    user_id: Annotated[str, keep_first] = Field(default="default")  # Immutable user identifier
+    created_at: Annotated[datetime, keep_first] = Field(default_factory=datetime.now)  # Immutable timestamp
+    checkpoints: Annotated[List[str], operator.add] = Field(default_factory=list)  # Checkpoint IDs accumulate
 
     # === HUMAN-IN-THE-LOOP (CLARIFICATIONS) ===
-    quality_check_required: bool = False
-    quality_issues: List[str] = Field(default_factory=list)
-    quality_metrics: Optional[Dict[str, float]] = None
-    clarifying_questions: List[Dict[str, Any]] = Field(default_factory=list)
-    original_query: Optional[str] = None
-    user_clarification: Optional[str] = None
-    enriched_query: Optional[str] = None
-    clarification_round: int = 0  # Track multi-round clarifications
-    awaiting_user_input: bool = False  # Signal frontend to pause
+    quality_check_required: Annotated[bool, operator.or_] = False  # True if ANY agent needs clarification
+    quality_issues: Annotated[List[str], operator.add] = Field(default_factory=list)
+    quality_metrics: Annotated[Optional[Dict[str, float]], merge_dicts] = None
+    clarifying_questions: Annotated[List[Dict[str, Any]], operator.add] = Field(default_factory=list)
+    original_query: Annotated[Optional[str], keep_first] = None
+    user_clarification: Annotated[Optional[str], keep_first] = None
+    enriched_query: Annotated[Optional[str], keep_first] = None
+    clarification_round: Annotated[int, take_max] = 0  # Track multi-round clarifications
+    awaiting_user_input: Annotated[bool, operator.or_] = False  # Signal frontend to pause
 
     # === INTERNAL INFRASTRUCTURE (excluded from serialization) ===
     # EventBus for real-time progress streaming (NOT persisted to checkpoints)
     # Note: Pydantic V2 doesn't allow field names with leading underscores,
     # so we use "event_bus" (no underscore) consistently throughout the codebase.
-    event_bus: Optional[Any] = Field(default=None, exclude=True)
+    event_bus: Annotated[Optional[Any], keep_first] = Field(default=None, exclude=True)
 
     @field_validator("complexity_score")
     @classmethod

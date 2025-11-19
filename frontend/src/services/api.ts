@@ -360,6 +360,22 @@ export class ApiService {
       reader.releaseLock();
     }
   }
+
+  /**
+   * Delete a message from conversation history
+   */
+  async deleteMessage(conversationId: string, messageId: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/chat/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete message: ${response.status}`);
+    }
+  }
 }
 
 // Singleton instance
