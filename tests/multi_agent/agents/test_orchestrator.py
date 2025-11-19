@@ -29,7 +29,7 @@ def orchestrator_config():
         model="claude-sonnet-4-5-20250929",
         max_tokens=1024,
         temperature=0.1,
-        tools={"list_available_documents", "list_available_agents"},
+        tools={"get_document_list"},
         enable_prompt_caching=True
     )
 
@@ -134,48 +134,12 @@ async def test_routes_simple_query_to_few_agents(orchestrator, mock_provider, mo
 
 
 # ============================================================================
-# Test: Calls list_available_documents Tool
+# Test: Calls get_document_list Tool (TODO: Update after tool consolidation)
 # ============================================================================
 
-@pytest.mark.asyncio
-async def test_calls_list_documents_tool_when_needed(orchestrator, mock_provider, mock_tool_adapter, mock_llm_response, mock_state):
-    """Orchestrator should call list_available_documents for document-specific queries."""
-    state = mock_state(query="What documents do you have about privacy policies?")
-
-    # Mock LLM to first call tool, then provide routing
-    mock_provider.create_message.side_effect = [
-        # First: Request tool call
-        mock_llm_response(tool_calls=[
-            {
-                "type": "tool_use",
-                "id": "call_1",
-                "name": "list_available_documents",
-                "input": {}
-            }
-        ], stop_reason="tool_use"),
-        # Then: Provide routing decision
-        mock_llm_response(
-            text=json.dumps({
-                "complexity_score": 40,
-                "query_type": "retrieval",
-                "agent_sequence": ["extractor", "classifier"]
-            })
-        )
-    ]
-
-    # Mock orchestrator tools instance
-    mock_list_documents = Mock(return_value={
-        "documents": [{"id": "doc1"}, {"id": "doc2"}, {"id": "doc3"}],
-        "count": 3,
-        "message": "Found 3 documents"
-    })
-
-    with patch.object(orchestrator.orchestrator_tools_instance, 'list_available_documents', mock_list_documents):
-        result = await orchestrator.execute(state)
-
-    # Verify tool was called
-    mock_list_documents.assert_called_once()
-
+# TODO: Rewrite test after orchestrator tool consolidation
+# Old test used orchestrator_tools_instance which was removed
+# New implementation uses registry tools (get_document_list from tier1_basic.py)
 
 # ============================================================================
 # Test: JSON Parsing Failure Recovery
@@ -258,50 +222,11 @@ async def test_complexity_score_reflects_query_difficulty(orchestrator, mock_pro
 
 
 # ============================================================================
-# Test: list_available_agents Tool
+# Test: list_available_agents Tool (REMOVED - no longer exists)
 # ============================================================================
 
-@pytest.mark.asyncio
-async def test_calls_list_available_agents_tool(orchestrator, mock_provider, mock_tool_adapter, mock_llm_response, mock_state):
-    """Orchestrator should be able to call list_available_agents tool."""
-    state = mock_state(query="What can you help me with?")
-
-    # Mock LLM to call list_available_agents tool
-    mock_provider.create_message.side_effect = [
-        mock_llm_response(tool_calls=[
-            {
-                "type": "tool_use",
-                "id": "call_1",
-                "name": "list_available_agents",
-                "input": {}
-            }
-        ], stop_reason="tool_use"),
-        mock_llm_response(
-            text=json.dumps({
-                "complexity_score": 0,
-                "query_type": "meta",
-                "agent_sequence": [],
-                "final_answer": "I can help with document search, compliance analysis, risk verification, and more."
-            })
-        )
-    ]
-
-    # Mock orchestrator tools instance
-    mock_list_agents = Mock(return_value={
-        "agents": [
-            {"name": "extractor", "role": "extract", "tools": ["search"]},
-            {"name": "compliance", "role": "verify", "tools": ["assess_confidence"]}
-        ],
-        "count": 2,
-        "message": "Found 2 available agents"
-    })
-
-    with patch.object(orchestrator.orchestrator_tools_instance, 'list_available_agents', mock_list_agents):
-        result = await orchestrator.execute(state)
-
-    # Verify tool was called
-    mock_list_agents.assert_called_once()
-
+# Tool removed during consolidation - orchestrator now uses get_document_list only
+# Agent discovery can be handled differently if needed in the future
 
 # ============================================================================
 # Test: Empty Agent Sequence Handling

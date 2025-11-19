@@ -21,6 +21,7 @@ import re
 from ..core.agent_base import BaseAgent
 from ..core.state import QueryType, MultiAgentState
 from ..core.agent_registry import register_agent
+from ..core.event_bus import EventType
 from ..prompts.loader import get_prompt_loader
 
 logger = logging.getLogger(__name__)
@@ -67,14 +68,25 @@ class OrchestratorAgent(BaseAgent):
         self.complexity_threshold_low = 30
         self.complexity_threshold_high = 70
 
-        # Initialize orchestrator-specific tools
-        from ..tools.orchestrator_tools import create_orchestrator_tools
-        self.orchestrator_tool_schemas, self.orchestrator_tools_instance = create_orchestrator_tools(
-            vector_store=vector_store,
-            agent_registry=agent_registry
-        )
+        # Initialize orchestrator tools using registry (tier1 tools)
+        # Orchestrator uses same tools as agents for consistency
+        from src.agent.tools.registry import get_registry
 
-        logger.info(f"OrchestratorAgent initialized with model: {config.model}")
+        self.tool_registry = get_registry()
+
+        # Get tool schemas for LLM (only document listing tool needed for routing)
+        available_tools = ["get_document_list"]
+        self.orchestrator_tool_schemas = [
+            {
+                "name": tool.name,
+                "description": tool.description or "No description",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            }
+            for tool_name in available_tools
+            if (tool := self.tool_registry.get_tool(tool_name))
+        ]
+
+        logger.info(f"OrchestratorAgent initialized with model: {config.model}, tools: {available_tools}")
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -94,9 +106,9 @@ class OrchestratorAgent(BaseAgent):
 
         if not query:
             logger.error("No query provided in state")
-            state["errors"] = state.get("errors", [])
-            state["errors"].append("No query provided for orchestration")
-            return state
+            errors = state.get("errors", [])
+            errors.append("No query provided for orchestration")
+            return {"errors": errors}
 
         # Detect phase: if agent_outputs exist (and not just orchestrator), we're in SYNTHESIS phase
         agent_outputs = state.get("agent_outputs", {})
@@ -111,6 +123,19 @@ class OrchestratorAgent(BaseAgent):
         else:
             # PHASE 1: ROUTING - analyze query and determine agent sequence
             logger.info(f"PHASE 1: Routing - analyzing query: {query[:100]}...")
+
+            # Extract event bus from state (injected by runner)
+            event_bus = state.get("event_bus")
+            if event_bus:
+                await event_bus.emit(
+                    event_type=EventType.AGENT_START,
+                    data={
+                        "agent": "orchestrator",
+                        "message": "Analyzing query complexity and routing..."
+                    },
+                    agent_name="orchestrator"
+                )
+
             return await self._route_query(state)
 
     async def _route_query(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -141,8 +166,8 @@ class OrchestratorAgent(BaseAgent):
                 logger.info("Orchestrator provided direct answer without agents")
 
             # Track orchestrator output
-            state["agent_outputs"] = state.get("agent_outputs", {})
-            state["agent_outputs"]["orchestrator"] = {
+            agent_outputs = state.get("agent_outputs", {})
+            agent_outputs["orchestrator"] = {
                 "complexity_score": routing_decision["complexity_score"],
                 "query_type": routing_decision["query_type"],
                 "agent_sequence": routing_decision["agent_sequence"],
@@ -156,7 +181,19 @@ class OrchestratorAgent(BaseAgent):
                 f"sequence={routing_decision['agent_sequence']}"
             )
 
-            return state
+            # Return ONLY changed keys (partial update) to avoid LangGraph state conflicts
+            update = {
+                "complexity_score": routing_decision["complexity_score"],
+                "query_type": routing_decision["query_type"],
+                "agent_sequence": routing_decision["agent_sequence"],
+                "agent_outputs": agent_outputs
+            }
+
+            # Add final_answer if orchestrator provided direct response (no agents)
+            if "final_answer" in routing_decision and routing_decision["final_answer"]:
+                update["final_answer"] = routing_decision["final_answer"]
+
+            return update
 
         except Exception as e:
             from ..core.error_tracker import track_error, ErrorSeverity
@@ -175,19 +212,20 @@ class OrchestratorAgent(BaseAgent):
                 exc_info=True
             )
 
-            state["errors"] = state.get("errors", [])
-            state["errors"].append(f"[{error_id}] Orchestration failed: {type(e).__name__}: {str(e)}")
+            errors = state.get("errors", [])
+            errors.append(f"[{error_id}] Orchestration failed: {type(e).__name__}: {str(e)}")
 
-            # DO NOT silently fall back - user must know orchestration failed
-            state["execution_phase"] = "error"
-            state["final_answer"] = (
-                f"Query analysis failed [{error_id}]. "
-                f"Unable to determine optimal workflow for your query. "
-                f"Error: {type(e).__name__}. "
-                f"Please check system configuration and try again."
-            )
-
-            return state
+            # Return ONLY changed keys (partial update)
+            return {
+                "errors": errors,
+                "execution_phase": "error",
+                "final_answer": (
+                    f"Query analysis failed [{error_id}]. "
+                    f"Unable to determine optimal workflow for your query. "
+                    f"Error: {type(e).__name__}. "
+                    f"Please check system configuration and try again."
+                )
+            }
 
     async def _analyze_and_route(self, query: str) -> Dict[str, Any]:
         """
@@ -307,15 +345,31 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
 
                         logger.info(f"Orchestrator calling tool: {tool_name}")
 
-                        # Execute tool using tools instance
+                        # Emit tool start event
+                        event_bus = None
+                        # Try to get event bus from self (not stored) or context?
+                        # Since _analyze_and_route doesn't have state, we can't easily access event_bus here
+                        # UNLESS we pass it down.
+                        # But for now, let's rely on the initial AGENT_START.
+                        # To do this properly, we'd need to refactor _analyze_and_route to accept event_bus.
+                        # Let's skip tool events for now in orchestrator to keep changes minimal and safe.
+
+                        # Execute tool using registry
                         try:
-                            if tool_name == "list_available_documents":
-                                result = self.orchestrator_tools_instance.list_available_documents()
-                            elif tool_name == "list_available_agents":
-                                result = self.orchestrator_tools_instance.list_available_agents()
-                            else:
+                            # Get tool from registry
+                            tool = self.tool_registry.get_tool(tool_name)
+
+                            if not tool:
                                 logger.warning(f"Unknown tool: {tool_name}")
                                 result = {"error": f"Unknown tool: {tool_name}"}
+                            else:
+                                # Execute tool and convert ToolResult to dict
+                                tool_result = tool.execute(**tool_input)
+
+                                if tool_result.success:
+                                    result = tool_result.data
+                                else:
+                                    result = {"error": tool_result.error}
 
                             tool_results.append({
                                 "type": "tool_result",
@@ -324,7 +378,7 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                             })
                             logger.debug(f"Tool {tool_name} result: {result}")
                         except Exception as e:
-                            logger.error(f"Tool {tool_name} failed: {e}")
+                            logger.error(f"Tool {tool_name} failed: {e}", exc_info=True)
                             tool_results.append({
                                 "type": "tool_result",
                                 "tool_use_id": tool_call.get("id"),
@@ -453,19 +507,71 @@ Ensure language matching and proper citations."""
 
             final_answer = response.text
 
+            # Check if orchestrator requested iteration (JSON response)
+            needs_iteration = False
+            next_agents = []
+            iteration_reason = ""
+            partial_answer = ""
+
+            try:
+                # Try parsing response as JSON (iteration request)
+                import json
+                iteration_request = json.loads(final_answer.strip())
+
+                if iteration_request.get("needs_iteration"):
+                    needs_iteration = True
+                    next_agents = iteration_request.get("next_agents", [])
+                    iteration_reason = iteration_request.get("iteration_reason", "")
+                    partial_answer = iteration_request.get("partial_answer", "")
+
+                    logger.info(
+                        f"Orchestrator requested iteration: {len(next_agents)} agents "
+                        f"({', '.join(next_agents)}) - Reason: {iteration_reason}"
+                    )
+
+                    # Replace final_answer with partial answer for this iteration
+                    final_answer = partial_answer
+            except (json.JSONDecodeError, ValueError):
+                # Not JSON - normal final answer
+                pass
+
             # Aggregate costs from ALL agents (stored in state for SSE event emission)
             total_cost_usd = tracker.get_total_cost()
 
-            # Update state (cost is NOT appended to final_answer - handled by SSE event instead)
-            state["final_answer"] = final_answer
-            state["agent_outputs"]["orchestrator"]["synthesis"] = {
+            # Build agent_outputs update (preserve existing outputs)
+            agent_outputs = state.get("agent_outputs", {})
+            if "orchestrator" not in agent_outputs:
+                agent_outputs["orchestrator"] = {}
+            agent_outputs["orchestrator"]["synthesis"] = {
                 "final_answer": final_answer,
                 "total_cost_usd": total_cost_usd
             }
 
-            logger.info(f"Synthesis complete: {len(final_answer)} chars, cost=${total_cost_usd:.6f}")
+            # Return ONLY changed keys (partial update) to avoid LangGraph state conflicts
+            update = {
+                "final_answer": final_answer,
+                "agent_outputs": agent_outputs
+            }
 
-            return state
+            # Add iteration flags if orchestrator requested it
+            if needs_iteration:
+                iteration_count = state.get("iteration_count", 0) + 1
+                update.update({
+                    "needs_iteration": True,
+                    "next_agents": next_agents,
+                    "iteration_reason": iteration_reason,
+                    "iteration_count": iteration_count
+                })
+
+                logger.info(
+                    f"Synthesis complete with iteration request (iteration {iteration_count}): "
+                    f"{len(next_agents)} agents - Reason: {iteration_reason}"
+                )
+            else:
+                update["needs_iteration"] = False
+                logger.info(f"Synthesis complete: {len(final_answer)} chars, cost=${total_cost_usd:.6f}")
+
+            return update
 
         except Exception as e:
             from ..core.error_tracker import track_error, ErrorSeverity
@@ -482,18 +588,19 @@ Ensure language matching and proper citations."""
                 exc_info=True
             )
 
-            state["errors"] = state.get("errors", [])
-            state["errors"].append(f"[{error_id}] Synthesis failed: {type(e).__name__}: {str(e)}")
+            errors = state.get("errors", [])
+            errors.append(f"[{error_id}] Synthesis failed: {type(e).__name__}: {str(e)}")
 
-            # Provide fallback answer
-            state["final_answer"] = (
-                f"Answer generation failed [{error_id}]. "
-                f"Agents completed their analysis, but final synthesis encountered an error. "
-                f"Error: {type(e).__name__}. "
-                f"Please try rephrasing your query."
-            )
-
-            return state
+            # Return ONLY changed keys (partial update)
+            return {
+                "errors": errors,
+                "final_answer": (
+                    f"Answer generation failed [{error_id}]. "
+                    f"Agents completed their analysis, but final synthesis encountered an error. "
+                    f"Error: {type(e).__name__}. "
+                    f"Please try rephrasing your query."
+                )
+            }
 
     def _build_synthesis_context(self, state: Dict[str, Any]) -> str:
         """

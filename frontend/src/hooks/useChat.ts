@@ -164,13 +164,25 @@ export function useChat() {
         timestamp: new Date().toISOString(),
         toolCalls: [],
         agentProgress: {
-          currentAgent: null,
-          currentMessage: null,
+          currentAgent: 'orchestrator', // Start with orchestrator immediately
+          currentMessage: 'Initializing...',
           completedAgents: [],
           activeTools: []
         }
       };
       currentToolCallsRef.current = new Map();
+
+      // IMMEDIATE UPDATE: Add placeholder message to state so UI shows "Thinking..." instantly
+      // This prevents the "empty gap" before first backend event arrives
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== updatedConversation.id) return c;
+          return {
+            ...c,
+            messages: [...c.messages, currentMessageRef.current!]
+          };
+        })
+      );
 
       setIsStreaming(true);
 
@@ -208,10 +220,10 @@ export function useChat() {
                     ...currentMessageRef.current!,
                     agentProgress: currentMessageRef.current!.agentProgress
                       ? {
-                          ...currentMessageRef.current!.agentProgress,
-                          activeTools: [...(currentMessageRef.current!.agentProgress.activeTools || [])],
-                          completedAgents: [...(currentMessageRef.current!.agentProgress.completedAgents || [])]
-                        }
+                        ...currentMessageRef.current!.agentProgress,
+                        activeTools: [...(currentMessageRef.current!.agentProgress.activeTools || [])],
+                        completedAgents: [...(currentMessageRef.current!.agentProgress.completedAgents || [])]
+                      }
                       : undefined
                   };
 
@@ -776,6 +788,46 @@ export function useChat() {
     // Optionally: Could show a message to the user that clarification was skipped
   }, []);
 
+  /**
+   * Delete a message from the current conversation
+   * @param messageId - ID of the message to delete
+   */
+  const deleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!currentConversationId) {
+        console.warn('No conversation selected');
+        return;
+      }
+
+      // Try backend notification (non-blocking)
+      try {
+        await apiService.deleteMessage(currentConversationId, messageId);
+      } catch (error) {
+        console.error('Backend delete notification failed:', error);
+      }
+
+      // Always update UI (frontend-centric approach)
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== currentConversationId) return c;
+
+          const updatedMessages = c.messages.filter((m) => m.id !== messageId);
+          const updatedConv = {
+            ...c,
+            messages: updatedMessages,
+            updatedAt: new Date().toISOString(),
+          };
+
+          storageService.saveConversation(updatedConv);
+          return updatedConv;
+        })
+      );
+
+      console.log(`✓ Message ${messageId} deleted locally`);
+    },
+    [currentConversationId]
+  );
+
   return {
     conversations,
     currentConversation,
@@ -788,6 +840,7 @@ export function useChat() {
     sendMessage,
     editMessage,
     regenerateMessage,
+    deleteMessage,
     submitClarification,
     cancelClarification,
   };

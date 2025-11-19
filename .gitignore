@@ -83,3 +83,4 @@ data_legacy/
 # Backup files
 *.bak
 *.backup
+config.json

@@ -352,6 +352,13 @@ async def chat_clarify(request: ClarificationRequest):
     return EventSourceResponse(event_generator())
 
 
+@app.delete("/chat/{conversation_id}/messages/{message_id}")
+async def delete_message(conversation_id: str, message_id: str):
+    """Delete a message from conversation history (frontend-managed)."""
+    logger.info(f"Message delete requested: conversation={conversation_id}, message={message_id}")
+    return {"success": True}
+
+
 @app.post("/model/switch", deprecated=True)
 async def switch_model(model: str):
     """

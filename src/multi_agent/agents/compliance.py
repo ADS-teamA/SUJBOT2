@@ -56,7 +56,7 @@ class ComplianceAgent(BaseAgent):
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Verify compliance with regulations (AUTONOMOUS).
+        Verify compliance with regulations using checklist from RequirementExtractor (AUTONOMOUS).
 
         LLM autonomously decides which tools to call based on query.
 
@@ -65,15 +65,74 @@ class ComplianceAgent(BaseAgent):
 
         Returns:
             Updated state with compliance findings
+
+        Raises:
+            ValueError: If requirement_extractor output is missing or invalid
         """
         query = state.get("query", "")
-        extractor_output = state.get("agent_outputs", {}).get("extractor", {})
 
-        if not extractor_output:
-            logger.warning("No extractor output found, skipping compliance check")
+        # CRITICAL: ComplianceAgent REQUIRES RequirementExtractor output (SOTA 2024 - requirement-first)
+        requirement_extractor_output = state.get("agent_outputs", {}).get("requirement_extractor", {})
+
+        if not requirement_extractor_output:
+            error_msg = (
+                "ComplianceAgent error: Missing requirement_extractor output. "
+                "Compliance agent requires checklist from RequirementExtractorAgent. "
+                "Ensure orchestrator routes: extractor → requirement_extractor → compliance."
+            )
+            logger.error(error_msg)
+            state["errors"] = state.get("errors", [])
+            state["errors"].append(error_msg)
             return state
 
-        logger.info("Running autonomous compliance verification...")
+        # Validate and parse checklist JSON
+        checklist_str = requirement_extractor_output.get("checklist", "")
+        if not checklist_str:
+            error_msg = (
+                "ComplianceAgent error: requirement_extractor output missing 'checklist' field. "
+                "RequirementExtractor must generate JSON checklist with atomic requirements."
+            )
+            logger.error(error_msg)
+            state["errors"] = state.get("errors", [])
+            state["errors"].append(error_msg)
+            return state
+
+        try:
+            import json
+            checklist_data = json.loads(checklist_str)
+
+            # Validate checklist structure
+            if "checklist" not in checklist_data:
+                raise ValueError("Checklist JSON missing 'checklist' array")
+            if not isinstance(checklist_data["checklist"], list):
+                raise ValueError("'checklist' must be an array of requirements")
+            if len(checklist_data["checklist"]) == 0:
+                raise ValueError("Checklist is empty - no requirements to verify")
+
+            # Log checklist summary
+            num_requirements = len(checklist_data["checklist"])
+            target_law = checklist_data.get("target_law", "unknown")
+            logger.info(
+                f"Parsed checklist: {num_requirements} requirements from {target_law}"
+            )
+
+        except json.JSONDecodeError as e:
+            error_msg = (
+                f"ComplianceAgent error: Invalid JSON from requirement_extractor: {str(e)}. "
+                f"RequirementExtractor must output valid JSON with checklist structure."
+            )
+            logger.error(error_msg)
+            state["errors"] = state.get("errors", [])
+            state["errors"].append(error_msg)
+            return state
+        except ValueError as e:
+            error_msg = f"ComplianceAgent error: Invalid checklist structure: {str(e)}"
+            logger.error(error_msg)
+            state["errors"] = state.get("errors", [])
+            state["errors"].append(error_msg)
+            return state
+
+        logger.info(f"Running checklist-based compliance verification for {num_requirements} requirements...")
 
         try:
             # Run autonomous tool calling loop

@@ -170,6 +170,7 @@ class MultiAgentRunner:
             OrchestratorAgent,
             ExtractorAgent,
             ClassifierAgent,
+            RequirementExtractorAgent,
             ComplianceAgent,
             RiskVerifierAgent,
             CitationAuditorAgent,
@@ -193,6 +194,7 @@ class MultiAgentRunner:
         agent_classes = {
             "extractor": ExtractorAgent,
             "classifier": ClassifierAgent,
+            "requirement_extractor": RequirementExtractorAgent,
             "compliance": ComplianceAgent,
             "risk_verifier": RiskVerifierAgent,
             "citation_auditor": CitationAuditorAgent,
@@ -209,6 +211,8 @@ class MultiAgentRunner:
     async def _initialize_tools(self) -> None:
         """Initialize tool registry with RAG components."""
         from ..agent.tools.registry import get_registry
+        # Import tool modules to trigger @register_tool decorators
+        from ..agent.tools import tier1_basic, tier2_advanced, tier3_analysis
         from ..storage import load_vector_store_adapter
         from ..embedding_generator import EmbeddingGenerator
         from ..reranker import CrossEncoderReranker
@@ -466,6 +470,7 @@ class MultiAgentRunner:
             "orchestrator": {"role": AgentRole.ORCHESTRATE, "tier": AgentTier.ORCHESTRATOR},
             "extractor": {"role": AgentRole.EXTRACT, "tier": AgentTier.WORKER},
             "classifier": {"role": AgentRole.CLASSIFY, "tier": AgentTier.SPECIALIST},
+            "requirement_extractor": {"role": AgentRole.EXTRACT, "tier": AgentTier.SPECIALIST},
             "compliance": {"role": AgentRole.VERIFY, "tier": AgentTier.SPECIALIST},
             "risk_verifier": {"role": AgentRole.VERIFY, "tier": AgentTier.SPECIALIST},
             "citation_auditor": {"role": AgentRole.AUDIT, "tier": AgentTier.WORKER},
@@ -532,7 +537,32 @@ class MultiAgentRunner:
             # Inject EventBus into state (internal infrastructure, excluded from serialization)
             # Note: Use "event_bus" key (no underscore) to match MultiAgentState field name
             state_dict["event_bus"] = event_bus
-            state_dict = await orchestrator.execute(state_dict)
+
+            # DEBUG: Verify query before orchestrator
+            logger.info(f"Query before orchestrator: {state_dict.get('query', 'MISSING')}")
+
+            # Execute orchestrator and MERGE result into existing state (don't overwrite)
+            # Run concurrently to allow event streaming during orchestrator execution
+            orchestrator_task = asyncio.create_task(orchestrator.execute(state_dict))
+
+            # Stream events while orchestrator is running
+            while not orchestrator_task.done():
+                # Check for events with short timeout
+                events = await event_bus.get_pending_events(timeout=0.1)
+                for event in events:
+                    if stream_progress:
+                        yield self._convert_event_to_sse(event)
+                
+                # Small sleep to prevent busy loop if no events
+                if not events:
+                    await asyncio.sleep(0.1)
+
+            # Get result (re-raise exception if failed)
+            orchestrator_result = await orchestrator_task
+            state_dict.update(orchestrator_result)
+
+            # DEBUG: Verify query after orchestrator
+            logger.info(f"Query after orchestrator: {state_dict.get('query', 'MISSING')}")
 
             # Extract and preserve EventBus before converting back to Pydantic model
             # (event_bus field has exclude=True, so it won't be in model_dump() output)
@@ -540,6 +570,9 @@ class MultiAgentRunner:
 
             # Update state
             state = MultiAgentState(**state_dict)
+
+            # DEBUG: Verify query after state reconstruction
+            logger.info(f"Query after reconstruction: {state.query if state.query else 'EMPTY STRING'}")
 
             # Restore EventBus for later use (will be re-injected before workflow execution)
             # CRITICAL: Always ensure event_bus is valid (never None) to prevent AttributeError
@@ -603,7 +636,7 @@ class MultiAgentRunner:
                 return
 
             workflow = self.workflow_builder.build_workflow(
-                agent_sequence=agent_sequence, enable_parallel=False
+                agent_sequence=agent_sequence, enable_parallel=True
             )
 
             # Step 3: Execute workflow with streaming
@@ -615,6 +648,9 @@ class MultiAgentRunner:
             # to comply with Pydantic V2 (no leading underscores allowed)
             state_dict = state.model_dump()
             state_dict["event_bus"] = event_bus
+
+            # DEBUG: Verify query is in state_dict
+            logger.info(f"State dict query before workflow: {state_dict.get('query', 'MISSING')}")
 
             # Run workflow with streaming to get intermediate state updates
             config = {"configurable": {"thread_id": thread_id}}
@@ -815,7 +851,7 @@ class MultiAgentRunner:
             logger.info(f"Rebuilding workflow with sequence: {agent_sequence}")
 
             workflow = self.workflow_builder.build_workflow(
-                agent_sequence=agent_sequence, enable_parallel=False
+                agent_sequence=agent_sequence, enable_parallel=True
             )
 
             # Resume workflow with same thread_id (will load from checkpoint)
