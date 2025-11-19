@@ -799,46 +799,31 @@ export function useChat() {
         return;
       }
 
+      // Try backend notification (non-blocking)
       try {
-        // Call backend to acknowledge deletion
         await apiService.deleteMessage(currentConversationId, messageId);
-
-        // Update local state - remove message from conversation
-        setConversations((prev) =>
-          prev.map((c) => {
-            if (c.id !== currentConversationId) return c;
-
-            const updatedMessages = c.messages.filter((m) => m.id !== messageId);
-            const updatedConv = {
-              ...c,
-              messages: updatedMessages,
-              updatedAt: new Date().toISOString(),
-            };
-
-            // Save to localStorage
-            storageService.saveConversation(updatedConv);
-
-            return updatedConv;
-          })
-        );
-
-        console.log(`✓ Message ${messageId} deleted from conversation ${currentConversationId}`);
       } catch (error) {
-        console.error('Failed to delete message:', error);
-        // Still update UI even if backend fails (frontend-centric approach)
-        setConversations((prev) =>
-          prev.map((c) => {
-            if (c.id !== currentConversationId) return c;
-
-            const updatedMessages = c.messages.filter((m) => m.id !== messageId);
-            return {
-              ...c,
-              messages: updatedMessages,
-              updatedAt: new Date().toISOString(),
-            };
-          })
-        );
+        console.error('Backend delete notification failed:', error);
       }
+
+      // Always update UI (frontend-centric approach)
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== currentConversationId) return c;
+
+          const updatedMessages = c.messages.filter((m) => m.id !== messageId);
+          const updatedConv = {
+            ...c,
+            messages: updatedMessages,
+            updatedAt: new Date().toISOString(),
+          };
+
+          storageService.saveConversation(updatedConv);
+          return updatedConv;
+        })
+      );
+
+      console.log(`✓ Message ${messageId} deleted locally`);
     },
     [currentConversationId]
   );

@@ -76,22 +76,15 @@ class OrchestratorAgent(BaseAgent):
 
         # Get tool schemas for LLM (only document listing tool needed for routing)
         available_tools = ["get_document_list"]
-        self.orchestrator_tool_schemas = []
-
-        for tool_name in available_tools:
-            tool = self.tool_registry.get_tool(tool_name)
-            if tool:
-                # Create simple schema from tool attributes
-                schema = {
-                    "name": tool.name,
-                    "description": tool.description or "No description",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                }
-                self.orchestrator_tool_schemas.append(schema)
+        self.orchestrator_tool_schemas = [
+            {
+                "name": tool.name,
+                "description": tool.description or "No description",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            }
+            for tool_name in available_tools
+            if (tool := self.tool_registry.get_tool(tool_name))
+        ]
 
         logger.info(f"OrchestratorAgent initialized with model: {config.model}, tools: {available_tools}")
 

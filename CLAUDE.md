@@ -18,6 +18,7 @@
 - [`docs/DOCKER_SETUP.md`](docs/DOCKER_SETUP.md) - Docker configuration and deployment
 - [`docs/WEB_INTERFACE.md`](docs/WEB_INTERFACE.md) - Web UI features and usage
 - [`docs/LANGUAGE_SUPPORT.md`](docs/LANGUAGE_SUPPORT.md) - Multilingual BM25 support (Czech + 24 languages)
+- [`docs/LANGGRAPH_STATE_FIX.md`](docs/LANGGRAPH_STATE_FIX.md) - LangGraph state merging and reducer implementation
 - Visual docs: [`indexing_pipeline.html`](indexing_pipeline.html), [`user_search_pipeline.html`](user_search_pipeline.html)
 
 **Docker Commands (primary interface):**
