@@ -259,3 +259,42 @@ async def get_current_active_user(request: Request) -> Dict:
         )
 
     return user
+
+async def get_current_admin_user(request: Request) -> Dict:
+    """
+    FastAPI dependency for getting admin user (admin-only routes).
+
+    Validates authentication AND admin privileges.
+
+    Usage:
+        @app.post("/auth/register")
+        async def register_user(admin: Dict = Depends(get_current_admin_user)):
+            # Only admins can create new users
+            pass
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        Admin user dict
+
+    Raises:
+        HTTPException 401: If user not authenticated
+        HTTPException 403: If user is not admin or inactive
+    """
+    user = await get_current_user(request)
+
+    if not user.get("is_active", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
+
+    if not user.get("is_admin", False):
+        logger.warning(f"Non-admin user {user['id']} attempted to access admin endpoint")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+
+    return user

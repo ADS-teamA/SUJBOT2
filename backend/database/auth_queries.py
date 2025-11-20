@@ -159,7 +159,7 @@ class AuthQueries:
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT id, email, password_hash, full_name, is_active,
+                    SELECT id, email, password_hash, full_name, is_active, is_admin,
                            created_at, updated_at, last_login_at
                     FROM auth.users
                     WHERE email = $1
@@ -205,7 +205,7 @@ class AuthQueries:
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT id, email, password_hash, full_name, is_active,
+                    SELECT id, email, password_hash, full_name, is_active, is_admin,
                            created_at, updated_at, last_login_at
                     FROM auth.users
                     WHERE id = $1
@@ -241,7 +241,7 @@ class AuthQueries:
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT id, email, password_hash, full_name, is_active,
+                    SELECT id, email, password_hash, full_name, is_active, is_admin,
                            created_at, updated_at, last_login_at
                     FROM auth.users
                     WHERE id = $1 AND is_active = true
@@ -370,7 +370,7 @@ class AuthQueries:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch(
                     """
-                    SELECT id, email, full_name, is_active,
+                    SELECT id, email, full_name, is_active, is_admin,
                            created_at, updated_at, last_login_at
                     FROM auth.users
                     ORDER BY created_at DESC

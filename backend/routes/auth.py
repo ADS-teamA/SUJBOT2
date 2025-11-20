@@ -18,7 +18,7 @@ import os
 
 from backend.auth.manager import AuthManager
 from backend.database.auth_queries import AuthQueries
-from backend.middleware.auth import get_current_user
+from backend.middleware.auth import get_current_user, get_current_admin_user
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: Optional[str]
     is_active: bool
+    is_admin: bool
     created_at: str
     last_login_at: Optional[str]
 
@@ -200,6 +201,7 @@ async def login(
             email=user["email"],
             full_name=user["full_name"],
             is_active=user["is_active"],
+            is_admin=user.get("is_admin", False),
             created_at=user["created_at"].isoformat(),
             last_login_at=user["last_login_at"].isoformat() if user["last_login_at"] else None
         ),
@@ -272,6 +274,7 @@ async def get_current_user_profile(
         email=user["email"],
         full_name=user["full_name"],
         is_active=user["is_active"],
+            is_admin=user.get("is_admin", False),
         created_at=user["created_at"].isoformat(),
         last_login_at=user["last_login_at"].isoformat() if user["last_login_at"] else None
     )
@@ -282,7 +285,7 @@ async def register_user(
     user_data: RegisterRequest,
     auth_manager: AuthManager = Depends(get_auth_manager),
     auth_queries: AuthQueries = Depends(get_auth_queries),
-    # current_user: Dict = Depends(get_current_user)  # Uncomment for admin-only registration
+    admin: Dict = Depends(get_current_admin_user)  # Requires admin authentication
 ):
     """
     Register new user (admin creates accounts manually).
@@ -365,6 +368,7 @@ async def register_user(
             email=user["email"],
             full_name=user["full_name"],
             is_active=user["is_active"],
+            is_admin=user.get("is_admin", False),
             created_at=user["created_at"].isoformat(),
             last_login_at=None
         )
