@@ -431,7 +431,9 @@ class BaseAgent(ABC):
         for iteration in range(max_iterations):
             self.logger.info(f"Autonomous loop iteration {iteration + 1}/{max_iterations}")
 
-            # Call LLM with tools
+            # Call LLM with tools (measure response time)
+            import time
+            llm_start_time = time.time()
             response = provider.create_message(
                 messages=messages,
                 tools=tool_schemas,
@@ -439,6 +441,7 @@ class BaseAgent(ABC):
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature
             )
+            llm_response_time_ms = (time.time() - llm_start_time) * 1000
 
             # Track LLM usage with proper model-specific pricing
             if hasattr(response, 'usage') and response.usage:
@@ -457,7 +460,8 @@ class BaseAgent(ABC):
                     output_tokens=output_tokens,
                     operation=f"agent_{self.config.name}",
                     cache_creation_tokens=cache_creation_tokens,
-                    cache_read_tokens=cache_read_tokens
+                    cache_read_tokens=cache_read_tokens,
+                    response_time_ms=llm_response_time_ms
                 )
 
                 self.logger.debug(

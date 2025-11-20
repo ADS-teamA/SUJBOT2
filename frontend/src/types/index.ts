@@ -42,6 +42,7 @@ export interface AgentCostBreakdown {
   cache_read_tokens: number;
   cache_creation_tokens: number;
   call_count: number;
+  response_time_ms: number;
 }
 
 export interface CostInfo {
