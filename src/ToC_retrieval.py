@@ -31,12 +31,12 @@ import re
 import json
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any, Type
+from dotenv import load_dotenv
 
 import fitz
 import google.generativeai as genai
 from pydantic import BaseModel, Field
 
-from src.config import Config
 
 
 
@@ -172,8 +172,8 @@ class LLMAgent:
 
     def __init__(self):
         # Load API key from project's config.json
-        config = Config.load()
-        api_key = config.api_keys.google_api_key
+        load_dotenv()
+        api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
             raise ValueError("Chyba: 'google_api_key' není nastaven v config.json.")

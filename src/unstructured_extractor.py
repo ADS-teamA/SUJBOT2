@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import math
+from typing import Any
 
 import numpy as np
 
@@ -320,24 +321,29 @@ class ExtractionConfig:
             )
 
         return cls(
-            strategy=os.getenv("UNSTRUCTURED_STRATEGY", cls.strategy),
-            model=os.getenv("UNSTRUCTURED_MODEL", cls.model),
-            languages=os.getenv("UNSTRUCTURED_LANGUAGES", ",".join(cls.languages)).split(","),
-            detect_language_per_element=get_bool_env("UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT",
-                                                     cls.detect_language_per_element),
-            infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", cls.infer_table_structure),
-            extract_images=get_bool_env("UNSTRUCTURED_EXTRACT_IMAGES", cls.extract_images),
-            filter_rotated_text=get_bool_env("FILTER_ROTATED_TEXT", cls.filter_rotated_text),
-            rotation_method=os.getenv("ROTATION_METHOD", cls.rotation_method),
+            strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
+            model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),
+            
+            # --- OPRAVA 1: Pevný seznam jazyků ---
+            languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),
+            
+            detect_language_per_element=get_bool_env("UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT", True),
+            infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", True),
+            extract_images=get_bool_env("UNSTRUCTURED_EXTRACT_IMAGES", False),
+            filter_rotated_text=get_bool_env("FILTER_ROTATED_TEXT", True),
+            rotation_method=os.getenv("ROTATION_METHOD", "bbox_orientation"),
             rotation_min_angle=min_angle,
             rotation_max_angle=max_angle,
-            enable_generic_hierarchy=get_bool_env("ENABLE_GENERIC_HIERARCHY", cls.enable_generic_hierarchy),
-            hierarchy_signals=os.getenv("HIERARCHY_SIGNALS", ",".join(cls.hierarchy_signals)).split(","),
-            hierarchy_clustering_eps=get_float_env("HIERARCHY_CLUSTERING_EPS", cls.hierarchy_clustering_eps),
-            hierarchy_clustering_min_samples=get_int_env("HIERARCHY_CLUSTERING_MIN_SAMPLES",
-                                                         cls.hierarchy_clustering_min_samples),
-            generate_markdown=get_bool_env("GENERATE_MARKDOWN", cls.generate_markdown),
-            generate_json=get_bool_env("GENERATE_JSON", cls.generate_json),
+            enable_generic_hierarchy=get_bool_env("ENABLE_GENERIC_HIERARCHY", True),
+            
+            # --- OPRAVA 2: Pevný seznam signálů hierarchie ---
+            # Původně: ",".join(cls.hierarchy_signals) -> Způsobovalo AttributeError
+            hierarchy_signals=os.getenv("HIERARCHY_SIGNALS", "type,font_size,spacing,numbering,parent_id").split(","),
+            
+            hierarchy_clustering_eps=get_float_env("HIERARCHY_CLUSTERING_EPS", 0.15),
+            hierarchy_clustering_min_samples=get_int_env("HIERARCHY_CLUSTERING_MIN_SAMPLES", 2),
+            generate_markdown=get_bool_env("GENERATE_MARKDOWN", True),
+            generate_json=get_bool_env("GENERATE_JSON", True),
         )
 
 
