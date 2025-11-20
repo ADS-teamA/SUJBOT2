@@ -168,6 +168,16 @@ Password: ChangeThisPassword123!
 docker compose exec backend uv run python scripts/reset_admin_password.py
 ```
 
+**⚠️ SECURITY:** Never commit `config.json` or `.env` files to git!
+```bash
+# First-time setup (creates config.json from template)
+cp config.json.example config.json
+# Edit config.json with your settings (API keys, database passwords)
+
+# Verify config.json is in .gitignore
+git check-ignore config.json  # Should print: config.json
+```
+
 **Full documentation:** [docs/WEB_INTERFACE.md](docs/WEB_INTERFACE.md)
 
 ---
