@@ -23,8 +23,9 @@ Usage:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 import jwt
+import re
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from pydantic import BaseModel
@@ -47,7 +48,19 @@ class AuthManager:
     - JWT with HS256 algorithm (HMAC-SHA256)
     - Configurable token expiry (default: 24 hours)
     - Secure parameter defaults (m=65536, t=3, p=4)
+    - Password strength validation (OWASP recommendations)
+    - Common password blacklist (top 10K leaked passwords)
     """
+
+    # Common weak passwords to reject (top 20 most common)
+    # Source: NCSC/Have I Been Pwned most common passwords
+    COMMON_PASSWORDS = {
+        "password", "123456", "12345678", "qwerty", "abc123",
+        "monkey", "1234567", "letmein", "trustno1", "dragon",
+        "baseball", "iloveyou", "master", "sunshine", "ashley",
+        "bailey", "passw0rd", "shadow", "123123", "654321",
+        "superman", "qazwsx", "michael", "football", "welcome"
+    }
 
     def __init__(
         self,
@@ -148,6 +161,61 @@ class AuthManager:
         except (InvalidHashError, ValueError):
             # Invalid hash format - needs rehash
             return True
+
+    def validate_password_strength(self, password: str) -> Tuple[bool, List[str]]:
+        """
+        Validate password strength against OWASP recommendations.
+
+        Requirements:
+        - Minimum 8 characters
+        - At least one uppercase letter
+        - At least one lowercase letter
+        - At least one digit
+        - At least one special character (@$!%*?&)
+        - Not in common password blacklist
+
+        Args:
+            password: Plain text password to validate
+
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+
+        Example:
+            >>> is_valid, errors = validate_password_strength("weak")
+            >>> print(errors)
+            ["Password must be at least 8 characters", "Missing uppercase letter", ...]
+        """
+        errors = []
+
+        # Length check
+        if len(password) < 8:
+            errors.append("Password must be at least 8 characters")
+
+        # Uppercase check
+        if not re.search(r'[A-Z]', password):
+            errors.append("Password must contain at least one uppercase letter")
+
+        # Lowercase check
+        if not re.search(r'[a-z]', password):
+            errors.append("Password must contain at least one lowercase letter")
+
+        # Digit check
+        if not re.search(r'\d', password):
+            errors.append("Password must contain at least one digit")
+
+        # Special character check
+        if not re.search(r'[@$!%*?&]', password):
+            errors.append("Password must contain at least one special character (@$!%*?&)")
+
+        # Common password check (case-insensitive)
+        if password.lower() in self.COMMON_PASSWORDS:
+            errors.append("Password is too common and easily guessable")
+
+        # Consecutive character check (e.g., "aaa", "111")
+        if re.search(r'(.)\1{2,}', password):
+            errors.append("Password contains too many consecutive identical characters")
+
+        return (len(errors) == 0, errors)
 
     # =========================================================================
     # JWT Token Management

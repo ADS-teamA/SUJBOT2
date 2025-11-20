@@ -7,9 +7,12 @@ Strictly imports from src/ without modifications.
 Security features:
 - JWT authentication with Argon2 password hashing
 - httpOnly cookies for token storage (XSS protection)
-- Rate limiting (token bucket algorithm)
-- CORS configuration
+- Password strength validation (OWASP requirements)
+- Rate limiting (token bucket algorithm per IP)
+- Security headers (CSP, HSTS, X-Frame-Options, etc.)
+- CORS configuration with explicit allow-lists
 - Per-user conversation isolation
+- SQL injection protection (parameterized queries)
 """
 
 import asyncio
@@ -34,6 +37,7 @@ from backend.auth.manager import AuthManager
 from backend.database.auth_queries import AuthQueries
 from backend.middleware.auth import AuthMiddleware, get_current_user, set_auth_instances
 from backend.middleware.rate_limit import RateLimitMiddleware
+from backend.middleware.security_headers import SecurityHeadersMiddleware
 from backend.routes.auth import router as auth_router, set_dependencies
 from backend.routes.conversations import router as conversations_router, set_postgres_adapter, get_postgres_adapter
 
@@ -182,7 +186,14 @@ app = FastAPI(
 # Middleware Configuration (ORDER MATTERS!)
 # =========================================================================
 
-# 1. CORS (must be first to set headers for all responses)
+# 1. Security Headers (must be first to apply to all responses)
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    environment=os.getenv("BUILD_TARGET", "development"),
+    enable_hsts=True  # HSTS only enabled in production
+)
+
+# 2. CORS (cross-origin resource sharing)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -195,11 +206,27 @@ app.add_middleware(
         "http://sujbot.fjfi.cvut.cz",
     ],
     allow_credentials=True,  # Required for cookies
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Restrict methods (NOT wildcard for security)
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    # Restrict headers (NOT wildcard for security)
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Cookie",
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "User-Agent",
+        "DNT",
+        "Cache-Control",
+        "X-Mx-ReqToken",
+        "Keep-Alive",
+        "If-Modified-Since",
+        "X-CSRF-Token"
+    ],
 )
 
-# 2. Rate Limiting (prevents abuse at network level)
+# 3. Rate Limiting (prevents abuse at network level)
 app.add_middleware(
     RateLimitMiddleware,
     requests_per_minute=60,
