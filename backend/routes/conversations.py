@@ -21,6 +21,14 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 # Pydantic Models
 # ============================================================================
 
+class MessageResponse(BaseModel):
+    """Response model for a single message."""
+    id: int
+    role: str
+    content: str
+    metadata: Optional[Dict]
+    created_at: str
+
 class ConversationCreate(BaseModel):
     """Request model for creating a new conversation."""
     title: Optional[str] = Field(default="New Conversation", max_length=500)
@@ -43,14 +51,6 @@ class MessageCreate(BaseModel):
 class TitleUpdate(BaseModel):
     """Request model for updating conversation title."""
     title: str = Field(..., min_length=1, max_length=500)
-
-class MessageResponse(BaseModel):
-    """Response model for a single message."""
-    id: int
-    role: str
-    content: str
-    metadata: Optional[Dict]
-    created_at: str
 
 # ============================================================================
 # Dependency Injection

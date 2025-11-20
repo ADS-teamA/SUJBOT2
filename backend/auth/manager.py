@@ -7,7 +7,7 @@ Handles:
 - Token expiration management (24h default)
 
 Usage:
-    auth_manager = AuthManager(secret_key=os.getenv("JWT_SECRET_KEY"))
+    auth_manager = AuthManager(secret_key=os.getenv("AUTH_SECRET_KEY"))
 
     # Hash password on registration
     password_hash = auth_manager.hash_password("user_password")
@@ -127,7 +127,7 @@ class AuthManager:
             # verify() raises exception if password doesn't match
             self.password_hasher.verify(password_hash, password)
             return True
-        except (VerifyMismatchError, VerificationError, InvalidHashError):
+        except Exception:
             # Password doesn't match or hash is invalid
             return False
 
@@ -244,7 +244,8 @@ class AuthManager:
         try:
             return jwt.decode(
                 token,
-                options={"verify_signature": False, "verify_exp": False}
+                options={"verify_signature": False, "verify_exp": False},
+                algorithms=[self.algorithm]
             )
         except Exception:
             return None

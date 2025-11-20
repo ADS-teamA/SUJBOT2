@@ -311,15 +311,14 @@ localStorage.clear()
 
 ## Security
 
-**For localhost development only!**
+**Security Model:**
+- ✅ Cookie-based authentication (httpOnly JWT tokens)
+- ✅ Multi-user support with Argon2 password hashing
+- ✅ User-owned conversations (database-backed)
+- ✅ Rate limiting middleware (10 login attempts/min per IP)
+- CORS enabled for localhost:5173 (development)
 
-- No authentication required
-- CORS enabled for localhost:5173
-- Single-user design
-- Data stored in browser LocalStorage
-- API keys read from backend `.env`
-
-**For production:** Add authentication, HTTPS, rate limiting, and proper CORS configuration.
+**For production:** Enable HTTPS, restrict CORS origins, rotate AUTH_SECRET_KEY regularly, consider implementing token blacklist in Redis for immediate revocation.
 
 ## Future Enhancements
 
@@ -328,7 +327,7 @@ Potential features to add:
 - [ ] Search within conversation history
 - [ ] Voice input/output
 - [ ] File upload for indexing
-- [ ] Multi-user support with auth
+- [x] Multi-user support with auth (✅ IMPLEMENTED - PR #108)
 - [ ] Real-time collaboration
 - [ ] Mobile responsive design improvements
 - [ ] Keyboard shortcuts
