@@ -22,6 +22,10 @@ Usage:
 
 from typing import Optional, Dict, List
 from datetime import datetime, timezone
+import logging
+import asyncpg
+
+logger = logging.getLogger(__name__)
 
 
 class AuthQueries:
@@ -66,6 +70,7 @@ class AuthQueries:
 
         Raises:
             asyncpg.UniqueViolationError: If email already exists
+            RuntimeError: If database connection fails
 
         Example:
             >>> user_id = await queries.create_user(
@@ -76,19 +81,38 @@ class AuthQueries:
             >>> print(user_id)
             1
         """
-        async with self.pool.acquire() as conn:
-            user_id = await conn.fetchval(
-                """
-                INSERT INTO auth.users (email, password_hash, full_name, is_active, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, NOW(), NOW())
-                RETURNING id
-                """,
-                email,
-                password_hash,
-                full_name,
-                is_active
+        try:
+            async with self.pool.acquire() as conn:
+                user_id = await conn.fetchval(
+                    """
+                    INSERT INTO auth.users (email, password_hash, full_name, is_active, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    RETURNING id
+                    """,
+                    email,
+                    password_hash,
+                    full_name,
+                    is_active
+                )
+                logger.info(f"Created user {user_id} with email {email}")
+                return user_id
+        except asyncpg.UniqueViolationError:
+            logger.warning(f"Failed to create user: email {email} already exists")
+            raise
+        except asyncpg.PostgresConnectionError as e:
+            logger.error(
+                f"Database connection error while creating user {email}",
+                exc_info=True,
+                extra={"email": email, "error_type": "ConnectionError"}
             )
-            return user_id
+            raise RuntimeError(f"Database connection failed: {e}") from e
+        except Exception as e:
+            logger.error(
+                f"Unexpected error while creating user {email}: {e}",
+                exc_info=True,
+                extra={"email": email, "error_type": e.__class__.__name__}
+            )
+            raise
 
     # =========================================================================
     # User Lookup
