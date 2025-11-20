@@ -14,8 +14,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: UserProfile | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  error: string | null;
+  login: (email: string, password: string) => Promise<{success: boolean, error?: string}>;
   logout: () => Promise<void>;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +30,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Check for existing session on mount (validates httpOnly cookie)
   useEffect(() => {
@@ -53,7 +56,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     verifySession();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{success: boolean, error?: string}> => {
+    setError(null); // Clear previous errors
     try {
       // Call backend login endpoint
       // Backend sets httpOnly cookie in response
@@ -62,22 +66,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Update state with user profile
       setUser(response.user);
       setIsAuthenticated(true);
-      return true;
+      return { success: true };
     } catch (error) {
       console.error('Login failed:', error);
       setUser(null);
       setIsAuthenticated(false);
-      return false;
+
+      // Surface actionable error message to user
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
   const logout = async () => {
+    setError(null); // Clear any auth errors
     try {
       // Call backend logout endpoint (clears httpOnly cookie)
       await apiService.logout();
     } catch (error) {
       console.error('Logout failed:', error);
-      // Continue anyway to clear local state
+      // Continue anyway to clear local state (graceful degradation)
+      // Don't surface error to user - logout should always succeed locally
     } finally {
       // Update local state
       setUser(null);
@@ -85,8 +95,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const clearError = () => {
+    setError(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, error, login, logout, clearError }}>
       {children}
     </AuthContext.Provider>
   );

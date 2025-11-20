@@ -27,12 +27,14 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
-      if (!success) {
-        setError('Invalid credentials. Please try again.');
+      const result = await login(email, password);
+      if (!result.success) {
+        // Use specific error message from AuthContext (e.g., "Invalid credentials", "Failed to connect to backend")
+        setError(result.error || 'Login failed. Please try again.');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      // Fallback for unexpected errors (shouldn't happen with new error handling)
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
