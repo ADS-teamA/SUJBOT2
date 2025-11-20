@@ -331,6 +331,18 @@ async def register_user(
             detail="Email already registered"
         )
 
+    # Validate password strength (OWASP requirements)
+    is_valid, errors = auth_manager.validate_password_strength(user_data.password)
+    if not is_valid:
+        logger.warning(f"Registration attempt with weak password: {user_data.email}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "Password does not meet security requirements",
+                "errors": errors
+            }
+        )
+
     # Hash password with Argon2
     password_hash = auth_manager.hash_password(user_data.password)
 
