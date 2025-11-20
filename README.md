@@ -1,5 +1,10 @@
 # SUJBOT2 - Production RAG System for Legal/Technical Documents
 
+> **⚠️ CRITICAL SECURITY NOTICE:**
+> Sensitive credentials were found in git history (Neo4j password: `sujbot_neo4j_2025`).
+> **ACTION REQUIRED:** If you have cloned this repository, immediately rotate all passwords.
+> See [**SECURITY_ADVISORY.md**](SECURITY_ADVISORY.md) for full details and remediation steps.
+
 Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and **multi-agent AI framework**.
 
 **Status:** PHASE 1-7 COMPLETE + **MULTI-AGENT UPGRADE** ✅ (2025-11-11)
@@ -273,12 +278,16 @@ SUJBOT2 implements production-grade security following OWASP best practices:
 
 5. **Database Security**
    ```bash
+   # ✅ PostgreSQL port NOT exposed by default (secure by design)
+   # docker-compose.yml: No port mapping in production
+   # docker-compose.override.yml: Port 5432 exposed ONLY in development
+
    # Restrict PostgreSQL access
    # Edit postgresql.conf:
    listen_addresses = 'localhost'
-   
+
    # Use strong password for postgres user
-   # Never expose port 5432 to public internet
+   # Generate with: openssl rand -base64 32
    ```
 
 6. **Review Security Logs**

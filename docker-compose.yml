@@ -64,11 +64,8 @@ services:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       # Performance config
       - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-    ports:
-      # WARNING: SECURITY RISK - PostgreSQL exposed on host network
-      # Remove this port mapping in production or use docker-compose.override.yml
-      # For production: Comment out this entire ports section
-      - "${POSTGRES_PORT:-5432}:5432"
+    # NOTE: Port mapping removed for security (production default)
+    # For local development, use docker-compose.override.yml to expose ports
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sujbot}"]
       interval: 5s

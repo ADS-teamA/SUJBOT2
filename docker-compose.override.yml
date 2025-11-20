@@ -60,5 +60,7 @@ services:
       -c log_duration=on
       -c log_min_duration_statement=100
     ports:
-      # Expose PostgreSQL for direct connection (pgAdmin, DBeaver)
-      - "5432:5432"
+      # DEVELOPMENT ONLY: Expose PostgreSQL for direct connection (pgAdmin, DBeaver)
+      # WARNING: This port mapping is REMOVED in production (docker-compose.yml)
+      # Never expose database ports in production deployments
+      - "${POSTGRES_PORT:-5432}:5432"
