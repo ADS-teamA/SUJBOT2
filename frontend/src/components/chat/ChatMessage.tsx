@@ -12,7 +12,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { Clock, DollarSign, Edit2, RotateCw, Check, X, Trash2 } from 'lucide-react';
+import { Clock, DollarSign, Edit2, RotateCw, Check, X } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 import type { Message } from '../../types';
 import { ToolCallDisplay } from './ToolCallDisplay';
@@ -23,7 +23,6 @@ interface ChatMessageProps {
   animationDelay?: number;
   onEdit: (messageId: string, newContent: string) => void;
   onRegenerate: (messageId: string) => void;
-  onDelete: (messageId: string) => void;
   disabled?: boolean;
   responseDurationMs?: number; // Duration in milliseconds for assistant responses
 }
@@ -33,7 +32,6 @@ export function ChatMessage({
   animationDelay: _animationDelay = 0,
   onEdit,
   onRegenerate,
-  onDelete,
   disabled = false,
   responseDurationMs,
 }: ChatMessageProps) {
@@ -60,13 +58,6 @@ export function ChatMessage({
 
   const handleRegenerate = () => {
     onRegenerate(message.id);
-  };
-
-  const handleDelete = () => {
-    // Confirm before deleting
-    if (window.confirm('Are you sure you want to delete this message?')) {
-      onDelete(message.id);
-    }
   };
 
   return (
@@ -133,6 +124,9 @@ export function ChatMessage({
                 )}
                 rows={4}
                 autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                data-lpignore="true"
               />
               <div className="flex gap-2">
                 <button
@@ -429,64 +423,34 @@ export function ChatMessage({
           {!disabled && !isEditing && (
             <div className="flex gap-1">
               {isUser && (
-                <>
-                  <button
-                    onClick={handleEdit}
-                    className={cn(
-                      'p-1.5 rounded-lg',
-                      'text-accent-500 hover:text-accent-700',
-                      'dark:text-accent-400 dark:hover:text-accent-200',
-                      'hover:bg-accent-100 dark:hover:bg-accent-800',
-                      'transition-colors'
-                    )}
-                    title="Edit message"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className={cn(
-                      'p-1.5 rounded-lg',
-                      'text-red-500 hover:text-red-700',
-                      'dark:text-red-400 dark:hover:text-red-200',
-                      'hover:bg-red-50 dark:hover:bg-red-900/30',
-                      'transition-colors'
-                    )}
-                    title="Delete message"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </>
+                <button
+                  onClick={handleEdit}
+                  className={cn(
+                    'p-1.5 rounded-lg',
+                    'text-accent-500 hover:text-accent-700',
+                    'dark:text-accent-400 dark:hover:text-accent-200',
+                    'hover:bg-accent-100 dark:hover:bg-accent-800',
+                    'transition-colors'
+                  )}
+                  title="Edit message"
+                >
+                  <Edit2 size={14} />
+                </button>
               )}
               {!isUser && (
-                <>
-                  <button
-                    onClick={handleRegenerate}
-                    className={cn(
-                      'p-1.5 rounded-lg',
-                      'text-accent-500 hover:text-accent-700',
-                      'dark:text-accent-400 dark:hover:text-accent-200',
-                      'hover:bg-accent-100 dark:hover:bg-accent-800',
-                      'transition-colors'
-                    )}
-                    title="Regenerate response"
-                  >
-                    <RotateCw size={14} />
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className={cn(
-                      'p-1.5 rounded-lg',
-                      'text-red-500 hover:text-red-700',
-                      'dark:text-red-400 dark:hover:text-red-200',
-                      'hover:bg-red-50 dark:hover:bg-red-900/30',
-                      'transition-colors'
-                    )}
-                    title="Delete message"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </>
+                <button
+                  onClick={handleRegenerate}
+                  className={cn(
+                    'p-1.5 rounded-lg',
+                    'text-accent-500 hover:text-accent-700',
+                    'dark:text-accent-400 dark:hover:text-accent-200',
+                    'hover:bg-accent-100 dark:hover:bg-accent-800',
+                    'transition-colors'
+                  )}
+                  title="Regenerate response"
+                >
+                  <RotateCw size={14} />
+                </button>
               )}
             </div>
           )}
