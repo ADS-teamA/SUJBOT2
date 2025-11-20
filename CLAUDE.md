@@ -245,6 +245,11 @@ orchestrator.run(query)  # LLM generates contextual response
 **Documentation:**
 - Update PIPELINE.md if research constraints change
 
+**Git workflow:**
+- **ALWAYS use `gh` CLI** for pull requests (NOT curl or web interface)
+- Command: `gh pr create --title "..." --body "..."`
+- Benefits: Faster, scriptable, consistent formatting
+
 **Model selection:**
 - **Production:** `claude-sonnet-4-5` (highest quality)
 - **Development:** `gpt-4o-mini` (best cost/performance: $0.15/$0.60 per 1M tokens)
