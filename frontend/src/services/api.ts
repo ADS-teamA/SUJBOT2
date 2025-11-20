@@ -48,19 +48,28 @@ export class ApiService {
    * Backend sets httpOnly cookie with JWT token
    */
   async login(email: string, password: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      credentials: 'include', // Send/receive cookies
-      body: JSON.stringify({ email, password }),
-    });
+    // Add timeout to prevent infinite loading state
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for login
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-      throw new Error(error.detail || 'Invalid credentials');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        credentials: 'include', // Send/receive cookies
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+        throw new Error(error.detail || 'Invalid credentials');
+      }
+
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response.json();
   }
 
   /**
@@ -82,17 +91,26 @@ export class ApiService {
    * Get current user profile (validates JWT cookie)
    */
   async getCurrentUser(): Promise<UserProfile> {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      method: 'GET',
-      headers: this.getHeaders(),
-      credentials: 'include', // Send cookies for authentication
-    });
+    // Add timeout to prevent infinite loading state if backend is unreachable
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-    if (!response.ok) {
-      throw new Error('Authentication failed');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include', // Send cookies for authentication
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error('Authentication failed');
+      }
+
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response.json();
   }
 
   /**

@@ -83,7 +83,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -m spacy download en_core_web_sm && \
     python -c "import nltk; nltk.download('stopwords')" && \
     # Cleanup to reduce image size
-    rm -rf /root/.cache/pip /tmp/*
+    rm -rf /tmp/*
 
 # ============================================================================
 # Stage 3: Development - Hot reload with source mounting

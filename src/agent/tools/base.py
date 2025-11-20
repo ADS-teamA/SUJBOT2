@@ -161,25 +161,27 @@ class BaseTool(ABC):
 
     def __init__(
         self,
-        vector_store,
-        embedder,
-        reranker=None,
-        graph_retriever=None,
-        knowledge_graph=None,
-        context_assembler=None,
-        config=None,
+        vector_store: Any,
+        embedder: Any,
+        reranker: Any = None,
+        graph_retriever: Any = None,
+        knowledge_graph: Any = None,
+        context_assembler: Any = None,
+        llm_provider: Any = None,
+        config: Optional[Any] = None,
     ):
         """
-        Initialize tool with pipeline components.
+        Initialize tool with dependencies.
 
         Args:
-            vector_store: HybridVectorStore instance
-            embedder: EmbeddingGenerator instance
-            reranker: CrossEncoderReranker (optional)
-            graph_retriever: GraphEnhancedRetriever (optional)
-            knowledge_graph: KnowledgeGraph (optional)
-            context_assembler: ContextAssembler (optional)
-            config: ToolConfig instance
+            vector_store: Vector store adapter
+            embedder: Embedding generator
+            reranker: Reranker (optional)
+            graph_retriever: Graph retriever (optional)
+            knowledge_graph: Knowledge graph (optional)
+            context_assembler: Context assembler (optional)
+            llm_provider: LLM provider for synthesis/HyDE (optional)
+            config: Tool configuration (optional)
         """
         self.vector_store = vector_store
         self.embedder = embedder
@@ -187,7 +189,8 @@ class BaseTool(ABC):
         self.graph_retriever = graph_retriever
         self.knowledge_graph = knowledge_graph
         self.context_assembler = context_assembler
-        self.config = config
+        self.llm_provider = llm_provider
+        self.config = config or {}
 
         # Statistics
         self.execution_count = 0
@@ -382,3 +385,29 @@ class BaseTool(ABC):
             "description": self.description,
             "input_schema": self.input_schema.model_json_schema(),
         }
+
+    def _generate_hyde_query(self, query: str) -> Optional[str]:
+        """Generate Hypothetical Document Embedding (HyDE) query."""
+        if not self.llm_provider:
+            return None
+            
+        prompt = (
+            f"Please write a short, hypothetical passage that answers the following question. "
+            f"The passage should be factual and use terminology relevant to the domain. "
+            f"Do not include any explanations, just the passage itself.\n\n"
+            f"Question: {query}\n\n"
+            f"Passage:"
+        )
+        
+        try:
+            response = self.llm_provider.create_message(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=300,
+                temperature=0.7,
+                system="You are a helpful assistant generating hypothetical documents for retrieval augmentation.",
+                tools=[]
+            )
+            return response.content[0].text
+        except Exception as e:
+            logger.warning(f"HyDE generation error: {e}")
+            return None
