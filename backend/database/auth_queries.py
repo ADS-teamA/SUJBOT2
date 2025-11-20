@@ -45,6 +45,23 @@ class AuthQueries:
         """
         self.pool = postgres_adapter.pool
 
+    def _handle_db_error(self, operation: str, context: Dict, error: Exception) -> None:
+        """Helper to log and re-raise database errors with context."""
+        if isinstance(error, asyncpg.PostgresConnectionError):
+            logger.error(
+                f"Database connection error during {operation}",
+                exc_info=True,
+                extra={**context, "error_type": "ConnectionError"}
+            )
+            raise RuntimeError(f"Database connection failed: {error}") from error
+        else:
+            logger.error(
+                f"Unexpected error during {operation}: {error}",
+                exc_info=True,
+                extra={**context, "error_type": error.__class__.__name__}
+            )
+            raise
+
     # =========================================================================
     # User Creation
     # =========================================================================
@@ -130,22 +147,40 @@ class AuthQueries:
             created_at, updated_at, last_login_at
             None if user not found
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> user = await queries.get_user_by_email("admin@sujbot.local")
             >>> if user and user['is_active']:
             ...     print(f"User {user['id']} found")
         """
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT id, email, password_hash, full_name, is_active,
-                       created_at, updated_at, last_login_at
-                FROM auth.users
-                WHERE email = $1
-                """,
-                email
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, email, password_hash, full_name, is_active,
+                           created_at, updated_at, last_login_at
+                    FROM auth.users
+                    WHERE email = $1
+                    """,
+                    email
+                )
+                return dict(row) if row else None
+        except asyncpg.PostgresConnectionError as e:
+            logger.error(
+                f"Database connection error while fetching user by email",
+                exc_info=True,
+                extra={"email": email, "error_type": "ConnectionError"}
             )
-            return dict(row) if row else None
+            raise RuntimeError(f"Database connection failed: {e}") from e
+        except Exception as e:
+            logger.error(
+                f"Unexpected error while fetching user by email {email}: {e}",
+                exc_info=True,
+                extra={"email": email, "error_type": e.__class__.__name__}
+            )
+            raise
 
     async def get_user_by_id(self, user_id: int) -> Optional[Dict]:
         """
