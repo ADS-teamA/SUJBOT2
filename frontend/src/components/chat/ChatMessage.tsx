@@ -30,7 +30,7 @@ interface ChatMessageProps {
 
 export function ChatMessage({
   message,
-  animationDelay = 0,
+  animationDelay: _animationDelay = 0,
   onEdit,
   onRegenerate,
   onDelete,
