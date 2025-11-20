@@ -22,6 +22,7 @@ export interface UserProfile {
   email: string;
   full_name: string | null;
   is_active: boolean;
+  is_admin: boolean;
   created_at: string;
   last_login_at: string | null;
 }
