@@ -1,10 +1,5 @@
 # SUJBOT2 - Production RAG System for Legal/Technical Documents
 
-> **⚠️ CRITICAL SECURITY NOTICE:**
-> Sensitive credentials were found in git history (Neo4j password: `sujbot_neo4j_2025`).
-> **ACTION REQUIRED:** If you have cloned this repository, immediately rotate all passwords.
-> See [**SECURITY_ADVISORY.md**](SECURITY_ADVISORY.md) for full details and remediation steps.
-
 Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and **multi-agent AI framework**.
 
 **Status:** PHASE 1-7 COMPLETE + **MULTI-AGENT UPGRADE** ✅ (2025-11-11)
