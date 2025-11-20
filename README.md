@@ -132,6 +132,46 @@ EMBEDDING_MODEL=text-embedding-3-large  # Windows
 
 ---
 
+## 🌐 Web Interface (Recommended)
+
+**Production-ready web UI with real-time agent progress visualization:**
+
+```bash
+# Start full stack (PostgreSQL + Backend + Frontend)
+docker compose up -d
+
+# OR use convenience script
+./start_web.sh
+
+# Access UI
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000/docs
+```
+
+**Features:**
+- 🔐 **JWT authentication** with Argon2 password hashing
+- 💬 **Real-time chat** with agent progress visualization
+- 📊 **Cost tracking** per query with agent breakdown
+- 🔍 **Tool execution** display (inline)
+- 💾 **Persistent conversations** (PostgreSQL)
+- 🎨 **Dark/light theme** with smooth transitions
+
+**Default credentials:**
+```
+Email: admin@example.com
+Password: ChangeThisPassword123!
+```
+
+**⚠️ IMPORTANT:** Change default password immediately in production!
+```bash
+# Reset admin password
+docker compose exec backend uv run python scripts/reset_admin_password.py
+```
+
+**Full documentation:** [docs/WEB_INTERFACE.md](docs/WEB_INTERFACE.md)
+
+---
+
 ## 📖 Usage
 
 ### 1. Index Documents
