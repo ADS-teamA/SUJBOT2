@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from pydantic import BaseModel, Field
 
 from backend.middleware.auth import get_current_user
@@ -354,4 +354,72 @@ async def update_conversation_title(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update conversation title. Please try again later."
+        )
+
+
+@router.delete("/{conversation_id}/messages/after/{keep_count}", status_code=status.HTTP_204_NO_CONTENT)
+async def truncate_messages_after(
+    conversation_id: str,
+    keep_count: int = Path(..., ge=0, description="Number of messages to keep (delete all after this count)"),
+    user: Dict = Depends(get_current_user),
+    adapter: PostgreSQLStorageAdapter = Depends(get_postgres_adapter)
+):
+    """
+    Delete all messages after a certain count.
+    Used for edit/regenerate to remove old messages before creating new ones.
+
+    Example: keep_count=5 means keep first 5 messages, delete the rest.
+
+    Args:
+        conversation_id: Conversation ID
+        keep_count: Number of messages to keep (0-indexed)
+        user: Authenticated user from JWT token
+        adapter: PostgreSQL storage adapter
+
+    Raises:
+        HTTPException 403: User does not own this conversation
+    """
+    try:
+        # Verify ownership
+        owns = await adapter.verify_conversation_ownership(conversation_id, user["id"])
+        if not owns:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this conversation"
+            )
+
+        # Delete messages after keep_count
+        # Use ROW_NUMBER() to get message order by creation time
+        async with adapter.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                DELETE FROM auth.messages
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) as row_num
+                        FROM auth.messages
+                        WHERE conversation_id = $1
+                    ) AS numbered
+                    WHERE row_num > $2
+                )
+                """,
+                conversation_id, keep_count
+            )
+
+            # Update conversation timestamp
+            await conn.execute(
+                "UPDATE auth.conversations SET updated_at = NOW() WHERE id = $1",
+                conversation_id
+            )
+
+        deleted_count = int(result.split()[-1]) if result else 0
+        logger.info(f"Truncated conversation {conversation_id}: kept {keep_count} messages, deleted {deleted_count}")
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to truncate messages in conversation {conversation_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete messages. Please try again later."
         )

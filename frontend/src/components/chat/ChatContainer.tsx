@@ -21,7 +21,6 @@ interface ChatContainerProps {
   onSendMessage: (message: string) => void;
   onEditMessage: (messageId: string, newContent: string) => void;
   onRegenerateMessage: (messageId: string) => void;
-  onDeleteMessage: (messageId: string) => void;
   clarificationData: ClarificationData | null;
   awaitingClarification: boolean;
   onSubmitClarification: (response: string) => void;
@@ -34,7 +33,6 @@ export function ChatContainer({
   onSendMessage,
   onEditMessage,
   onRegenerateMessage,
-  onDeleteMessage,
   clarificationData,
   awaitingClarification,
   onSubmitClarification,
@@ -157,23 +155,15 @@ export function ChatContainer({
 
                       // Validate and warn about suspicious durations
                       if (duration < 0) {
-                        console.warn('Negative duration detected (clock skew?):', {
-                          userTime,
-                          assistantTime,
-                          duration
-                        });
-                        // Don't show negative durations (clock skew issue)
-                      } else if (duration > 600000) {
-                        // Backend took > 10 minutes - this indicates performance issues
-                        console.error('⚠️ Backend response took > 10 minutes:', {
-                          duration,
-                          messageId: message.id,
-                          durationMinutes: (duration / 60000).toFixed(1)
-                        });
-                        // Still show duration to user so they know backend is slow
-                        responseDurationMs = duration;
+                        // Negative duration (clock skew), don't show
+                      } else if (duration > 24 * 60 * 60 * 1000) {
+                        // > 24 hours, likely a regenerated message from old history
+                        // Don't show duration as it's misleading
                       } else if (duration > 50) {
-                        // Normal duration: > 50ms, < 10 minutes
+                        // Normal duration: > 50ms
+                        // For very long durations (e.g. > 10 mins), it might be a regeneration
+                        // of an old message, but we'll show it anyway as it might be useful context
+                        // just without the console warning.
                         responseDurationMs = duration;
                       }
                       // Else: duration <= 50ms (likely cached/instant), don't show
@@ -195,7 +185,6 @@ export function ChatContainer({
                       animationDelay={index === 0 ? 0 : index * 100}
                       onEdit={onEditMessage}
                       onRegenerate={onRegenerateMessage}
-                      onDelete={onDeleteMessage}
                       disabled={isStreaming}
                       responseDurationMs={responseDurationMs}
                     />

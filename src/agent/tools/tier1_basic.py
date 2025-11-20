@@ -141,6 +141,10 @@ class SearchInput(ToolInput):
         False,
         description="Enable knowledge graph boosting for entity-centric queries. Boosts chunks mentioning query entities (+30%) and high-centrality concepts (+15%). Use when query mentions specific entities (organizations, standards, regulations). Performance overhead: +200-500ms. Default: False (performance-first).",
     )
+    use_hyde: bool = Field(
+        False,
+        description="Enable HyDE (Hypothetical Document Embeddings) for better zero-shot retrieval. Generates a hypothetical answer to improve semantic matching. Slower (~1-2s) but higher quality for ambiguous queries.",
+    )
 
 
 @register_tool
@@ -262,9 +266,22 @@ class SearchTool(BaseTool):
         return self._query_expander
 
     def execute_impl(
-        self, query: str, k: int = 5, num_expands: int = 0, enable_graph_boost: bool = False
+        self, query: str, k: int = 5, num_expands: int = 0, enable_graph_boost: bool = False, use_hyde: bool = False
     ) -> ToolResult:
         k, _ = validate_k_parameter(k, adaptive=True, detail_level="medium")
+
+        # Handle HyDE (Hypothetical Document Embeddings)
+        hyde_doc = None
+        if use_hyde:
+            if self.llm_provider:
+                try:
+                    hyde_doc = self._generate_hyde_query(query)
+                    if hyde_doc:
+                        logger.info(f"HyDE generated hypothetical document: {hyde_doc[:100]}...")
+                except Exception as e:
+                    logger.warning(f"HyDE generation failed: {e}. Falling back to standard search.")
+            else:
+                logger.warning("HyDE requested but no LLM provider available. Falling back to standard search.")
 
         # === STEP 1: Query Expansion ===
         queries = [query]  # Default: original query only
@@ -329,7 +346,13 @@ class SearchTool(BaseTool):
                 logger.info(f"Searching with graph boost (query {idx}/{len(queries)}): '{q}'")
 
                 # Embed query (extract 1D array for graph retriever)
-                query_embedding = self.embedder.embed_texts([q])[0]
+                # Use HyDE doc if available AND this is the original query
+                text_to_embed = q
+                if hyde_doc and q == query:
+                     text_to_embed = hyde_doc
+                     logger.info(f"Using HyDE document for embedding query {idx}")
+
+                query_embedding = self.embedder.embed_texts([text_to_embed])[0]
 
                 # Delegate to GraphEnhancedRetriever with error handling
                 try:
@@ -397,7 +420,13 @@ class SearchTool(BaseTool):
                 logger.info(f"Searching with query {idx}/{len(queries)}: '{q}'")
 
                 # Embed query (extract 1D array)
-                query_embedding = self.embedder.embed_texts([q])[0]
+                # Use HyDE doc if available AND this is the original query
+                text_to_embed = q
+                if hyde_doc and q == query:
+                     text_to_embed = hyde_doc
+                     logger.info(f"Using HyDE document for embedding query {idx}")
+
+                query_embedding = self.embedder.embed_texts([text_to_embed])[0]
 
                 # Hybrid search
                 results = self.vector_store.hierarchical_search(
@@ -551,6 +580,7 @@ class SearchTool(BaseTool):
             "document_filter": document_filter,
             "queries_used": queries,
             "search_metadata": search_metadata,
+            "hyde_used": bool(hyde_doc),
         }
 
         # Add RAG confidence to metadata

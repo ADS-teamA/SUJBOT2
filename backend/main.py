@@ -363,7 +363,8 @@ async def chat_stream(
         )
 
     # Save user message to database immediately (before streaming)
-    if request.conversation_id:
+    # Skip if regenerating (message already exists in database)
+    if request.conversation_id and not request.skip_save_user_message:
         try:
             await adapter.append_message(
                 conversation_id=request.conversation_id,

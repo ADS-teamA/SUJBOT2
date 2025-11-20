@@ -1058,10 +1058,32 @@ class MultiDocSynthesizerTool(BaseTool):
         return "".join(prompt_parts)
 
     def _generate_synthesis(self, prompt: str, mode: str) -> str:
-        """Generate synthesis using LLM (placeholder for future LLM integration)."""
-        # TODO: Integrate with LLM (Anthropic Claude or OpenAI)
-        # For now, return placeholder
-        return f"[LLM synthesis would be generated here for mode: {mode}]"
+        """Generate synthesis using LLM."""
+        if not self.llm_provider:
+            return "LLM synthesis not available (no provider configured). Returning structured chunks."
+
+        try:
+            # Adjust system prompt based on mode
+            system_prompt = "You are a helpful assistant synthesizing information from multiple documents."
+            if mode == "compare":
+                system_prompt += " Focus on identifying similarities, differences, and conflicts."
+            elif mode == "summarize":
+                system_prompt += " Create a comprehensive unified summary."
+            elif mode == "analyze":
+                system_prompt += " Analyze patterns, themes, and deeper insights."
+
+            response = self.llm_provider.create_message(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,  # Allow long synthesis
+                temperature=0.3,  # Lower temperature for factual synthesis
+                system=system_prompt,
+                tools=[]
+            )
+            return response.content[0].text
+            
+        except Exception as e:
+            logger.error(f"LLM synthesis failed: {e}")
+            return f"Synthesis failed due to error: {str(e)}. Please review the retrieved chunks directly."
 
 
 # ============================================================================
@@ -1585,6 +1607,9 @@ class FilteredSearchInput(ToolInput):
     section_id: Optional[str] = Field(
         None, description="DEPRECATED: Use filter_type='section', filter_value=<section_title> instead"
     )
+    use_hyde: bool = Field(
+        False, description="Enable HyDE (Hypothetical Document Embeddings) for better zero-shot retrieval. Slower (~1-2s) but higher quality."
+    )
 
 
 @register_tool
@@ -1644,8 +1669,25 @@ class FilteredSearchTool(BaseTool):
         search_type: Optional[str] = None,
         document_id: Optional[str] = None,
         section_id: Optional[str] = None,
+        use_hyde: bool = False,
     ) -> ToolResult:
         from .utils import validate_k_parameter
+
+        # Handle HyDE (Hypothetical Document Embeddings)
+        hyde_doc = None
+        if use_hyde:
+            if self.llm_provider:
+                try:
+                    hyde_doc = self._generate_hyde_query(query)
+                    if hyde_doc:
+                        logger.info(f"HyDE generated hypothetical document: {hyde_doc[:100]}...")
+                        # Append HyDE document to query for dense retrieval or use as query
+                        # Strategy: Use HyDE doc for dense embedding, original query for BM25
+                        # We'll pass it to the search methods
+                except Exception as e:
+                    logger.warning(f"HyDE generation failed: {e}. Falling back to standard search.")
+            else:
+                logger.warning("HyDE requested but no LLM provider available. Falling back to standard search.")
 
         # Handle legacy parameter mapping
         if search_type and search_method == "hybrid":
@@ -1698,12 +1740,12 @@ class FilteredSearchTool(BaseTool):
             elif search_method == "dense_only":
                 chunks = self._execute_dense_only(
                     query, filter_type, filter_value, document_type, section_type,
-                    start_date, end_date, k
+                    start_date, end_date, k, hyde_doc=hyde_doc
                 )
             else:  # hybrid
                 chunks = self._execute_hybrid(
                     query, filter_type, filter_value, document_type, section_type,
-                    start_date, end_date, k
+                    start_date, end_date, k, hyde_doc=hyde_doc
                 )
 
             if not chunks:
@@ -1715,6 +1757,7 @@ class FilteredSearchTool(BaseTool):
                         "filter_type": filter_type,
                         "filter_value": filter_value,
                         "no_results": True,
+                        "hyde_used": bool(hyde_doc),
                     },
                 )
 
@@ -1733,12 +1776,15 @@ class FilteredSearchTool(BaseTool):
                     "filter_type": filter_type,
                     "filter_value": filter_value,
                     "results_count": len(formatted),
+                    "hyde_used": bool(hyde_doc),
                 },
             )
 
         except Exception as e:
             logger.error(f"Filtered search failed: {e}", exc_info=True)
             return ToolResult(success=False, data=None, error=str(e))
+
+
 
     def _execute_bm25_only(
         self,
@@ -1817,10 +1863,14 @@ class FilteredSearchTool(BaseTool):
         start_date: Optional[str],
         end_date: Optional[str],
         k: int,
+        hyde_doc: Optional[str] = None,
     ) -> List[Dict]:
         """Dense-only search (~100-200ms) with optional filtering."""
         retrieval_k = k * 3 if filter_type else k
-        query_embedding = self.embedder.embed_texts([query])
+        
+        # Use HyDE document for embedding if available, otherwise use query
+        text_to_embed = hyde_doc if hyde_doc else query
+        query_embedding = self.embedder.embed_texts([text_to_embed])
 
         # Dense search (no document filter support in FAISS for dense-only)
         dense_results = self.vector_store.faiss_store.search_layer3(
@@ -1855,9 +1905,12 @@ class FilteredSearchTool(BaseTool):
         start_date: Optional[str],
         end_date: Optional[str],
         k: int,
+        hyde_doc: Optional[str] = None,
     ) -> List[Dict]:
         """Hybrid search (~200-300ms): BM25 + Dense + RRF fusion."""
-        query_embedding = self.embedder.embed_texts([query])
+        # Use HyDE document for embedding (dense), but original query for BM25 (sparse)
+        text_to_embed = hyde_doc if hyde_doc else query
+        query_embedding = self.embedder.embed_texts([text_to_embed])
         retrieval_k = k * 3 if filter_type in {"section", "metadata", "temporal"} else k
 
         # Document filter: index-level (fast path for hybrid)
@@ -1979,6 +2032,9 @@ class SimilaritySearchTool(BaseTool):
     def execute_impl(
         self, chunk_id: str, search_mode: str, cross_document: bool = True, k: int = 6
     ) -> ToolResult:
+        logger.warning(
+            "SimilaritySearchTool is DEPRECATED. Use ExpandContextTool with mode='similarity' instead."
+        )
         try:
             # Get Layer 3 metadata
             layer3_chunks = []
@@ -2082,10 +2138,12 @@ class SimilaritySearchTool(BaseTool):
                 },
                 citations=citations,
                 metadata={
-                    "chunk_id": chunk_id,
+                    "source_chunk_id": chunk_id,
                     "search_mode": search_mode,
                     "cross_document": cross_document,
                     "results_count": len(formatted),
+                    "deprecated": True,
+                    "deprecation_message": "Use ExpandContextTool with mode='similarity' instead",
                 },
             )
 

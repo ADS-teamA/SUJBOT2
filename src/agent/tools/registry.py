@@ -53,6 +53,7 @@ class ToolRegistry:
         graph_retriever=None,
         knowledge_graph=None,
         context_assembler=None,
+        llm_provider=None,
         config=None,
     ) -> None:
         """
@@ -67,6 +68,7 @@ class ToolRegistry:
             graph_retriever: GraphEnhancedRetriever (optional)
             knowledge_graph: KnowledgeGraph (optional)
             context_assembler: ContextAssembler (optional)
+            llm_provider: LLM Provider (optional)
             config: ToolConfig
         """
         for tool_name, tool_class in self._tool_classes.items():
@@ -95,6 +97,7 @@ class ToolRegistry:
                 graph_retriever=graph_retriever,
                 knowledge_graph=knowledge_graph,
                 context_assembler=context_assembler,
+                llm_provider=llm_provider,
                 config=config,
             )
 

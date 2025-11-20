@@ -8,10 +8,22 @@ import type { Message, Conversation, ToolCall, ClarificationData } from '../type
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  // Initialize currentConversationId from localStorage to persist across page refreshes
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    () => localStorage.getItem('currentConversationId')
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
+
+  // Persist currentConversationId to localStorage when it changes
+  useEffect(() => {
+    if (currentConversationId) {
+      localStorage.setItem('currentConversationId', currentConversationId);
+    } else {
+      localStorage.removeItem('currentConversationId');
+    }
+  }, [currentConversationId]);
 
   // Load conversations from server on mount
   useEffect(() => {
@@ -27,6 +39,18 @@ export function useChat() {
 
     loadConversations();
   }, []); // Run once on mount
+
+  // Validate that saved conversation ID still exists after loading conversations
+  useEffect(() => {
+    if (currentConversationId && conversations.length > 0) {
+      const conversationExists = conversations.some(c => c.id === currentConversationId);
+      if (!conversationExists) {
+        // Saved conversation was deleted, clear it
+        console.log('Saved conversation no longer exists, clearing currentConversationId');
+        setCurrentConversationId(null);
+      }
+    }
+  }, [conversations, currentConversationId]);
 
   // Refs for managing streaming state
   const currentMessageRef = useRef<Message | null>(null);
@@ -96,6 +120,32 @@ export function useChat() {
   }, []);
 
   /**
+   * Load messages when conversation is selected
+   * This ensures messages are fetched from database after page refresh
+   */
+  useEffect(() => {
+    if (!currentConversationId) return;
+
+    const loadMessages = async () => {
+      try {
+        const messages = await apiService.getConversationHistory(currentConversationId);
+
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === currentConversationId
+              ? { ...conv, messages }
+              : conv
+          )
+        );
+      } catch (error) {
+        console.error('Failed to load conversation messages:', error);
+      }
+    };
+
+    loadMessages();
+  }, [currentConversationId]);
+
+  /**
    * Delete a conversation
    */
   const deleteConversation = useCallback(async (id: string) => {
@@ -134,8 +184,10 @@ export function useChat() {
       let conversation: Conversation;
 
       if (currentConversationId) {
-        // Find conversation from state using functional read
-        const found = conversations.find((c) => c.id === currentConversationId);
+        // Find conversation from REF (not state) to ensure we have latest version
+        // This is critical for edit/regenerate where state might have been updated
+        // in the same tick (truncation) but not yet committed to the 'conversations' variable
+        const found = conversationsRef.current.find((c) => c.id === currentConversationId);
         if (found) {
           conversation = found;
         } else {
@@ -209,7 +261,8 @@ export function useChat() {
         // Stream response from backend
         for await (const event of apiService.streamChat(
           content,
-          conversation.id
+          conversation.id,
+          !addUserMessage  // Skip saving user message when regenerating/editing (already exists)
         )) {
           // Handle agent progress events
           if (event.event === 'agent_start') {
@@ -227,6 +280,16 @@ export function useChat() {
               currentMessageRef.current.agentProgress.activeTools = [];
 
               // Update UI - IMPORTANT: Deep copy agentProgress to trigger React re-render
+              // Capture snapshot of current message to avoid race conditions where ref becomes null
+              const currentMessageSnapshot = { ...currentMessageRef.current };
+              const currentAgentProgressSnapshot = currentMessageRef.current.agentProgress
+                ? {
+                  ...currentMessageRef.current.agentProgress,
+                  activeTools: [...(currentMessageRef.current.agentProgress.activeTools || [])],
+                  completedAgents: [...(currentMessageRef.current.agentProgress.completedAgents || [])]
+                }
+                : undefined;
+
               setConversations((prev) =>
                 prev.map((c) => {
                   if (c.id !== updatedConversation.id) return c;
@@ -236,14 +299,8 @@ export function useChat() {
 
                   // Deep copy message with agentProgress to ensure React detects changes
                   const updatedMessage = {
-                    ...currentMessageRef.current!,
-                    agentProgress: currentMessageRef.current!.agentProgress
-                      ? {
-                        ...currentMessageRef.current!.agentProgress,
-                        activeTools: [...(currentMessageRef.current!.agentProgress.activeTools || [])],
-                        completedAgents: [...(currentMessageRef.current!.agentProgress.completedAgents || [])]
-                      }
-                      : undefined
+                    ...currentMessageSnapshot,
+                    agentProgress: currentAgentProgressSnapshot
                   };
 
                   if (lastMsg?.role === 'assistant') {
@@ -524,6 +581,8 @@ export function useChat() {
 
       // Use functional update to get current conversation state
       let shouldSend = false;
+      let messageIndex = -1;
+      let conversationId = '';
 
       setConversations((prev) => {
         // Find the current conversation
@@ -531,11 +590,12 @@ export function useChat() {
         if (!currentConv) return prev;
 
         // Find the message index
-        const messageIndex = currentConv.messages.findIndex((m) => m.id === messageId);
+        messageIndex = currentConv.messages.findIndex((m) => m.id === messageId);
         if (messageIndex === -1 || currentConv.messages[messageIndex].role !== 'user') {
           return prev;
         }
 
+        conversationId = currentConv.id;
         shouldSend = true;
 
         // Remove all messages after this one (including assistant response)
@@ -555,8 +615,14 @@ export function useChat() {
         return prev.map((c) => (c.id === currentConversationId ? updatedConversation : c));
       });
 
-      // If validation passed, send the edited message
+      // If validation passed, delete from backend and send the edited message
       if (shouldSend) {
+        // Delete from backend in background (don't await - fire and forget for immediate UI response)
+        apiService.truncateMessagesAfter(conversationId, messageIndex).catch((error) => {
+          console.error('Failed to truncate messages in database:', error);
+          // Non-critical - frontend state is already updated
+        });
+
         // Race condition fix: Wait for React to commit state update before sending
         // Without this, sendMessage may read stale conversation state (pre-update)
         // causing duplicate messages or incorrect context.
@@ -630,10 +696,16 @@ export function useChat() {
         updatedAt: new Date().toISOString(),
       };
 
-      // Update state
+      // IMMEDIATELY update state to remove message from UI
       setConversations((prev) =>
         prev.map((c) => (c.id === conversationId ? updatedConversation : c))
       );
+
+      // Delete from backend in background (don't await - fire and forget for immediate UI response)
+      apiService.truncateMessagesAfter(conversationId, messageIndex).catch((error) => {
+        console.error('Failed to truncate messages in database:', error);
+        // Non-critical - frontend state is already updated
+      });
 
       // Race condition fix: Wait for React to commit state update before sending
       // Without this, sendMessage may read stale conversation state (pre-truncation)
@@ -647,7 +719,7 @@ export function useChat() {
       // Pass false to prevent adding a new user message (we're regenerating from existing)
       await sendMessage(userMessageContent, false);
     },
-    [isStreaming, sendMessage, currentConversationId]
+    [isStreaming, sendMessage, currentConversationId, cleanMessages]
   );
 
   /**

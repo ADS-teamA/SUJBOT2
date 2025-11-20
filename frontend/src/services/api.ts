@@ -48,19 +48,28 @@ export class ApiService {
    * Backend sets httpOnly cookie with JWT token
    */
   async login(email: string, password: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      credentials: 'include', // Send/receive cookies
-      body: JSON.stringify({ email, password }),
-    });
+    // Add timeout to prevent infinite loading state
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for login
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-      throw new Error(error.detail || 'Invalid credentials');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        credentials: 'include', // Send/receive cookies
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+        throw new Error(error.detail || 'Invalid credentials');
+      }
+
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response.json();
   }
 
   /**
@@ -82,17 +91,26 @@ export class ApiService {
    * Get current user profile (validates JWT cookie)
    */
   async getCurrentUser(): Promise<UserProfile> {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      method: 'GET',
-      headers: this.getHeaders(),
-      credentials: 'include', // Send cookies for authentication
-    });
+    // Add timeout to prevent infinite loading state if backend is unreachable
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-    if (!response.ok) {
-      throw new Error('Authentication failed');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include', // Send cookies for authentication
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error('Authentication failed');
+      }
+
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response.json();
   }
 
   /**
@@ -100,7 +118,8 @@ export class ApiService {
    */
   async *streamChat(
     message: string,
-    conversationId?: string
+    conversationId?: string,
+    skipSaveUserMessage?: boolean
   ): AsyncGenerator<SSEEvent, void, unknown> {
     let response;
     try {
@@ -111,6 +130,7 @@ export class ApiService {
         body: JSON.stringify({
           message,
           conversation_id: conversationId,
+          skip_save_user_message: skipSaveUserMessage || false,
         }),
       });
     } catch (error) {
@@ -537,7 +557,18 @@ export class ApiService {
       throw new Error(`Failed to fetch conversation history: ${response.status}`);
     }
 
-    return response.json();
+    const messages = await response.json();
+
+    // Map backend format to frontend format
+    return messages.map((msg: any) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.created_at, // Map created_at to timestamp
+      metadata: msg.metadata,
+      cost: msg.metadata?.cost, // Map cost from metadata
+      toolCalls: msg.metadata?.tool_calls, // Map toolCalls from metadata if present
+    }));
   }
 
   /**
@@ -574,6 +605,25 @@ export class ApiService {
 
     if (!response.ok) {
       throw new Error(`Failed to update conversation title: ${response.status}`);
+    }
+  }
+
+  /**
+   * Truncate messages after a certain count
+   * Used for edit/regenerate to remove old messages
+   */
+  async truncateMessagesAfter(conversationId: string, keepCount: number): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/conversations/${encodeURIComponent(conversationId)}/messages/after/${keepCount}`,
+      {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to truncate messages: ${response.status}`);
     }
   }
 }

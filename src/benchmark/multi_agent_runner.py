@@ -27,7 +27,7 @@ from ..cost_tracker import get_global_tracker, reset_global_tracker
 from .config import BenchmarkConfig
 from .dataset import BenchmarkDataset, QueryExample
 from .metrics import compute_all_metrics, aggregate_metrics, format_metrics
-from .runner import QueryResult, BenchmarkResult  # Reuse existing dataclasses
+from .models import QueryResult, BenchmarkResult
 
 logger = logging.getLogger(__name__)
 
