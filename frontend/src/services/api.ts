@@ -3,15 +3,97 @@
  *
  * Handles:
  * - SSE streaming for chat
+ * - Authentication (cookie-based with httpOnly)
  * - Model switching
  * - Health checks
  */
 
-import type { Model, HealthStatus, SSEEvent } from '../types';
+import type { Model, HealthStatus, SSEEvent, Conversation, Message } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000';
+// Use environment variable for API base URL
+// Empty string = relative URLs (same-origin, through Nginx proxy)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
+  ? import.meta.env.VITE_API_BASE_URL
+  : 'http://localhost:8000';
+
+// Authentication types
+export interface UserProfile {
+  id: number;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface LoginResponse {
+  user: UserProfile;
+  message: string;
+}
 
 export class ApiService {
+  /**
+   * Get headers for JSON requests
+   * (Cookies are sent automatically with credentials: 'include')
+   */
+  private getHeaders(): HeadersInit {
+    return {
+      'Content-Type': 'application/json',
+    };
+  }
+
+  /**
+   * Login with email and password
+   * Backend sets httpOnly cookie with JWT token
+   */
+  async login(email: string, password: string): Promise<LoginResponse> {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      credentials: 'include', // Send/receive cookies
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+      throw new Error(error.detail || 'Invalid credentials');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Logout (clears httpOnly cookie on backend)
+   */
+  async logout(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      credentials: 'include', // Send cookies to backend
+    });
+
+    if (!response.ok) {
+      throw new Error('Logout failed');
+    }
+  }
+
+  /**
+   * Get current user profile (validates JWT cookie)
+   */
+  async getCurrentUser(): Promise<UserProfile> {
+    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+      credentials: 'include', // Send cookies for authentication
+    });
+
+    if (!response.ok) {
+      throw new Error('Authentication failed');
+    }
+
+    return response.json();
+  }
+
   /**
    * Stream chat response using Server-Sent Events (SSE)
    */
@@ -23,9 +105,8 @@ export class ApiService {
     try {
       response = await fetch(`${API_BASE_URL}/chat/stream`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
+        credentials: 'include', // Send authentication cookie
         body: JSON.stringify({
           message,
           conversation_id: conversationId,
@@ -192,7 +273,9 @@ export class ApiService {
    * Get list of available models
    */
   async getModels(): Promise<{ models: Model[]; defaultModel: string }> {
-    const response = await fetch(`${API_BASE_URL}/models`);
+    const response = await fetch(`${API_BASE_URL}/models`, {
+      headers: this.getHeaders(),
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch models: ${response.status}`);
@@ -207,6 +290,7 @@ export class ApiService {
   async switchModel(model: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/model/switch?model=${encodeURIComponent(model)}`, {
       method: 'POST',
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -240,9 +324,7 @@ export class ApiService {
     try {
       response = await fetch(`${API_BASE_URL}/chat/clarify`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           thread_id: threadId,
           response: userResponse,
@@ -369,11 +451,128 @@ export class ApiService {
       `${API_BASE_URL}/chat/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
       {
         method: 'DELETE',
+        headers: this.getHeaders(),
       }
     );
 
     if (!response.ok) {
       throw new Error(`Failed to delete message: ${response.status}`);
+    }
+  }
+
+  // ============================================================================
+  // Conversation Management
+  // ============================================================================
+
+  /**
+   * Get all conversations for the authenticated user
+   */
+  async getConversations(): Promise<Conversation[]> {
+    const response = await fetch(`${API_BASE_URL}/conversations`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+      credentials: 'include', // Send JWT cookie
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch conversations: ${response.status}`);
+    }
+
+    const conversations = await response.json();
+
+    // Convert backend snake_case to frontend camelCase
+    return conversations.map((conv: any) => ({
+      id: conv.id,
+      title: conv.title,
+      messages: conv.messages || [],  // Backend now includes empty messages array
+      createdAt: conv.created_at,
+      updatedAt: conv.updated_at,
+      userId: conv.user_id,
+    }));
+  }
+
+  /**
+   * Create a new conversation
+   */
+  async createConversation(title?: string): Promise<Conversation> {
+    const response = await fetch(`${API_BASE_URL}/conversations`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ title: title || 'New Conversation' }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create conversation: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Convert backend snake_case to frontend camelCase
+    return {
+      id: data.id,
+      title: data.title,
+      messages: data.messages || [],  // Backend now includes empty messages array
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      userId: data.user_id,
+    };
+  }
+
+  /**
+   * Get message history for a conversation
+   */
+  async getConversationHistory(conversationId: string): Promise<Message[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/conversations/${encodeURIComponent(conversationId)}/messages`,
+      {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch conversation history: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Delete a conversation
+   */
+  async deleteConversation(conversationId: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/conversations/${encodeURIComponent(conversationId)}`,
+      {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete conversation: ${response.status}`);
+    }
+  }
+
+  /**
+   * Update conversation title
+   */
+  async updateConversationTitle(conversationId: string, title: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/conversations/${encodeURIComponent(conversationId)}/title`,
+      {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ title }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to update conversation title: ${response.status}`);
     }
   }
 }

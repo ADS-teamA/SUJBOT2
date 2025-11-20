@@ -4,19 +4,29 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
-import { storageService } from '../lib/storage';
 import type { Message, Conversation, ToolCall, ClarificationData } from '../types';
 
 export function useChat() {
-  const [conversations, setConversations] = useState<Conversation[]>(() =>
-    storageService.getConversations()
-  );
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() =>
-    storageService.getCurrentConversationId()
-  );
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
+
+  // Load conversations from server on mount
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const serverConversations = await apiService.getConversations();
+        setConversations(serverConversations);
+      } catch (error) {
+        console.error('Failed to load conversations from server:', error);
+        // Don't block UI - user can still create new conversations
+      }
+    };
+
+    loadConversations();
+  }, []); // Run once on mount
 
   // Refs for managing streaming state
   const currentMessageRef = useRef<Message | null>(null);
@@ -62,21 +72,20 @@ export function useChat() {
   /**
    * Create a new conversation
    */
-  const createConversation = useCallback(() => {
-    const newConversation: Conversation = {
-      id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      title: 'New Conversation',
-      messages: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  const createConversation = useCallback(async () => {
+    try {
+      // Create conversation on server
+      const newConversation = await apiService.createConversation('New Conversation');
 
-    setConversations((prev) => [...prev, newConversation]);
-    setCurrentConversationId(newConversation.id);
-    storageService.saveConversation(newConversation);
-    storageService.setCurrentConversationId(newConversation.id);
+      // Update local state
+      setConversations((prev) => [...prev, newConversation]);
+      setCurrentConversationId(newConversation.id);
 
-    return newConversation;
+      return newConversation;
+    } catch (error) {
+      console.error('Failed to create conversation:', error);
+      throw error;
+    }
   }, []);
 
   /**
@@ -84,18 +93,29 @@ export function useChat() {
    */
   const selectConversation = useCallback((id: string) => {
     setCurrentConversationId(id);
-    storageService.setCurrentConversationId(id);
   }, []);
 
   /**
    * Delete a conversation
    */
-  const deleteConversation = useCallback((id: string) => {
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    storageService.deleteConversation(id);
+  const deleteConversation = useCallback(async (id: string) => {
+    try {
+      // Delete from server
+      await apiService.deleteConversation(id);
 
-    if (currentConversationId === id) {
-      setCurrentConversationId(null);
+      // Update local state
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      // Still remove from UI even if server delete fails (eventual consistency)
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+      }
     }
   }, [currentConversationId]);
 
@@ -119,10 +139,10 @@ export function useChat() {
         if (found) {
           conversation = found;
         } else {
-          conversation = createConversation();
+          conversation = await createConversation();
         }
       } else {
-        conversation = createConversation();
+        conversation = await createConversation();
       }
 
       let updatedConversation: Conversation;
@@ -154,7 +174,6 @@ export function useChat() {
       setConversations((prev) =>
         prev.map((c) => (c.id === updatedConversation.id ? updatedConversation : c))
       );
-      storageService.saveConversation(updatedConversation);
 
       // Initialize assistant message with agent progress
       currentMessageRef.current = {
@@ -475,9 +494,6 @@ export function useChat() {
 
               const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
 
-              // Save to localStorage with final content
-              storageService.saveConversation(finalConv);
-
               return finalConv;
             })
           );
@@ -534,9 +550,6 @@ export function useChat() {
           messages: cleanedMessages,
           updatedAt: new Date().toISOString(),
         };
-
-        // Save to storage immediately
-        storageService.saveConversation(updatedConversation);
 
         // Return updated conversations array
         return prev.map((c) => (c.id === currentConversationId ? updatedConversation : c));
@@ -621,9 +634,6 @@ export function useChat() {
       setConversations((prev) =>
         prev.map((c) => (c.id === conversationId ? updatedConversation : c))
       );
-
-      // Save to storage
-      storageService.saveConversation(updatedConversation);
 
       // Race condition fix: Wait for React to commit state update before sending
       // Without this, sendMessage may read stale conversation state (pre-truncation)
@@ -755,8 +765,6 @@ export function useChat() {
               const cleanedMessages = cleanMessages(messages);
               const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
 
-              storageService.saveConversation(finalConv);
-
               return finalConv;
             })
           );
@@ -818,7 +826,6 @@ export function useChat() {
             updatedAt: new Date().toISOString(),
           };
 
-          storageService.saveConversation(updatedConv);
           return updatedConv;
         })
       );

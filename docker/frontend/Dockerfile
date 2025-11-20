@@ -18,7 +18,9 @@ FROM base AS dependencies
 COPY package.json package-lock.json ./
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci
+# Use BuildKit cache for faster rebuilds
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline --no-audit
 
 # ============================================================================
 # Stage 3: Builder - Vite production build
@@ -33,7 +35,12 @@ COPY . .
 ARG VITE_API_BASE_URL=http://localhost:8000
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
-RUN npm run build
+# Limit Node.js memory during build (prevents OOM on low-memory systems)
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
+RUN npm run build && \
+    # Cleanup to reduce image size
+    rm -rf node_modules/.cache
 
 # ============================================================================
 # Stage 4: Development - Vite dev server with hot reload
@@ -58,8 +65,8 @@ FROM nginx:alpine AS production
 # Copy built static files from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy custom Nginx configuration
-COPY ../docker/nginx/nginx.conf /etc/nginx/nginx.conf
+# Copy custom Nginx configuration (commented out - using default nginx config)
+# COPY ../docker/nginx/nginx.conf /etc/nginx/nginx.conf
 
 # Create nginx user for non-root execution
 RUN chown -R nginx:nginx /usr/share/nginx/html && \

@@ -605,6 +605,202 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             return results
 
     # ============================================================================
+    # Conversation Ownership Management
+    # ============================================================================
+
+    async def create_conversation(
+        self,
+        conversation_id: str,
+        user_id: int,
+        title: Optional[str] = None
+    ) -> None:
+        """
+        Create new conversation owned by user.
+
+        Args:
+            conversation_id: UUID string for conversation
+            user_id: Owner user ID
+            title: Optional conversation title
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO auth.conversations (id, user_id, title, created_at, updated_at)
+                VALUES ($1, $2, $3, NOW(), NOW())
+                """,
+                conversation_id, user_id, title
+            )
+            logger.debug(f"Created conversation {conversation_id} for user {user_id}")
+
+    async def get_user_conversations(
+        self,
+        user_id: int,
+        limit: int = 50
+    ) -> List[Dict]:
+        """
+        Get all conversations for user (ordered by most recent).
+
+        Args:
+            user_id: User ID
+            limit: Maximum conversations to return
+
+        Returns:
+            List of conversation dicts with id, title, created_at, updated_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, title, created_at, updated_at
+                FROM auth.conversations
+                WHERE user_id = $1
+                ORDER BY updated_at DESC
+                LIMIT $2
+                """,
+                user_id, limit
+            )
+            conversations = [dict(row) for row in rows]
+            logger.debug(f"Retrieved {len(conversations)} conversations for user {user_id}")
+            return conversations
+
+    async def verify_conversation_ownership(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Check if user owns conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID to check
+
+        Returns:
+            True if user owns conversation, False otherwise
+        """
+        async with self.pool.acquire() as conn:
+            owner_id = await conn.fetchval(
+                "SELECT user_id FROM auth.conversations WHERE id = $1",
+                conversation_id
+            )
+            is_owner = owner_id == user_id
+            logger.debug(
+                f"Ownership check: conversation {conversation_id}, "
+                f"user {user_id}, owner {owner_id}, result {is_owner}"
+            )
+            return is_owner
+
+    async def get_conversation_history(
+        self,
+        conversation_id: str,
+        limit: int = 100
+    ) -> List[Dict]:
+        """
+        Get message history for conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            limit: Maximum messages to return
+
+        Returns:
+            List of message dicts with id, role, content, metadata, created_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, role, content, metadata, created_at
+                FROM auth.messages
+                WHERE conversation_id = $1
+                ORDER BY created_at ASC
+                LIMIT $2
+                """,
+                conversation_id, limit
+            )
+            # Convert rows to dicts and parse metadata JSON string back to dict
+            import json
+            messages = []
+            for row in rows:
+                msg = dict(row)
+                # Parse metadata from JSON string to dict (asyncpg returns JSONB as string)
+                if msg.get('metadata') and isinstance(msg['metadata'], str):
+                    msg['metadata'] = json.loads(msg['metadata'])
+                messages.append(msg)
+
+            logger.debug(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
+            return messages
+
+    async def append_message(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        metadata: Optional[Dict] = None
+    ) -> int:
+        """
+        Append message to conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            role: Message role ('user', 'assistant', 'system')
+            content: Message content
+            metadata: Optional metadata (tool calls, costs, etc.)
+
+        Returns:
+            Message ID
+        """
+        import json
+
+        async with self.pool.acquire() as conn:
+            # Convert metadata dict to JSON string for JSONB column
+            metadata_json = json.dumps(metadata) if metadata else None
+
+            # Insert message
+            message_id = await conn.fetchval(
+                """
+                INSERT INTO auth.messages (conversation_id, role, content, metadata, created_at)
+                VALUES ($1, $2, $3, $4::jsonb, NOW())
+                RETURNING id
+                """,
+                conversation_id, role, content, metadata_json
+            )
+
+            # Update conversation updated_at timestamp
+            await conn.execute(
+                "UPDATE auth.conversations SET updated_at = NOW() WHERE id = $1",
+                conversation_id
+            )
+
+            logger.debug(
+                f"Appended {role} message (id={message_id}) to conversation {conversation_id}"
+            )
+            return message_id
+
+    async def delete_conversation(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Delete conversation (with ownership check).
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID (must be owner)
+
+        Returns:
+            True if deleted, False if not found or not owned
+        """
+        async with self.pool.acquire() as conn:
+            # Verify ownership and delete in single transaction
+            result = await conn.execute(
+                "DELETE FROM auth.conversations WHERE id = $1 AND user_id = $2",
+                conversation_id, user_id
+            )
+            # result is like "DELETE 1" or "DELETE 0"
+            deleted = result.split()[-1] == "1"
+            logger.debug(f"Delete conversation {conversation_id} for user {user_id}: {deleted}")
+            return deleted
+
+    # ============================================================================
     # Cleanup
     # ============================================================================
 
@@ -617,3 +813,252 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             except Exception:
                 # Ignore errors during destruction (Python may be shutting down)
                 pass
+
+# ====================================================================================
+# PostgreSQL Storage Adapter for Authentication & User Data
+# ====================================================================================
+
+class PostgreSQLStorageAdapter:
+    """
+    PostgreSQL connection pool for auth/user data.
+    
+    Separate from PostgresVectorStoreAdapter (vector search).
+    This adapter provides connection pooling for:
+    - auth.users (user accounts)
+    - auth.conversations (chat sessions)
+    - auth.messages (message history)
+    
+    Used by AuthQueries for user management and conversation storage.
+    """
+    
+    def __init__(self):
+        """Initialize adapter (connection pool created in initialize())."""
+        import os
+        self.pool: Optional[asyncpg.Pool] = None
+        self.db_url = os.getenv("DATABASE_URL")
+        
+        if not self.db_url:
+            raise ValueError(
+                "DATABASE_URL environment variable is required. "
+                "Set in .env file (e.g., postgresql://postgres:password@postgres:5432/sujbot)"
+            )
+    
+    async def initialize(self):
+        """Create connection pool."""
+        logger.info("Creating PostgreSQL connection pool for auth/user storage...")
+        
+        self.pool = await asyncpg.create_pool(
+            self.db_url,
+            min_size=2,
+            max_size=10,
+            command_timeout=60
+        )
+        
+        # Test connection
+        async with self.pool.acquire() as conn:
+            version = await conn.fetchval("SELECT version()")
+            logger.info(f"PostgreSQL connected: {version}")
+        
+        logger.info("✓ Connection pool created (2-10 connections)")
+    
+    async def close(self):
+        """Close connection pool."""
+        if self.pool:
+            await self.pool.close()
+            logger.info("PostgreSQL connection pool closed")
+
+    # ============================================================================
+    # Conversation Management Methods
+    # ============================================================================
+
+    async def create_conversation(
+        self,
+        conversation_id: str,
+        user_id: int,
+        title: Optional[str] = None
+    ) -> None:
+        """
+        Create new conversation owned by user.
+
+        Args:
+            conversation_id: UUID string for conversation
+            user_id: Owner user ID
+            title: Optional conversation title
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO auth.conversations (id, user_id, title, created_at, updated_at)
+                VALUES ($1, $2, $3, NOW(), NOW())
+                """,
+                conversation_id, user_id, title
+            )
+            logger.debug(f"Created conversation {conversation_id} for user {user_id}")
+
+    async def get_user_conversations(
+        self,
+        user_id: int,
+        limit: int = 50
+    ) -> List[Dict]:
+        """
+        Get all conversations for user (ordered by most recent).
+
+        Args:
+            user_id: User ID
+            limit: Maximum conversations to return
+
+        Returns:
+            List of conversation dicts with id, title, created_at, updated_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, title, created_at, updated_at
+                FROM auth.conversations
+                WHERE user_id = $1
+                ORDER BY updated_at DESC
+                LIMIT $2
+                """,
+                user_id, limit
+            )
+            conversations = [dict(row) for row in rows]
+            logger.debug(f"Retrieved {len(conversations)} conversations for user {user_id}")
+            return conversations
+
+    async def verify_conversation_ownership(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Check if user owns conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID to check
+
+        Returns:
+            True if user owns conversation, False otherwise
+        """
+        async with self.pool.acquire() as conn:
+            owner_id = await conn.fetchval(
+                "SELECT user_id FROM auth.conversations WHERE id = $1",
+                conversation_id
+            )
+            is_owner = owner_id == user_id
+            logger.debug(
+                f"Ownership check: conversation {conversation_id}, "
+                f"user {user_id}, owner {owner_id}, result {is_owner}"
+            )
+            return is_owner
+
+    async def get_conversation_history(
+        self,
+        conversation_id: str,
+        limit: int = 100
+    ) -> List[Dict]:
+        """
+        Get message history for conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            limit: Maximum messages to return
+
+        Returns:
+            List of message dicts with id, role, content, metadata, created_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, role, content, metadata, created_at
+                FROM auth.messages
+                WHERE conversation_id = $1
+                ORDER BY created_at ASC
+                LIMIT $2
+                """,
+                conversation_id, limit
+            )
+            # Convert rows to dicts and parse metadata JSON string back to dict
+            import json
+            messages = []
+            for row in rows:
+                msg = dict(row)
+                # Parse metadata from JSON string to dict (asyncpg returns JSONB as string)
+                if msg.get('metadata') and isinstance(msg['metadata'], str):
+                    msg['metadata'] = json.loads(msg['metadata'])
+                messages.append(msg)
+
+            logger.debug(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
+            return messages
+
+    async def append_message(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        metadata: Optional[Dict] = None
+    ) -> int:
+        """
+        Append message to conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            role: Message role ('user', 'assistant', 'system')
+            content: Message content
+            metadata: Optional metadata (tool calls, costs, etc.)
+
+        Returns:
+            Message ID
+        """
+        import json
+
+        async with self.pool.acquire() as conn:
+            # Convert metadata dict to JSON string for JSONB column
+            metadata_json = json.dumps(metadata) if metadata else None
+
+            # Insert message
+            message_id = await conn.fetchval(
+                """
+                INSERT INTO auth.messages (conversation_id, role, content, metadata, created_at)
+                VALUES ($1, $2, $3, $4::jsonb, NOW())
+                RETURNING id
+                """,
+                conversation_id, role, content, metadata_json
+            )
+
+            # Update conversation updated_at timestamp
+            await conn.execute(
+                "UPDATE auth.conversations SET updated_at = NOW() WHERE id = $1",
+                conversation_id
+            )
+
+            logger.debug(
+                f"Appended {role} message (id={message_id}) to conversation {conversation_id}"
+            )
+            return message_id
+
+    async def delete_conversation(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Delete conversation (with ownership check).
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID (must be owner)
+
+        Returns:
+            True if deleted, False if not found or not owned
+        """
+        async with self.pool.acquire() as conn:
+            # Verify ownership and delete in single transaction
+            result = await conn.execute(
+                "DELETE FROM auth.conversations WHERE id = $1 AND user_id = $2",
+                conversation_id, user_id
+            )
+            # result is like "DELETE 1" or "DELETE 0"
+            deleted = result.split()[-1] == "1"
+            logger.debug(f"Delete conversation {conversation_id} for user {user_id}: {deleted}")
+            return deleted

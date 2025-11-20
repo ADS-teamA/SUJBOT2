@@ -48,11 +48,16 @@ COPY backend/requirements.txt ./backend/
 
 # Install dependencies with uv (reproducible builds from lockfile)
 # Using --system to install globally (no venv in Docker)
-RUN uv pip install --system --no-cache \
-    # Install all main dependencies from pyproject.toml
-    -r backend/requirements.txt && \
-    uv pip install --system --no-cache \
-    # Core dependencies from pyproject.toml
+# IMPORTANT: Install PyTorch CPU-only FIRST to avoid CUDA dependencies (saves ~4GB!)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    # Step 1: Install PyTorch CPU-only FIRST (prevents CUDA downloads)
+    uv pip install --system \
+    --index-url https://download.pytorch.org/whl/cpu \
+    "torch>=2.0.0" "torchvision>=0.15.0" && \
+    # Step 2: Install core dependencies (will use CPU torch from step 1)
+    uv pip install --system \
+    -r backend/requirements.txt \
+    # Core dependencies
     python-dotenv pydantic pyyaml \
     pypdf2 pymupdf \
     "unstructured[all-docs]>=0.10.0" \
@@ -62,10 +67,9 @@ RUN uv pip install --system --no-cache \
     tiktoken "sentence-transformers>=5.1.2" "faiss-cpu>=1.7.4" "rank-bm25>=0.2.2" \
     numpy scikit-learn hdbscan "umap-learn>=0.5.5" matplotlib \
     "neo4j>=5.25.0" networkx click tqdm \
-    # PyTorch dependencies
-    "torch>=2.0.0" "torchvision>=0.15.0" "transformers>=4.34.0" accelerate "safetensors>=0.4.3" \
+    "transformers>=4.34.0" accelerate "safetensors>=0.4.3" \
     # OCR support
-    "rapidocr>=3.3.0" "opencv-python>=4.5.1" \
+    "rapidocr>=3.3.0" "opencv-python-headless>=4.5.1" \
     # Docling dependencies
     "pypdfium2>=4.30.0" "filetype>=1.2.0" "rtree>=1.3.0" \
     "python-docx>=1.1.2" "python-pptx>=1.0.2" "openpyxl>=3.1.5" \
@@ -74,11 +78,12 @@ RUN uv pip install --system --no-cache \
     # PostgreSQL drivers
     psycopg2-binary asyncpg pgvector nest-asyncio \
     # Language support for BM25 hybrid search
-    "spacy>=3.7.0" "langdetect>=1.0.9" "nltk>=3.8.0"
-
-# Download spaCy English model and NLTK stopwords
-RUN python -m spacy download en_core_web_sm && \
-    python -c "import nltk; nltk.download('stopwords')"
+    "spacy>=3.7.0" "langdetect>=1.0.9" "nltk>=3.8.0" && \
+    # Step 3: Download language models
+    python -m spacy download en_core_web_sm && \
+    python -c "import nltk; nltk.download('stopwords')" && \
+    # Cleanup to reduce image size
+    rm -rf /root/.cache/pip /tmp/*
 
 # ============================================================================
 # Stage 3: Development - Hot reload with source mounting

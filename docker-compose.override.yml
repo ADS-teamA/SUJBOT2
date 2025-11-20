@@ -11,6 +11,8 @@ services:
       - ./src:/app/src
       - ./backend:/app/backend
       - ./prompts:/app/prompts
+      - ./scripts:/app/scripts
+      - ./vector_db:/app/vector_db:ro
       - ./config.json:/app/config.json
       # Exclude Python cache from host (anonymous volumes)
       - /app/src/__pycache__
@@ -28,6 +30,7 @@ services:
       # Development settings
       STORAGE_BACKEND: postgresql  # Use PostgreSQL in dev
       LOG_LEVEL: DEBUG
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
 
   frontend:
     build:
@@ -45,7 +48,8 @@ services:
       - /app/node_modules
     command: npm run dev -- --host 0.0.0.0
     environment:
-      VITE_API_BASE_URL: http://localhost:8000
+      # Empty = relative URLs, goes through Nginx proxy (same-origin)
+      VITE_API_BASE_URL: ""
 
   postgres:
     # Enable verbose logging in development

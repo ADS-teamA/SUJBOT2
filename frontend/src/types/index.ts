@@ -62,6 +62,7 @@ export interface Conversation {
   messages: Message[];
   createdAt: string;  // ISO 8601 format for JSON serialization safety
   updatedAt: string;  // ISO 8601 format for JSON serialization safety
+  userId?: number;  // Optional: included in responses from backend (user_id field)
 }
 
 export interface Model {
