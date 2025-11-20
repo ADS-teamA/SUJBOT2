@@ -8,6 +8,7 @@ All endpoints require JWT authentication and verify conversation ownership.
 from datetime import datetime
 from typing import Dict, List, Optional
 import uuid
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -16,6 +17,7 @@ from backend.middleware.auth import get_current_user
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Pydantic Models
@@ -90,20 +92,27 @@ async def list_conversations(
     Returns:
         List of conversations ordered by most recent update
     """
-    conversations = await adapter.get_user_conversations(user["id"], limit=limit)
+    try:
+        conversations = await adapter.get_user_conversations(user["id"], limit=limit)
 
-    # Convert to response model with empty messages (use GET /conversations/{id}/messages to fetch messages)
-    return [
-        ConversationResponse(
-            id=conv["id"],
-            user_id=user["id"],
-            title=conv["title"] or "New Conversation",
-            messages=[],  # Messages loaded separately via GET /{id}/messages
-            created_at=conv["created_at"].isoformat() if hasattr(conv["created_at"], "isoformat") else str(conv["created_at"]),
-            updated_at=conv["updated_at"].isoformat() if hasattr(conv["updated_at"], "isoformat") else str(conv["updated_at"])
+        # Convert to response model with empty messages (use GET /conversations/{id}/messages to fetch messages)
+        return [
+            ConversationResponse(
+                id=conv["id"],
+                user_id=user["id"],
+                title=conv["title"] or "New Conversation",
+                messages=[],  # Messages loaded separately via GET /{id}/messages
+                created_at=conv["created_at"].isoformat() if hasattr(conv["created_at"], "isoformat") else str(conv["created_at"]),
+                updated_at=conv["updated_at"].isoformat() if hasattr(conv["updated_at"], "isoformat") else str(conv["updated_at"])
+            )
+            for conv in conversations
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list conversations for user {user['id']}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve conversations. Please try again later."
         )
-        for conv in conversations
-    ]
 
 @router.post("", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
 async def create_conversation(
@@ -125,23 +134,30 @@ async def create_conversation(
     # Generate conversation ID (UUID4 without prefix, 32 chars)
     conversation_id = uuid.uuid4().hex
 
-    # Create conversation in database
-    await adapter.create_conversation(
-        conversation_id=conversation_id,
-        user_id=user["id"],
-        title=data.title
-    )
+    try:
+        # Create conversation in database
+        await adapter.create_conversation(
+            conversation_id=conversation_id,
+            user_id=user["id"],
+            title=data.title
+        )
 
-    # Return created conversation with empty messages list
-    now = datetime.now().isoformat()
-    return ConversationResponse(
-        id=conversation_id,
-        user_id=user["id"],
-        title=data.title or "New Conversation",
-        messages=[],  # New conversations start with no messages
-        created_at=now,
-        updated_at=now
-    )
+        # Return created conversation with empty messages list
+        now = datetime.now().isoformat()
+        return ConversationResponse(
+            id=conversation_id,
+            user_id=user["id"],
+            title=data.title or "New Conversation",
+            messages=[],  # New conversations start with no messages
+            created_at=now,
+            updated_at=now
+        )
+    except Exception as e:
+        logger.error(f"Failed to create conversation for user {user['id']}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create conversation. Please try again later."
+        )
 
 @router.get("/{conversation_id}/messages", response_model=List[MessageResponse])
 async def get_messages(
@@ -165,28 +181,38 @@ async def get_messages(
     Raises:
         HTTPException 403: User does not own this conversation
     """
-    # Verify ownership
-    owns = await adapter.verify_conversation_ownership(conversation_id, user["id"])
-    if not owns:
+    try:
+        # Verify ownership
+        owns = await adapter.verify_conversation_ownership(conversation_id, user["id"])
+        if not owns:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this conversation"
+            )
+
+        # Get messages
+        messages = await adapter.get_conversation_history(conversation_id, limit=limit)
+
+        # Convert to response model
+        return [
+            MessageResponse(
+                id=msg["id"],
+                role=msg["role"],
+                content=msg["content"],
+                metadata=msg.get("metadata"),
+                created_at=msg["created_at"].isoformat() if hasattr(msg["created_at"], "isoformat") else str(msg["created_at"])
+            )
+            for msg in messages
+        ]
+    except HTTPException:
+        # Re-raise HTTP exceptions (403) without logging as errors
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get messages for conversation {conversation_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this conversation"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve messages. Please try again later."
         )
-
-    # Get messages
-    messages = await adapter.get_conversation_history(conversation_id, limit=limit)
-
-    # Convert to response model
-    return [
-        MessageResponse(
-            id=msg["id"],
-            role=msg["role"],
-            content=msg["content"],
-            metadata=msg.get("metadata"),
-            created_at=msg["created_at"].isoformat() if hasattr(msg["created_at"], "isoformat") else str(msg["created_at"])
-        )
-        for msg in messages
-    ]
 
 @router.post("/{conversation_id}/messages", response_model=Dict, status_code=status.HTTP_201_CREATED)
 async def append_message(
@@ -210,27 +236,37 @@ async def append_message(
     Raises:
         HTTPException 403: User does not own this conversation
     """
-    # Verify ownership
-    owns = await adapter.verify_conversation_ownership(conversation_id, user["id"])
-    if not owns:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this conversation"
+    try:
+        # Verify ownership
+        owns = await adapter.verify_conversation_ownership(conversation_id, user["id"])
+        if not owns:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this conversation"
+            )
+
+        # Append message
+        message_id = await adapter.append_message(
+            conversation_id=conversation_id,
+            role=message.role,
+            content=message.content,
+            metadata=message.metadata
         )
 
-    # Append message
-    message_id = await adapter.append_message(
-        conversation_id=conversation_id,
-        role=message.role,
-        content=message.content,
-        metadata=message.metadata
-    )
-
-    return {
-        "id": message_id,
-        "conversation_id": conversation_id,
-        "message": "Message appended successfully"
-    }
+        return {
+            "id": message_id,
+            "conversation_id": conversation_id,
+            "message": "Message appended successfully"
+        }
+    except HTTPException:
+        # Re-raise HTTP exceptions (403) without logging as errors
+        raise
+    except Exception as e:
+        logger.error(f"Failed to append message to conversation {conversation_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to append message. Please try again later."
+        )
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_conversation(
@@ -250,16 +286,26 @@ async def delete_conversation(
         HTTPException 403: User does not own this conversation
         HTTPException 404: Conversation not found
     """
-    # Delete conversation (includes ownership check)
-    deleted = await adapter.delete_conversation(conversation_id, user["id"])
+    try:
+        # Delete conversation (includes ownership check)
+        deleted = await adapter.delete_conversation(conversation_id, user["id"])
 
-    if not deleted:
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversation not found or you do not have access to it"
+            )
+
+        return None  # 204 No Content
+    except HTTPException:
+        # Re-raise HTTP exceptions (404) without logging as errors
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete conversation {conversation_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation not found or you do not have access to it"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete conversation. Please try again later."
         )
-
-    return None  # 204 No Content
 
 @router.patch("/{conversation_id}/title")
 async def update_conversation_title(
@@ -283,19 +329,29 @@ async def update_conversation_title(
     Raises:
         HTTPException 403: User does not own this conversation
     """
-    # Verify ownership
-    owns = await adapter.verify_conversation_ownership(conversation_id, user["id"])
-    if not owns:
+    try:
+        # Verify ownership
+        owns = await adapter.verify_conversation_ownership(conversation_id, user["id"])
+        if not owns:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this conversation"
+            )
+
+        # Update title
+        async with adapter.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE auth.conversations SET title = $1, updated_at = NOW() WHERE id = $2",
+                data.title, conversation_id
+            )
+
+        return {"message": "Title updated successfully", "title": data.title}
+    except HTTPException:
+        # Re-raise HTTP exceptions (403) without logging as errors
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update title for conversation {conversation_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this conversation"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update conversation title. Please try again later."
         )
-
-    # Update title
-    async with adapter.pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE auth.conversations SET title = $1, updated_at = NOW() WHERE id = $2",
-            data.title, conversation_id
-        )
-
-    return {"message": "Title updated successfully", "title": data.title}

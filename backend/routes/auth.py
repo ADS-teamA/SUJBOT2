@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict
 import logging
+import os
 
 from backend.auth.manager import AuthManager
 from backend.database.auth_queries import AuthQueries
@@ -177,11 +178,13 @@ async def login(
     token = auth_manager.create_token(user_id=user["id"], email=user["email"])
 
     # Set httpOnly cookie (XSS protection)
+    # Secure flag: True for production (HTTPS), False for local development
+    is_production = os.getenv("BUILD_TARGET", "development") == "production"
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,      # JavaScript cannot access (XSS protection)
-        secure=True,        # HTTPS only (set to False for local dev if needed)
+        secure=is_production,  # HTTPS only in production
         samesite="lax",     # CSRF protection
         max_age=86400,      # 24 hours (matches token expiry)
     )
