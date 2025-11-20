@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
 
 from backend.middleware.auth import get_current_user
@@ -77,7 +77,7 @@ def get_postgres_adapter() -> PostgreSQLStorageAdapter:
 
 @router.get("", response_model=List[ConversationResponse])
 async def list_conversations(
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=1000),
     user: Dict = Depends(get_current_user),
     adapter: PostgreSQLStorageAdapter = Depends(get_postgres_adapter)
 ):
@@ -85,7 +85,7 @@ async def list_conversations(
     List all conversations for the authenticated user.
 
     Args:
-        limit: Maximum number of conversations to return (default 50)
+        limit: Maximum number of conversations to return (default 50, max 1000)
         user: Authenticated user from JWT token
         adapter: PostgreSQL storage adapter
 
@@ -162,7 +162,7 @@ async def create_conversation(
 @router.get("/{conversation_id}/messages", response_model=List[MessageResponse])
 async def get_messages(
     conversation_id: str,
-    limit: int = 100,
+    limit: int = Query(default=100, ge=1, le=1000),
     user: Dict = Depends(get_current_user),
     adapter: PostgreSQLStorageAdapter = Depends(get_postgres_adapter)
 ):
@@ -171,7 +171,7 @@ async def get_messages(
 
     Args:
         conversation_id: Conversation ID
-        limit: Maximum messages to return (default 100)
+        limit: Maximum messages to return (default 100, max 1000)
         user: Authenticated user from JWT token
         adapter: PostgreSQL storage adapter
 

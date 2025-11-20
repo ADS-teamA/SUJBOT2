@@ -1,5 +1,10 @@
 # SUJBOT2 - Production RAG System for Legal/Technical Documents
 
+> **⚠️ CRITICAL SECURITY NOTICE:**
+> Sensitive credentials were found in git history (Neo4j password: `sujbot_neo4j_2025`).
+> **ACTION REQUIRED:** If you have cloned this repository, immediately rotate all passwords.
+> See [**SECURITY_ADVISORY.md**](SECURITY_ADVISORY.md) for full details and remediation steps.
+
 Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and **multi-agent AI framework**.
 
 **Status:** PHASE 1-7 COMPLETE + **MULTI-AGENT UPGRADE** ✅ (2025-11-11)
@@ -158,7 +163,7 @@ docker compose up -d
 
 **Default credentials:**
 ```
-Email: admin@example.com
+Email: admin@sujbot.local
 Password: ChangeThisPassword123!
 ```
 
@@ -181,6 +186,144 @@ git check-ignore config.json  # Should print: config.json
 **Full documentation:** [docs/WEB_INTERFACE.md](docs/WEB_INTERFACE.md)
 
 ---
+## 🔒 Security Features
+
+SUJBOT2 implements production-grade security following OWASP best practices:
+
+### Authentication & Authorization
+
+**JWT-based Authentication:**
+- ✅ Argon2id password hashing (PHC winner, GPU-resistant)
+- ✅ httpOnly cookies for token storage (XSS protection)
+- ✅ 24-hour token expiry with secure key rotation
+- ✅ Admin-only user registration (prevents unauthorized signups)
+
+**Password Requirements (OWASP-compliant):**
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter  
+- At least one digit
+- At least one special character (@$!%*?&)
+- Not in common password blacklist (25 most common passwords)
+- No consecutive identical characters (e.g., "aaa", "111")
+
+### Network Security
+
+**HTTP Security Headers:**
+- ✅ Content-Security-Policy (XSS protection)
+- ✅ X-Frame-Options: DENY (clickjacking protection)
+- ✅ X-Content-Type-Options: nosniff (MIME sniffing protection)
+- ✅ Strict-Transport-Security (HTTPS enforcement in production)
+- ✅ Referrer-Policy (information leakage prevention)
+- ✅ Permissions-Policy (disable camera, geolocation, etc.)
+
+**Rate Limiting:**
+- ✅ Token bucket algorithm per IP address
+- ✅ Login endpoint: 10 requests/minute (brute force protection)
+- ✅ Registration endpoint: 5 requests/minute (spam prevention)
+- ✅ Default: 60 requests/minute for other endpoints
+
+**CORS Configuration:**
+- ✅ Explicit origin allow-list (no wildcards)
+- ✅ Restricted HTTP methods and headers
+- ✅ Credentials support for cookie-based auth
+
+### Data Protection
+
+**SQL Injection Prevention:**
+- ✅ Parameterized queries throughout (asyncpg with $1, $2 placeholders)
+- ✅ No string concatenation in SQL statements
+
+**Input Validation:**
+- ✅ Pydantic models for all API requests
+- ✅ Email format validation
+- ✅ Message length limits (50K characters)
+- ✅ Conversation title length limits (500 characters)
+
+### Production Deployment Checklist
+
+**Before deploying to production:**
+
+1. **Change Default Credentials**
+   ```bash
+   # Default admin account
+   Email: admin@sujbot.local
+   Password: ChangeThisPassword123!
+   
+   # Reset password immediately
+   docker compose exec backend uv run python scripts/reset_admin_password.py
+   ```
+
+2. **Generate Secure Keys**
+   ```bash
+   # AUTH_SECRET_KEY (64 bytes)
+   openssl rand -base64 64
+   
+   # POSTGRES_PASSWORD (32 bytes)
+   openssl rand -base64 32
+   ```
+
+3. **Set Environment Variables**
+   ```bash
+   # Edit .env file
+   AUTH_SECRET_KEY=<generated-key>
+   POSTGRES_PASSWORD=<strong-password>
+   BUILD_TARGET=production  # Enables HSTS and other production security
+   ```
+
+4. **Enable HTTPS**
+   - Configure reverse proxy (Nginx/Caddy) with TLS certificates
+   - Let's Encrypt recommended for automatic certificate management
+   - Update VITE_API_BASE_URL to use https://
+
+5. **Database Security**
+   ```bash
+   # ✅ PostgreSQL port NOT exposed by default (secure by design)
+   # docker-compose.yml: No port mapping in production
+   # docker-compose.override.yml: Port 5432 exposed ONLY in development
+
+   # Restrict PostgreSQL access
+   # Edit postgresql.conf:
+   listen_addresses = 'localhost'
+
+   # Use strong password for postgres user
+   # Generate with: openssl rand -base64 32
+   ```
+
+6. **Review Security Logs**
+   ```bash
+   # Monitor failed login attempts
+   docker compose logs backend | grep "Failed login"
+   
+   # Check rate limit violations
+   docker compose logs backend | grep "Rate limit exceeded"
+   ```
+
+### Security Considerations
+
+**What's Protected:**
+- ✅ User registration (admin-only)
+- ✅ Password strength (OWASP requirements)
+- ✅ Brute force attacks (rate limiting)
+- ✅ XSS attacks (CSP headers + httpOnly cookies)
+- ✅ Clickjacking (X-Frame-Options)
+- ✅ SQL injection (parameterized queries)
+- ✅ CSRF (SameSite=Lax cookies)
+
+**Known Limitations:**
+- ⚠️ No multi-factor authentication (planned for future release)
+- ⚠️ No token refresh mechanism (tokens expire after 24h)
+- ⚠️ In-memory HITL storage (use Redis for multi-instance deployments)
+- ⚠️ No audit log for admin actions (planned for future release)
+
+**Reporting Security Issues:**
+- Please report security vulnerabilities to the project maintainers privately
+- Do not create public GitHub issues for security vulnerabilities
+
+
+
+---
+
 
 ## 📖 Usage
 
