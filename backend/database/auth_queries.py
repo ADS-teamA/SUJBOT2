@@ -193,22 +193,28 @@ class AuthQueries:
             User dict (same structure as get_user_by_email)
             None if user not found
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> user = await queries.get_user_by_id(1)
             >>> if user:
             ...     print(f"User: {user['email']}")
         """
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT id, email, password_hash, full_name, is_active,
-                       created_at, updated_at, last_login_at
-                FROM auth.users
-                WHERE id = $1
-                """,
-                user_id
-            )
-            return dict(row) if row else None
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, email, password_hash, full_name, is_active,
+                           created_at, updated_at, last_login_at
+                    FROM auth.users
+                    WHERE id = $1
+                    """,
+                    user_id
+                )
+                return dict(row) if row else None
+        except Exception as e:
+            self._handle_db_error("get_user_by_id", {"user_id": user_id}, e)
 
     async def get_active_user_by_id(self, user_id: int) -> Optional[Dict]:
         """
@@ -222,23 +228,29 @@ class AuthQueries:
         Returns:
             User dict if active, None if not found or inactive
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> user = await queries.get_active_user_by_id(1)
             >>> if user:
             ...     # User is active and can access protected routes
             ...     pass
         """
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT id, email, password_hash, full_name, is_active,
-                       created_at, updated_at, last_login_at
-                FROM auth.users
-                WHERE id = $1 AND is_active = true
-                """,
-                user_id
-            )
-            return dict(row) if row else None
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT id, email, password_hash, full_name, is_active,
+                           created_at, updated_at, last_login_at
+                    FROM auth.users
+                    WHERE id = $1 AND is_active = true
+                    """,
+                    user_id
+                )
+                return dict(row) if row else None
+        except Exception as e:
+            self._handle_db_error("get_active_user_by_id", {"user_id": user_id}, e)
 
     # =========================================================================
     # User Updates
@@ -253,17 +265,28 @@ class AuthQueries:
         Args:
             user_id: User ID to update
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> await queries.update_last_login(1)
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                """
-                UPDATE auth.users
-                SET last_login_at = NOW()
-                WHERE id = $1
-                """,
-                user_id
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE auth.users
+                    SET last_login_at = NOW()
+                    WHERE id = $1
+                    """,
+                    user_id
+                )
+                logger.debug(f"Updated last_login for user {user_id}")
+        except Exception as e:
+            # Log but don't fail the request - this is non-critical
+            logger.warning(
+                f"Failed to update last_login for user {user_id}: {e}",
+                extra={"user_id": user_id, "error_type": e.__class__.__name__}
             )
 
     async def deactivate_user(self, user_id: int) -> None:
@@ -273,18 +296,25 @@ class AuthQueries:
         Args:
             user_id: User ID to deactivate
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> await queries.deactivate_user(1)
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                """
-                UPDATE auth.users
-                SET is_active = false, updated_at = NOW()
-                WHERE id = $1
-                """,
-                user_id
-            )
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE auth.users
+                    SET is_active = false, updated_at = NOW()
+                    WHERE id = $1
+                    """,
+                    user_id
+                )
+                logger.info(f"Deactivated user {user_id}")
+        except Exception as e:
+            self._handle_db_error("deactivate_user", {"user_id": user_id}, e)
 
     async def activate_user(self, user_id: int) -> None:
         """
@@ -293,18 +323,25 @@ class AuthQueries:
         Args:
             user_id: User ID to activate
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> await queries.activate_user(1)
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                """
-                UPDATE auth.users
-                SET is_active = true, updated_at = NOW()
-                WHERE id = $1
-                """,
-                user_id
-            )
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE auth.users
+                    SET is_active = true, updated_at = NOW()
+                    WHERE id = $1
+                    """,
+                    user_id
+                )
+                logger.info(f"Activated user {user_id}")
+        except Exception as e:
+            self._handle_db_error("activate_user", {"user_id": user_id}, e)
 
     # =========================================================================
     # User Listing (for admin)
@@ -321,24 +358,30 @@ class AuthQueries:
         Returns:
             List of user dicts (excludes password_hash for security)
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> users = await queries.list_users(limit=10)
             >>> for user in users:
             ...     print(f"{user['email']} - Active: {user['is_active']}")
         """
-        async with self.pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT id, email, full_name, is_active,
-                       created_at, updated_at, last_login_at
-                FROM auth.users
-                ORDER BY created_at DESC
-                LIMIT $1 OFFSET $2
-                """,
-                limit,
-                offset
-            )
-            return [dict(row) for row in rows]
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, email, full_name, is_active,
+                           created_at, updated_at, last_login_at
+                    FROM auth.users
+                    ORDER BY created_at DESC
+                    LIMIT $1 OFFSET $2
+                    """,
+                    limit,
+                    offset
+                )
+                return [dict(row) for row in rows]
+        except Exception as e:
+            self._handle_db_error("list_users", {"limit": limit, "offset": offset}, e)
 
     async def count_users(self) -> int:
         """
@@ -347,9 +390,15 @@ class AuthQueries:
         Returns:
             Total number of users
 
+        Raises:
+            RuntimeError: If database connection fails
+
         Example:
             >>> total = await queries.count_users()
             >>> print(f"Total users: {total}")
         """
-        async with self.pool.acquire() as conn:
-            return await conn.fetchval("SELECT COUNT(*) FROM auth.users")
+        try:
+            async with self.pool.acquire() as conn:
+                return await conn.fetchval("SELECT COUNT(*) FROM auth.users")
+        except Exception as e:
+            self._handle_db_error("count_users", {}, e)
