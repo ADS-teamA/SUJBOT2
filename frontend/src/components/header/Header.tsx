@@ -116,22 +116,6 @@ export function Header({
 
         {/* Controls */}
         <div className="flex items-center gap-3">
-          {/* Logout button */}
-          <button
-            onClick={logout}
-            {...logoutHover.hoverProps}
-            style={logoutHover.style}
-            className={cn(
-              'p-2 rounded-lg',
-              'text-accent-700 dark:text-accent-300',
-              'hover:bg-accent-100 dark:hover:bg-accent-800',
-              'transition-all duration-700'
-            )}
-            title="Sign out"
-          >
-            <LogOut size={20} className="transition-all duration-700" />
-          </button>
-
           {/* Theme toggle */}
           <button
             onClick={onToggleTheme}
@@ -174,6 +158,22 @@ export function Header({
                 )}
               />
             </div>
+          </button>
+
+          {/* Logout button */}
+          <button
+            onClick={logout}
+            {...logoutHover.hoverProps}
+            style={logoutHover.style}
+            className={cn(
+              'p-2 rounded-lg',
+              'text-accent-700 dark:text-accent-300',
+              'hover:bg-accent-100 dark:hover:bg-accent-800',
+              'transition-all duration-700'
+            )}
+            title="Sign out"
+          >
+            <LogOut size={20} className="transition-all duration-700" />
           </button>
         </div>
       </div>

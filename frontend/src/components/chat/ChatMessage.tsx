@@ -556,6 +556,8 @@ export function ChatMessage({
                                   return null;
                                 }
 
+                                const responseTime = typeof agent?.response_time_ms === 'number' ? agent.response_time_ms : 0;
+
                                 return (
                                   <div
                                     key={idx}
@@ -575,6 +577,12 @@ export function ChatMessage({
                                       {cacheTokens > 0 && (
                                         <span className="text-accent-600 dark:text-accent-400">
                                           {cacheTokens.toLocaleString()} cached
+                                        </span>
+                                      )}
+                                      {responseTime > 0 && (
+                                        <span className="text-accent-500 dark:text-accent-400 flex items-center gap-0.5">
+                                          <Clock size={10} />
+                                          {(responseTime / 1000).toFixed(2)}s
                                         </span>
                                       )}
                                     </div>
