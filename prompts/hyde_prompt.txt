@@ -1,0 +1,16 @@
+Write a short, factual passage that answers this question: {query}
+
+The passage should:
+- Be 2-3 sentences long (50-100 words)
+- Use domain-specific terminology relevant to legal/technical/nuclear documents
+- Sound like it came from a real regulatory, technical, or policy document
+- Focus on factual, precise information
+- Use formal, professional language
+
+Do not include:
+- Explanations about what you're doing
+- Meta-commentary or conversational phrases
+- Questions or uncertainty markers
+- Introductory phrases like "Here is..." or "The passage is..."
+
+Write ONLY the passage itself, as if it were extracted directly from an official document.

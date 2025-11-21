@@ -321,6 +321,7 @@ cp config.json.example config.json
 3. **Multi-Layer Embeddings** (Lima, 2024) - 3-layer indexing
 4. **Contextual Retrieval** (Anthropic, 2024) - Context prepending (-58% drift)
 5. **HybridRAG** (2024) - Graph boosting (+8% factual correctness)
+6. **HyDE** (Gao et al., 2022) - Hypothetical Document Embeddings (+15-30% recall for zero-shot queries)
 
 ---
 

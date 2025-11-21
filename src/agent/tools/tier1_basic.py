@@ -211,6 +211,7 @@ class SearchTool(BaseTool):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._query_expander = None  # Lazy initialization
+        self._hyde_generator = None  # Lazy initialization
 
     def _get_query_expander(self):
         """Lazy initialization of QueryExpander."""
@@ -265,23 +266,94 @@ class SearchTool(BaseTool):
 
         return self._query_expander
 
+    def _get_hyde_generator(self):
+        """Lazy initialization of HyDEGenerator."""
+        if self._hyde_generator is None:
+            import os
+            from ..hyde_generator import HyDEGenerator
+
+            # Get provider and model from config (reuse query expansion settings)
+            provider = self.config.query_expansion_provider
+            model = self.config.query_expansion_model
+
+            # Get API keys from environment variables
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+            openai_key = os.getenv("OPENAI_API_KEY")
+
+            try:
+                self._hyde_generator = HyDEGenerator(
+                    provider=provider,
+                    model=model,
+                    anthropic_api_key=anthropic_key,
+                    openai_api_key=openai_key,
+                    num_hypotheses=3,  # Multi-hypothesis averaging
+                )
+                logger.info(f"HyDEGenerator initialized: provider={provider}, model={model}")
+            except ValueError as e:
+                logger.warning(
+                    f"HyDEGenerator configuration error: {e}. "
+                    f"HyDE will be disabled. "
+                    f"Common causes: missing API key or unsupported provider."
+                )
+                self._hyde_generator = None
+            except ImportError as e:
+                package_name = "openai" if provider == "openai" else "anthropic"
+                logger.warning(
+                    f"HyDEGenerator package missing: {e}. "
+                    f"HyDE will be disabled. Install: 'uv pip install {package_name}'"
+                )
+                self._hyde_generator = None
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error initializing HyDEGenerator ({type(e).__name__}): {e}. "
+                    f"HyDE will be disabled."
+                )
+                self._hyde_generator = None
+
+        return self._hyde_generator
+
     def execute_impl(
         self, query: str, k: int = 5, num_expands: int = 0, enable_graph_boost: bool = False, use_hyde: bool = False
     ) -> ToolResult:
         k, _ = validate_k_parameter(k, adaptive=True, detail_level="medium")
 
-        # Handle HyDE (Hypothetical Document Embeddings)
-        hyde_doc = None
+        # === STEP 0: HyDE Generation (Multi-Hypothesis) ===
+        hyde_docs = []
+        hyde_metadata = {"use_hyde": use_hyde, "num_hypotheses": 0, "generation_method": "none"}
+
         if use_hyde:
-            if self.llm_provider:
+            hyde_gen = self._get_hyde_generator()
+
+            if hyde_gen:
                 try:
-                    hyde_doc = self._generate_hyde_query(query)
-                    if hyde_doc:
-                        logger.info(f"HyDE generated hypothetical document: {hyde_doc[:100]}...")
+                    # Generate 3 hypothetical docs for original query (multi-hypothesis averaging)
+                    hyde_result = hyde_gen.generate(query, num_docs=3)
+                    hyde_docs = hyde_result.hypothetical_docs
+
+                    hyde_metadata.update(
+                        {
+                            "num_hypotheses": len(hyde_docs),
+                            "generation_method": hyde_result.generation_method,
+                            "model_used": hyde_result.model_used,
+                        }
+                    )
+
+                    # Warn if fallback was used
+                    if hyde_result.generation_method == "fallback":
+                        logger.warning(
+                            "HyDE generation failed internally (LLM error). "
+                            "Falling back to standard search."
+                        )
+                    else:
+                        logger.info(
+                            f"HyDE generated {len(hyde_docs)} hypothetical docs for original query"
+                        )
                 except Exception as e:
                     logger.warning(f"HyDE generation failed: {e}. Falling back to standard search.")
             else:
-                logger.warning("HyDE requested but no LLM provider available. Falling back to standard search.")
+                logger.warning(
+                    "HyDE requested but generator not available. Falling back to standard search."
+                )
 
         # === STEP 1: Query Expansion ===
         queries = [query]  # Default: original query only
@@ -346,13 +418,16 @@ class SearchTool(BaseTool):
                 logger.info(f"Searching with graph boost (query {idx}/{len(queries)}): '{q}'")
 
                 # Embed query (extract 1D array for graph retriever)
-                # Use HyDE doc if available AND this is the original query
-                text_to_embed = q
-                if hyde_doc and q == query:
-                     text_to_embed = hyde_doc
-                     logger.info(f"Using HyDE document for embedding query {idx}")
-
-                query_embedding = self.embedder.embed_texts([text_to_embed])[0]
+                # Use HyDE docs if available AND this is the original query
+                if hyde_docs and q == query:
+                    # Multi-hypothesis averaging: embed all HyDE docs and average
+                    import numpy as np
+                    embeddings = self.embedder.embed_texts(hyde_docs)
+                    query_embedding = np.mean(embeddings, axis=0)
+                    logger.info(f"Using {len(hyde_docs)} HyDE docs (multi-hypothesis averaging) for query {idx}")
+                else:
+                    # Standard embedding
+                    query_embedding = self.embedder.embed_texts([q])[0]
 
                 # Delegate to GraphEnhancedRetriever with error handling
                 try:
@@ -420,13 +495,16 @@ class SearchTool(BaseTool):
                 logger.info(f"Searching with query {idx}/{len(queries)}: '{q}'")
 
                 # Embed query (extract 1D array)
-                # Use HyDE doc if available AND this is the original query
-                text_to_embed = q
-                if hyde_doc and q == query:
-                     text_to_embed = hyde_doc
-                     logger.info(f"Using HyDE document for embedding query {idx}")
-
-                query_embedding = self.embedder.embed_texts([text_to_embed])[0]
+                # Use HyDE docs if available AND this is the original query
+                if hyde_docs and q == query:
+                    # Multi-hypothesis averaging: embed all HyDE docs and average
+                    import numpy as np
+                    embeddings = self.embedder.embed_texts(hyde_docs)
+                    query_embedding = np.mean(embeddings, axis=0)
+                    logger.info(f"Using {len(hyde_docs)} HyDE docs (multi-hypothesis averaging) for query {idx}")
+                else:
+                    # Standard embedding
+                    query_embedding = self.embedder.embed_texts([q])[0]
 
                 # Hybrid search
                 results = self.vector_store.hierarchical_search(
@@ -580,7 +658,7 @@ class SearchTool(BaseTool):
             "document_filter": document_filter,
             "queries_used": queries,
             "search_metadata": search_metadata,
-            "hyde_used": bool(hyde_doc),
+            "hyde_metadata": hyde_metadata,
         }
 
         # Add RAG confidence to metadata

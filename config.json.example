@@ -206,6 +206,7 @@
     "reranker_model": "bge-reranker-large",
     "enable_graph_boost": true,
     "graph_boost_weight": 0.3,
+    "hyde_num_hypotheses": 3,
     "max_document_compare": 3,
     "compliance_threshold": 0.7,
     "context_window": 2,
