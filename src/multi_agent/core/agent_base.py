@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
 import logging
+import time  # For LLM response time measurement
 
 from pydantic import BaseModel
 from langgraph.graph import StateGraph
@@ -432,16 +433,27 @@ class BaseAgent(ABC):
             self.logger.info(f"Autonomous loop iteration {iteration + 1}/{max_iterations}")
 
             # Call LLM with tools (measure response time)
-            import time
             llm_start_time = time.time()
-            response = provider.create_message(
-                messages=messages,
-                tools=tool_schemas,
-                system=system_prompt,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature
-            )
-            llm_response_time_ms = (time.time() - llm_start_time) * 1000
+            try:
+                response = provider.create_message(
+                    messages=messages,
+                    tools=tool_schemas,
+                    system=system_prompt,
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature
+                )
+                llm_response_time_ms = (time.time() - llm_start_time) * 1000
+                self.logger.info(f"LLM call took {llm_response_time_ms:.2f}ms for agent {self.config.name}")
+            except Exception as e:
+                # Measure time to failure - valuable for debugging timeout/performance issues
+                llm_response_time_ms = (time.time() - llm_start_time) * 1000
+                self.logger.error(
+                    f"LLM call FAILED after {llm_response_time_ms:.2f}ms for agent {self.config.name}: {e}",
+                    exc_info=True
+                )
+                # Note: Cost tracking won't happen since we don't have a response object
+                # Re-raise to allow upstream error handling (agent execute wrapper)
+                raise
 
             # Track LLM usage with proper model-specific pricing
             if hasattr(response, 'usage') and response.usage:
@@ -467,6 +479,13 @@ class BaseAgent(ABC):
                 self.logger.debug(
                     f"Agent {self.config.name} LLM call: {input_tokens} in, {output_tokens} out, "
                     f"cache: {cache_read_tokens} read, {cache_creation_tokens} created - ${cost:.6f}"
+                )
+            else:
+                # Warn when response time is measured but not tracked
+                self.logger.warning(
+                    f"Response missing usage data for agent {self.config.name} - "
+                    f"response time ({llm_response_time_ms:.2f}ms) not tracked in cost tracker. "
+                    f"Response type: {type(response)}, has 'usage' attr: {hasattr(response, 'usage')}"
                 )
 
             # Check if LLM wants to call tools

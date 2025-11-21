@@ -8,7 +8,7 @@
  * - Health checks
  */
 
-import type { Model, HealthStatus, SSEEvent, Conversation, Message } from '../types';
+import type { Model, HealthStatus, SSEEvent, Conversation, Message, AgentCostBreakdown } from '../types';
 
 // Use environment variable for API base URL
 // Empty string = relative URLs (same-origin, through Nginx proxy)
@@ -561,16 +561,57 @@ export class ApiService {
 
     // Map backend format to frontend format
     return messages.map((msg: any) => {
-      // Transform cost data from snake_case (backend) to camelCase (frontend)
+      // Transform top-level cost data from snake_case (backend) to camelCase (frontend)
+      // Nested structures (agentBreakdown, cacheStats) preserve snake_case field names
       let cost = undefined;
       if (msg.metadata?.cost) {
         const backendCost = msg.metadata.cost;
+
+        // Validate and transform agent breakdown with runtime checks
+        let agentBreakdown: AgentCostBreakdown[] = [];
+        if (backendCost.agent_breakdown) {
+          if (!Array.isArray(backendCost.agent_breakdown)) {
+            console.error(
+              'Invalid agent_breakdown from backend - expected array, got:',
+              typeof backendCost.agent_breakdown,
+              backendCost.agent_breakdown
+            );
+          } else {
+            agentBreakdown = backendCost.agent_breakdown.map((agent: any, idx: number) => {
+              // Validate each agent entry
+              if (typeof agent !== 'object' || agent === null) {
+                console.warn(`Invalid agent entry at index ${idx}:`, agent);
+                return null;
+              }
+
+              // Validate response_time_ms specifically (new field in this PR)
+              if (agent.response_time_ms !== undefined && typeof agent.response_time_ms !== 'number') {
+                console.warn(
+                  `Invalid response_time_ms for agent ${agent.agent || 'unknown'}:`,
+                  agent.response_time_ms
+                );
+              }
+
+              return {
+                agent: agent.agent ?? 'unknown',
+                cost: typeof agent.cost === 'number' ? agent.cost : 0,
+                input_tokens: typeof agent.input_tokens === 'number' ? agent.input_tokens : 0,
+                output_tokens: typeof agent.output_tokens === 'number' ? agent.output_tokens : 0,
+                cache_read_tokens: typeof agent.cache_read_tokens === 'number' ? agent.cache_read_tokens : 0,
+                cache_creation_tokens: typeof agent.cache_creation_tokens === 'number' ? agent.cache_creation_tokens : 0,
+                call_count: typeof agent.call_count === 'number' ? agent.call_count : 0,
+                response_time_ms: typeof agent.response_time_ms === 'number' ? agent.response_time_ms : 0,
+              };
+            }).filter((agent): agent is AgentCostBreakdown => agent !== null);
+          }
+        }
+
         cost = {
           totalCost: backendCost.total_cost ?? 0,
           inputTokens: backendCost.total_input_tokens ?? 0,
           outputTokens: backendCost.total_output_tokens ?? 0,
           cachedTokens: backendCost.cache_stats?.cache_read_tokens ?? 0,
-          agentBreakdown: backendCost.agent_breakdown ?? [],
+          agentBreakdown,  // Validated array
           cacheStats: backendCost.cache_stats ?? {
             cache_read_tokens: 0,
             cache_creation_tokens: 0
