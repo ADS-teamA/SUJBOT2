@@ -1654,6 +1654,56 @@ class FilteredSearchTool(BaseTool):
     tier = 2
     input_schema = FilteredSearchInput
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._hyde_generator = None  # Lazy initialization
+
+    def _get_hyde_generator(self):
+        """Lazy initialization of HyDEGenerator."""
+        if self._hyde_generator is None:
+            import os
+            from ..hyde_generator import HyDEGenerator
+
+            # Get provider and model from config (reuse query expansion settings)
+            provider = self.config.query_expansion_provider
+            model = self.config.query_expansion_model
+
+            # Get API keys from environment variables
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+            openai_key = os.getenv("OPENAI_API_KEY")
+
+            try:
+                self._hyde_generator = HyDEGenerator(
+                    provider=provider,
+                    model=model,
+                    anthropic_api_key=anthropic_key,
+                    openai_api_key=openai_key,
+                    num_hypotheses=self.config.hyde_num_hypotheses,
+                )
+                logger.info(f"HyDEGenerator initialized: provider={provider}, model={model}")
+            except ValueError as e:
+                logger.warning(
+                    f"HyDEGenerator configuration error: {e}. "
+                    f"HyDE will be disabled. "
+                    f"Common causes: missing API key or unsupported provider."
+                )
+                self._hyde_generator = None
+            except ImportError as e:
+                package_name = "openai" if provider == "openai" else "anthropic"
+                logger.warning(
+                    f"HyDEGenerator package missing: {e}. "
+                    f"HyDE will be disabled. Install: 'uv pip install {package_name}'"
+                )
+                self._hyde_generator = None
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error initializing HyDEGenerator ({type(e).__name__}): {e}. "
+                    f"HyDE will be disabled."
+                )
+                self._hyde_generator = None
+
+        return self._hyde_generator
+
     def execute_impl(
         self,
         query: str,
@@ -1673,21 +1723,23 @@ class FilteredSearchTool(BaseTool):
     ) -> ToolResult:
         from .utils import validate_k_parameter
 
-        # Handle HyDE (Hypothetical Document Embeddings)
-        hyde_doc = None
+        # Handle HyDE (Hypothetical Document Embeddings) - Multi-hypothesis averaging
+        hyde_docs = []
         if use_hyde:
-            if self.llm_provider:
-                try:
-                    hyde_doc = self._generate_hyde_query(query)
-                    if hyde_doc:
-                        logger.info(f"HyDE generated hypothetical document: {hyde_doc[:100]}...")
-                        # Append HyDE document to query for dense retrieval or use as query
-                        # Strategy: Use HyDE doc for dense embedding, original query for BM25
-                        # We'll pass it to the search methods
-                except Exception as e:
-                    logger.warning(f"HyDE generation failed: {e}. Falling back to standard search.")
+            hyde_gen = self._get_hyde_generator()
+            if hyde_gen:
+                hyde_result = hyde_gen.generate(query, num_docs=1)  # Tier 2: 1 doc (efficiency)
+                hyde_docs = hyde_result.hypothetical_docs
+
+                # Warn if fallback was used
+                if hyde_result.generation_method == "fallback":
+                    logger.warning(
+                        "HyDE generation failed internally (LLM error). Falling back to standard search."
+                    )
+                elif hyde_docs:
+                    logger.info(f"HyDE generated {len(hyde_docs)} hypothetical document(s)")
             else:
-                logger.warning("HyDE requested but no LLM provider available. Falling back to standard search.")
+                logger.warning("HyDE requested but HyDEGenerator unavailable. Falling back to standard search.")
 
         # Handle legacy parameter mapping
         if search_type and search_method == "hybrid":
@@ -1740,12 +1792,12 @@ class FilteredSearchTool(BaseTool):
             elif search_method == "dense_only":
                 chunks = self._execute_dense_only(
                     query, filter_type, filter_value, document_type, section_type,
-                    start_date, end_date, k, hyde_doc=hyde_doc
+                    start_date, end_date, k, hyde_docs=hyde_docs
                 )
             else:  # hybrid
                 chunks = self._execute_hybrid(
                     query, filter_type, filter_value, document_type, section_type,
-                    start_date, end_date, k, hyde_doc=hyde_doc
+                    start_date, end_date, k, hyde_docs=hyde_docs
                 )
 
             if not chunks:
@@ -1757,7 +1809,7 @@ class FilteredSearchTool(BaseTool):
                         "filter_type": filter_type,
                         "filter_value": filter_value,
                         "no_results": True,
-                        "hyde_used": bool(hyde_doc),
+                        "hyde_used": bool(hyde_docs),
                     },
                 )
 
@@ -1776,7 +1828,7 @@ class FilteredSearchTool(BaseTool):
                     "filter_type": filter_type,
                     "filter_value": filter_value,
                     "results_count": len(formatted),
-                    "hyde_used": bool(hyde_doc),
+                    "hyde_used": bool(hyde_docs),
                 },
             )
 
@@ -1863,14 +1915,16 @@ class FilteredSearchTool(BaseTool):
         start_date: Optional[str],
         end_date: Optional[str],
         k: int,
-        hyde_doc: Optional[str] = None,
+        hyde_docs: Optional[List[str]] = None,
     ) -> List[Dict]:
         """Dense-only search (~100-200ms) with optional filtering."""
         retrieval_k = k * 3 if filter_type else k
-        
-        # Use HyDE document for embedding if available, otherwise use query
-        text_to_embed = hyde_doc if hyde_doc else query
-        query_embedding = self.embedder.embed_texts([text_to_embed])
+
+        # Use HyDE document for embedding if available (Tier 2: use first doc)
+        if hyde_docs and len(hyde_docs) > 0:
+            query_embedding = self.embedder.embed_texts([hyde_docs[0]])
+        else:
+            query_embedding = self.embedder.embed_texts([query])
 
         # Dense search (no document filter support in FAISS for dense-only)
         dense_results = self.vector_store.faiss_store.search_layer3(
@@ -1905,12 +1959,15 @@ class FilteredSearchTool(BaseTool):
         start_date: Optional[str],
         end_date: Optional[str],
         k: int,
-        hyde_doc: Optional[str] = None,
+        hyde_docs: Optional[List[str]] = None,
     ) -> List[Dict]:
         """Hybrid search (~200-300ms): BM25 + Dense + RRF fusion."""
         # Use HyDE document for embedding (dense), but original query for BM25 (sparse)
-        text_to_embed = hyde_doc if hyde_doc else query
-        query_embedding = self.embedder.embed_texts([text_to_embed])
+        # Tier 2: use first HyDE doc (efficiency)
+        if hyde_docs and len(hyde_docs) > 0:
+            query_embedding = self.embedder.embed_texts([hyde_docs[0]])
+        else:
+            query_embedding = self.embedder.embed_texts([query])
         retrieval_k = k * 3 if filter_type in {"section", "metadata", "temporal"} else k
 
         # Document filter: index-level (fast path for hybrid)

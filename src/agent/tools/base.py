@@ -386,28 +386,3 @@ class BaseTool(ABC):
             "input_schema": self.input_schema.model_json_schema(),
         }
 
-    def _generate_hyde_query(self, query: str) -> Optional[str]:
-        """Generate Hypothetical Document Embedding (HyDE) query."""
-        if not self.llm_provider:
-            return None
-            
-        prompt = (
-            f"Please write a short, hypothetical passage that answers the following question. "
-            f"The passage should be factual and use terminology relevant to the domain. "
-            f"Do not include any explanations, just the passage itself.\n\n"
-            f"Question: {query}\n\n"
-            f"Passage:"
-        )
-        
-        try:
-            response = self.llm_provider.create_message(
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.7,
-                system="You are a helpful assistant generating hypothetical documents for retrieval augmentation.",
-                tools=[]
-            )
-            return response.content[0].text
-        except Exception as e:
-            logger.warning(f"HyDE generation error: {e}")
-            return None

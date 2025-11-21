@@ -297,7 +297,13 @@ The passage should be 2-3 sentences long, use domain-specific terminology, and s
         return text
 
     def _call_anthropic(self, prompt: str) -> str:
-        """Call Anthropic API."""
+        """
+        Call Anthropic API.
+
+        Note: Unlike OpenAI (which has model-specific parameter names for o1-/o3-/gpt-5 series),
+        all Anthropic Claude models use consistent parameter names (max_tokens, temperature).
+        No model-specific branching needed.
+        """
         response = self.client.messages.create(
             model=self.model,
             max_tokens=500,

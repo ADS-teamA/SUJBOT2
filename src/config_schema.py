@@ -705,6 +705,12 @@ class AgentToolConfig(BaseModel):
         description="Lazy load knowledge graph (speeds up startup)"
     )
     cache_embeddings: bool = Field(..., description="Cache embeddings")
+    hyde_num_hypotheses: int = Field(
+        ...,
+        description="Number of hypothetical documents for HyDE (multi-hypothesis averaging)",
+        ge=1,
+        le=10
+    )
 
 
 class CLIConfig(BaseModel):

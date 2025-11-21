@@ -286,7 +286,7 @@ class SearchTool(BaseTool):
                     model=model,
                     anthropic_api_key=anthropic_key,
                     openai_api_key=openai_key,
-                    num_hypotheses=3,  # Multi-hypothesis averaging
+                    num_hypotheses=self.config.hyde_num_hypotheses,
                 )
                 logger.info(f"HyDEGenerator initialized: provider={provider}, model={model}")
             except ValueError as e:
