@@ -23,9 +23,14 @@ def _load_agent_base_prompt() -> str:
     Task-specific prompts (chat, benchmark) should be appended separately.
     """
     try:
-        from .prompt_loader import load_prompt
-
-        return load_prompt("base_agent_prompt")
+        # Use centralized prompt loader from multi_agent module
+        from pathlib import Path
+        prompt_file = Path(__file__).parent.parent.parent / "prompts" / "base_agent_prompt.txt"
+        if prompt_file.exists():
+            return prompt_file.read_text(encoding="utf-8").strip()
+        else:
+            logger.warning(f"Prompt file not found: {prompt_file}")
+            return "You are a RAG-powered assistant for legal and technical documents."
     except Exception as e:
         logger.error(f"Failed to load base agent prompt: {e}")
         # Fallback to minimal prompt
@@ -288,8 +293,13 @@ class AgentConfig:
                 f"Gemini (gemini-2.5-flash/gemini-2.5-pro)"
             )
 
-        # Path validation
-        if not self.vector_store_path.exists():
+        # Path validation (skip for PostgreSQL backend)
+        # Storage backend is determined at runtime from config.json, not here
+        # The multi-agent runner will handle vector store initialization
+        # This validation only applies if explicitly using FAISS backend
+        import os
+        storage_backend = os.getenv("STORAGE_BACKEND", "faiss")
+        if storage_backend == "faiss" and not self.vector_store_path.exists():
             raise FileNotFoundError(
                 f"Vector store not found: {self.vector_store_path}. "
                 f"Run indexing pipeline first."
@@ -376,5 +386,62 @@ class AgentConfig:
                 if default_kg_path.exists():
                     config.knowledge_graph_path = default_kg_path
                     logger.info(f"Using vector store path for knowledge graphs: {default_kg_path}")
+
+        return config
+
+    @classmethod
+    def from_config(cls, root_config, **overrides) -> "AgentConfig":
+        """
+        Create config from validated RootConfig (config.json).
+
+        Args:
+            root_config: Validated RootConfig from src.config
+            **overrides: Override specific config values (e.g., from CLI args)
+
+        Returns:
+            AgentConfig instance
+        """
+        from src.config import ModelConfig
+
+        # Get model config for API keys
+        model_config = ModelConfig.from_config(root_config)
+
+        # Detect provider for query expansion model
+        query_expansion_model = root_config.agent.query_expansion_model
+        query_expansion_provider = "openai"
+        if "claude" in query_expansion_model.lower() or "haiku" in query_expansion_model.lower() or "sonnet" in query_expansion_model.lower():
+            query_expansion_provider = "anthropic"
+        elif "gemini" in query_expansion_model.lower():
+            query_expansion_provider = "google"
+
+        tool_config = ToolConfig(
+            query_expansion_provider=query_expansion_provider,
+            query_expansion_model=query_expansion_model,
+        )
+
+        # Create config from JSON
+        config = cls(
+            anthropic_api_key=model_config.anthropic_api_key or "",
+            openai_api_key=model_config.openai_api_key or "",
+            google_api_key=model_config.google_api_key or "",
+            model=root_config.agent.model,
+            max_tokens=root_config.agent.max_tokens or 4096,
+            temperature=root_config.agent.temperature,
+            vector_store_path=Path(root_config.agent.vector_store_path),
+            knowledge_graph_path=Path(root_config.agent.knowledge_graph_path) if root_config.agent.knowledge_graph_path else None,
+            enable_knowledge_graph=root_config.knowledge_graph.enable,
+            enable_tool_validation=root_config.agent.enable_tool_validation,
+            enable_prompt_caching=root_config.agent.enable_prompt_caching,
+            enable_context_management=root_config.agent.enable_context_management,
+            context_management_trigger=root_config.agent.context_management_trigger,
+            context_management_keep=root_config.agent.context_management_keep,
+            debug_mode=root_config.agent.debug_mode,
+            tool_config=tool_config,
+        )
+
+        # Apply overrides (e.g., from CLI args)
+        for key, value in overrides.items():
+            if hasattr(config, key):
+                setattr(config, key, value)
 
         return config

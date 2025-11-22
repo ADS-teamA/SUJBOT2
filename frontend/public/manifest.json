@@ -1,0 +1,17 @@
+{
+  "name": "SUJBOT2 - Legal & Technical Document Intelligence",
+  "short_name": "SUJBOT2",
+  "description": "Multi-agent RAG system for legal and technical document analysis",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#031623",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -87,6 +87,10 @@ class EntityExtractionConfig:
     include_examples: bool = True  # Include few-shot examples in prompt
     max_entities_per_chunk: int = 50  # Max entities per chunk
 
+    # Lightweight pre-processing
+    enable_regex_prefill: bool = True  # Run regex/pattern detectors before LLM
+    regex_prefill_confidence: float = 0.85  # Confidence assigned to regex hits
+
 
 @dataclass
 class RelationshipExtractionConfig:

@@ -1,257 +1,465 @@
-# CLAUDE.md - Navigation Guide
+# CLAUDE.md - Development Guide
 
-**SUJBOT2**: Production RAG system for legal/technical docs. 7-phase pipeline + 17-tool AI agent.
+**SUJBOT2**: Production RAG system for legal/technical documents with multi-agent orchestration.
 
-**Status:** PHASE 1-7 COMPLETE ✅ (2025-11-03)
+---
+
+## 📚 Documentation Structure
+
+**For detailed information, read these files:**
+- [`README.md`](README.md) - Installation, quick start, user guide
+- [`PIPELINE.md`](PIPELINE.md) - Complete 7-phase pipeline specification with research papers
+- [`docs/DOCKER_SETUP.md`](docs/DOCKER_SETUP.md) - Docker configuration, hot reload, deployment
+- [`docs/HITL_IMPLEMENTATION_SUMMARY.md`](docs/HITL_IMPLEMENTATION_SUMMARY.md) - Human-in-the-Loop system
+- [`docs/SOTA_COMPLIANCE_IMPLEMENTATION.md`](docs/SOTA_COMPLIANCE_IMPLEMENTATION.md) - Compliance verification workflow
+- [`docs/BENCHMARK.md`](docs/BENCHMARK.md) - Evaluation system
+- [`docs/WEB_INTERFACE.md`](docs/WEB_INTERFACE.md) - Web UI features
 
 ---
 
 ## 🚀 Quick Start
 
-**Read these files for detailed information:**
-- [`README.md`](README.md) - User guide, installation, quick start
-- [`PIPELINE.md`](PIPELINE.md) - Complete pipeline specification with research papers
-- [`INSTALL.md`](INSTALL.md) - Platform-specific setup (Windows/macOS/Linux)
-- [`docs/agent/README.md`](docs/agent/README.md) - Agent CLI documentation
-- Visual docs: [`indexing_pipeline.html`](indexing_pipeline.html), [`user_search_pipeline.html`](user_search_pipeline.html)
-
-**Common commands:**
 ```bash
-# Index documents
+# 1. Setup
+# CRITICAL: API keys go in .env (NOT in config.json!)
+cp .env.example .env
+# Edit .env with your API keys (file is gitignored)
+
+# 2. Index documents
 uv run python run_pipeline.py data/document.pdf
 
-# Launch agent
-uv run python -m src.agent.cli
+# 3. Start full stack (Docker)
+docker-compose up -d
 
-# Run tests
-uv run pytest tests/ -v
+# 4. Access
+# Frontend: http://localhost:5173
+# Backend: http://localhost:8000/docs
 
-# Debug issues
-/debug-optimize
+# See docs/DOCKER_SETUP.md for detailed instructions
+```
+
+---
+
+## 🏗️ Architecture Overview
+
+### Why This Architecture?
+
+**Full-stack RAG system:**
+- **Dual Storage Backends** - FAISS (fast, in-memory) OR PostgreSQL (production, pgvector + Apache AGE)
+- **FastAPI Backend** - Multi-agent orchestration + 7-phase pipeline
+- **React Frontend** - Real-time agent progress visualization
+
+**Key Design Decisions:**
+1. **Dual Backend Support** - FAISS for development/testing, PostgreSQL for production (user-selectable)
+2. **Multi-layer embeddings** - 3 separate indexes (document/section/chunk) for 2.3x better retrieval
+3. **Autonomous agents** - LLM-driven tool calling (NOT hardcoded workflows)
+4. **Hierarchical summaries** - Document summaries built from section summaries (prevents context overflow)
+5. **Hybrid search** - BM25 + dense embeddings + RRF fusion (+23% precision)
+
+**Architecture Layers:**
+```
+User Query
+    ↓
+Orchestrator (routing + synthesis)
+    ↓
+Specialized Agents (extractor, classifier, compliance, etc.)
+    ↓
+RAG Tools (11 specialized tools for retrieval and analysis)
+    ↓
+Storage (FAISS or PostgreSQL: vectors, graph, checkpoints)
+           ↓                    ↓
+    Fast in-memory      Production database
+    (development)       (concurrent access, ACID)
 ```
 
 ---
 
 ## ⚠️ CRITICAL CONSTRAINTS (NEVER CHANGE)
 
-These are research-backed decisions. **DO NOT modify** without explicit approval:
+These are research-backed decisions. **DO NOT modify** without explicit approval.
 
-### 1. Hierarchical Document Summary (MANDATORY)
+### 1. SINGLE SOURCE OF TRUTH (SSOT)
+
+**Principles:**
+- **One canonical implementation** - Each feature has EXACTLY ONE authoritative version
+- **No duplicate code** - Delete obsolete implementations immediately
+- **No legacy code** - Remove unused/deprecated code
+- **Clean root directory** - Tests in `tests/`, docs in `docs/`, scripts in `scripts/`
+- **API keys in `.env` ONLY** - NEVER in config.json, NEVER in code, NEVER in git
+
+**Why:** Prevents confusion, reduces maintenance burden, keeps codebase navigable, protects secrets.
+
+### 2. AUTONOMOUS AGENTIC ARCHITECTURE
+
+**CRITICAL: Agents MUST be LLM-driven, NOT hardcoded workflows!**
+
+```python
+# ❌ WRONG (Hardcoded)
+def execute():
+    step1 = call_tool_a()  # Predefined sequence
+    step2 = call_tool_b()
+    return synthesize(step1, step2)
+
+# ✅ CORRECT (Autonomous)
+def execute():
+    return llm.run(
+        system_prompt="You are an expert...",
+        tools=[search, analyze, verify],  # LLM decides which to call
+        messages=[user_query]
+    )
 ```
-Flow: Sections → Section Summaries (PHASE 3B) → Document Summary
+
+**Principles:**
+- LLM decides tool calling sequence autonomously
+- No "step 1, step 2, step 3" logic in code
+- System prompts guide behavior (NOT code)
+- Exception: Orchestrator has routing logic
+
+**Benefits:**
+- 70% code reduction (~200 lines → ~60 lines per agent)
+- LLM adapts to query complexity
+- Emergent reasoning (discovers optimal strategies)
+- Behavior changes via prompts (no code changes)
+
+**Implementation:** All agents inherit from `BaseAgent.run_autonomous_tool_loop()` which handles:
+1. LLM receives: system prompt + state + tool schemas
+2. LLM decides: call tools OR provide final answer
+3. Tool results fed back to LLM
+4. Loop continues until final answer or max iterations
+
+### 3. HIERARCHICAL DOCUMENT SUMMARIES
+
+**NEVER pass full document text to LLM for document summary!**
+
 ```
-- **NEVER pass full document text to LLM** for document summary
-- **ALWAYS generate from section summaries** (hierarchical aggregation)
-- Exception: Fallback `"(Document summary unavailable)"` if section summaries fail
-- Files: `src/docling_extractor_v2.py`, `src/summary_generator.py`
+Flow: Sections → Section Summaries → Document Summary
+```
 
-### 2. RCTS Chunking (LegalBench-RAG)
-- Chunk size: **500 chars** (optimal for legal docs)
-- Overlap: **0** (RCTS handles via hierarchy)
-- Changing this invalidates ALL vector stores
+- **Why:** Prevents context overflow, handles 100+ page documents
+- **Implementation:** PHASE 2 generates section summaries, then aggregates to document summary
+- **Document summary content:** Describes what the document is about AND provides brief description of sections
+- **Length:** 100-1000 chars (adaptive based on document complexity)
+- **Fallback:** `"(Document summary unavailable)"` if section summaries fail
 
-### 3. Generic Summaries (Reuter et al., counterintuitive!)
-- Length: **150 chars**
-- Style: **GENERIC** (NOT expert terminology)
+### 4. TOKEN-AWARE CHUNKING
 
-### 4. Summary-Augmented Chunking (SAC)
+- **Max tokens:** 512 (optimal for legal docs)
+- **Tokenizer:** tiktoken (OpenAI text-embedding-3-large)
+- **Research basis:** 512 tokens ≈ 500 chars (LegalBench-RAG)
+- **Why tokens not chars:** Guarantees embedding model compatibility, handles Czech diacritics
+
+**Changing this invalidates ALL vector stores!**
+
+### 5. GENERIC SUMMARIES (Counterintuitive!)
+
+- **Section summaries:** 300 chars
+- **Document summaries:** 100-1000 chars (describes document and sections)
+- **Style:** GENERIC (NOT expert terminology)
+- **Research:** Reuter et al. (2024) - generic summaries improve retrieval
+- **Prompts:** Stored in `prompts/` as `.txt` files (loaded as I/O)
+
+### 6. SUMMARY-AUGMENTED CHUNKING (SAC)
+
 - Prepend document summary during embedding
 - Strip summaries during retrieval
-- **-58% context drift** (proven by research)
+- **Result:** -58% context drift (Anthropic, 2024)
 
-### 5. Multi-Layer Embeddings (Lima 2024)
-- **3 separate FAISS indexes** (NOT merged)
-- 2.3x essential chunks vs single-layer
+### 7. MULTI-LAYER EMBEDDINGS
 
-### 6. No Cohere Reranking
+- **3 separate indexes** (document/section/chunk) - NOT merged
+- **Result:** 2.3x essential chunks vs single-layer (Lima, 2024)
+
+### 8. HYBRID SEARCH
+
+- BM25 + Dense embeddings + RRF fusion
+- **Result:** +23% precision vs dense-only
+- **RRF k=60** (optimal)
+
+### 9. NO COHERE RERANKING
+
 - Cohere performs WORSE on legal docs
-- Use: `ms-marco`, `bge-reranker` instead
+- **Use:** `ms-marco` or `bge-reranker` instead
 
-### 7. Hybrid Search (Industry 2025)
-- BM25 + Dense + RRF fusion
-- **+23% precision** vs dense-only
-- RRF k=60 (optimal)
+### 10. AUTONOMOUS AGENT RESPONSES
 
----
-
-## 📂 Key File Locations
-
-**Pipeline Core:**
-- `run_pipeline.py` - CLI entry point
-- `src/indexing_pipeline.py` - Main orchestrator (PHASE 1-6)
-- `src/config.py` - Shared configs
-
-**7 Phases:**
-1. `src/docling_extractor_v2.py` - Hierarchy extraction
-2. `src/summary_generator.py` - Document summaries
-3. `src/multi_layer_chunker.py` - Chunking + SAC + section summaries
-4. `src/embedding_generator.py`, `src/faiss_vector_store.py` - Embeddings + FAISS
-5. `src/hybrid_search.py`, `src/graph/`, `src/reranker.py` - Advanced retrieval
-6. `src/context_assembly.py` - Context prep
-7. `src/agent/` - RAG agent (17 tools)
-
-**Agent Tools:**
-- `src/agent/tools/tier1_basic.py` - 6 fast tools (100-300ms)
-- `src/agent/tools/tier2_advanced.py` - 8 quality tools (500-1000ms)
-- `src/agent/tools/tier3_analysis.py` - 3 analysis tools (1-3s)
-
-**Tests:**
-- `tests/test_phase*.py` - Pipeline tests
-- `tests/agent/` - Agent tests (49 tests)
-- `tests/graph/` - Knowledge graph tests
-
----
-
-## 🛠️ Common Development Tasks
-
-### Adding New Tool
-1. Create class in `src/agent/tools/tier{1,2,3}_{basic,advanced,analysis}.py`
-2. Define `ToolInput` schema (Pydantic)
-3. Implement `execute_impl()` method
-4. Register with `@register_tool` decorator
-5. Add tests in `tests/agent/tools/`
-
-Example skeleton:
-```python
-class MyToolInput(ToolInput):
-    query: str = Field(..., description="User query")
-
-@register_tool
-class MyTool(BaseTool):
-    name = "my_tool"
-    description = "What this tool does"
-    tier = 1
-    input_schema = MyToolInput
-
-    def execute_impl(self, query: str) -> ToolResult:
-        results = self.vector_store.search(query, k=10)
-        return ToolResult(success=True, data=results)
-```
-
-### Debugging Retrieval Issues
-```bash
-# Enable debug mode
-uv run python -m src.agent.cli --debug
-
-# Use /debug-optimize slash command
-/debug-optimize
-[Paste error description]
-```
-
-### GPT-5 and O-Series Model Compatibility
-
-**RECOMMENDED MODELS (production-ready):**
-- **Production:** `claude-sonnet-4-5` (highest quality, best for complex queries)
-- **Development:** `gpt-4o-mini` (best cost/performance, $0.15/$0.60 per 1M tokens)
-- **Budget:** `claude-haiku-4-5` (fastest, cheapest Claude model)
-
-**GPT-5 Support (✅ IMPLEMENTED, EXPERIMENTAL):**
-
-GPT-5 and O-series models (`gpt-5`, `gpt-5-mini`, `o1`, `o3`, `o4-mini`) are **now supported** but require special parameter handling:
+**NEVER use hardcoded template responses!**
 
 ```python
-# GPT-5/o-series require different parameters
-if model.startswith(("gpt-5", "o1", "o3", "o4")):
-    params = {
-        "model": model,
-        "max_completion_tokens": 300,  # NOT max_tokens
-        "temperature": 1.0,  # ONLY 1.0 supported (default)
-        "reasoning_effort": "minimal"  # Controls reasoning depth
-    }
-else:
-    # GPT-4 and earlier
-    params = {
-        "model": model,
-        "max_tokens": 300,
-        "temperature": 0.7
-    }
+# ❌ WRONG
+if is_greeting(query):
+    return "Hello! How can I help?"
+
+# ✅ CORRECT
+orchestrator.run(query)  # LLM generates contextual response
 ```
 
-**`reasoning_effort` parameter:**
-- `"minimal"` - Fastest, used for simple tasks (summarization, context generation)
-- `"low"` - Light reasoning
-- `"medium"` - Default reasoning (if not specified)
-- `"high"` - Deep reasoning for complex tasks
-
-**Why GPT-5/o-series may not be recommended:**
-- ⚠️ API parameter differences can cause confusion (`max_completion_tokens` vs `max_tokens`)
-- ⚠️ Temperature is fixed at 1.0 (no customization)
-- ⚠️ May be more expensive than GPT-4o-mini for simple tasks
-- ⚠️ `reasoning_effort` behavior can be unpredictable for certain prompts
-
-**Files with GPT-5 support:**
-- ✅ `src/summary_generator.py` - Document/section summaries
-- ✅ `src/contextual_retrieval.py` - Context generation
-- ⚠️ `src/agent/query_expander.py` - Not yet updated (uses gpt-4o-mini)
-
-**Testing recommendation:** If you want to use GPT-5 models, test thoroughly with your specific use case before deploying to production. Fall back to `gpt-4o-mini` if you encounter issues.
+**Why:** Enables contextual awareness, eliminates brittle templates, allows adaptation.
 
 ---
 
 ## 🎯 Best Practices
 
 ### Agent Development
-- **Tool tier selection:** Always start with TIER 1 tools (fast), escalate to TIER 2/3 only when needed
-- **Query expansion:** Use `num_expands=0` (default) for speed, `num_expands=1-2` for recall-critical queries
-- **Graph boost:** Enable only for entity-focused queries (organizations, standards, regulations)
-- **Prompt caching:** Enable via `ENABLE_PROMPT_CACHING=true` for 90% cost savings on repeated queries
-- **Context pruning:** Keep conversation history under 50K tokens to prevent quadratic growth
+
+**Tool selection:**
+- Use `search` for most queries (hybrid retrieval with optional expansion)
+- Use specialized tools (graph_search, filtered_search) for specific needs
+- Check tool documentation with `get_tool_help` when unsure
+
+**Query expansion:**
+- `num_expands=0` (default) - Speed
+- `num_expands=1-2` - Recall-critical queries
+
+**Graph boost:**
+- Enable only for entity-focused queries (organizations, standards, regulations)
+
+**Prompt caching:**
+- Enable via `ENABLE_PROMPT_CACHING=true` for 90% cost savings on repeated queries
+
+**Context pruning:**
+- Keep conversation history under 50K tokens to prevent quadratic growth
 
 ### Pipeline Indexing
-- **Speed modes:** Use `SPEED_MODE=fast` for development, `SPEED_MODE=eco` for overnight bulk processing
-- **Batch processing:** Index directories instead of individual files for better throughput
-- **Knowledge graph:** Set `KG_BACKEND=neo4j` for production, `simple` for testing
-- **Entity deduplication:** Use Layer 1 + Layer 3 (production balanced mode) for legal docs
-- **Validation:** Always run `pytest tests/` before committing pipeline changes
+
+**Speed modes:**
+- `SPEED_MODE=fast` - Development (fast iteration)
+- `SPEED_MODE=eco` - Production (50% cheaper, overnight jobs)
+
+**Knowledge graph:**
+- `KG_BACKEND=neo4j` - Production
+- `KG_BACKEND=simple` - Dev/testing
+
+**Entity deduplication:**
+- Use Layer 1 + Layer 3 (production balanced mode) for legal docs
+
+**Validation:**
+- Always run `pytest tests/` before committing pipeline changes
 
 ### Code Quality
-- **Type hints:** Required for all public APIs (use `mypy src/` to verify)
-- **Error handling:** Use graceful degradation (e.g., reranker unavailable → fall back to RRF)
-- **Logging:** Use appropriate levels (debug/info/warning/error) - avoid print statements
-- **Testing:** Write tests BEFORE implementing new features (TDD approach)
-- **Documentation:** Update PIPELINE.md if research constraints change
-- **Model selection:** ALWAYS use `gpt-4o-mini` (NOT gpt-5-nano) for stability and cost savings
+
+**Type hints:**
+- Required for all public APIs
+- Verify with `mypy src/`
+
+**Error handling:**
+- Use graceful degradation (e.g., reranker unavailable → fall back to RRF)
+
+**Logging:**
+- Use appropriate levels (debug/info/warning/error)
+- Avoid print statements
+
+**Testing:**
+- Write tests BEFORE implementing new features (TDD approach)
+
+**Documentation:**
+- Update PIPELINE.md if research constraints change
+
+**Git workflow:**
+- **ALWAYS use `gh` CLI** for pull requests (NOT curl or web interface)
+- Command: `gh pr create --title "..." --body "..."`
+- Benefits: Faster, scriptable, consistent formatting
+
+**Model selection:**
+- **Production:** `claude-sonnet-4-5` (highest quality)
+- **Development:** `gpt-4o-mini` (best cost/performance: $0.15/$0.60 per 1M tokens)
+- **Budget:** `claude-haiku-4-5` (fastest, cheapest)
 
 ### Performance
-- **Embedding cache:** Monitor hit rate with `embedder.get_cache_stats()` (target >80%)
-- **FAISS indexes:** Keep layer separation (DO NOT merge L1/L2/L3)
-- **Reranker loading:** Lazy load to reduce startup time (~2s savings)
-- **Token limits:** Use `max_total_tokens` parameter to prevent context overflow
 
-### Debugging
-- **Debug mode:** Use `--debug` flag to see tool execution details
-- **Cost tracking:** Call `reset_global_tracker()` at operation start, `get_summary()` at end
-- **Vector store stats:** Use `store.get_stats()` to diagnose retrieval issues
-- **Multi-agent debug:** Use `/debug-optimize` for complex issues (auto-applies fixes)
+**Embedding cache:**
+- Monitor hit rate with `embedder.get_cache_stats()` (target >80%)
+
+**FAISS indexes:**
+- Keep layer separation (DO NOT merge L1/L2/L3)
+
+**Reranker loading:**
+- Lazy load to reduce startup time (~2s savings)
+
+**Token limits:**
+- Use `max_total_tokens` parameter to prevent context overflow
+
+### RAG-Specific Best Practices
+
+**Document preprocessing:**
+- Use Docling (yolox layout model) for accurate structure extraction
+- Preserve hierarchy (document → sections → chunks)
+
+**Chunking strategy:**
+- Respect document structure (don't split mid-sentence)
+- 512 tokens with 0 overlap (hierarchical overlap handles naturally)
+
+**Embedding strategy:**
+- Multi-layer: separate indexes for documents, sections, chunks
+- SAC: prepend document summary during embedding
+
+**Retrieval strategy:**
+- Hybrid search (BM25 + dense + RRF) for best precision
+- Graph boost for entity queries
+- Reranking with ms-marco or bge-reranker
+
+**Context assembly:**
+- Include hierarchical metadata (document title, section title)
+- Limit total tokens to prevent overflow
+- Deduplicate chunks from same section
 
 ---
 
 ## 🔧 Configuration
 
-**SSOT (Single Source of Truth): `.env.example`**
+**CRITICAL: Two-File Configuration System**
 
-All configuration lives in [`.env.example`](.env.example) - DO NOT duplicate config in CLAUDE.md!
+1. **`.env`** - Secrets (gitignored, NEVER commit!)
+   - API keys (Anthropic, OpenAI, Voyage, Google)
+   - Database passwords
+   - JWT secret keys
+   - Copy from `.env.example` and fill in your values
 
-**Setup:**
+2. **`config.json`** - Settings (version-controlled, public)
+   - Model selection
+   - Pipeline parameters
+   - Feature flags
+   - NO secrets allowed!
+
 ```bash
+# Setup API keys (REQUIRED)
 cp .env.example .env
-# Edit .env with your API keys and settings
+# Edit .env with your keys
+
+# Configuration is already in config.json (no copy needed)
 ```
 
-**Key decisions** (see `.env.example` for all options):
-- **Required:** `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
-- **Embedding:** `EMBEDDING_MODEL=bge-m3` (macOS M1/M2/M3, free) or `text-embedding-3-large` (Windows, cloud)
-- **Knowledge Graph:** `KG_BACKEND=neo4j` (production) or `simple` (dev/testing)
-- **Speed:** `SPEED_MODE=fast` (default) or `eco` (50% cheaper, overnight jobs)
+**Key decisions:**
+- **API keys:** In `.env` file (ANTHROPIC_API_KEY or OPENAI_API_KEY)
+- **Storage backend:** `faiss` (development, fast) or `postgresql` (production, ACID)
+- **Embedding model:** `bge-m3` (free, local) or `text-embedding-3-large` (cloud)
+- **Knowledge graph:** `neo4j` (production) or `simple` (dev)
+- **Speed mode:** `fast` (dev) or `eco` (production)
 
-**For detailed config docs, read `.env.example` inline comments.**
+### Storage Backend Selection
+
+**Two backends available:**
+
+1. **FAISS** (Default for development)
+   - Fast in-memory vector search
+   - Zero setup required
+   - Perfect for testing and iteration
+   - Files saved to `vector_db/` directory
+
+2. **PostgreSQL** (Recommended for production)
+   - Persistent database storage (pgvector extension)
+   - Concurrent access from multiple agents
+   - ACID transactions
+   - Standard database backups
+   - Requires PostgreSQL with pgvector
+
+**How to choose:**
+
+```json
+// config.json
+{
+  "storage": {
+    "backend": "faiss"       // Development: fast, no setup
+    // OR
+    "backend": "postgresql"  // Production: persistent, scalable
+  }
+}
+```
+
+**CLI override:**
+```bash
+# Index to PostgreSQL (override config.json)
+python run_pipeline.py document.pdf --backend postgresql
+
+# Index to FAISS (override config.json)
+python run_pipeline.py document.pdf --backend faiss
+```
+
+**PostgreSQL setup:**
+```bash
+# 1. Set DATABASE_URL in .env
+export DATABASE_URL="postgresql://user:pass@localhost:5432/dbname"
+
+# 2. Configure in config.json
+{
+  "storage": {
+    "backend": "postgresql"
+  }
+}
+
+# 3. Index documents
+python run_pipeline.py document.pdf
+```
+
+**See `config.json` for all options.**
+
+### Migrating from Previous Versions
+
+If upgrading from a version that used `config.json` for API keys:
+
+1. **Create .env file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Move API keys** from `config.json` to `.env`:
+   ```bash
+   # Old location (config.json) - REMOVE THIS SECTION
+   {
+     "api_keys": {
+       "anthropic_api_key": "sk-ant-...",  # ❌ REMOVE
+       "openai_api_key": "sk-..."          # ❌ REMOVE
+     }
+   }
+
+   # New location (.env) - ADD YOUR KEYS HERE
+   ANTHROPIC_API_KEY=sk-ant-...  # ✅ CORRECT
+   OPENAI_API_KEY=sk-...          # ✅ CORRECT
+   ```
+
+3. **Remove `api_keys` section** from `config.json` (now ignored):
+   - The old `api_keys: {}` field is no longer used
+   - It's safe to remove it entirely from your config.json
+
+4. **Verify:**
+   ```bash
+   # .env should NOT be tracked by git
+   git status  # Should NOT show .env
+
+   # config.json should have NO secrets
+   grep -i "api_key\|password\|secret" config.json  # Should return nothing
+   ```
+
+5. **Test:**
+   ```bash
+   # Should fail with clear error if API keys missing
+   python run_pipeline.py --help
+
+   # Should work after setting keys in .env
+   python run_pipeline.py document.pdf
+   ```
+
+**Why this change?**
+- **Security:** API keys were in version-controlled files (bad practice)
+- **Best practice:** Secrets in `.env` (gitignored), settings in `config.json`
+- **Standards:** Follows 12-factor app methodology
+
+---
+
+## 📖 Research Papers (DO NOT CONTRADICT)
+
+1. **LegalBench-RAG** (Pipitone & Alami, 2024) - RCTS, reranking, 500-char chunks
+2. **Summary-Augmented Chunking** (Reuter et al., 2024) - SAC, generic summaries
+3. **Multi-Layer Embeddings** (Lima, 2024) - 3-layer indexing
+4. **Contextual Retrieval** (Anthropic, 2024) - Context prepending (-58% drift)
+5. **HybridRAG** (2024) - Graph boosting (+8% factual correctness)
+6. **HyDE** (Gao et al., 2022) - Hypothetical Document Embeddings (+15-30% recall for zero-shot queries)
 
 ---
 
 ## 📚 Code Style
 
-**Formatting:**
 ```bash
+# Formatting
 uv run black src/ tests/ --line-length 100
 uv run isort src/ tests/ --profile black
 ```
@@ -265,32 +473,37 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-## 📖 Research Papers (DO NOT CONTRADICT)
+## 🔍 Where to Find Things
 
-1. **LegalBench-RAG** (Pipitone & Alami, 2024) - RCTS, reranking
-2. **Summary-Augmented Chunking** (Reuter et al., 2024) - SAC, generic summaries
-3. **Multi-Layer Embeddings** (Lima, 2024) - 3-layer indexing
-4. **Contextual Retrieval** (Anthropic, 2024) - Context prepending
-5. **HybridRAG** (2024) - Graph boosting (+8% factual correctness)
+**See README.md for:**
+- File locations (backend, frontend, agents, tools)
+- Installation instructions
+- Testing commands
+
+**See docs/DOCKER_SETUP.md for:**
+- Docker architecture
+- Hot reload workflow
+- Debugging commands
+- Common operations
+
+**See PIPELINE.md for:**
+- 7-phase pipeline details
+- Research paper references
+- Implementation specifics
+
+**See docs/SOTA_COMPLIANCE_IMPLEMENTATION.md for:**
+- Requirement-first compliance approach
+- Plan-and-Solve pattern
+- Gap classification
 
 ---
 
-## 🐛 Debug System
+**Last Updated:** 2025-11-22
+**Version:** PHASE 1-7 COMPLETE + Dual Backend Support + Multi-Agent + HITL + Docker Web UI
 
-**`/debug-optimize` slash command** - Multi-agent debugging:
-- 5 specialized agents (cost-optimizer, rag-debugger, validation-expert, pipeline-expert, agent-expert)
-- Auto-applies fixes (max 20 per run)
-- Respects research constraints
-- Git commits if tests pass
-
-**When to use:**
-- Agent errors, tool failures
-- High API costs, cache misses
-- Pipeline failures, validation errors
-
----
-
-**Last Updated:** 2025-11-03
-**Version:** PHASE 1-7 COMPLETE + Hierarchical Summaries + Query Expansion + RAG Confidence Scoring
-
-**Note:** `vector_db/` is tracked in git (contains merged vector stores) - DO NOT add to `.gitignore`
+**Notes:**
+- Configuration: SSOT in `config.json` (strict validation, no defaults)
+- Storage: **Dual backend support** - FAISS (development) OR PostgreSQL (production, user-selectable)
+- Agents: 7 autonomous agents (orchestrator + 6 specialized)
+- Tools: 11 RAG tools (search, retrieval, analysis, and metadata tools)
+- Hybrid Search: Works seamlessly with both FAISS and PostgreSQL backends

@@ -12,8 +12,8 @@
     "max_tokens": 100
   },
   "chunking": {
-    "chunk_size": 500,
-    "chunk_overlap": 0,
+    "chunk_size": null,
+    "chunk_overlap": null,
     "enable_contextual": true,
     "enable_multi_layer": true
   },
@@ -26,6 +26,6 @@
   "enable_knowledge_graph": false,
   "enable_hybrid_search": true,
   "enable_reranking": false,
-  "speed_mode": "eco",
+  "speed_mode": "fast",
   "vector_store_path": "benchmark_db"
 }

@@ -1,0 +1,9 @@
+Given this search query: "{query}"
+
+Generate {num_expansions} related questions that capture the same intent using different wording:
+- Use synonyms and related terminology
+- Rephrase with different sentence structures
+- Keep the same semantic meaning
+- Vary specificity levels (general/specific)
+
+Return ONLY the {num_expansions} variations, one per line, without numbering or explanation.

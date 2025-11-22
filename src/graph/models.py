@@ -1,18 +1,20 @@
 """
 Data models for Knowledge Graph entities and relationships.
 
-Schema v2.0 (Extended for Compliance Checking):
-- 30 Entity Types: Core (8) + Regulatory (6) + Authorization (2) + Nuclear (9) + Events (4) + Liability (1)
-- 40 Relationship Types: Compliance (5) + Regulatory (5) + Structure (4) + Citations (4) +
-  Authorization (5) + Nuclear (8) + Temporal (4) + Content (2) + Provenance (3)
+Schema v2.1 (Extended for Compliance Checking + Definition Alignment):
+- 32 Entity Types: Core (8) + Regulatory (6) + Authorization (2) + Nuclear (9) + Events (4) +
+  Liability (1) + Legal Terminology (2)
+- 41 Relationship Types: Compliance (5) + Regulatory (5) + Structure (4) + Citations (4) +
+  Authorization (5) + Nuclear (8) + Temporal (4) + Content (2) + Legal Terminology (1) + Provenance (3)
 
 Key Hierarchies:
 - Regulatory: TREATY → REGULATION → DECREE → LEGAL_PROVISION → REQUIREMENT
 - Compliance: REQUIREMENT ← COMPLIES_WITH/CONTRADICTS → CLAUSE
 - Nuclear: FACILITY → REACTOR → SYSTEM → SAFETY_FUNCTION
 - Authorization: AUTHORITY → GRANTED_BY → PERMIT → LICENSE_CONDITION
+- Legal Terminology: LEGAL_TERM ← DEFINITION_OF ← DEFINITION (ontology mapping)
 
-Complete graph structure with entities, relationships, and compliance verification support.
+Complete graph structure with entities, relationships, compliance verification, and definition alignment support.
 """
 
 from dataclasses import dataclass, field
@@ -20,6 +22,10 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 from datetime import datetime
 import json
+import logging
+import uuid
+
+logger = logging.getLogger(__name__)
 
 
 class EntityType(Enum):
@@ -67,6 +73,10 @@ class EntityType(Enum):
 
     # ==================== LIABILITY & INSURANCE ====================
     LIABILITY_REGIME = "liability_regime"  # Operator liability framework
+
+    # ==================== LEGAL TERMINOLOGY (Definition Alignment) ====================
+    LEGAL_TERM = "legal_term"  # Legal terminology requiring alignment (e.g., "Consumer", "Data Controller")
+    DEFINITION = "definition"  # Legal definition text from authoritative source
 
 
 class RelationshipType(Enum):
@@ -127,6 +137,9 @@ class RelationshipType(Enum):
     # ==================== CONTENT & TOPICS ====================
     COVERS_TOPIC = "covers_topic"  # Document → Topic
     APPLIES_TO = "applies_to"  # Regulation → Location/Jurisdiction
+
+    # ==================== LEGAL TERMINOLOGY (Definition Alignment) ====================
+    DEFINITION_OF = "definition_of"  # Definition → Legal term (links term to its authoritative definition)
 
     # ==================== PROVENANCE (entity → chunk) ====================
     MENTIONED_IN = "mentioned_in"  # Entity → Chunk (all occurrences)
@@ -248,6 +261,112 @@ class Entity:
         }
 
     @classmethod
+    def create_legal_term(
+        cls,
+        term_value: str,
+        confidence: float,
+        source_chunk_id: str,
+        document_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> "Entity":
+        """
+        Create LEGAL_TERM entity with validation.
+
+        Invariants enforced:
+        - term_value must be non-empty
+        - confidence in [0.0, 1.0]
+        - Must have source provenance
+
+        Args:
+            term_value: Legal term text (e.g., "Consumer", "Data Controller")
+            confidence: Extraction confidence (0.0-1.0)
+            source_chunk_id: Chunk ID where term was found
+            document_id: Document ID containing the term
+            metadata: Optional metadata dict (related_terms, jurisdiction, category)
+            **kwargs: Additional Entity fields
+
+        Returns:
+            Entity with type LEGAL_TERM
+
+        Raises:
+            ValueError: If invariants violated
+        """
+        if not term_value or not term_value.strip():
+            raise ValueError("Legal term value cannot be empty")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {confidence}")
+
+        return cls(
+            id=str(uuid.uuid4()),
+            type=EntityType.LEGAL_TERM,
+            value=term_value,
+            normalized_value=term_value.lower().strip(),
+            confidence=confidence,
+            source_chunk_ids=[source_chunk_id],
+            first_mention_chunk_id=source_chunk_id,
+            document_id=document_id,
+            metadata=metadata or {},
+            **kwargs
+        )
+
+    @classmethod
+    def create_definition(
+        cls,
+        definition_text: str,
+        confidence: float,
+        source_chunk_id: str,
+        source_document_id: str,
+        source_provision: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> "Entity":
+        """
+        Create DEFINITION entity with validation.
+
+        Invariants enforced:
+        - definition_text must be non-empty and substantive (min 10 chars)
+        - Must reference authoritative source (law/regulation)
+        - Source provision recommended for traceability
+
+        Args:
+            definition_text: Definition text from law/regulation
+            confidence: Extraction confidence (0.0-1.0)
+            source_chunk_id: Chunk ID where definition was found
+            source_document_id: Document ID (should be law/regulation)
+            source_provision: § reference or article number (recommended)
+            metadata: Optional metadata dict (parent_regulation, definition_type)
+            **kwargs: Additional Entity fields
+
+        Returns:
+            Entity with type DEFINITION
+
+        Raises:
+            ValueError: If invariants violated
+        """
+        if not definition_text or len(definition_text.strip()) < 10:
+            raise ValueError("Definition text must be non-empty and substantive (min 10 chars)")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {confidence}")
+
+        metadata_copy = metadata.copy() if metadata else {}
+        if source_provision:
+            metadata_copy["source_provision"] = source_provision
+
+        return cls(
+            id=str(uuid.uuid4()),
+            type=EntityType.DEFINITION,
+            value=definition_text,
+            normalized_value=definition_text[:100].lower().strip(),  # First 100 chars for matching
+            confidence=confidence,
+            source_chunk_ids=[source_chunk_id],
+            first_mention_chunk_id=source_chunk_id,
+            document_id=source_document_id,
+            metadata=metadata_copy,
+            **kwargs
+        )
+
+    @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Entity":
         """Create Entity from dictionary."""
         data_copy = data.copy()
@@ -360,6 +479,63 @@ class Relationship:
         }
 
     @classmethod
+    def create_definition_of(
+        cls,
+        definition_entity: "Entity",
+        term_entity: "Entity",
+        confidence: float,
+        source_chunk_id: str,
+        evidence_text: str,
+        properties: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> "Relationship":
+        """
+        Create DEFINITION_OF relationship with type validation.
+
+        Invariants enforced:
+        - source must be DEFINITION entity
+        - target must be LEGAL_TERM entity
+        - Prevents type mismatches at construction
+
+        Args:
+            definition_entity: DEFINITION entity (source)
+            term_entity: LEGAL_TERM entity (target)
+            confidence: Relationship confidence (0.0-1.0)
+            source_chunk_id: Chunk ID where relationship was found
+            evidence_text: Supporting text snippet
+            properties: Optional relationship properties
+            **kwargs: Additional Relationship fields
+
+        Returns:
+            Relationship with type DEFINITION_OF
+
+        Raises:
+            ValueError: If entity types are wrong or invariants violated
+        """
+        if definition_entity.type != EntityType.DEFINITION:
+            raise ValueError(
+                f"Source must be DEFINITION entity, got {definition_entity.type.value}"
+            )
+        if term_entity.type != EntityType.LEGAL_TERM:
+            raise ValueError(
+                f"Target must be LEGAL_TERM entity, got {term_entity.type.value}"
+            )
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0.0, 1.0], got {confidence}")
+
+        return cls(
+            id=str(uuid.uuid4()),
+            type=RelationshipType.DEFINITION_OF,
+            source_entity_id=definition_entity.id,
+            target_entity_id=term_entity.id,
+            confidence=confidence,
+            source_chunk_id=source_chunk_id,
+            evidence_text=evidence_text,
+            properties=properties or {},
+            **kwargs
+        )
+
+    @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Relationship":
         """Create Relationship from dictionary."""
         data_copy = data.copy()
@@ -425,16 +601,67 @@ class KnowledgeGraph:
         """Get relationships where entity is the target."""
         return [rel for rel in self.relationships if rel.target_entity_id == entity_id]
 
+    def find_entities(
+        self,
+        entity_type: Optional[str] = None,
+        value_contains: Optional[str] = None,
+        min_confidence: float = 0.0,
+    ) -> List[Entity]:
+        """
+        Find entities matching filter criteria.
+
+        Args:
+            entity_type: Filter by entity type (e.g., 'organization', 'regulation')
+            value_contains: Filter by substring in value (case-insensitive)
+            min_confidence: Minimum confidence threshold
+
+        Returns:
+            List of matching Entity objects
+        """
+        results = []
+        for entity in self.entities:
+            # Filter by type
+            # FIX: Convert string entity_type to EntityType enum for comparison (was always failing)
+            if entity_type:
+                # Handle both string and EntityType enum inputs
+                if isinstance(entity_type, str):
+                    try:
+                        entity_type_enum = EntityType(entity_type)
+                    except (ValueError, KeyError):
+                        valid_types = [t.value for t in EntityType]
+                        logger.error(f"Unknown entity type '{entity_type}'. Valid types: {valid_types}")
+                        # Return empty list - no matches for invalid type
+                        return []
+                else:
+                    entity_type_enum = entity_type
+
+                if entity.type != entity_type_enum:
+                    continue
+
+            # Filter by value substring
+            if value_contains and value_contains.lower() not in entity.value.lower():
+                continue
+
+            # Filter by confidence
+            if entity.confidence < min_confidence:
+                continue
+
+            results.append(entity)
+
+        return results
+
     def compute_stats(self) -> Dict[str, Any]:
         """Compute statistics about the graph."""
         entity_type_counts = {}
         for entity in self.entities:
-            entity_type_counts[entity.type.value] = entity_type_counts.get(entity.type.value, 0) + 1
+            # entity.type is already a string
+            entity_type_counts[entity.type] = entity_type_counts.get(entity.type, 0) + 1
 
         relationship_type_counts = {}
         for rel in self.relationships:
-            relationship_type_counts[rel.type.value] = (
-                relationship_type_counts.get(rel.type.value, 0) + 1
+            # rel.type is already a string
+            relationship_type_counts[rel.type] = (
+                relationship_type_counts.get(rel.type, 0) + 1
             )
 
         # Average confidence

@@ -17,26 +17,33 @@ import { Header } from './components/header/Header';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { ResponsiveSidebar } from './components/layout/ResponsiveSidebar';
 import { ChatContainer } from './components/chat/ChatContainer';
+import { LoginPage } from './pages/LoginPage';
 import { useChat } from './hooks/useChat';
 import { useTheme } from './hooks/useTheme';
+import { useAuth } from './contexts/AuthContext';
 import { cn } from './design-system/utils/cn';
 import { apiService } from './services/api';
 import './index.css';
 
 function App() {
+  // Authentication
+  const { isAuthenticated, isLoading } = useAuth();
+
   // Custom hooks
   const {
     conversations,
     currentConversation,
     isStreaming,
-    selectedModel,
+    clarificationData,
+    awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
     sendMessage,
-    switchModel,
     editMessage,
     regenerateMessage,
+    submitClarification,
+    cancelClarification,
   } = useChat();
 
   const { theme, toggleTheme } = useTheme();
@@ -62,6 +69,26 @@ function App() {
       });
   }, []);
 
+  // Show loading state while verifying token
+  if (isLoading) {
+    return (
+      <div className={cn(
+        'h-screen flex items-center justify-center',
+        'bg-white dark:bg-accent-950'
+      )}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-900 dark:border-accent-100 mx-auto mb-4"></div>
+          <p className="text-accent-600 dark:text-accent-400">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
     <div className={cn(
       'h-screen flex flex-col',
@@ -72,8 +99,6 @@ function App() {
       <Header
         theme={theme}
         onToggleTheme={toggleTheme}
-        selectedModel={selectedModel}
-        onModelChange={switchModel}
         onToggleSidebar={toggleSidebar}
         sidebarOpen={sidebarOpen}
       />
@@ -121,6 +146,10 @@ function App() {
           onSendMessage={sendMessage}
           onEditMessage={editMessage}
           onRegenerateMessage={regenerateMessage}
+          clarificationData={clarificationData}
+          awaitingClarification={awaitingClarification}
+          onSubmitClarification={submitClarification}
+          onCancelClarification={cancelClarification}
         />
       </div>
     </div>

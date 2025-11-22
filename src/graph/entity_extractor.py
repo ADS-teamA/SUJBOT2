@@ -154,6 +154,17 @@ class EntityExtractor:
         chunk_content = chunk.get("raw_content", chunk.get("content", ""))
         chunk_metadata = chunk.get("metadata", {})
 
+        prefill_entities: List[Entity] = []
+        if self.config.enable_regex_prefill:
+            try:
+                prefill_entities = self._regex_extract_entities(
+                    chunk_content=chunk_content,
+                    chunk_id=chunk_id,
+                    chunk_metadata=chunk_metadata,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(f"Regex prefill failed for chunk {chunk_id}: {exc}")
+
         # Build extraction prompt
         prompt = self._build_extraction_prompt(chunk_content, chunk_metadata)
 
@@ -161,7 +172,7 @@ class EntityExtractor:
         response_text = self._call_llm(prompt)
 
         # Parse response
-        entities = self._parse_llm_response(
+        entities = prefill_entities + self._parse_llm_response(
             response_text,
             chunk_id=chunk_id,
             document_id=chunk_metadata.get("document_id"),
@@ -418,6 +429,122 @@ class EntityExtractor:
         )
 
         return entity
+
+    def _regex_extract_entities(
+        self,
+        chunk_content: str,
+        chunk_id: str,
+        chunk_metadata: Dict[str, Any],
+    ) -> List[Entity]:
+        """Extract simple entities via regex/patterns before calling the LLM."""
+        entities: List[Entity] = []
+        seen: Set[tuple] = set()
+        document_id = chunk_metadata.get("document_id")
+        section_path = chunk_metadata.get("section_path")
+
+        def add_entity(
+            entity_type: EntityType,
+            value: str,
+            normalized: Optional[str] = None,
+            context: Optional[str] = None,
+        ):
+            key = (entity_type, (normalized or value).lower())
+            if key in seen or entity_type not in self.config.enabled_entity_types:
+                return
+            seen.add(key)
+            confidence = self.config.regex_prefill_confidence
+            entities.append(
+                Entity(
+                    id=str(uuid.uuid4()),
+                    type=entity_type,
+                    value=value.strip(),
+                    normalized_value=(normalized or value).strip(),
+                    confidence=confidence,
+                    source_chunk_ids=[chunk_id],
+                    first_mention_chunk_id=chunk_id,
+                    document_id=document_id,
+                    section_path=section_path,
+                    metadata={
+                        "context": context or value.strip(),
+                        "extraction_confidence": confidence,
+                    },
+                    extraction_method="regex",
+                    extracted_at=datetime.now(),
+                )
+            )
+
+        content = chunk_content or ""
+
+        # Dates (textual month)
+        month_map = {
+            "january": 1,
+            "february": 2,
+            "march": 3,
+            "april": 4,
+            "may": 5,
+            "june": 6,
+            "july": 7,
+            "august": 8,
+            "september": 9,
+            "october": 10,
+            "november": 11,
+            "december": 12,
+        }
+
+        for match in re.finditer(r"\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b", content):
+            day, month_name, year = match.groups()
+            month = month_map[month_name.lower()]
+            try:
+                normalized = datetime(int(year), month, int(day)).strftime("%Y-%m-%d")
+            except ValueError:
+                normalized = None
+            add_entity(EntityType.DATE, match.group(0), normalized)
+
+        # ISO style dates (YYYY-MM-DD)
+        for match in re.finditer(r"\b(\d{4})-(\d{2})-(\d{2})\b", content):
+            year, month, day = match.groups()
+            try:
+                normalized = datetime(int(year), int(month), int(day)).strftime("%Y-%m-%d")
+            except ValueError:
+                normalized = None
+            add_entity(EntityType.DATE, match.group(0), normalized)
+
+        # European style dates (DD.MM.YYYY)
+        for match in re.finditer(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b", content):
+            day, month, year = match.groups()
+            try:
+                normalized = datetime(int(year), int(month), int(day)).strftime("%Y-%m-%d")
+            except ValueError:
+                normalized = None
+            add_entity(EntityType.DATE, match.group(0), normalized)
+
+        # Legal citations and sections
+        citation_pattern = re.compile(
+            r"(Article|Art\.|Section|Sec\.|Clause|Paragraph|Para\.|§)\s+([\dA-Za-z\.\-\/\(\)]+)",
+            re.IGNORECASE,
+        )
+        for match in citation_pattern.finditer(content):
+            keyword = match.group(1).lower()
+            label = match.group(2)
+            value = match.group(0)
+            if keyword in {"article", "art.", "paragraph", "para.", "§"}:
+                entity_type = EntityType.LEGAL_PROVISION
+            else:
+                entity_type = EntityType.CLAUSE
+            normalized = f"{keyword} {label}".lower()
+            add_entity(entity_type, value, normalized)
+
+        # Standards or technical identifiers (ISO/IEC/EN...)
+        standard_pattern = re.compile(
+            r"\b(?:ISO|IEC|EN|ASTM|IEEE|GRI)\s*\d{3,5}(?::\d{2,4})?\b",
+            re.IGNORECASE,
+        )
+        for match in standard_pattern.finditer(content):
+            value = match.group(0)
+            normalized = value.upper().replace(" ", "")
+            add_entity(EntityType.STANDARD, value, normalized)
+
+        return entities
 
     def _deduplicate_entities(self, entities: List[Entity]) -> List[Entity]:
         """

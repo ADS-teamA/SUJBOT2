@@ -133,12 +133,18 @@ class FAISSVectorStore:
 
         # Add metadata
         for chunk in chunks:
+            # Build hierarchical path: document_id > section_path
+            hierarchical_path = chunk.metadata.document_id
+            if chunk.metadata.section_path:
+                hierarchical_path = f"{chunk.metadata.document_id} > {chunk.metadata.section_path}"
+
             chunk_meta = {
                 "chunk_id": chunk.chunk_id,
                 "document_id": chunk.metadata.document_id,
                 "section_id": chunk.metadata.section_id,
                 "section_title": chunk.metadata.section_title,
                 "section_path": chunk.metadata.section_path,
+                "hierarchical_path": hierarchical_path,  # NEW: Full path for breadcrumb navigation
                 "page_number": chunk.metadata.page_number,
                 "layer": layer,
                 # Store raw_content for generation (without SAC)

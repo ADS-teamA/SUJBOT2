@@ -4,21 +4,53 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
-import { storageService } from '../lib/storage';
-import type { Message, Conversation, ToolCall } from '../types';
+import type { Message, Conversation, ToolCall, ClarificationData } from '../types';
 
 export function useChat() {
-  const [conversations, setConversations] = useState<Conversation[]>(() =>
-    storageService.getConversations()
-  );
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() =>
-    storageService.getCurrentConversationId()
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  // Initialize currentConversationId from localStorage to persist across page refreshes
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    () => localStorage.getItem('currentConversationId')
   );
   const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(() =>
-    // Load from localStorage, or use Gemini 2.5 Flash Lite as default
-    storageService.getSelectedModel() || 'gemini-2.5-flash-latest-exp-1206'
-  );
+  const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
+  const [awaitingClarification, setAwaitingClarification] = useState(false);
+
+  // Persist currentConversationId to localStorage when it changes
+  useEffect(() => {
+    if (currentConversationId) {
+      localStorage.setItem('currentConversationId', currentConversationId);
+    } else {
+      localStorage.removeItem('currentConversationId');
+    }
+  }, [currentConversationId]);
+
+  // Load conversations from server on mount
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const serverConversations = await apiService.getConversations();
+        setConversations(serverConversations);
+      } catch (error) {
+        console.error('Failed to load conversations from server:', error);
+        // Don't block UI - user can still create new conversations
+      }
+    };
+
+    loadConversations();
+  }, []); // Run once on mount
+
+  // Validate that saved conversation ID still exists after loading conversations
+  useEffect(() => {
+    if (currentConversationId && conversations.length > 0) {
+      const conversationExists = conversations.some(c => c.id === currentConversationId);
+      if (!conversationExists) {
+        // Saved conversation was deleted, clear it
+        console.log('Saved conversation no longer exists, clearing currentConversationId');
+        setCurrentConversationId(null);
+      }
+    }
+  }, [conversations, currentConversationId]);
 
   // Refs for managing streaming state
   const currentMessageRef = useRef<Message | null>(null);
@@ -42,28 +74,6 @@ export function useChat() {
     conversationsRef.current = conversations;
   }, [conversations]);
 
-  // Initialize and verify model
-  useEffect(() => {
-    const savedModel = storageService.getSelectedModel();
-
-    // If no saved model, save the default
-    if (!savedModel) {
-      storageService.setSelectedModel('gemini-2.5-flash-latest-exp-1206');
-    }
-
-    // Verify model is available on backend
-    apiService.getModels().then((data) => {
-      const currentModel = savedModel || 'gemini-2.5-flash-latest-exp-1206';
-
-      // If current model is not available, fallback to backend default
-      if (!data.models.some((m: any) => m.id === currentModel)) {
-        const defaultModel = data.defaultModel || 'gemini-2.5-flash-latest-exp-1206';
-        setSelectedModel(defaultModel);
-        storageService.setSelectedModel(defaultModel);
-      }
-    }).catch(console.error);
-  }, []);
-
   /**
    * Clean invalid/incomplete messages from conversation
    * Prevents corrupted data in localStorage
@@ -86,21 +96,20 @@ export function useChat() {
   /**
    * Create a new conversation
    */
-  const createConversation = useCallback(() => {
-    const newConversation: Conversation = {
-      id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      title: 'New Conversation',
-      messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  const createConversation = useCallback(async () => {
+    try {
+      // Create conversation on server
+      const newConversation = await apiService.createConversation('New Conversation');
 
-    setConversations((prev) => [...prev, newConversation]);
-    setCurrentConversationId(newConversation.id);
-    storageService.saveConversation(newConversation);
-    storageService.setCurrentConversationId(newConversation.id);
+      // Update local state
+      setConversations((prev) => [...prev, newConversation]);
+      setCurrentConversationId(newConversation.id);
 
-    return newConversation;
+      return newConversation;
+    } catch (error) {
+      console.error('Failed to create conversation:', error);
+      throw error;
+    }
   }, []);
 
   /**
@@ -108,18 +117,55 @@ export function useChat() {
    */
   const selectConversation = useCallback((id: string) => {
     setCurrentConversationId(id);
-    storageService.setCurrentConversationId(id);
   }, []);
+
+  /**
+   * Load messages when conversation is selected
+   * This ensures messages are fetched from database after page refresh
+   */
+  useEffect(() => {
+    if (!currentConversationId) return;
+
+    const loadMessages = async () => {
+      try {
+        const messages = await apiService.getConversationHistory(currentConversationId);
+
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === currentConversationId
+              ? { ...conv, messages }
+              : conv
+          )
+        );
+      } catch (error) {
+        console.error('Failed to load conversation messages:', error);
+      }
+    };
+
+    loadMessages();
+  }, [currentConversationId]);
 
   /**
    * Delete a conversation
    */
-  const deleteConversation = useCallback((id: string) => {
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    storageService.deleteConversation(id);
+  const deleteConversation = useCallback(async (id: string) => {
+    try {
+      // Delete from server
+      await apiService.deleteConversation(id);
 
-    if (currentConversationId === id) {
-      setCurrentConversationId(null);
+      // Update local state
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      // Still remove from UI even if server delete fails (eventual consistency)
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+      }
     }
   }, [currentConversationId]);
 
@@ -138,15 +184,17 @@ export function useChat() {
       let conversation: Conversation;
 
       if (currentConversationId) {
-        // Find conversation from state using functional read
-        const found = conversations.find((c) => c.id === currentConversationId);
+        // Find conversation from REF (not state) to ensure we have latest version
+        // This is critical for edit/regenerate where state might have been updated
+        // in the same tick (truncation) but not yet committed to the 'conversations' variable
+        const found = conversationsRef.current.find((c) => c.id === currentConversationId);
         if (found) {
           conversation = found;
         } else {
-          conversation = createConversation();
+          conversation = await createConversation();
         }
       } else {
-        conversation = createConversation();
+        conversation = await createConversation();
       }
 
       let updatedConversation: Conversation;
@@ -157,38 +205,55 @@ export function useChat() {
           id: `msg_${Date.now()}_user`,
           role: 'user',
           content: content.trim(),
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         };
 
         // Add user message to conversation
         updatedConversation = {
           ...conversation,
           messages: [...conversation.messages, userMessage],
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
           title: conversation.messages.length === 0 ? content.slice(0, 50) : conversation.title,
         };
       } else {
         // Regenerate/edit mode - use conversation as-is
         updatedConversation = {
           ...conversation,
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         };
       }
 
       setConversations((prev) =>
         prev.map((c) => (c.id === updatedConversation.id ? updatedConversation : c))
       );
-      storageService.saveConversation(updatedConversation);
 
-      // Initialize assistant message
+      // Initialize assistant message with agent progress
       currentMessageRef.current = {
         id: `msg_${Date.now()}_assistant`,
         role: 'assistant',
         content: '',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         toolCalls: [],
+        agentProgress: {
+          currentAgent: 'orchestrator', // Start with orchestrator immediately
+          currentMessage: 'Initializing...',
+          completedAgents: [],
+          activeTools: []
+        }
       };
       currentToolCallsRef.current = new Map();
+
+      // IMMEDIATE UPDATE: Add placeholder message to state so UI shows "Thinking..." instantly
+      // This prevents the "empty gap" before first backend event arrives
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== updatedConversation.id) return c;
+          return {
+            ...c,
+            messages: [...c.messages, currentMessageRef.current!]
+          };
+        })
+      );
 
       setIsStreaming(true);
 
@@ -197,12 +262,112 @@ export function useChat() {
         for await (const event of apiService.streamChat(
           content,
           conversation.id,
-          selectedModel
+          !addUserMessage  // Skip saving user message when regenerating/editing (already exists)
         )) {
-          console.log('📨 FRONTEND: Received event:', event.event);
-          if (event.event === 'text_delta') {
+          // Handle agent progress events
+          if (event.event === 'agent_start') {
+            if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
+              // Mark previous agent as completed
+              if (currentMessageRef.current.agentProgress.currentAgent) {
+                currentMessageRef.current.agentProgress.completedAgents.push(
+                  currentMessageRef.current.agentProgress.currentAgent
+                );
+              }
+
+              // Set new current agent and clear activeTools
+              currentMessageRef.current.agentProgress.currentAgent = event.data.agent;
+              currentMessageRef.current.agentProgress.currentMessage = event.data.message;
+              currentMessageRef.current.agentProgress.activeTools = [];
+
+              // Update UI - IMPORTANT: Deep copy agentProgress to trigger React re-render
+              // Capture snapshot of current message to avoid race conditions where ref becomes null
+              const currentMessageSnapshot = { ...currentMessageRef.current };
+              const currentAgentProgressSnapshot = currentMessageRef.current.agentProgress
+                ? {
+                  ...currentMessageRef.current.agentProgress,
+                  activeTools: [...(currentMessageRef.current.agentProgress.activeTools || [])],
+                  completedAgents: [...(currentMessageRef.current.agentProgress.completedAgents || [])]
+                }
+                : undefined;
+
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== updatedConversation.id) return c;
+
+                  const messages = [...c.messages];
+                  const lastMsg = messages[messages.length - 1];
+
+                  // Deep copy message with agentProgress to ensure React detects changes
+                  const updatedMessage = {
+                    ...currentMessageSnapshot,
+                    agentProgress: currentAgentProgressSnapshot
+                  };
+
+                  if (lastMsg?.role === 'assistant') {
+                    messages[messages.length - 1] = updatedMessage;
+                  } else {
+                    messages.push(updatedMessage);
+                  }
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          }
+          else if (event.event === 'tool_call') {
+            // Tool call event (running/completed/failed)
+            if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
+              const { tool, status, timestamp } = event.data;
+
+              if (status === 'running') {
+                // Add new tool to activeTools
+                currentMessageRef.current.agentProgress.activeTools.push({
+                  tool,
+                  status,
+                  timestamp
+                });
+              } else if (status === 'completed' || status === 'failed') {
+                // Update status of existing tool
+                const toolIndex = currentMessageRef.current.agentProgress.activeTools.findIndex(
+                  t => t.tool === tool && t.status === 'running'
+                );
+                if (toolIndex >= 0) {
+                  currentMessageRef.current.agentProgress.activeTools[toolIndex].status = status;
+                }
+              }
+
+              // Update UI
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== updatedConversation.id) return c;
+
+                  const messages = [...c.messages];
+                  const lastMsg = messages[messages.length - 1];
+
+                  if (lastMsg?.role === 'assistant') {
+                    messages[messages.length - 1] = { ...currentMessageRef.current! };
+                  } else {
+                    messages.push({ ...currentMessageRef.current! });
+                  }
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          }
+          else if (event.event === 'text_delta') {
             // Append text delta
             if (currentMessageRef.current) {
+              // Mark all agents as completed when text starts arriving
+              if (currentMessageRef.current.agentProgress && currentMessageRef.current.agentProgress.currentAgent) {
+                currentMessageRef.current.agentProgress.completedAgents.push(
+                  currentMessageRef.current.agentProgress.currentAgent
+                );
+                currentMessageRef.current.agentProgress.currentAgent = null;
+                currentMessageRef.current.agentProgress.currentMessage = null;
+                currentMessageRef.current.agentProgress.activeTools = [];
+              }
+
               currentMessageRef.current.content += event.data.content;
 
               // Update UI
@@ -225,52 +390,8 @@ export function useChat() {
                 })
               );
             }
-          } else if (event.event === 'tool_call') {
-            // Tool execution started
-            console.log('🔧 FRONTEND: Received tool_call event:', event.data);
-            const toolCall: ToolCall = {
-              id: event.data.call_id || `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              name: event.data.tool_name,
-              input: event.data.tool_input,
-              status: 'running',
-            };
-            console.log('🔧 FRONTEND: Created ToolCall:', toolCall);
-
-            currentToolCallsRef.current.set(toolCall.id, toolCall);
-            console.log('🔧 FRONTEND: currentToolCallsRef size:', currentToolCallsRef.current.size);
-
-            if (currentMessageRef.current) {
-              currentMessageRef.current.toolCalls = Array.from(
-                currentToolCallsRef.current.values()
-              );
-              console.log('🔧 FRONTEND: Updated currentMessageRef.toolCalls:', currentMessageRef.current.toolCalls);
-            } else {
-              console.error('❌ FRONTEND: currentMessageRef.current is NULL!');
-            }
-
-            // Update UI
-            setConversations((prev) => {
-              console.log('🔧 FRONTEND: Updating conversations state...');
-              return prev.map((c) => {
-                if (c.id !== updatedConversation.id) return c;
-
-                const messages = [...c.messages];
-                const lastMsg = messages[messages.length - 1];
-                console.log('🔧 FRONTEND: Last message role:', lastMsg?.role);
-
-                if (lastMsg?.role === 'assistant') {
-                  console.log('🔧 FRONTEND: Updating existing assistant message');
-                  messages[messages.length - 1] = { ...currentMessageRef.current! };
-                } else {
-                  console.log('🔧 FRONTEND: Adding new assistant message');
-                  messages.push({ ...currentMessageRef.current! });
-                }
-
-                console.log('🔧 FRONTEND: Updated message toolCalls:', messages[messages.length - 1]?.toolCalls);
-                return { ...c, messages };
-              });
-            });
-          } else if (event.event === 'tool_result') {
+          }
+          else if (event.event === 'tool_result') {
             // Tool execution completed
             const callId = event.data.call_id;
             const existingToolCall = currentToolCallsRef.current.get(callId);
@@ -339,15 +460,32 @@ export function useChat() {
                 })
               );
             }
-          } else if (event.event === 'cost_update') {
-            // Cost tracking update
+          } else if (event.event === 'cost_summary') {
+            // Cost tracking summary with per-agent breakdown
+            console.log('💰 FRONTEND: Cost summary received:', event.data);
+
             if (currentMessageRef.current) {
+              // Validate and sanitize cost data
+              const totalCost = typeof event.data.total_cost === 'number' ? event.data.total_cost : 0;
+              const inputTokens = typeof event.data.total_input_tokens === 'number' ? event.data.total_input_tokens : 0;
+              const outputTokens = typeof event.data.total_output_tokens === 'number' ? event.data.total_output_tokens : 0;
+              const agentBreakdown = Array.isArray(event.data.agent_breakdown) ? event.data.agent_breakdown : [];
+
+              // Log validation warnings
+              if (totalCost < 0 || isNaN(totalCost)) {
+                console.error('❌ Invalid cost value received:', event.data.total_cost);
+              }
+              if (inputTokens < 0 || outputTokens < 0) {
+                console.error('❌ Invalid token counts:', { inputTokens, outputTokens });
+              }
+
               currentMessageRef.current.cost = {
-                totalCost: event.data.total_cost,
-                inputTokens: event.data.input_tokens,
-                outputTokens: event.data.output_tokens,
-                cachedTokens: event.data.cached_tokens,
-                summary: event.data.summary,
+                totalCost: Math.max(0, totalCost),
+                inputTokens: Math.max(0, inputTokens),
+                outputTokens: Math.max(0, outputTokens),
+                cachedTokens: event.data.cache_stats?.cache_read_tokens || 0,
+                agentBreakdown,
+                cacheStats: event.data.cache_stats || { cache_read_tokens: 0, cache_creation_tokens: 0 },
               };
 
               // Update UI
@@ -362,6 +500,15 @@ export function useChat() {
                 })
               );
             }
+          } else if (event.event === 'clarification_needed') {
+            // HITL: Agent needs clarification
+            console.log('🤔 FRONTEND: Clarification needed:', event.data);
+
+            setClarificationData(event.data);
+            setAwaitingClarification(true);
+
+            // Don't emit "done" - workflow is paused
+            return;
           } else if (event.event === 'done') {
             // Stream completed
             break;
@@ -402,10 +549,7 @@ export function useChat() {
                 msg.content !== undefined
               );
 
-              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date() };
-
-              // Save to localStorage with final content
-              storageService.saveConversation(finalConv);
+              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
 
               return finalConv;
             })
@@ -425,22 +569,8 @@ export function useChat() {
         currentToolCallsRef.current = new Map();
       }
     },
-    [isStreaming, createConversation, selectedModel, currentConversationId, conversations]
+    [isStreaming, createConversation, currentConversationId, conversations]
   );
-
-  /**
-   * Switch model
-   */
-  const switchModel = useCallback(async (model: string) => {
-    try {
-      await apiService.switchModel(model);
-      setSelectedModel(model);
-      storageService.setSelectedModel(model);
-    } catch (error) {
-      console.error('Failed to switch model:', error);
-      throw error;
-    }
-  }, []);
 
   /**
    * Edit a user message and resend
@@ -451,6 +581,8 @@ export function useChat() {
 
       // Use functional update to get current conversation state
       let shouldSend = false;
+      let messageIndex = -1;
+      let conversationId = '';
 
       setConversations((prev) => {
         // Find the current conversation
@@ -458,11 +590,12 @@ export function useChat() {
         if (!currentConv) return prev;
 
         // Find the message index
-        const messageIndex = currentConv.messages.findIndex((m) => m.id === messageId);
+        messageIndex = currentConv.messages.findIndex((m) => m.id === messageId);
         if (messageIndex === -1 || currentConv.messages[messageIndex].role !== 'user') {
           return prev;
         }
 
+        conversationId = currentConv.id;
         shouldSend = true;
 
         // Remove all messages after this one (including assistant response)
@@ -475,18 +608,21 @@ export function useChat() {
         const updatedConversation: Conversation = {
           ...currentConv,
           messages: cleanedMessages,
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         };
-
-        // Save to storage immediately
-        storageService.saveConversation(updatedConversation);
 
         // Return updated conversations array
         return prev.map((c) => (c.id === currentConversationId ? updatedConversation : c));
       });
 
-      // If validation passed, send the edited message
+      // If validation passed, delete from backend and send the edited message
       if (shouldSend) {
+        // Delete from backend in background (don't await - fire and forget for immediate UI response)
+        apiService.truncateMessagesAfter(conversationId, messageIndex).catch((error) => {
+          console.error('Failed to truncate messages in database:', error);
+          // Non-critical - frontend state is already updated
+        });
+
         // Race condition fix: Wait for React to commit state update before sending
         // Without this, sendMessage may read stale conversation state (pre-update)
         // causing duplicate messages or incorrect context.
@@ -557,16 +693,19 @@ export function useChat() {
       const updatedConversation: Conversation = {
         ...currentConv,
         messages: cleanedMessages,
-        updatedAt: new Date(),
+        updatedAt: new Date().toISOString(),
       };
 
-      // Update state
+      // IMMEDIATELY update state to remove message from UI
       setConversations((prev) =>
         prev.map((c) => (c.id === conversationId ? updatedConversation : c))
       );
 
-      // Save to storage
-      storageService.saveConversation(updatedConversation);
+      // Delete from backend in background (don't await - fire and forget for immediate UI response)
+      apiService.truncateMessagesAfter(conversationId, messageIndex).catch((error) => {
+        console.error('Failed to truncate messages in database:', error);
+        // Non-critical - frontend state is already updated
+      });
 
       // Race condition fix: Wait for React to commit state update before sending
       // Without this, sendMessage may read stale conversation state (pre-truncation)
@@ -580,20 +719,208 @@ export function useChat() {
       // Pass false to prevent adding a new user message (we're regenerating from existing)
       await sendMessage(userMessageContent, false);
     },
-    [isStreaming, sendMessage, currentConversationId]
+    [isStreaming, sendMessage, currentConversationId, cleanMessages]
+  );
+
+  /**
+   * Submit clarification response and resume workflow
+   */
+  const submitClarification = useCallback(
+    async (response: string) => {
+      if (!clarificationData || !response.trim()) {
+        return;
+      }
+
+      const { thread_id } = clarificationData;
+
+      // Reset clarification state
+      setClarificationData(null);
+      setAwaitingClarification(false);
+
+      // Get current conversation
+      const conversation = conversations.find((c) => c.id === currentConversationId);
+      if (!conversation) {
+        console.error('No current conversation found');
+        return;
+      }
+
+      // Initialize assistant message for resumed workflow
+      currentMessageRef.current = {
+        id: `msg_${Date.now()}_assistant`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        toolCalls: [],
+      };
+      currentToolCallsRef.current = new Map();
+
+      setIsStreaming(true);
+
+      try {
+        // Stream clarification response from backend
+        for await (const event of apiService.streamClarification(thread_id, response)) {
+          console.log('📨 FRONTEND: Received clarification event:', event.event);
+
+          if (event.event === 'text_delta') {
+            // Append text delta
+            if (currentMessageRef.current) {
+              currentMessageRef.current.content += event.data.content;
+
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== conversation.id) return c;
+
+                  const messages = [...c.messages];
+                  const lastMsg = messages[messages.length - 1];
+
+                  if (lastMsg?.role === 'assistant') {
+                    messages[messages.length - 1] = { ...currentMessageRef.current! };
+                  } else {
+                    messages.push({ ...currentMessageRef.current! });
+                  }
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          } else if (event.event === 'cost_summary') {
+            // Cost tracking update
+            if (currentMessageRef.current) {
+              currentMessageRef.current.cost = {
+                totalCost: event.data.total_cost,
+                inputTokens: event.data.input_tokens,
+                outputTokens: event.data.output_tokens,
+                cachedTokens: event.data.cached_tokens,
+                agentBreakdown: event.data.agent_breakdown,
+              };
+
+              setConversations((prev) =>
+                prev.map((c) => {
+                  if (c.id !== conversation.id) return c;
+
+                  const messages = [...c.messages];
+                  messages[messages.length - 1] = { ...currentMessageRef.current! };
+
+                  return { ...c, messages };
+                })
+              );
+            }
+          } else if (event.event === 'done') {
+            // Stream completed
+            break;
+          } else if (event.event === 'error') {
+            // Error occurred
+            console.error('Clarification stream error:', event.data);
+
+            if (currentMessageRef.current) {
+              currentMessageRef.current.content += `\n\n[Error: ${event.data.error}]`;
+            }
+          }
+        }
+
+        // Save final message
+        const finalMessage = currentMessageRef.current;
+        if (finalMessage) {
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c.id !== conversation.id) return c;
+
+              const messages = [...c.messages];
+              const lastMsg = messages[messages.length - 1];
+
+              if (lastMsg?.role === 'assistant') {
+                messages[messages.length - 1] = { ...finalMessage };
+              } else {
+                messages.push({ ...finalMessage });
+              }
+
+              const cleanedMessages = cleanMessages(messages);
+              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
+
+              return finalConv;
+            })
+          );
+        }
+      } catch (error) {
+        console.error('❌ Error during clarification streaming:', error);
+
+        if (currentMessageRef.current) {
+          currentMessageRef.current.content += `\n\n[Error: ${(error as Error).message}]`;
+        }
+      } finally {
+        setIsStreaming(false);
+        currentMessageRef.current = null;
+        currentToolCallsRef.current = new Map();
+      }
+    },
+    [clarificationData, conversations, currentConversationId, cleanMessages]
+  );
+
+  /**
+   * Cancel clarification and continue with original query
+   */
+  const cancelClarification = useCallback(() => {
+    console.log('🚫 FRONTEND: Clarification cancelled - continuing with original query');
+    setClarificationData(null);
+    setAwaitingClarification(false);
+    setIsStreaming(false);
+
+    // Optionally: Could show a message to the user that clarification was skipped
+  }, []);
+
+  /**
+   * Delete a message from the current conversation
+   * @param messageId - ID of the message to delete
+   */
+  const deleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!currentConversationId) {
+        console.warn('No conversation selected');
+        return;
+      }
+
+      // Try backend notification (non-blocking)
+      try {
+        await apiService.deleteMessage(currentConversationId, messageId);
+      } catch (error) {
+        console.error('Backend delete notification failed:', error);
+      }
+
+      // Always update UI (frontend-centric approach)
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== currentConversationId) return c;
+
+          const updatedMessages = c.messages.filter((m) => m.id !== messageId);
+          const updatedConv = {
+            ...c,
+            messages: updatedMessages,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return updatedConv;
+        })
+      );
+
+      console.log(`✓ Message ${messageId} deleted locally`);
+    },
+    [currentConversationId]
   );
 
   return {
     conversations,
     currentConversation,
     isStreaming,
-    selectedModel,
+    clarificationData,
+    awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
     sendMessage,
-    switchModel,
     editMessage,
     regenerateMessage,
+    deleteMessage,
+    submitClarification,
+    cancelClarification,
   };
 }

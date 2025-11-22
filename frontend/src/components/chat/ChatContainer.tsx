@@ -1,14 +1,19 @@
 /**
  * ChatContainer Component - Main chat area with messages and input
+ *
+ * Features:
+ * - Welcome screen for new conversations
+ * - Gradient background
+ * - Animated input box transition (center → bottom on first message)
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
-import { FileText } from 'lucide-react';
+import { WelcomeScreen } from './WelcomeScreen';
+import { ClarificationModal } from './ClarificationModal';
 import { cn } from '../../design-system/utils/cn';
-import { useFadeIn } from '../../design-system/animations/hooks/useFadeIn';
-import type { Conversation } from '../../types';
+import type { Conversation, ClarificationData } from '../../types';
 
 interface ChatContainerProps {
   conversation: Conversation | undefined;
@@ -16,6 +21,10 @@ interface ChatContainerProps {
   onSendMessage: (message: string) => void;
   onEditMessage: (messageId: string, newContent: string) => void;
   onRegenerateMessage: (messageId: string) => void;
+  clarificationData: ClarificationData | null;
+  awaitingClarification: boolean;
+  onSubmitClarification: (response: string) => void;
+  onCancelClarification: () => void;
 }
 
 export function ChatContainer({
@@ -24,158 +33,197 @@ export function ChatContainer({
   onSendMessage,
   onEditMessage,
   onRegenerateMessage,
+  clarificationData,
+  awaitingClarification,
+  onSubmitClarification,
+  onCancelClarification,
 }: ChatContainerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [inputAnimated, setInputAnimated] = useState(false);
+  const hasMessages = (conversation?.messages.length || 0) > 0;
+
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.messages]);
 
-  const { style: fadeStyle } = useFadeIn({ duration: 'slow' });
+  // Reset scroll when clearing messages (New Conversation)
+  useEffect(() => {
+    if (!hasMessages && containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [hasMessages]);
 
-  if (!conversation) {
-    return (
-      <div className={cn(
-        'flex-1 flex items-center justify-center',
-        'bg-white dark:bg-accent-950'
-      )}>
-        <div className="text-center max-w-md px-4" style={fadeStyle}>
-          <FileText size={64} className={cn(
-            'mx-auto mb-4',
-            'text-accent-300 dark:text-accent-700'
-          )} />
-          <h2 className={cn(
-            'text-2xl font-bold mb-2',
-            'text-accent-800 dark:text-accent-200'
-          )}>
-            Welcome to SUJBOT2
-          </h2>
-          <p className={cn(
-            'mb-6',
-            'text-accent-600 dark:text-accent-400'
-          )}>
-            Start a new conversation by typing a message below.
-          </p>
-          <p className={cn(
-            'text-sm',
-            'text-accent-500 dark:text-accent-500'
-          )}>
-            This is a RAG-powered assistant for legal and technical documents.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Trigger input animation on first message
+  useEffect(() => {
+    if (hasMessages && !inputAnimated) {
+      setInputAnimated(true);
+    }
+  }, [hasMessages, inputAnimated]);
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col h-full relative">
+      {/* Gradient background */}
+      <div
+        className={cn(
+          'absolute inset-0 -z-10',
+          'bg-white dark:bg-accent-950'
+        )}
+        style={{
+          background: 'var(--gradient-mesh-light)',
+        }}
+      />
+      <div
+        className={cn(
+          'absolute inset-0 -z-10',
+          'dark:block hidden'
+        )}
+        style={{
+          background: 'var(--gradient-mesh-dark)',
+        }}
+      />
+      <div
+        className={cn(
+          'absolute inset-0 -z-10'
+        )}
+        style={{
+          background: 'var(--gradient-light)',
+        }}
+      />
+      <div
+        className={cn(
+          'absolute inset-0 -z-10',
+          'dark:block hidden'
+        )}
+        style={{
+          background: 'var(--gradient-dark)',
+        }}
+      />
+
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto">
-          {conversation.messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full py-12">
-              <div className="text-center max-w-md px-4" style={fadeStyle}>
-                <FileText size={48} className={cn(
-                  'mx-auto mb-3',
-                  'text-accent-300 dark:text-accent-700'
-                )} />
-                <h3 className={cn(
-                  'text-lg font-semibold mb-2',
-                  'text-accent-800 dark:text-accent-200'
-                )}>
-                  {conversation.title}
-                </h3>
-                <p className={cn(
-                  'text-accent-600 dark:text-accent-400'
-                )}>
-                  Ask me anything about your documents!
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className={cn(
-              'divide-y',
-              'divide-accent-200 dark:divide-accent-800'
-            )}>
-              {conversation.messages
-                .filter((message) => {
-                  // Show user messages always
-                  if (message.role === 'user') return true;
+      <div
+        ref={containerRef}
+        className={cn(
+          'flex-1',
+          hasMessages ? 'overflow-y-auto' : 'overflow-hidden'
+        )}>
+        {!hasMessages ? (
+          <WelcomeScreen onPromptClick={onSendMessage} />
+        ) : (
+          <div
+            className="max-w-5xl mx-auto py-4"
+            style={{ animation: 'fadeIn 0.3s ease-out' }}
+          >
+            {conversation?.messages
+              .filter((message) => {
+                // Show user messages always
+                if (message.role === 'user') return true;
 
-                  // Show assistant messages with:
-                  // 1. Non-empty content (after trimming), OR
-                  // 2. Tool calls (even if content is empty/whitespace)
-                  const hasContent = message.content && message.content.trim().length > 0;
-                  const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
+                // Show assistant messages with:
+                // 1. Non-empty content (after trimming), OR
+                // 2. Tool calls (even if content is empty/whitespace), OR
+                // 3. Active agent progress (during generation)
+                const hasContent = message.content && message.content.trim().length > 0;
+                const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
+                const hasProgress = message.agentProgress && (
+                  message.agentProgress.currentAgent !== null ||
+                  message.agentProgress.activeTools?.length > 0
+                );
 
-                  return hasContent || hasToolCalls;
-                })
-                .map((message, index, filteredMessages) => {
-                  // Calculate response duration for assistant messages
-                  let responseDurationMs: number | undefined;
+                return hasContent || hasToolCalls || hasProgress;
+              })
+              .map((message, index, filteredMessages) => {
+                // Calculate response duration for assistant messages
+                let responseDurationMs: number | undefined;
 
-                  if (message.role === 'assistant' && index > 0) {
-                    // Find the previous user message
-                    const prevMessage = filteredMessages[index - 1];
-                    if (prevMessage && prevMessage.role === 'user') {
-                      const userTime = new Date(prevMessage.timestamp).getTime();
-                      const assistantTime = new Date(message.timestamp).getTime();
+                if (message.role === 'assistant' && index > 0) {
+                  // Find the previous user message
+                  const prevMessage = filteredMessages[index - 1];
+                  if (prevMessage && prevMessage.role === 'user') {
+                    const userTime = new Date(prevMessage.timestamp).getTime();
+                    const assistantTime = new Date(message.timestamp).getTime();
 
-                      // Validate timestamps are valid dates
-                      if (isNaN(userTime)) {
-                        console.error('Invalid user message timestamp:', prevMessage.timestamp);
-                      } else if (isNaN(assistantTime)) {
-                        console.error('Invalid assistant message timestamp:', message.timestamp);
-                      } else {
-                        const duration = assistantTime - userTime;
+                    // Validate timestamps are valid dates
+                    if (isNaN(userTime)) {
+                      console.error('Invalid user message timestamp:', prevMessage.timestamp);
+                    } else if (isNaN(assistantTime)) {
+                      console.error('Invalid assistant message timestamp:', message.timestamp);
+                    } else {
+                      const duration = assistantTime - userTime;
 
-                        // Validate and warn about suspicious durations
-                        if (duration < 0) {
-                          console.warn('Negative duration detected (clock skew?):', {
-                            userTime,
-                            assistantTime,
-                            duration
-                          });
-                          // Don't show negative durations (clock skew issue)
-                        } else if (duration > 300000) {
-                          // Backend took > 5 minutes - this indicates performance issues
-                          console.error('⚠️ Backend response took > 5 minutes:', {
-                            duration,
-                            messageId: message.id,
-                            durationMinutes: (duration / 60000).toFixed(1)
-                          });
-                          // Still show duration to user so they know backend is slow
-                          responseDurationMs = duration;
-                        } else if (duration > 50) {
-                          // Normal duration: > 50ms, < 5 minutes
-                          responseDurationMs = duration;
-                        }
-                        // Else: duration <= 50ms (likely cached/instant), don't show
+                      // Validate and warn about suspicious durations
+                      if (duration < 0) {
+                        // Negative duration (clock skew), don't show
+                      } else if (duration > 24 * 60 * 60 * 1000) {
+                        // > 24 hours, likely a regenerated message from old history
+                        // Don't show duration as it's misleading
+                      } else if (duration > 50) {
+                        // Normal duration: > 50ms
+                        // For very long durations (e.g. > 10 mins), it might be a regeneration
+                        // of an old message, but we'll show it anyway as it might be useful context
+                        // just without the console warning.
+                        responseDurationMs = duration;
                       }
+                      // Else: duration <= 50ms (likely cached/instant), don't show
                     }
                   }
+                }
 
-                  return (
+                return (
+                  <div
+                    key={message.id}
+                    style={
+                      index === 0 && inputAnimated
+                        ? { animation: 'fadeInFromCenter 0.5s ease-out' }
+                        : undefined
+                    }
+                  >
                     <ChatMessage
-                      key={message.id}
                       message={message}
-                      animationDelay={index * 50}
+                      animationDelay={index === 0 ? 0 : index * 100}
                       onEdit={onEditMessage}
                       onRegenerate={onRegenerateMessage}
                       disabled={isStreaming}
                       responseDurationMs={responseDurationMs}
                     />
-                  );
-                })}
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+                  </div>
+                );
+              })}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
       </div>
 
-      {/* Input area */}
-      <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+      {/* Input area with animation */}
+      <div
+        className={cn(
+          !hasMessages && 'absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl px-4'
+        )}
+        style={
+          hasMessages && inputAnimated
+            ? {
+              animation: 'slideDown 0.4s ease-out',
+            }
+            : !hasMessages
+              ? {
+                animation: 'fadeInScale 0.6s ease-out',
+              }
+              : undefined
+        }
+      >
+        <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+      </div>
+
+      {/* HITL Clarification Modal */}
+      <ClarificationModal
+        isOpen={awaitingClarification}
+        clarificationData={clarificationData}
+        onSubmit={onSubmitClarification}
+        onCancel={onCancelClarification}
+        disabled={isStreaming}
+      />
     </div>
   );
 }

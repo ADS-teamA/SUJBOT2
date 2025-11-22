@@ -1,8 +1,29 @@
 # SUJBOT2 - Production RAG System for Legal/Technical Documents
 
-Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and interactive AI agent.
+Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and **multi-agent AI framework**.
 
-**Status:** PHASE 1-7 COMPLETE ✅ (Full SOTA 2025 RAG System + 14-Tool Agent + Query Expansion)
+**Status:** PHASE 1-7 COMPLETE + **MULTI-AGENT UPGRADE** ✅ (2025-11-11)
+
+## 🆕 NEW: Multi-Agent System (v2.0)
+
+SUJBOT2 has been upgraded to a **research-backed multi-agent framework** achieving:
+- ✅ **90% cost savings** via 3-level prompt caching (Harvey AI case study)
+- ✅ **8 specialized agents** for higher quality (Orchestrator, Extractor, Classifier, Compliance, Risk Verifier, Citation Auditor, Gap Synthesizer, Report Generator)
+- ✅ **State persistence** with PostgreSQL checkpointing
+- ✅ **Full observability** with LangSmith integration
+
+**Quick Start:**
+```bash
+# New multi-agent command
+uv run python -m src.multi_agent.runner --query "Verify GDPR compliance"
+
+# Interactive mode
+uv run python -m src.multi_agent.runner --interactive
+```
+
+**Migrating from v1.x single-agent?** → See [**MIGRATION_GUIDE.md**](MIGRATION_GUIDE.md)
+
+**Architecture details** → See [**MULTI_AGENT_STATUS.md**](MULTI_AGENT_STATUS.md)
 
 ## 📚 Interactive Documentation
 
@@ -30,19 +51,36 @@ Production-ready RAG system based on 4 research papers implementing state-of-the
 - **PHASE 2:** Generic summary generation (150 chars, proven better than expert summaries)
 - **PHASE 3:** RCTS chunking (500 chars) + SAC (58% DRM reduction)
 - **PHASE 4:** Multi-layer indexing (3 separate FAISS indexes)
-- **PHASE 5:** Hybrid search (BM25+Dense+RRF) + Knowledge graph + Cross-encoder reranking + Query expansion
+- **PHASE 5:** Hybrid search (BM25+Dense+RRF) + Universal language support (Czech, 24+ languages) + Knowledge graph + Cross-encoder reranking + Query expansion
 - **PHASE 6:** Context assembly with citations
 
-**Agent (PHASE 7):**
-- **Interactive CLI** powered by Claude SDK
-- **14 specialized tools** (5 basic + 6 advanced + 3 analysis)
-- **Query expansion** with multi-query generation (+15-25% recall improvement)
-- **Cost tracking** with prompt caching (90% savings on cached tokens)
-- **Conversation management** (/help, /model, /stats, /config, /clear)
+**Agent (PHASE 7) - Multi-Agent System:**
+- **8 specialized agents** (Orchestrator, Extractor, Classifier, Compliance, Risk Verifier, Citation Auditor, Gap Synthesizer, Report Generator)
+- **16 existing tools** integrated via adapter pattern (zero changes needed)
+- **3-level prompt caching** for 90% cost savings (regulatory docs + contract templates + system prompts)
+- **PostgreSQL checkpointing** for state persistence and recovery
+- **LangSmith observability** for full workflow tracing
+- **Adaptive routing** with 3 workflow patterns (Simple, Standard, Complex)
 
 ---
 
 ## 🚀 Quick Start
+
+### ⚠️ Breaking Change (v2.0 - HybridChunker)
+
+**If upgrading from v1.x:**
+- Chunking strategy changed to **HybridChunker** (token-aware, 512 tokens ≈ 500 chars)
+- Layout model changed to **HERON** (+23.9% accuracy improvement)
+- **All existing vector stores must be re-indexed**
+- Run: `rm -rf vector_db/* && uv run python run_pipeline.py data/`
+- Estimated time: 15-30 minutes for 10k chunks
+
+**Why this change:**
+- Token-aware chunking guarantees embedding model compatibility
+- HERON provides best accuracy for complex legal layouts
+- Preserves research constraints (512 tokens ≈ 500 chars)
+
+---
 
 ### Prerequisites
 
@@ -93,6 +131,194 @@ EMBEDDING_MODEL=text-embedding-3-large  # Windows
 **For detailed platform-specific instructions, see [INSTALL.md](INSTALL.md).**
 
 ---
+
+## 🌐 Web Interface (Recommended)
+
+**Production-ready web UI with real-time agent progress visualization:**
+
+```bash
+# Start full stack (PostgreSQL + Backend + Frontend)
+docker compose up -d
+
+# OR use convenience script
+./start_web.sh
+
+# Access UI
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000/docs
+```
+
+**Features:**
+- 🔐 **JWT authentication** with Argon2 password hashing
+- 💬 **Real-time chat** with agent progress visualization
+- 📊 **Cost tracking** per query with agent breakdown
+- 🔍 **Tool execution** display (inline)
+- 💾 **Persistent conversations** (PostgreSQL)
+- 🎨 **Dark/light theme** with smooth transitions
+
+**Default credentials:**
+```
+Email: admin@sujbot.local
+Password: ChangeThisPassword123!
+```
+
+**⚠️ IMPORTANT:** Change default password immediately in production!
+```bash
+# Reset admin password
+docker compose exec backend uv run python scripts/reset_admin_password.py
+```
+
+**⚠️ SECURITY:** Never commit `config.json` or `.env` files to git!
+```bash
+# First-time setup (creates config.json from template)
+cp config.json.example config.json
+# Edit config.json with your settings (API keys, database passwords)
+
+# Verify config.json is in .gitignore
+git check-ignore config.json  # Should print: config.json
+```
+
+**Full documentation:** [docs/WEB_INTERFACE.md](docs/WEB_INTERFACE.md)
+
+---
+## 🔒 Security Features
+
+SUJBOT2 implements production-grade security following OWASP best practices:
+
+### Authentication & Authorization
+
+**JWT-based Authentication:**
+- ✅ Argon2id password hashing (PHC winner, GPU-resistant)
+- ✅ httpOnly cookies for token storage (XSS protection)
+- ✅ 24-hour token expiry with secure key rotation
+- ✅ Admin-only user registration (prevents unauthorized signups)
+
+**Password Requirements (OWASP-compliant):**
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter  
+- At least one digit
+- At least one special character (@$!%*?&)
+- Not in common password blacklist (25 most common passwords)
+- No consecutive identical characters (e.g., "aaa", "111")
+
+### Network Security
+
+**HTTP Security Headers:**
+- ✅ Content-Security-Policy (XSS protection)
+- ✅ X-Frame-Options: DENY (clickjacking protection)
+- ✅ X-Content-Type-Options: nosniff (MIME sniffing protection)
+- ✅ Strict-Transport-Security (HTTPS enforcement in production)
+- ✅ Referrer-Policy (information leakage prevention)
+- ✅ Permissions-Policy (disable camera, geolocation, etc.)
+
+**Rate Limiting:**
+- ✅ Token bucket algorithm per IP address
+- ✅ Login endpoint: 10 requests/minute (brute force protection)
+- ✅ Registration endpoint: 5 requests/minute (spam prevention)
+- ✅ Default: 60 requests/minute for other endpoints
+
+**CORS Configuration:**
+- ✅ Explicit origin allow-list (no wildcards)
+- ✅ Restricted HTTP methods and headers
+- ✅ Credentials support for cookie-based auth
+
+### Data Protection
+
+**SQL Injection Prevention:**
+- ✅ Parameterized queries throughout (asyncpg with $1, $2 placeholders)
+- ✅ No string concatenation in SQL statements
+
+**Input Validation:**
+- ✅ Pydantic models for all API requests
+- ✅ Email format validation
+- ✅ Message length limits (50K characters)
+- ✅ Conversation title length limits (500 characters)
+
+### Production Deployment Checklist
+
+**Before deploying to production:**
+
+1. **Change Default Credentials**
+   ```bash
+   # Default admin account
+   Email: admin@sujbot.local
+   Password: ChangeThisPassword123!
+   
+   # Reset password immediately
+   docker compose exec backend uv run python scripts/reset_admin_password.py
+   ```
+
+2. **Generate Secure Keys**
+   ```bash
+   # AUTH_SECRET_KEY (64 bytes)
+   openssl rand -base64 64
+   
+   # POSTGRES_PASSWORD (32 bytes)
+   openssl rand -base64 32
+   ```
+
+3. **Set Environment Variables**
+   ```bash
+   # Edit .env file
+   AUTH_SECRET_KEY=<generated-key>
+   POSTGRES_PASSWORD=<strong-password>
+   BUILD_TARGET=production  # Enables HSTS and other production security
+   ```
+
+4. **Enable HTTPS**
+   - Configure reverse proxy (Nginx/Caddy) with TLS certificates
+   - Let's Encrypt recommended for automatic certificate management
+   - Update VITE_API_BASE_URL to use https://
+
+5. **Database Security**
+   ```bash
+   # ✅ PostgreSQL port NOT exposed by default (secure by design)
+   # docker-compose.yml: No port mapping in production
+   # docker-compose.override.yml: Port 5432 exposed ONLY in development
+
+   # Restrict PostgreSQL access
+   # Edit postgresql.conf:
+   listen_addresses = 'localhost'
+
+   # Use strong password for postgres user
+   # Generate with: openssl rand -base64 32
+   ```
+
+6. **Review Security Logs**
+   ```bash
+   # Monitor failed login attempts
+   docker compose logs backend | grep "Failed login"
+   
+   # Check rate limit violations
+   docker compose logs backend | grep "Rate limit exceeded"
+   ```
+
+### Security Considerations
+
+**What's Protected:**
+- ✅ User registration (admin-only)
+- ✅ Password strength (OWASP requirements)
+- ✅ Brute force attacks (rate limiting)
+- ✅ XSS attacks (CSP headers + httpOnly cookies)
+- ✅ Clickjacking (X-Frame-Options)
+- ✅ SQL injection (parameterized queries)
+- ✅ CSRF (SameSite=Lax cookies)
+
+**Known Limitations:**
+- ⚠️ No multi-factor authentication (planned for future release)
+- ⚠️ No token refresh mechanism (tokens expire after 24h)
+- ⚠️ In-memory HITL storage (use Redis for multi-instance deployments)
+- ⚠️ No audit log for admin actions (planned for future release)
+
+**Reporting Security Issues:**
+- Please report security vulnerabilities to the project maintainers privately
+- Do not create public GitHub issues for security vulnerabilities
+
+
+
+---
+
 
 ## 📖 Usage
 
@@ -199,6 +425,10 @@ Document (PDF/DOCX)
 [PHASE 5] Hybrid Search + Knowledge Graph + Reranking + Query Expansion
     ├─ Query expansion (optional, num_expands=0-5)
     ├─ BM25 + Dense retrieval + RRF fusion
+    │   ├─ Universal language support (auto-detection)
+    │   ├─ Czech stop words (422 words, hardcoded)
+    │   ├─ spaCy lemmatization (24 languages)
+    │   └─ NLTK stop words fallback (16 languages)
     ├─ Entity/relationship extraction (NetworkX)
     └─ Cross-encoder reranking (NOT Cohere - hurts legal docs)
     ↓

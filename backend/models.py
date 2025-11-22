@@ -26,7 +26,10 @@ class ChatRequest(BaseModel):
         description="User message (max 50K chars to prevent abuse)",
     )
     conversation_id: Optional[str] = Field(None, description="Conversation ID for history")
-    model: Optional[str] = Field(None, description="Override default model")
+    skip_save_user_message: bool = Field(
+        False,
+        description="Skip saving user message to database (for regenerate where message already exists)",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -51,3 +54,15 @@ class ModelsResponse(BaseModel):
 
     models: List[ModelInfo]
     default_model: str
+
+
+class ClarificationRequest(BaseModel):
+    """Request to provide clarification for interrupted workflow."""
+
+    thread_id: str = Field(..., description="Thread ID from clarification_needed event")
+    response: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="User's free-form clarification response",
+    )

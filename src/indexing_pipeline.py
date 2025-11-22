@@ -48,10 +48,11 @@ from src.config import (
     ChunkingConfig,
     EmbeddingConfig,
 )
-from src.docling_extractor_v2 import DoclingExtractorV2
+from src.unstructured_extractor import UnstructuredExtractor
 from src.multi_layer_chunker import MultiLayerChunker
 from src.embedding_generator import EmbeddingGenerator
 from src.faiss_vector_store import FAISSVectorStore
+from src.storage import create_vector_store_adapter
 from src.cost_tracker import get_global_tracker, reset_global_tracker
 
 # Knowledge Graph imports (optional)
@@ -231,6 +232,9 @@ class IndexingConfig:
     duplicate_sample_pages: int = 1  # Pages to sample for detection (1 = first page)
     vector_store_path: str = "vector_db"  # Path to vector store for duplicate checking
 
+    # Storage Backend Selection (PHASE 4)
+    storage_backend: str = "faiss"  # "faiss" or "postgresql" - where to index vectors
+
     def __post_init__(self):
         """Configure speed mode and validate settings."""
         # Validate speed mode
@@ -260,9 +264,10 @@ class IndexingConfig:
         # Initialize clustering config if enabled
         if self.enable_semantic_clustering and self.clustering_config is None:
             try:
-                from src.config import ClusteringConfig
+                from src.config import ClusteringConfig, get_config
 
-                self.clustering_config = ClusteringConfig.from_env()
+                root_config = get_config()
+                self.clustering_config = ClusteringConfig.from_config(root_config.clustering)
             except ImportError:
                 logger.warning("Semantic clustering enabled but clustering module not available")
 
@@ -283,27 +288,34 @@ class IndexingConfig:
         Returns:
             IndexingConfig instance loaded from environment
         """
-        # Load speed mode from env
-        speed_mode = os.getenv("SPEED_MODE", "fast")
+        # Load validated config from config.json
+        from src.config import get_config
+        root_config = get_config()
 
-        # Create config with sub-configs loaded from env
+        # Get storage backend from config (RootConfig has extra="allow")
+        storage_backend = "faiss"  # Default to FAISS
+        if hasattr(root_config, "storage"):
+            storage_config = root_config.storage
+            if isinstance(storage_config, dict):
+                storage_backend = storage_config.get("backend", "faiss")
+            else:
+                storage_backend = getattr(storage_config, "backend", "faiss")
+
+        # Create config with sub-configs loaded from config.json
         config = cls(
-            speed_mode=speed_mode,
-            extraction_config=ExtractionConfig.from_env(),
-            summarization_config=SummarizationConfig.from_env(),
-            chunking_config=ChunkingConfig.from_env(),
-            embedding_config=EmbeddingConfig.from_env(),
-            enable_semantic_clustering=os.getenv("ENABLE_SEMANTIC_CLUSTERING", "false").lower() == "true",
-            enable_knowledge_graph=os.getenv("ENABLE_KNOWLEDGE_GRAPH", "true").lower() == "true",
-            enable_hybrid_search=os.getenv("ENABLE_HYBRID_SEARCH", "true").lower() == "true",
-            enable_duplicate_detection=(
-                os.getenv("ENABLE_DUPLICATE_DETECTION", "true").lower() == "true"
-            ),
-            duplicate_similarity_threshold=float(
-                os.getenv("DUPLICATE_SIMILARITY_THRESHOLD", "0.98")
-            ),
-            duplicate_sample_pages=int(os.getenv("DUPLICATE_SAMPLE_PAGES", "1")),
-            vector_store_path=os.getenv("VECTOR_STORE_PATH", "vector_db"),
+            speed_mode=root_config.summarization.speed_mode,
+            extraction_config=ExtractionConfig.from_config(root_config.extraction),
+            summarization_config=SummarizationConfig.from_config(root_config.summarization),
+            chunking_config=ChunkingConfig.from_config(root_config.chunking),
+            embedding_config=EmbeddingConfig.from_config(root_config.embedding),
+            enable_semantic_clustering=root_config.clustering.enable_labels,
+            enable_knowledge_graph=root_config.knowledge_graph.enable,
+            enable_hybrid_search=root_config.hybrid_search.enable,
+            enable_duplicate_detection=True,  # Always enabled
+            duplicate_similarity_threshold=0.98,  # Default value
+            duplicate_sample_pages=1,  # Default value
+            vector_store_path=root_config.agent.vector_store_path,
+            storage_backend=storage_backend,
             **overrides,
         )
 
@@ -346,7 +358,7 @@ class IndexingPipeline:
         logger.info("Initializing IndexingPipeline...")
 
         # Initialize PHASE 1: Extraction (uses nested config)
-        self.extractor = DoclingExtractorV2(self.config.extraction_config)
+        self.extractor = UnstructuredExtractor(self.config.extraction_config)
 
         # Initialize PHASE 3: Chunking (uses nested config)
         self.chunker = MultiLayerChunker(config=self.config.chunking_config)
@@ -436,7 +448,7 @@ class IndexingPipeline:
 
         Returns:
             Dict with pipeline results, or None if document is a duplicate and was skipped:
-                - vector_store: FAISSVectorStore with indexed document
+                - vector_store: VectorStoreAdapter (FAISS) with indexed document
                 - knowledge_graph: KnowledgeGraph (if enabled, else None)
                 - chunks: Dict of chunks (if save_intermediate)
                 - stats: Pipeline statistics
@@ -736,15 +748,60 @@ class IndexingPipeline:
                     logger.warning(f"Clustering module not available: {e}")
                     logger.warning("Skipping semantic clustering")
 
-            # PHASE 4: FAISS Indexing
-            logger.info("PHASE 4: FAISS Indexing")
-            vector_store = FAISSVectorStore(dimensions=self.embedder.dimensions)
-            vector_store.add_chunks(chunks, embeddings)
-            store_stats = vector_store.get_stats()
-            logger.info(
-                f"Indexed: {store_stats['total_vectors']} vectors "
-                f"({store_stats['documents']} documents)"
-            )
+            # PHASE 4: Vector Store Indexing (backend-agnostic)
+            backend = self.config.storage_backend
+            logger.info(f"PHASE 4: Vector Store Indexing (backend={backend})")
+
+            if backend == "postgresql":
+                # PostgreSQL backend - use async adapter
+                import asyncio
+                import nest_asyncio
+
+                # Enable nested event loops (for running async in sync context)
+                nest_asyncio.apply()
+
+                # Get connection string from environment
+                connection_string = os.getenv("DATABASE_URL")
+                if not connection_string:
+                    raise ValueError(
+                        "DATABASE_URL environment variable is required for PostgreSQL backend.\n"
+                        "Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/dbname'"
+                    )
+
+                # Create PostgreSQL adapter
+                async def create_postgres_adapter():
+                    adapter = await create_vector_store_adapter(
+                        backend="postgresql",
+                        connection_string=connection_string,
+                        dimensions=self.embedder.dimensions
+                    )
+                    await adapter.initialize()
+                    return adapter
+
+                vector_store = asyncio.run(create_postgres_adapter())
+                vector_store.add_chunks(chunks, embeddings)  # Sync wrapper
+                store_stats = vector_store.get_stats()
+                logger.info(
+                    f"PostgreSQL indexed: {store_stats['total_vectors']} vectors "
+                    f"({store_stats['documents']} documents)"
+                )
+
+            elif backend == "faiss":
+                # FAISS backend - traditional file-based storage
+                vector_store = FAISSVectorStore(dimensions=self.embedder.dimensions)
+                vector_store.add_chunks(chunks, embeddings)
+                store_stats = vector_store.get_stats()
+                logger.info(
+                    f"FAISS indexed: {store_stats['total_vectors']} vectors "
+                    f"({store_stats['documents']} documents)"
+                )
+
+            else:
+                raise ValueError(
+                    f"Unknown storage backend: {backend}\n"
+                    f"Supported backends: 'faiss', 'postgresql'\n"
+                    f"Set storage.backend in config.json"
+                )
 
         # PHASE 5B: Hybrid Search (optional, skip if exists)
         if self.config.enable_hybrid_search:
@@ -768,9 +825,9 @@ class IndexingPipeline:
                         f"L3={len(bm25_store.index_layer3.corpus)}"
                     )
 
-                    # Wrap FAISS + BM25 into HybridVectorStore
+                    # Wrap vector store (FAISS or PostgreSQL) + BM25 into HybridVectorStore
                     hybrid_store = HybridVectorStore(
-                        faiss_store=vector_store,
+                        vector_store=vector_store,
                         bm25_store=bm25_store,
                         fusion_k=self.config.hybrid_fusion_k,
                     )
@@ -876,9 +933,21 @@ class IndexingPipeline:
         logger.info(f"Indexing complete: {document_path.name}")
         logger.info("=" * 80)
 
+        # Wrap vector store in adapter (for unified interface)
+        from src.hybrid_search import HybridVectorStore
+        if isinstance(vector_store, HybridVectorStore):
+            # HybridVectorStore contains a FAISSVectorStore, wrap the FAISS component
+            vector_store_adapter = create_vector_store_adapter(
+                faiss_store=vector_store.faiss_store,
+                bm25_store=vector_store.bm25_store
+            )
+        else:
+            # Plain FAISSVectorStore
+            vector_store_adapter = create_vector_store_adapter(faiss_store=vector_store)
+
         # Prepare result
         result_dict = {
-            "vector_store": vector_store,
+            "vector_store": vector_store_adapter,
             "knowledge_graph": knowledge_graph,
             "stats": {
                 "document_id": result.document_id,
@@ -916,7 +985,7 @@ class IndexingPipeline:
 
         Returns:
             Dict with:
-                - vector_store: Combined FAISSVectorStore
+                - vector_store: Combined VectorStoreAdapter (FAISS)
                 - knowledge_graphs: List of KnowledgeGraphs (if enabled)
                 - stats: Batch statistics
         """
@@ -1035,8 +1104,20 @@ class IndexingPipeline:
         logger.info(f"\nBatch indexing complete: {vector_store.get_stats()}")
         logger.info(f"Saved to: {combined_output}")
 
+        # Wrap vector store in adapter (for unified interface)
+        from src.hybrid_search import HybridVectorStore
+        if isinstance(vector_store, HybridVectorStore):
+            # HybridVectorStore contains a FAISSVectorStore, wrap the FAISS component
+            vector_store_adapter = create_vector_store_adapter(
+                faiss_store=vector_store.faiss_store,
+                bm25_store=vector_store.bm25_store
+            )
+        else:
+            # Plain FAISSVectorStore
+            vector_store_adapter = create_vector_store_adapter(faiss_store=vector_store)
+
         return {
-            "vector_store": vector_store,
+            "vector_store": vector_store_adapter,
             "knowledge_graphs": knowledge_graphs,
             "stats": {
                 "total_documents": len(document_paths),
@@ -1115,23 +1196,7 @@ class IndexingPipeline:
 if __name__ == "__main__":
     # Initialize pipeline with research-optimal settings
     # Knowledge Graph is now enabled by default (PHASE 5A)
-    config = IndexingConfig(
-        # PHASE 1-2
-        enable_smart_hierarchy=True,
-        generate_summaries=True,
-        summary_model="gpt-4o-mini",
-        # PHASE 3
-        chunk_size=500,
-        enable_sac=True,
-        # PHASE 4
-        embedding_model="text-embedding-3-large",
-        normalize_embeddings=True,
-        # PHASE 5A: Knowledge Graph (enabled by default)
-        # enable_knowledge_graph=True,  # ✅ No need to set - default is True
-        kg_llm_provider="openai",
-        kg_llm_model="gpt-4o-mini",
-        kg_backend="simple",  # simple, neo4j, or networkx
-    )
+    config = IndexingConfig.from_env()
 
     pipeline = IndexingPipeline(config)
 

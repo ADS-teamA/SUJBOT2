@@ -2,14 +2,15 @@
 PHASE 3: Multi-Layer Chunking with Contextual Retrieval
 
 Based on research:
-- LegalBench-RAG: RecursiveCharacterTextSplitter > Fixed-size (Prec@1: 6.41% vs 2.40%)
+- LegalBench-RAG: Small chunks optimal (500 chars equivalent to 512 tokens)
 - Anthropic, 2024: Contextual Retrieval reduces retrieval failures by 67%
 - Lima, 2024: Multi-layer embeddings improve essential chunks by 2.3x
+- Docling HybridChunker: Token-aware, hierarchy-preserving chunking
 
 Implementation:
 - Layer 1: Document level (1 chunk per document)
 - Layer 2: Section level (1 chunk per section)
-- Layer 3: Chunk level (RCTS 500 chars + Contextual Retrieval)
+- Layer 3: Chunk level (HybridChunker 512 tokens + Contextual Retrieval)
 
 Contextual Retrieval:
 - Generates LLM-based context for each chunk
@@ -21,10 +22,8 @@ import logging
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
-try:
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-except ImportError:
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
+# Token-aware chunking (no Docling dependency)
+import tiktoken
 
 # Import contextual retrieval
 try:
@@ -112,12 +111,13 @@ class MultiLayerChunker:
     Creates 3 layers:
     - Layer 1: Document level (summary only)
     - Layer 2: Section level (section summaries)
-    - Layer 3: Chunk level (RCTS 500 chars + Contextual Retrieval)
+    - Layer 3: Chunk level (HybridChunker 512 tokens + Contextual Retrieval)
 
     Based on:
-    - LegalBench-RAG (Pipitone & Alami, 2024)
+    - LegalBench-RAG (Pipitone & Alami, 2024) - Small chunk size optimal
     - Contextual Retrieval (Anthropic, Sept 2024)
     - Multi-Layer Embeddings (Lima, 2024)
+    - Docling HybridChunker - Token-aware, hierarchy-preserving
     """
 
     def __init__(self, config: Optional[ChunkingConfig] = None, api_key: Optional[str] = None):
@@ -131,17 +131,7 @@ class MultiLayerChunker:
         self.config = config or ChunkingConfig()
 
         # Extract params for convenience
-        self.chunk_size = self.config.chunk_size
-        self.chunk_overlap = self.config.chunk_overlap
         self.enable_contextual = self.config.enable_contextual
-
-        # Initialize RecursiveCharacterTextSplitter
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-            length_function=len,
-            separators=self.config.separators,
-        )
 
         # Initialize contextual retrieval if enabled
         self.context_generator = None
@@ -160,7 +150,7 @@ class MultiLayerChunker:
         chunking_mode = "Contextual" if self.enable_contextual else "Basic"
         logger.info(
             f"MultiLayerChunker initialized: "
-            f"chunk_size={self.chunk_size}, overlap={self.chunk_overlap}, "
+            f"max_tokens={self.config.max_tokens}, tokenizer={self.config.tokenizer_model}, "
             f"mode={chunking_mode}"
         )
 
@@ -330,171 +320,83 @@ class MultiLayerChunker:
 
         return chunks
 
-    def _create_layer3_chunks(self, extracted_doc) -> List[Chunk]:
+    def _token_aware_split(self, text: str, max_tokens: int = 512) -> List[str]:
         """
-        Layer 3: Chunk-level with Contextual Retrieval.
+        Split text into token-aware chunks using tiktoken directly.
 
-        CRITICAL: This is the PRIMARY chunking layer!
+        Uses max_tokens=512 (≈ 500 chars for CS/EN text).
+        Preserves LegalBench-RAG research constraint.
 
-        Process (Contextual Retrieval):
-        1. Split each section into 500-char chunks using RCTS
-        2. Generate LLM-based context for each chunk (explains what chunk discusses)
-        3. Prepend context to chunk for embedding
-        4. Keep raw content (without context) for generation
-        5. Fallback to basic chunking if context generation fails
+        Args:
+            text: Text to split
+            max_tokens: Maximum tokens per chunk (default: 512)
 
-        Based on:
-        - Anthropic, 2024: Contextual Retrieval reduces failures by 67%
-        - LegalBench-RAG: RCTS outperforms fixed-size
+        Returns:
+            List of text chunks, each <= max_tokens
         """
+        if not text.strip():
+            return []
 
+        # Get tiktoken encoding
+        encoding = tiktoken.encoding_for_model(self.config.tokenizer_model)
+
+        # Encode text to tokens
+        tokens = encoding.encode(text)
+
+        # Split into chunks of max_tokens
         chunks = []
-
-        # Get document summary for context generation
-        doc_summary = extracted_doc.document_summary or ""
-
-        # CONTEXTUAL RETRIEVAL mode
-        if self.enable_contextual and self.context_generator:
-            logger.info("Using Contextual Retrieval for Layer 3")
-            chunks = self._create_layer3_contextual(extracted_doc, doc_summary)
-
-        # Basic mode (no augmentation)
-        else:
-            logger.info("Using basic chunking for Layer 3 (no augmentation)")
-            chunks = self._create_layer3_basic(extracted_doc)
+        for i in range(0, len(tokens), max_tokens):
+            chunk_tokens = tokens[i:i + max_tokens]
+            chunk_text = encoding.decode(chunk_tokens)
+            chunks.append(chunk_text)
 
         return chunks
 
-    def _create_layer3_contextual(self, extracted_doc, doc_summary: str) -> List[Chunk]:
+    def _create_layer3_token_aware(self, extracted_doc) -> List[Chunk]:
         """
-        Create Layer 3 chunks with Contextual Retrieval.
+        Layer 3: Token-aware chunking using tiktoken directly.
 
-        Generates LLM-based context for each chunk.
+        Replaces HybridChunker (Docling dependency).
+        Guarantees chunks fit within embedding model token limits.
+
+        Args:
+            extracted_doc: ExtractedDocument from UnstructuredExtractor
+
+        Returns:
+            List of Chunk objects with token-aware boundaries
         """
         chunks = []
         chunk_counter = 0
 
-        # Prepare all chunks with metadata for batch context generation
-        chunks_to_contextualize = []
-
+        # Iterate through sections and split into token-aware chunks
         for section in extracted_doc.sections:
             # Skip empty sections
             if not section.content.strip():
                 continue
 
-            # Split section into raw chunks
-            raw_chunks = self.text_splitter.split_text(section.content)
+            # Split section content into token-aware chunks
+            section_chunks = self._token_aware_split(
+                section.content,
+                max_tokens=self.config.max_tokens
+            )
 
-            for idx, raw_chunk in enumerate(raw_chunks):
+            if not section_chunks:
+                continue
+
+            # Create Chunk objects for each split
+            for chunk_idx, chunk_text in enumerate(section_chunks):
                 chunk_counter += 1
+                chunk_id = f"{extracted_doc.document_id}_L3_{chunk_counter}"
 
-                # Get surrounding chunks (if enabled in config)
-                preceding_chunk = None
-                following_chunk = None
-                if (
-                    self.config.context_config
-                    and self.config.context_config.include_surrounding_chunks
-                ):
-                    num_surrounding = self.config.context_config.num_surrounding_chunks
-                    # Get preceding chunk(s)
-                    if idx > 0:
-                        preceding_chunk = raw_chunks[idx - 1]
-                    # Get following chunk(s)
-                    if idx < len(raw_chunks) - 1:
-                        following_chunk = raw_chunks[idx + 1]
-
-                # Prepare metadata for context generation
-                metadata = {
-                    "document_summary": doc_summary,
-                    "section_title": section.title,
-                    "section_path": section.path,
-                    "preceding_chunk": preceding_chunk,
-                    "following_chunk": following_chunk,
-                    "section": section,
-                    "idx": idx,
-                    "chunk_id": f"{extracted_doc.document_id}_L3_{section.section_id}_chunk_{idx}",
-                }
-
-                chunks_to_contextualize.append((raw_chunk, metadata))
-
-        # Generate contexts in batch (parallel)
-        logger.info(f"Generating contexts for {len(chunks_to_contextualize)} chunks...")
-
-        try:
-            chunk_contexts = self.context_generator.generate_contexts_batch(chunks_to_contextualize)
-
-            # Create Chunk objects with contexts
-            for (raw_chunk, metadata), context_result in zip(
-                chunks_to_contextualize, chunk_contexts
-            ):
-                section = metadata["section"]
-                idx = metadata["idx"]
-
-                # Use context if successful, otherwise use raw chunk
-                if context_result.success:
-                    augmented_content = f"{context_result.context}\n\n{raw_chunk}"
-                else:
-                    # Fallback to basic (no augmentation)
-                    logger.warning(
-                        f"Context generation failed for chunk {metadata['chunk_id']}, "
-                        f"using raw chunk"
-                    )
-                    augmented_content = raw_chunk
-
-                chunk = Chunk(
-                    chunk_id=metadata["chunk_id"],
-                    content=augmented_content,  # For embedding (with context)
-                    raw_content=raw_chunk,  # For generation (without context)
-                    metadata=ChunkMetadata(
-                        chunk_id=f"{extracted_doc.document_id}_L3_{section.section_id}_chunk_{idx}",
-                        layer=3,
-                        document_id=extracted_doc.document_id,
-                        section_id=section.section_id,
-                        parent_chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
-                        page_number=section.page_number,
-                        char_start=section.char_start,
-                        char_end=section.char_end,
-                        section_title=section.title,
-                        section_path=section.path,
-                        section_level=section.level,
-                        section_depth=section.depth,
-                    ),
-                )
-
-                chunks.append(chunk)
-
-        except Exception as e:
-            logger.error(f"Batch context generation failed: {e}")
-            if self.config.context_config and self.config.context_config.fallback_to_basic:
-                logger.warning("Falling back to basic chunking due to context generation failure")
-                return self._create_layer3_basic(extracted_doc)
-            raise
-
-        return chunks
-
-    def _create_layer3_basic(self, extracted_doc) -> List[Chunk]:
-        """
-        Create Layer 3 chunks with basic RCTS chunking (no augmentation).
-
-        Used as fallback when Contextual Retrieval is disabled or fails.
-        """
-        chunks = []
-
-        for section in extracted_doc.sections:
-            # Skip empty sections
-            if not section.content.strip():
-                continue
-
-            # Split section into raw chunks
-            raw_chunks = self.text_splitter.split_text(section.content)
-
-            for idx, raw_chunk in enumerate(raw_chunks):
-                chunk_id = f"{extracted_doc.document_id}_L3_{section.section_id}_chunk_{idx}"
+                # Calculate character positions within section
+                # This is approximate since we're working with token boundaries
+                char_start = section.char_start
+                char_end = section.char_start + len(chunk_text)
 
                 chunk = Chunk(
                     chunk_id=chunk_id,
-                    content=raw_chunk,  # No augmentation
-                    raw_content=raw_chunk,
+                    content=chunk_text,  # Will be augmented with context if enabled
+                    raw_content=chunk_text,
                     metadata=ChunkMetadata(
                         chunk_id=chunk_id,
                         layer=3,
@@ -502,18 +404,107 @@ class MultiLayerChunker:
                         section_id=section.section_id,
                         parent_chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
                         page_number=section.page_number,
-                        char_start=section.char_start,
-                        char_end=section.char_end,
+                        char_start=char_start,
+                        char_end=char_end,
                         section_title=section.title,
                         section_path=section.path,
                         section_level=section.level,
                         section_depth=section.depth,
                     ),
                 )
-
                 chunks.append(chunk)
 
+        logger.info(f"Layer 3: {len(chunks)} token-aware chunks created (tiktoken)")
         return chunks
+
+    def _create_layer3_chunks(self, extracted_doc) -> List[Chunk]:
+        """
+        Layer 3: Token-aware chunking with tiktoken directly.
+
+        BREAKING CHANGE: Replaces Docling HybridChunker with direct tiktoken.
+        Uses max_tokens=512 (≈ 500 chars) to preserve research intent.
+
+        Process:
+        1. Token-aware splitting with tiktoken (direct implementation)
+        2. Contextual Retrieval augmentation (if enabled)
+        3. Prepend context for embedding
+
+        Based on:
+        - Anthropic, 2024: Contextual Retrieval reduces failures by 67%
+        - LegalBench-RAG: Small chunks optimal (512 tokens ≈ 500 chars)
+        - Unstructured.io: Hierarchy-preserving extraction
+        """
+        logger.info("PHASE 3A: Layer 3 chunking with tiktoken (direct)")
+
+        # Generate token-aware chunks
+        chunks = self._create_layer3_token_aware(extracted_doc)
+
+        # Apply Contextual Retrieval augmentation
+        if self.enable_contextual and self.context_generator:
+            logger.info("Applying Contextual Retrieval augmentation to token-aware chunks...")
+            chunks = self._apply_contextual_augmentation_to_hybrid_chunks(chunks, extracted_doc)
+
+        logger.info(f"Layer 3: {len(chunks)} token-aware chunks with context")
+        return chunks
+
+    def _apply_contextual_augmentation_to_hybrid_chunks(
+        self, chunks: List[Chunk], extracted_doc
+    ) -> List[Chunk]:
+        """
+        Apply Contextual Retrieval augmentation to hybrid chunks.
+
+        Generates LLM-based context for each chunk and prepends it to chunk content.
+
+        Args:
+            chunks: List of Chunk objects from HybridChunker
+            extracted_doc: ExtractedDocument with metadata
+
+        Returns:
+            List of Chunk objects with augmented content
+        """
+        doc_summary = extracted_doc.document_summary or ""
+
+        # Prepare chunks for batch context generation
+        chunks_to_contextualize = []
+        for chunk in chunks:
+            metadata = {
+                "document_summary": doc_summary,
+                "section_title": chunk.metadata.section_title,
+                "section_path": chunk.metadata.section_path,
+                "chunk_id": chunk.chunk_id,
+                "preceding_chunk": None,  # HybridChunker doesn't provide surrounding chunks
+                "following_chunk": None,
+            }
+            chunks_to_contextualize.append((chunk.raw_content, metadata))
+
+        # Generate contexts in batch
+        logger.info(f"Generating contexts for {len(chunks_to_contextualize)} hybrid chunks...")
+
+        try:
+            chunk_contexts = self.context_generator.generate_contexts_batch(chunks_to_contextualize)
+
+            # Apply contexts to chunks
+            augmented_chunks = []
+            for chunk, context_result in zip(chunks, chunk_contexts):
+                if context_result.success:
+                    # Prepend context to chunk content
+                    chunk.content = f"{context_result.context}\n\n{chunk.raw_content}"
+                else:
+                    # Keep raw content if context generation failed
+                    logger.warning(
+                        f"Context generation failed for {chunk.chunk_id}, using raw content"
+                    )
+
+                augmented_chunks.append(chunk)
+
+            logger.info(
+                f"Contextual augmentation: {sum(1 for c in chunk_contexts if c.success)}/{len(chunks)} successful"
+            )
+            return augmented_chunks
+
+        except Exception as e:
+            logger.error(f"Batch context generation failed: {e}, using raw chunks")
+            return chunks  # Fallback to raw chunks
 
     def _generate_section_summaries_from_contexts(
         self, extracted_doc, layer3_chunks: List[Chunk]
@@ -753,22 +744,28 @@ class MultiLayerChunker:
 
 # Example usage
 if __name__ == "__main__":
-    # This would be used after DoclingExtractorV2
-    from config import ExtractionConfig, ChunkingConfig
-    from docling_extractor_v2 import DoclingExtractorV2
+    # This would be used after UnstructuredExtractor
+    from pathlib import Path
+    from config import ChunkingConfig
+    from unstructured_extractor import UnstructuredExtractor, ExtractionConfig
 
     # Extract document
     extraction_config = ExtractionConfig(
-        enable_smart_hierarchy=True, generate_summaries=True  # Required for Layer 1 and Layer 2
+        strategy="hi_res",
+        model="yolox",  # Best results from testing on legal documents
+        languages=["ces", "eng"],
+        detect_language_per_element=True,
+        filter_rotated_text=True,
     )
 
-    extractor = DoclingExtractorV2(extraction_config)
-    result = extractor.extract("document.pdf")
+    extractor = UnstructuredExtractor(extraction_config)
+    pdf_path = Path("data/document.pdf")
+    result = extractor.extract(pdf_path)
 
     # Create multi-layer chunks with Contextual Retrieval
     chunking_config = ChunkingConfig(
-        chunk_size=500,
-        chunk_overlap=0,
+        max_tokens=512,  # Token-aware chunking (≈ 500 chars)
+        tokenizer_model="text-embedding-3-large",
         enable_contextual=True,  # Use Contextual Retrieval (RECOMMENDED)
     )
 

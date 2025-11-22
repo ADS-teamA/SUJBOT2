@@ -1,19 +1,15 @@
 /**
- * Header Component - Top navigation with model selector, theme toggle, and sidebar control
+ * Header Component - Top navigation with theme toggle and sidebar control
  */
 
-import { useState, useEffect } from 'react';
-import { Sun, Moon, Settings, Menu } from 'lucide-react';
-import { apiService } from '../../services/api';
+import { Sun, Moon, Menu, LogOut } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 import { useHover } from '../../design-system/animations/hooks/useHover';
-import type { Model } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface HeaderProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
-  selectedModel: string;
-  onModelChange: (model: string) => void;
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
 }
@@ -21,52 +17,23 @@ interface HeaderProps {
 export function Header({
   theme,
   onToggleTheme,
-  selectedModel,
-  onModelChange,
   onToggleSidebar,
   sidebarOpen,
 }: HeaderProps) {
-  const [models, setModels] = useState<Model[]>([]);
-  const [showModelSelector, setShowModelSelector] = useState(false);
-  const [modelError, setModelError] = useState<string | null>(null);
+  // Authentication
+  const { logout } = useAuth();
 
   // Animation hooks
   const hamburgerHover = useHover({ scale: true });
   const themeHover = useHover({ scale: true });
-
-  // Load available models on mount
-  useEffect(() => {
-    apiService
-      .getModels()
-      .then((data) => {
-        setModels(data.models);
-        setModelError(null);
-      })
-      .catch((error) => {
-        console.error('Failed to load models:', error);
-        setModelError(`Failed to load models: ${error.message}. Using default model.`);
-      });
-  }, []);
-
-  const handleModelChange = async (modelId: string) => {
-    try {
-      await onModelChange(modelId);
-      setShowModelSelector(false);
-      setModelError(null);
-    } catch (error) {
-      console.error('Failed to switch model:', error);
-      setModelError(`Failed to switch to model: ${(error as Error).message}`);
-      // Keep selector open for retry
-    }
-  };
-
-  const currentModel = models.find((m) => m.id === selectedModel);
+  const logoutHover = useHover({ scale: true });
 
   return (
     <header className={cn(
       'bg-white dark:bg-accent-900',
       'border-b border-accent-200 dark:border-accent-800',
-      'px-6 py-4'
+      'px-6 py-4',
+      'transition-all duration-700'
     )}>
       <div className="flex items-center justify-between">
         {/* Left side: Hamburger + Logo */}
@@ -80,34 +47,68 @@ export function Header({
               'p-2 rounded-lg',
               'text-accent-700 dark:text-accent-300',
               'hover:bg-accent-100 dark:hover:bg-accent-800',
-              'transition-colors duration-150'
+              'transition-all duration-700'
             )}
             aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
           >
-            <Menu size={20} />
+            <Menu size={20} className="transition-all duration-700" />
           </button>
 
           {/* Logo and title */}
           <div className="flex items-center gap-3">
-            <div className={cn(
-              'w-8 h-8 rounded-lg',
-              'bg-accent-700 dark:bg-accent-300',
-              'flex items-center justify-center',
-              'text-white dark:text-accent-900',
-              'font-bold'
-            )}>
-              S2
-            </div>
+            {/* Icon - Atom + Book */}
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 512 512"
+              xmlns="http://www.w3.org/2000/svg"
+              className={cn(
+                'text-accent-900 dark:text-accent-100',
+                'flex-shrink-0',
+                'transition-all duration-700'
+              )}
+            >
+              {/* Atom + Book */}
+              <g transform="translate(256 256)" stroke="currentColor" fill="none" strokeLinecap="round">
+                {/* Orbitals (thicker) */}
+                <ellipse rx="185" ry="110" strokeWidth="16" />
+                <ellipse rx="185" ry="110" strokeWidth="16" transform="rotate(60)" />
+                <ellipse rx="185" ry="110" strokeWidth="16" transform="rotate(-60)" />
+
+                {/* Electrons (3 atoms evenly distributed at 0°, 120°, 240°) */}
+                <circle r="20" cx="185" cy="0" fill="currentColor" stroke="none" />
+                <circle r="20" cx="-92.5" cy="160" fill="currentColor" stroke="none" />
+                <circle r="20" cx="-92.5" cy="-160" fill="currentColor" stroke="none" />
+
+                {/* Paragraph symbol § */}
+                <text
+                  x="0"
+                  y="35"
+                  fontSize="140"
+                  fontWeight="bold"
+                  fill="currentColor"
+                  textAnchor="middle"
+                  fontFamily="serif"
+                >§</text>
+              </g>
+            </svg>
             <div>
-              <h1 className={cn(
-                'text-lg font-bold',
-                'text-accent-900 dark:text-accent-100'
-              )}>SUJBOT2</h1>
+              <h1
+                className={cn(
+                  'text-xl font-light tracking-tight',
+                  'text-accent-900 dark:text-accent-100',
+                  'transition-colors duration-700'
+                )}
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                SUJBOT2
+              </h1>
               <p className={cn(
-                'text-xs',
-                'text-accent-500 dark:text-accent-400'
+                'text-xs font-light',
+                'text-accent-500 dark:text-accent-400',
+                'transition-colors duration-700'
               )}>
-                RAG-Powered Document Assistant
+                Legal & Technical Document Intelligence
               </p>
             </div>
           </div>
@@ -115,90 +116,64 @@ export function Header({
 
         {/* Controls */}
         <div className="flex items-center gap-3">
-          {/* Model selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowModelSelector(!showModelSelector)}
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-lg',
-                'border border-accent-300 dark:border-accent-600',
-                'hover:bg-accent-100 dark:hover:bg-accent-800',
-                'transition-all duration-150',
-                'hover:scale-105'
-              )}
-            >
-              <Settings size={16} />
-              <span className="text-sm font-medium">
-                {currentModel?.name || 'Select Model'}
-              </span>
-            </button>
-
-            {/* Dropdown */}
-            {showModelSelector && (
-              <div className={cn(
-                'absolute right-0 mt-2 w-80',
-                'bg-white dark:bg-accent-900',
-                'border border-accent-200 dark:border-accent-800',
-                'rounded-lg shadow-lg overflow-hidden z-50',
-                'animate-scale-in'
-              )}>
-                {/* Error message */}
-                {modelError && (
-                  <div className={cn(
-                    'px-4 py-3 border-b',
-                    'bg-red-50 dark:bg-red-900/20',
-                    'border-red-200 dark:border-red-800',
-                    'text-red-800 dark:text-red-200 text-xs'
-                  )}>
-                    {modelError}
-                  </div>
-                )}
-
-                {models.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => handleModelChange(model.id)}
-                    className={cn(
-                      'w-full text-left px-4 py-3',
-                      'hover:bg-accent-100 dark:hover:bg-accent-800',
-                      'transition-colors duration-150',
-                      'border-b border-accent-100 dark:border-accent-800',
-                      'last:border-b-0',
-                      selectedModel === model.id && 'bg-accent-200 dark:bg-accent-800/50'
-                    )}
-                  >
-                    <div className="font-medium text-sm">{model.name}</div>
-                    <div className={cn(
-                      'text-xs mt-0.5',
-                      'text-accent-500 dark:text-accent-400'
-                    )}>
-                      {model.description}
-                    </div>
-                    <div className={cn(
-                      'text-xs mt-1',
-                      'text-accent-400 dark:text-accent-500'
-                    )}>
-                      {model.provider}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Theme toggle */}
           <button
             onClick={onToggleTheme}
             {...themeHover.hoverProps}
             style={themeHover.style}
             className={cn(
-              'p-2 rounded-lg',
+              'relative p-2 rounded-lg',
               'hover:bg-accent-100 dark:hover:bg-accent-800',
-              'transition-colors duration-150'
+              'transition-all duration-700',
+              'group overflow-hidden'
             )}
             title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           >
-            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+            {/* Background glow effect */}
+            <div className={cn(
+              'absolute inset-0 rounded-lg opacity-0',
+              'group-hover:opacity-100 transition-opacity duration-700',
+              'bg-gradient-to-r from-amber-100 to-blue-100',
+              'dark:from-amber-900/20 dark:to-blue-900/20'
+            )} />
+
+            {/* Icons with rotation animation */}
+            <div className="relative">
+              <Moon
+                size={20}
+                className={cn(
+                  'absolute inset-0 transition-all duration-700',
+                  theme === 'light'
+                    ? 'opacity-100 rotate-0'
+                    : 'opacity-0 -rotate-90'
+                )}
+              />
+              <Sun
+                size={20}
+                className={cn(
+                  'transition-all duration-700',
+                  theme === 'dark'
+                    ? 'opacity-100 rotate-0'
+                    : 'opacity-0 rotate-90'
+                )}
+              />
+            </div>
+          </button>
+
+          {/* Logout button */}
+          <button
+            onClick={logout}
+            {...logoutHover.hoverProps}
+            style={logoutHover.style}
+            className={cn(
+              'p-2 rounded-lg',
+              'text-accent-700 dark:text-accent-300',
+              'hover:bg-accent-100 dark:hover:bg-accent-800',
+              'transition-all duration-700'
+            )}
+            title="Sign out"
+          >
+            <LogOut size={20} className="transition-all duration-700" />
           </button>
         </div>
       </div>

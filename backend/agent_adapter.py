@@ -1,9 +1,9 @@
 """
-Agent Adapter - Wraps existing AgentCore without modifying src/.
+Agent Adapter - Wraps Multi-Agent Runner for web frontend.
 
 This adapter:
-1. Imports AgentCore from src/agent/agent_core.py
-2. Handles SSE event formatting
+1. Initializes MultiAgentRunner from src/multi_agent/runner.py
+2. Handles SSE event formatting for workflow execution
 3. Tracks cost per message
 4. Provides clean interface for FastAPI
 """
@@ -15,33 +15,27 @@ import re
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Any, Optional
 
-from src.agent.agent_core import AgentCore
+from src.multi_agent.runner import MultiAgentRunner
 from src.agent.config import AgentConfig
-from src.agent.providers import create_provider
-from src.agent.tools.registry import get_registry
-from src.context_assembly import CitationFormat, ContextAssembler
 from src.cost_tracker import get_global_tracker, reset_global_tracker
-from src.embedding_generator import EmbeddingGenerator
-from src.hybrid_search import HybridVectorStore
-from src.reranker import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
 
 
 class AgentAdapter:
     """
-    Adapter wrapping AgentCore for web frontend.
+    Adapter wrapping MultiAgentRunner for web frontend.
 
     Responsibilities:
-    - Initialize AgentCore with config
-    - Convert streaming events to SSE format
+    - Initialize multi-agent system with config
+    - Convert workflow events to SSE format
     - Track costs per request
     - Provide model switching capability
     """
 
     def __init__(self, vector_store_path: Optional[Path] = None, model: Optional[str] = None):
         """
-        Initialize agent adapter.
+        Initialize agent adapter with multi-agent system.
 
         Args:
             vector_store_path: Path to vector store (default: ../vector_db from backend/)
@@ -61,6 +55,7 @@ class AgentAdapter:
         if model:
             config_overrides["model"] = model
 
+        # Load full configuration
         self.config = AgentConfig.from_env(**config_overrides)
 
         # Validate config
@@ -70,220 +65,103 @@ class AgentAdapter:
             logger.error(f"Config validation failed: {e}")
             raise
 
-        # Initialize pipeline components (same as CLI)
-        logger.info("Loading vector store...")
-        vector_store = HybridVectorStore.load(str(self.config.vector_store_path))
+        # Load multi-agent configuration
+        # Check if config.json has multi_agent section
+        config_path = project_root / "config.json"
+        multi_agent_config = {}
 
-        logger.info("Initializing embedder...")
-        embedder = EmbeddingGenerator()
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    full_config = json.load(f)
+                    multi_agent_config = full_config.get("multi_agent", {})
+            except Exception as e:
+                logger.warning(f"Could not load multi_agent config from config.json: {e}")
 
-        # Track degraded components (instance variable for health endpoint)
+        # If no multi_agent config, load from extension file
+        if not multi_agent_config:
+            extension_path = project_root / "config_multi_agent_extension.json"
+            if extension_path.exists():
+                try:
+                    with open(extension_path) as f:
+                        extension_config = json.load(f)
+                        multi_agent_config = extension_config.get("multi_agent", {})
+                except Exception as e:
+                    logger.error(f"Could not load config_multi_agent_extension.json: {e}")
+                    raise
+
+        if not multi_agent_config:
+            raise ValueError(
+                "Multi-agent configuration not found. "
+                "Add 'multi_agent' section to config.json or ensure config_multi_agent_extension.json exists."
+            )
+
+        # Build runner configuration
+        runner_config = {
+            "api_keys": {
+                "anthropic_api_key": self.config.anthropic_api_key,
+                "openai_api_key": self.config.openai_api_key,
+                "google_api_key": self.config.google_api_key,
+            },
+            "vector_store_path": str(self.config.vector_store_path),
+            "models": full_config.get("models", {}),  # Add models section for embedding config
+            "storage": full_config.get("storage", {}),  # Add storage section for backend selection
+            "agent_tools": full_config.get("agent_tools", {}),  # Add agent_tools for reranking config
+            "knowledge_graph": full_config.get("knowledge_graph", {}),  # Add knowledge_graph config
+            "neo4j": full_config.get("neo4j", {}),  # Add neo4j connection config
+            "multi_agent": multi_agent_config,
+        }
+
+        # Initialize multi-agent runner
+        logger.info("Initializing multi-agent system...")
+        self.runner = MultiAgentRunner(runner_config)
+
+        # Track degraded components for health endpoint
         self.degraded_components = []
 
-        # Initialize reranker (optional, lazy load)
-        reranker = None
-        if self.config.tool_config.enable_reranking:
-            if not self.config.tool_config.lazy_load_reranker:
-                logger.info("Loading reranker...")
-                try:
-                    reranker = CrossEncoderReranker(
-                        model_name=self.config.tool_config.reranker_model
-                    )
-                except (ImportError, ModuleNotFoundError) as e:
-                    logger.error(
-                        f"Reranker dependencies missing: {e}. "
-                        f"Install with: uv pip install sentence-transformers"
-                    )
-                    self.config.tool_config.enable_reranking = False
-                    self.degraded_components.append({
-                        "component": "reranker",
-                        "error": f"Missing dependencies: {e}",
-                        "severity": "high",
-                        "user_message": "Search quality reduced - reranker unavailable",
-                        "action_required": "Install with: uv pip install sentence-transformers"
-                    })
-                except (FileNotFoundError, ValueError) as e:
-                    logger.error(
-                        f"Reranker configuration error: {e}. "
-                        f"Check model name '{self.config.tool_config.reranker_model}' in config."
-                    )
-                    self.config.tool_config.enable_reranking = False
-                    self.degraded_components.append({
-                        "component": "reranker",
-                        "error": f"Configuration error: {e}",
-                        "severity": "high",
-                        "user_message": "Search quality reduced - reranker misconfigured",
-                        "action_required": f"Check reranker model name '{self.config.tool_config.reranker_model}' in config"
-                    })
-                except RuntimeError as e:
-                    if "CUDA" in str(e) or "GPU" in str(e):
-                        logger.warning(
-                            f"GPU unavailable for reranker: {e}. This is expected on CPU-only systems."
-                        )
-                        self.config.tool_config.enable_reranking = False
-                        self.degraded_components.append({
-                            "component": "reranker",
-                            "error": "GPU unavailable (CPU-only mode)",
-                            "severity": "medium",
-                            "user_message": "Running on CPU only - reranker disabled for performance"
-                        })
-                    else:
-                        logger.critical(f"Unexpected runtime error loading reranker: {e}", exc_info=True)
-                        self.config.tool_config.enable_reranking = False
-                        self.degraded_components.append({
-                            "component": "reranker",
-                            "error": f"Runtime error: {e}",
-                            "severity": "critical",
-                            "user_message": "Search quality reduced - reranker failed to initialize"
-                        })
-                except Exception as e:
-                    # Catch-all for truly unexpected errors
-                    logger.critical(
-                        f"Unexpected error loading reranker: {type(e).__name__}: {e}",
-                        exc_info=True
-                    )
-                    self.config.tool_config.enable_reranking = False
-                    self.degraded_components.append({
-                        "component": "reranker",
-                        "error": f"Unexpected error: {type(e).__name__}",
-                        "severity": "critical",
-                        "user_message": "Search quality reduced - reranker unavailable"
-                    })
-            else:
-                logger.info("Reranker set to lazy load")
+        # HITL: In-memory storage for pending clarifications
+        # TODO: In production, use Redis or database for multi-instance deployments
+        self._pending_clarifications: Dict[str, Dict[str, Any]] = {}
 
-        # Load knowledge graph (optional) - UNIFIED WITH CLI
-        knowledge_graph = None
-        graph_retriever = None
-        if self.config.enable_knowledge_graph and self.config.knowledge_graph_path:
-            logger.info("Loading knowledge graph...")
-            try:
-                from src.agent.graph_loader import load_knowledge_graph
-
-                # Use shared loader (handles Neo4j/JSON with intelligent fallback)
-                knowledge_graph, graph_retriever = load_knowledge_graph(
-                    kg_path=self.config.knowledge_graph_path,
-                    vector_store=vector_store,
-                    user_print=None  # WebApp doesn't print to console
-                )
-
-            except RuntimeError as e:
-                # Explicit Neo4j config errors (fail-fast when KG_BACKEND=neo4j)
-                logger.error(f"Knowledge graph backend misconfigured: {e}")
-                self.config.enable_knowledge_graph = False
-                self.degraded_components.append({
-                    "component": "knowledge_graph",
-                    "error": f"Neo4j misconfiguration: {e}",
-                    "severity": "critical",
-                    "action_required": "Fix Neo4j config in .env or change KG_BACKEND=simple"
-                })
-            except (ImportError, ModuleNotFoundError) as e:
-                logger.error(
-                    f"Knowledge graph dependencies missing: {e}. "
-                    f"Install with: uv pip install networkx neo4j"
-                )
-                self.config.enable_knowledge_graph = False
-                self.degraded_components.append({
-                    "component": "knowledge_graph",
-                    "error": f"Missing dependencies: {e}",
-                    "severity": "high"
-                })
-            except FileNotFoundError as e:
-                logger.warning(
-                    f"Knowledge graph file not found: {e}. "
-                    f"Run indexing with ENABLE_KNOWLEDGE_GRAPH=true to generate it: "
-                    f"uv run python run_pipeline.py data/your_docs/"
-                )
-                self.config.enable_knowledge_graph = False
-                self.degraded_components.append({
-                    "component": "knowledge_graph",
-                    "error": f"File not found - run indexing to generate",
-                    "severity": "medium"
-                })
-            except (ValueError, KeyError, TypeError) as e:
-                logger.error(
-                    f"Knowledge graph file corrupted or invalid format: {e}. "
-                    f"Re-run indexing pipeline to regenerate."
-                )
-                self.config.enable_knowledge_graph = False
-                self.degraded_components.append({
-                    "component": "knowledge_graph",
-                    "error": f"Invalid file format: {e}"
-                })
-            except Exception as e:
-                # Catch-all for truly unexpected errors
-                logger.critical(
-                    f"Unexpected error loading knowledge graph: {type(e).__name__}: {e}",
-                    exc_info=True
-                )
-                self.config.enable_knowledge_graph = False
-                self.degraded_components.append({
-                    "component": "knowledge_graph",
-                    "error": f"Unexpected error: {type(e).__name__}"
-                })
-
-        # Warn if running in degraded mode with detailed component info
-        if self.degraded_components:
-            component_names = [d["component"] for d in self.degraded_components]
-
-            # Log detailed degradation info
-            logger.warning("=" * 60)
-            logger.warning("⚠️  WARNING: RUNNING IN DEGRADED MODE")
-            logger.warning("=" * 60)
-
-            for component in self.degraded_components:
-                severity = component.get("severity", "medium")
-                symbol = "🔴" if severity == "critical" else "🟡" if severity == "high" else "🟢"
-
-                logger.warning(f"{symbol} {component['component']}: {component['error']}")
-
-                if "user_message" in component:
-                    logger.warning(f"   → {component['user_message']}")
-
-                if "action_required" in component:
-                    logger.warning(f"   → Action: {component['action_required']}")
-
-            logger.warning("=" * 60)
-            logger.warning(f"Degraded components: {', '.join(component_names)}")
-            logger.warning("Some agent tools may be unavailable or produce lower-quality results.")
-
-        # Initialize context assembler
-        logger.info("Initializing context assembler...")
-        citation_format_map = {
-            "inline": CitationFormat.INLINE,
-            "detailed": CitationFormat.DETAILED,
-            "footnote": CitationFormat.FOOTNOTE,
-        }
-        context_assembler = ContextAssembler(
-            citation_format=citation_format_map.get(
-                self.config.cli_config.citation_format, CitationFormat.INLINE
-            )
-        )
-
-        # Initialize tools (CRITICAL - must happen before AgentCore)
-        logger.info("Initializing tools...")
-        registry = get_registry()
-        registry.initialize_tools(
-            vector_store=vector_store,
-            embedder=embedder,
-            reranker=reranker,
-            graph_retriever=graph_retriever,
-            knowledge_graph=knowledge_graph,
-            context_assembler=context_assembler,
-            config=self.config.tool_config,
-        )
-        logger.info(f"✅ {len(registry)} tools initialized")
-
-        # Initialize AgentCore (reuses existing implementation)
-        self.agent = AgentCore(self.config)
-
-        # Initialize with document list
-        self.agent.initialize_with_documents()
+        # Store current model
+        self.current_model = model or multi_agent_config.get("orchestrator", {}).get("model", "claude-sonnet-4-5-20250929")
 
         logger.info(
-            f"AgentAdapter initialized: model={self.config.model}, "
-            f"vector_store={self.config.vector_store_path}, tools={len(registry)}"
+            f"AgentAdapter initialized with multi-agent system: "
+            f"model={self.current_model}, vector_store={self.config.vector_store_path}"
         )
+
+    async def initialize(self) -> bool:
+        """
+        Initialize the multi-agent runner.
+
+        Returns:
+            True if successful
+        """
+        try:
+            success = await self.runner.initialize()
+            if not success:
+                logger.error("Multi-agent system initialization failed")
+                self.degraded_components.append({
+                    "component": "multi_agent_system",
+                    "error": "Initialization failed",
+                    "severity": "critical",
+                    "user_message": "Multi-agent system failed to start",
+                })
+                return False
+
+            logger.info("Multi-agent system initialized successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to initialize multi-agent system: {e}", exc_info=True)
+            self.degraded_components.append({
+                "component": "multi_agent_system",
+                "error": str(e),
+                "severity": "critical",
+                "user_message": f"System initialization error: {str(e)}",
+            })
+            return False
 
     async def stream_response(
         self,
@@ -293,23 +171,28 @@ class AgentAdapter:
         """
         Stream agent response as SSE-compatible events.
 
+        Note: Multi-agent system executes workflow asynchronously and returns
+        final result. We emit progress updates during execution.
+
         Yields SSE events in format:
         {
-            "event": "text_delta" | "tool_call" | "tool_calls_summary" | "cost_update" | "done" | "error",
+            "event": "progress" | "agent_start" | "agent_complete" | "tool_call" | "text_delta" | "done" | "error",
             "data": {...}
         }
 
         Event types:
-        - text_delta: Streaming text chunks from agent response
-        - tool_call: Tool invocation detected (streamed immediately when Claude decides to use tool)
-        - tool_calls_summary: Summary of all tool calls with results (sent after response completes)
-        - cost_update: Token usage and cost information
+        - progress: Workflow progress updates (e.g., "Running extractor agent...")
+        - agent_start: Agent execution started
+        - agent_complete: Agent execution completed
+        - text_delta: Final answer text (streamed after workflow completes)
         - done: Stream completed successfully
-        - error: Error occurred during streaming
+        - error: Error occurred during execution
+
+        Note: Cost tracking is done internally but not shown to users
 
         Args:
             query: User query
-            conversation_id: Optional conversation ID for context
+            conversation_id: Optional conversation ID for context (not used in multi-agent)
 
         Yields:
             Dict containing event type and data
@@ -319,222 +202,177 @@ class AgentAdapter:
         tracker = get_global_tracker()
 
         try:
-            # Stream from AgentCore using process_message
-            # Note: process_message is synchronous generator, but we can iterate
-            # in async context with periodic yields to event loop
+            # Emit start event
+            yield {
+                "event": "progress",
+                "data": {
+                    "message": "Initializing multi-agent workflow...",
+                    "stage": "init"
+                }
+            }
+            await asyncio.sleep(0)
 
-            # Get streaming generator from AgentCore
-            text_stream = self.agent.process_message(query, stream=True)
+            # Execute multi-agent workflow with progress streaming
+            logger.info("Starting multi-agent query execution with streaming...")
 
-            # Stream text chunks (including markers for inline tool display)
-            # DO NOT send separate tool_call events during streaming
-            # Reasons:
-            # 1. Frontend expects markers in text for inline rendering
-            # 2. Sending both causes duplicate display (at top + inline)
-            # 3. Tool IDs available but execution metadata (timing, success) isn't until after execution
+            # Stream progress events from runner
+            result = None
+            async for event in self.runner.run_query(query, stream_progress=True):
+                if event.get("type") == "agent_start":
+                    # Agent start event (new format from runner.py)
+                    agent_name = event.get("agent", "unknown")
 
-            for chunk in text_stream:
-                # Strip ANSI color codes only
-                clean_chunk = re.sub(r'\033\[[0-9;]+m', '', chunk)
+                    # Map agent name to user-friendly role
+                    agent_roles = {
+                        "extractor": "Searching documents",
+                        "classifier": "Classifying query",
+                        "compliance": "Checking compliance",
+                        "risk_verifier": "Verifying risks",
+                        "citation_auditor": "Auditing citations",
+                        "gap_synthesizer": "Synthesizing information",
+                        "report_generator": "Generating report"
+                    }
+                    message = agent_roles.get(agent_name, f"Running {agent_name}")
 
-                if clean_chunk:  # Only send non-empty chunks
-                    # DEBUG: Log chunk yielding to diagnose streaming issues
-                    logger.info(f"🔄 STREAMING: Yielding chunk ({len(clean_chunk)} chars): {clean_chunk[:50]}...")
+                    yield {
+                        "event": "agent_start",
+                        "data": {
+                            "agent": agent_name,
+                            "message": message
+                        }
+                    }
+                    await asyncio.sleep(0)
 
-                    # Send ALL text including [Using tool...] markers
-                    # Frontend will parse markers and render tools inline
+                elif event.get("type") == "progress":
+                    # Legacy progress event (workflow init/complete)
+                    yield {
+                        "event": "progress",
+                        "data": event
+                    }
+                    await asyncio.sleep(0)
+
+                elif event.get("type") == "tool_call":
+                    # Tool call event (running/completed/failed)
+                    yield {
+                        "event": "tool_call",
+                        "data": {
+                            "agent": event.get("agent"),
+                            "tool": event.get("tool"),
+                            "status": event.get("status"),
+                            "timestamp": event.get("timestamp")
+                        }
+                    }
+                    await asyncio.sleep(0)
+
+                elif event.get("type") == "final":
+                    # Final result
+                    result = event
+                    break
+
+            if not result:
+                raise RuntimeError("Workflow produced no result")
+
+            # Check if clarification is needed (HITL)
+            if result.get("clarification_needed", False):
+                logger.info("HITL: Clarification needed, emitting event...")
+
+                thread_id = result.get("thread_id")
+
+                # Store clarification state for resume
+                self._pending_clarifications[thread_id] = {
+                    "original_query": result.get("original_query"),
+                    "complexity_score": result.get("complexity_score"),
+                    "query_type": result.get("query_type"),
+                    "questions": result.get("questions", []),
+                    "quality_metrics": result.get("quality_metrics", {}),
+                    # Need to store agent_sequence for resume
+                    "agent_sequence": result.get("agent_sequence", []),
+                }
+
+                yield {
+                    "event": "clarification_needed",
+                    "data": {
+                        "thread_id": thread_id,
+                        "questions": result.get("questions", []),
+                        "quality_metrics": result.get("quality_metrics", {}),
+                        "original_query": result.get("original_query"),
+                        "complexity_score": result.get("complexity_score"),
+                        "query_type": result.get("query_type"),
+                    }
+                }
+
+                # Don't emit "done" - waiting for user response
+                return
+
+            # Check if execution was successful
+            if not result.get("success", False):
+                error_msg = result.get("final_answer", "Unknown error")
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": error_msg,
+                        "type": "ExecutionError",
+                        "errors": result.get("errors", [])
+                    }
+                }
+                return
+
+            # Extract workflow metadata
+            complexity_score = result.get("complexity_score", 0)
+            query_type = result.get("query_type", "unknown")
+            agent_sequence = result.get("agent_sequence", [])
+
+            # Emit workflow summary
+            yield {
+                "event": "progress",
+                "data": {
+                    "message": f"Workflow executed: {', '.join(agent_sequence)}",
+                    "stage": "complete",
+                    "complexity_score": complexity_score,
+                    "query_type": query_type,
+                    "agents_used": len(agent_sequence)
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Extract final answer
+            final_answer = result.get("final_answer") or "No answer generated"
+
+            # Stream final answer as text chunks (simulate streaming for UX consistency)
+            # Split into paragraphs for progressive display
+            paragraphs = final_answer.split('\n\n')
+
+            for i, paragraph in enumerate(paragraphs):
+                if paragraph.strip():
+                    # Add back paragraph separator except for last paragraph
+                    chunk = paragraph + ('\n\n' if i < len(paragraphs) - 1 else '')
+
                     yield {
                         "event": "text_delta",
                         "data": {
-                            "content": clean_chunk
+                            "content": chunk
                         }
                     }
-                    # Yield control to event loop (allows concurrent requests)
-                    await asyncio.sleep(0)
+                    # Small delay for UX (simulate natural response streaming)
+                    await asyncio.sleep(0.05)
 
-            # Extract tool calls from conversation history
-            # Tool calls are stored in assistant message content blocks (Anthropic format)
-            # Tool results are in subsequent user messages with metadata
-            #
-            # Four-pass extraction is required because:
-            # 1. Tool calls (tool_use) are in assistant messages with role="assistant"
-            # 2. Tool results (tool_result) are in user messages with role="user"
-            # 3. They must be joined by tool_use_id to create complete tool call objects
-            # 4. Execution metadata (timing, success) must be enriched from tool_call_history
-            #    (metadata was removed from API responses for Anthropic API compliance)
-            #
-            # Performance optimization: Scan last 10 messages only (not entire history)
-            # Rationale: In tool-heavy conversations, each turn can generate 2-5 messages:
-            #   - 1 assistant message (with tool_use blocks)
-            #   - 1-4 user messages (one tool_result per tool called)
-            # Therefore, 10 messages covers the most recent 2-4 turns, which is sufficient
-            # because tool_use/tool_result pairs are always in adjacent messages.
-            # For no-tool conversations: 10 messages = 5 complete turns.
-            tool_calls_info = []
-            tool_results_map = {}  # tool_use_id -> result metadata
+            # Extract tool calls if available (from tool_executions in state)
+            tool_executions = result.get("tool_executions", [])
+            if tool_executions:
+                # Convert to frontend-compatible format
+                tool_calls_info = []
+                for execution in tool_executions:
+                    tool_calls_info.append({
+                        "id": execution.get("tool_id", ""),
+                        "name": execution.get("tool_name", ""),
+                        "input": execution.get("inputs", {}),
+                        "result": execution.get("output", {}),
+                        "executionTimeMs": execution.get("execution_time_ms", 0),
+                        "success": execution.get("success", True),
+                        "error": execution.get("error"),
+                        "agent": execution.get("agent_name", ""),
+                    })
 
-            if self.agent.conversation_history:
-                # Pass 1: Collect tool_use blocks (from assistant messages)
-                for message in self.agent.conversation_history[-10:]:
-                    if message.get("role") == "assistant" and "content" in message:
-                        content = message["content"]
-
-                        # Validate content is a list (defensive programming)
-                        if not isinstance(content, list):
-                            logger.error(
-                                f"CRITICAL: Invalid message content format in conversation history: "
-                                f"expected list, got {type(content).__name__}. "
-                                f"Message role={message.get('role')}, content preview={str(content)[:100]}. "
-                                f"This indicates data corruption - tool calls may be missing from UI."
-                            )
-                            # Surface to user via error event
-                            yield {
-                                "event": "error",
-                                "data": {
-                                    "error": "Internal error: conversation history corruption detected. Some tool results may be missing.",
-                                    "type": "DataCorruptionError",
-                                    "severity": "high"
-                                }
-                            }
-                            continue
-
-                        for content_block in content:
-                            # Validate content_block is a dict
-                            if not isinstance(content_block, dict):
-                                logger.warning(f"Skipping non-dict content block: {type(content_block).__name__}")
-                                continue
-
-                            if content_block.get("type") == "tool_use":
-                                # Validate required fields exist
-                                if "id" not in content_block or "name" not in content_block:
-                                    logger.error(
-                                        f"tool_use block missing required fields. "
-                                        f"Has id={('id' in content_block)}, name={('name' in content_block)}"
-                                    )
-                                    continue
-
-                                tool_calls_info.append({
-                                    "id": content_block.get("id", ""),
-                                    "name": content_block.get("name", ""),
-                                    "input": content_block.get("input", {}),
-                                })
-
-                # Pass 2: Collect tool_result blocks with metadata (from user messages)
-                for message in self.agent.conversation_history[-10:]:
-                    if message.get("role") == "user" and "content" in message:
-                        content = message["content"]
-
-                        # Validate content is a list
-                        if not isinstance(content, list):
-                            logger.error(
-                                f"CRITICAL: Invalid message content format in conversation history: "
-                                f"expected list, got {type(content).__name__}. "
-                                f"Message role={message.get('role')}. "
-                                f"This indicates data corruption - tool results may be missing from UI."
-                            )
-                            # Surface to user via error event
-                            yield {
-                                "event": "error",
-                                "data": {
-                                    "error": "Internal error: conversation history corruption detected. Some tool results may be missing.",
-                                    "type": "DataCorruptionError",
-                                    "severity": "high"
-                                }
-                            }
-                            continue
-
-                        for content_block in content:
-                            # Validate content_block is a dict
-                            if not isinstance(content_block, dict):
-                                logger.warning(f"Skipping non-dict content block: {type(content_block).__name__}")
-                                continue
-
-                            if content_block.get("type") == "tool_result":
-                                tool_use_id = content_block.get("tool_use_id")
-                                if tool_use_id:
-                                    # Note: _metadata was removed from agent_core.py (API compliance fix)
-                                    # We can no longer access execution_time_ms, success, error from here
-                                    # This will be handled differently in future versions
-                                    tool_results_map[tool_use_id] = {
-                                        "result": content_block.get("content"),
-                                        "metadata": {},  # Empty - no longer available from API responses
-                                    }
-
-                # Pass 3: Merge tool_use and tool_result data by tool_use_id
-                for tool_call in tool_calls_info:
-                    tool_id = tool_call["id"]
-                    if tool_id in tool_results_map:
-                        result_data = tool_results_map[tool_id]
-                        tool_call["result"] = result_data.get("result")
-
-                        # Metadata is no longer in API responses (removed for API compliance)
-                        # Will be enriched from tool_call_history in Pass 4
-                        tool_call["executionTimeMs"] = 0  # Placeholder, will be updated in Pass 4
-                        tool_call["success"] = True  # Default assumption
-                        tool_call["error"] = None
-                        tool_call["explicitParams"] = []
-
-                # Pass 4: Enrich with execution metadata from tool_call_history
-                # tool_call_history contains execution_time_ms, success, error, etc.
-                # Match by tool name and use counters to handle multiple calls to same tool
-                if self.agent.tool_call_history:
-                    # Build mapping: tool_name -> list of execution records (in order)
-                    tool_history_by_name = {}
-                    for record in self.agent.tool_call_history:
-                        tool_name = record.get("tool_name", "")
-                        if tool_name not in tool_history_by_name:
-                            tool_history_by_name[tool_name] = []
-                        tool_history_by_name[tool_name].append(record)
-
-                    # Track how many times we've matched each tool name (for multiple calls)
-                    tool_name_counters = {}
-
-                    # Enrich tool_calls_info with execution metadata
-                    for tool_call in tool_calls_info:
-                        tool_name = tool_call.get("name", "")
-
-                        # Get current index for this tool name
-                        current_index = tool_name_counters.get(tool_name, 0)
-                        tool_name_counters[tool_name] = current_index + 1
-
-                        # Find matching execution record
-                        if tool_name in tool_history_by_name:
-                            history_records = tool_history_by_name[tool_name]
-
-                            # Match in chronological order (FIFO)
-                            # Both tool_call_history and tool_calls_info are in chronological order
-                            if current_index < len(history_records):
-                                # Match forward: first call -> first execution, second -> second, etc.
-                                record_index = current_index
-                                record = history_records[record_index]
-
-                                # Enrich with execution metadata
-                                tool_call["executionTimeMs"] = record.get("execution_time_ms", 0)
-                                tool_call["success"] = record.get("success", True)
-                                # Only include error if present
-                                if "error" in record:
-                                    tool_call["error"] = record.get("error")
-                                # Include RAG confidence if available
-                                if "rag_confidence" in record:
-                                    tool_call["ragConfidence"] = record.get("rag_confidence")
-                            else:
-                                # Metadata missing - log and flag for UI
-                                logger.error(
-                                    f"Tool call metadata missing: tool_name={tool_name}, call_index={current_index}, "
-                                    f"history_length={len(history_records)}. This indicates execution tracking failure."
-                                )
-                                tool_call["executionTimeMs"] = None  # Explicitly mark as missing
-                                tool_call["success"] = None  # Don't default to True
-                                tool_call["error"] = "Execution metadata unavailable"
-                                tool_call["metadataMissing"] = True  # Flag for UI
-
-                    logger.info(f"Enriched {len(tool_calls_info)} tool calls with execution metadata from tool_call_history")
-
-            # Send tool_calls_summary with all tool results
-            # Frontend uses this for inline rendering (matches markers in text)
-            # No need for individual tool_result events - summary has everything
-            if tool_calls_info:
-                logger.info(f"Extracted {len(tool_calls_info)} tool calls from conversation history")
                 yield {
                     "event": "tool_calls_summary",
                     "data": {
@@ -542,47 +380,89 @@ class AgentAdapter:
                         "count": len(tool_calls_info)
                     }
                 }
-            else:
-                logger.debug("No tool calls found in conversation history")
 
-            # Send final cost update
-            cost_summary = tracker.get_session_cost_summary()
+            # Emit cost summary event with per-agent breakdown
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            agent_breakdown = tracker.get_agent_breakdown()
+
+            # Build agent breakdown array for frontend with defensive access
+            agent_costs = []
+            for agent_name, stats in agent_breakdown.items():
+                try:
+                    agent_costs.append({
+                        "agent": agent_name,
+                        "cost": stats.get("cost", 0.0),
+                        "input_tokens": stats.get("input_tokens", 0),
+                        "output_tokens": stats.get("output_tokens", 0),
+                        "cache_read_tokens": stats.get("cache_read_tokens", 0),
+                        "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
+                        "call_count": stats.get("call_count", 0),
+                        "response_time_ms": stats.get("response_time_ms", 0.0)
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)
+                    # Continue with remaining agents - partial cost data is better than none
+
+            # Sort by cost descending
+            agent_costs.sort(key=lambda x: x["cost"], reverse=True)
+
             yield {
-                "event": "cost_update",
+                "event": "cost_summary",
                 "data": {
-                    "summary": cost_summary,
-                    "total_cost": tracker.get_total_cost(),
-                    "input_tokens": tracker._total_input_tokens,
-                    "output_tokens": tracker._total_output_tokens,
-                    "cached_tokens": tracker._total_cache_read_tokens
+                    "total_cost": total_cost_usd,
+                    "agent_breakdown": agent_costs,
+                    "total_input_tokens": tracker.total_input_tokens,
+                    "total_output_tokens": tracker.total_output_tokens,
+                    "cache_stats": tracker.get_cache_stats()
                 }
             }
+            await asyncio.sleep(0)
 
             # Signal completion
             yield {
                 "event": "done",
-                "data": {}
+                "data": {
+                    "agent_sequence": agent_sequence,
+                    "complexity_score": complexity_score,
+                    "query_type": query_type,
+                }
             }
 
         except Exception as e:
-            logger.error(f"Error during streaming: {e}", exc_info=True)
+            # Capture execution context for debugging
+            context = {
+                "query": query[:200] if query else "N/A",
+                "conversation_id": conversation_id,
+                "agent_sequence": agent_sequence if 'agent_sequence' in locals() else [],
+                "last_agent": agent_sequence[-1] if 'agent_sequence' in locals() and agent_sequence else None,
+                "error_phase": "multi_agent_execution"
+            }
+
+            logger.error(
+                f"Error during multi-agent execution: {type(e).__name__}: {e}",
+                exc_info=True,
+                extra=context
+            )
+
             yield {
                 "event": "error",
                 "data": {
                     "error": str(e),
-                    "type": type(e).__name__
+                    "type": type(e).__name__,
+                    "context": context
                 }
             }
 
     def get_available_models(self) -> list[Dict[str, Any]]:
         """
-        Get list of available models (same as CLI).
+        Get list of available models.
 
         Returns:
-            List of model info dicts matching CLI's _list_available_models()
+            List of model info dicts
         """
         return [
-            # Anthropic Claude models (from CLI)
+            # Anthropic Claude models
             {
                 "id": "claude-haiku-4-5-20251001",
                 "name": "Claude Haiku 4.5",
@@ -608,70 +488,212 @@ class AgentAdapter:
                 "provider": "google",
                 "description": "Best reasoning (✅ caching, 100/day free)"
             },
+            # OpenAI GPT models
             {
-                "id": "gemini-2.5-flash-lite",
-                "name": "Gemini 2.5 Flash Lite",
-                "provider": "google",
-                "description": "High volume (✅ caching, 1000/day free)"
-            },
-            # OpenAI GPT-5 models (from CLI)
-            {
-                "id": "gpt-5-nano",
-                "name": "GPT-5 Nano",
+                "id": "gpt-4o-mini",
+                "name": "GPT-4o Mini",
                 "provider": "openai",
-                "description": "Ultra-fast, minimal cost (❌ no caching)"
+                "description": "Fast and affordable (❌ no caching)"
             },
-            {
-                "id": "gpt-5-mini",
-                "name": "GPT-5 Mini",
-                "provider": "openai",
-                "description": "Balanced & affordable (❌ no caching)"
-            },
-            {
-                "id": "gpt-5",
-                "name": "GPT-5",
-                "provider": "openai",
-                "description": "Most capable (❌ no caching)"
-            }
         ]
 
     def switch_model(self, model: str) -> None:
         """
-        Switch to a different model (UNIFIED WITH CLI).
+        Switch to a different model.
 
-        Preserves conversation history and document list.
-        System prompt, tools, and history are sent on every API call automatically.
+        Note: In multi-agent system, model switching affects orchestrator.
+        Individual agents use their configured models.
 
         Args:
             model: Model identifier
         """
-        old_model = self.config.model
+        old_model = self.current_model
+        self.current_model = model
 
-        # Update config
-        self.config.model = model
-
-        # Create new provider (same logic as CLI)
-        new_provider = create_provider(
-            model=model,
-            anthropic_api_key=self.config.anthropic_api_key,
-            openai_api_key=self.config.openai_api_key,
-            google_api_key=self.config.google_api_key,
-        )
-
-        # Switch provider on existing agent (preserves conversation_history)
-        self.agent.provider = new_provider
-
-        # Auto-adjust streaming based on provider support (same as CLI)
-        streaming_supported = new_provider.supports_feature('streaming')
-        old_streaming = self.config.cli_config.enable_streaming
-        self.config.cli_config.enable_streaming = streaming_supported
+        # Update orchestrator model in runner config
+        if hasattr(self.runner, 'multi_agent_config'):
+            if 'orchestrator' in self.runner.multi_agent_config:
+                self.runner.multi_agent_config['orchestrator']['model'] = model
 
         logger.info(
             f"Model switched: {old_model} → {model} "
-            f"(provider: {new_provider.get_provider_name()}, "
-            f"streaming: {old_streaming} → {streaming_supported}, "
-            f"history preserved: {len(self.agent.conversation_history)} messages)"
+            f"(Note: Individual agents use their configured models)"
         )
+
+    async def resume_clarification(
+        self, thread_id: str, user_response: str
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Resume interrupted workflow with user clarification.
+
+        Args:
+            thread_id: Thread ID from clarification_needed event
+            user_response: User's free-form clarification text
+
+        Yields:
+            SSE events (same format as stream_response)
+        """
+        # Reset cost tracker
+        reset_global_tracker()
+        tracker = get_global_tracker()
+
+        try:
+            # Retrieve pending clarification
+            if thread_id not in self._pending_clarifications:
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": f"No pending clarification found for thread {thread_id}",
+                        "type": "NotFoundError",
+                    }
+                }
+                return
+
+            clarification_data = self._pending_clarifications[thread_id]
+
+            # Emit resume event
+            yield {
+                "event": "progress",
+                "data": {
+                    "message": "Resuming workflow with clarification...",
+                    "stage": "resume",
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Build original state from clarification data
+            original_state = {
+                "query": clarification_data["original_query"],
+                "complexity_score": clarification_data["complexity_score"],
+                "query_type": clarification_data["query_type"],
+                "agent_sequence": clarification_data["agent_sequence"],
+                "execution_phase": "agent_execution",
+                "agent_outputs": {},
+                "tool_executions": [],
+                "documents": [],
+                "citations": [],
+                "total_cost_cents": 0.0,
+                "errors": [],
+            }
+
+            # Resume workflow
+            result = await self.runner.resume_with_clarification(
+                thread_id=thread_id,
+                user_response=user_response,
+                original_state=original_state,
+            )
+
+            # Clean up pending clarification
+            del self._pending_clarifications[thread_id]
+
+            # Check if successful
+            if not result.get("success", False):
+                error_msg = result.get("final_answer", "Resume failed")
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": error_msg,
+                        "type": "ResumeError",
+                        "errors": result.get("errors", []),
+                    }
+                }
+                return
+
+            # Extract workflow metadata
+            complexity_score = result.get("complexity_score", 0)
+            query_type = result.get("query_type", "unknown")
+            agent_sequence = result.get("agent_sequence", [])
+
+            # Emit workflow summary
+            yield {
+                "event": "progress",
+                "data": {
+                    "message": f"Workflow completed: {', '.join(agent_sequence)}",
+                    "stage": "complete",
+                    "complexity_score": complexity_score,
+                    "query_type": query_type,
+                    "agents_used": len(agent_sequence),
+                    "enriched_query": result.get("enriched_query"),
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Stream final answer (same as stream_response)
+            final_answer = result.get("final_answer") or "No answer generated"
+            paragraphs = final_answer.split("\n\n")
+
+            for i, paragraph in enumerate(paragraphs):
+                if paragraph.strip():
+                    chunk = paragraph + ("\n\n" if i < len(paragraphs) - 1 else "")
+                    yield {
+                        "event": "text_delta",
+                        "data": {"content": chunk},
+                    }
+                    await asyncio.sleep(0.05)
+
+            # Emit cost summary event with per-agent breakdown
+            tracker = get_global_tracker()
+            total_cost_usd = tracker.get_total_cost()
+            agent_breakdown = tracker.get_agent_breakdown()
+
+            # Build agent breakdown array for frontend with defensive access
+            agent_costs = []
+            for agent_name, stats in agent_breakdown.items():
+                try:
+                    agent_costs.append({
+                        "agent": agent_name,
+                        "cost": stats.get("cost", 0.0),
+                        "input_tokens": stats.get("input_tokens", 0),
+                        "output_tokens": stats.get("output_tokens", 0),
+                        "cache_read_tokens": stats.get("cache_read_tokens", 0),
+                        "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
+                        "call_count": stats.get("call_count", 0),
+                        "response_time_ms": stats.get("response_time_ms", 0.0)
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)
+                    # Continue with remaining agents - partial cost data is better than none
+
+            # Sort by cost descending
+            agent_costs.sort(key=lambda x: x["cost"], reverse=True)
+
+            yield {
+                "event": "cost_summary",
+                "data": {
+                    "total_cost": total_cost_usd,
+                    "agent_breakdown": agent_costs,
+                    "total_input_tokens": tracker.total_input_tokens,
+                    "total_output_tokens": tracker.total_output_tokens,
+                    "cache_stats": tracker.get_cache_stats()
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Emit done
+            yield {"event": "done", "data": {}}
+
+        except Exception as e:
+            # Capture execution context for debugging
+            context = {
+                "query": query[:200] if query else "N/A",
+                "conversation_id": conversation_id,
+                "error_phase": "simple_mode_execution"
+            }
+
+            logger.error(
+                f"Resume error: {type(e).__name__}: {e}",
+                exc_info=True,
+                extra=context
+            )
+
+            yield {
+                "event": "error",
+                "data": {
+                    "error": str(e),
+                    "type": type(e).__name__,
+                    "context": context
+                },
+            }
 
     def get_health_status(self) -> Dict[str, Any]:
         """
@@ -681,32 +703,36 @@ class AgentAdapter:
             Health status dict with degraded component warnings
         """
         try:
-            # Check if agent is properly initialized
-            if not self.agent:
+            # Check if runner is properly initialized
+            if not self.runner:
                 return {
                     "status": "error",
-                    "message": "Agent not initialized",
+                    "message": "Multi-agent runner not initialized",
                     "details": {},
                     "degraded_components": []
                 }
 
-            # Check vector store
-            vector_store_exists = self.config.vector_store_path.exists()
+            # Check vector store (skip for PostgreSQL backend)
+            # Read storage backend from environment variable (set in docker-compose.yml)
+            import os
+            storage_backend = os.getenv("STORAGE_BACKEND", "faiss")
+
+            if storage_backend == "faiss":
+                vector_store_exists = self.config.vector_store_path.exists()
+                if not vector_store_exists:
+                    return {
+                        "status": "error",
+                        "message": "Vector store not found",
+                        "details": {
+                            "vector_store_path": str(self.config.vector_store_path)
+                        },
+                        "degraded_components": []
+                    }
 
             # Check API keys
             has_anthropic_key = bool(self.config.anthropic_api_key)
             has_openai_key = bool(self.config.openai_api_key)
             has_google_key = bool(self.config.google_api_key)
-
-            if not vector_store_exists:
-                return {
-                    "status": "error",
-                    "message": "Vector store not found",
-                    "details": {
-                        "vector_store_path": str(self.config.vector_store_path)
-                    },
-                    "degraded_components": []
-                }
 
             if not has_anthropic_key and not has_openai_key and not has_google_key:
                 return {
@@ -718,19 +744,20 @@ class AgentAdapter:
 
             # Determine overall status based on degraded components
             status = "degraded" if self.degraded_components else "healthy"
-            message = "Agent ready" if status == "healthy" else "Agent running in degraded mode"
+            message = "Multi-agent system ready" if status == "healthy" else "Multi-agent system running in degraded mode"
 
             return {
                 "status": status,
                 "message": message,
                 "details": {
-                    "model": self.config.model,
+                    "model": self.current_model,
                     "vector_store": str(self.config.vector_store_path),
                     "has_anthropic_key": has_anthropic_key,
                     "has_openai_key": has_openai_key,
-                    "has_google_key": has_google_key
+                    "has_google_key": has_google_key,
+                    "agents_registered": len(self.runner.agent_registry._agent_instances) if hasattr(self.runner, 'agent_registry') and self.runner.agent_registry else 0,
                 },
-                "degraded_components": self.degraded_components  # Expose to UI
+                "degraded_components": self.degraded_components
             }
 
         except Exception as e:
@@ -738,5 +765,6 @@ class AgentAdapter:
             return {
                 "status": "error",
                 "message": str(e),
-                "details": {}
+                "details": {},
+                "degraded_components": []
             }
