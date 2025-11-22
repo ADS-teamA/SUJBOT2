@@ -63,7 +63,7 @@ Orchestrator (routing + synthesis)
     ↓
 Specialized Agents (extractor, classifier, compliance, etc.)
     ↓
-RAG Tools (16 tools in 3 tiers: basic, advanced, analysis)
+RAG Tools (17 specialized tools for retrieval and analysis)
     ↓
 Storage (PostgreSQL: vectors, graph, checkpoints)
 ```
@@ -192,10 +192,10 @@ orchestrator.run(query)  # LLM generates contextual response
 
 ### Agent Development
 
-**Tool tier selection:**
-- Start with TIER 1 (fast: 100-300ms)
-- Escalate to TIER 2 (quality: 500-1000ms) when needed
-- TIER 3 (analysis: 500ms-3s) for complex tasks only
+**Tool selection:**
+- Use `search` for most queries (hybrid retrieval with optional expansion)
+- Use specialized tools (graph_search, filtered_search) for specific needs
+- Check tool documentation with `get_tool_help` when unsure
 
 **Query expansion:**
 - `num_expands=0` (default) - Speed
@@ -374,4 +374,4 @@ uv run isort src/ tests/ --profile black
 - Configuration: SSOT in `config.json` (strict validation, no defaults)
 - Storage: PostgreSQL with pgvector (migration from FAISS completed)
 - Agents: 7 autonomous agents (orchestrator + 6 specialized)
-- Tools: 16 RAG tools in 3 tiers (basic, advanced, analysis)
+- Tools: 17 RAG tools (search, retrieval, analysis, and metadata tools)

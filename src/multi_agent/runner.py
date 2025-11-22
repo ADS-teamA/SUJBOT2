@@ -211,8 +211,7 @@ class MultiAgentRunner:
     async def _initialize_tools(self) -> None:
         """Initialize tool registry with RAG components."""
         from ..agent.tools.registry import get_registry
-        # Import tool modules to trigger @register_tool decorators
-        from ..agent.tools import tier1_basic, tier2_advanced, tier3_analysis
+        # Tool modules are auto-imported via tools/__init__.py
         from ..storage import load_vector_store_adapter
         from ..embedding_generator import EmbeddingGenerator
         from ..reranker import CrossEncoderReranker

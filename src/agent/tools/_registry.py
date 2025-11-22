@@ -8,7 +8,7 @@ Provides Claude SDK tool definitions.
 import logging
 from typing import Any, Dict, List, Optional, Type
 
-from .base import BaseTool, ToolResult
+from ._base import BaseTool, ToolResult
 from src.storage import VectorStoreAdapter
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class ToolRegistry:
             )
 
             self._tools[tool_name] = tool_instance
-            logger.info(f"Initialized tool: {tool_name} (Tier {tool_class.tier})")
+            logger.info(f"Initialized tool: {tool_name}")
 
         # Log summary
         available_count = len(self._tools)
@@ -154,18 +154,6 @@ class ToolRegistry:
         """Get all initialized tool instances."""
         return list(self._tools.values())
 
-    def get_tools_by_tier(self, tier: int) -> List[BaseTool]:
-        """
-        Get tools by tier level.
-
-        Args:
-            tier: 1=basic, 2=advanced, 3=analysis
-
-        Returns:
-            List of tools in that tier
-        """
-        return [tool for tool in self._tools.values() if tool.tier == tier]
-
     def get_unavailable_tools(self) -> Dict[str, str]:
         """
         Get list of unavailable tools and reasons.
@@ -197,13 +185,6 @@ class ToolRegistry:
         total_errors = sum(s["error_count"] for s in tool_stats)
         total_time = sum(s["total_time_ms"] for s in tool_stats)
 
-        # Group by tier
-        tier_stats = {}
-        for tier in [1, 2, 3]:
-            tier_tools = self.get_tools_by_tier(tier)
-            tier_calls = sum(t.execution_count for t in tier_tools)
-            tier_stats[f"tier{tier}_calls"] = tier_calls
-
         return {
             "total_tools": len(self._tools),
             "total_registered": len(self._tool_classes),
@@ -217,7 +198,6 @@ class ToolRegistry:
                 if total_calls > 0
                 else 100.0
             ),
-            "tier_distribution": tier_stats,
             "tools": tool_stats,
             "unavailable": self._unavailable_tools,
         }

@@ -252,6 +252,6 @@ Potential improvements to the display:
 
 - **Core Implementation**: [`src/agent/rag_confidence.py`](../src/agent/rag_confidence.py)
 - **Detailed Metrics**: [`docs/rag-confidence.md`](rag-confidence.md)
-- **Search Tool Integration**: [`src/agent/tools/tier1_basic.py`](../src/agent/tools/tier1_basic.py)
+- **Search Tool Integration**: [`src/agent/tools/search.py`](../src/agent/tools/search.py)
 - **CLI Implementation**: [`src/agent/cli.py`](../src/agent/cli.py)
 

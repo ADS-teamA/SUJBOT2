@@ -57,7 +57,7 @@ Implementace SOTA (State-of-the-Art) systému pro compliance checking v legal RA
 ```
 
 ### 2. DefinitionAlignerTool
-**Soubor:** `src/agent/tools/tier3_analysis.py` (lines 203-546)
+**Soubor:** `src/agent/tools/get_stats.py` (lines 203-546)
 **Řádky kódu:** +346
 
 **Zodpovědnost:**
@@ -295,7 +295,7 @@ Compliance queries → query_type="compliance"
 
 - [x] **Code Implementation**
   - [x] RequirementExtractorAgent (`src/multi_agent/agents/requirement_extractor.py`)
-  - [x] DefinitionAlignerTool (`src/agent/tools/tier3_analysis.py`)
+  - [x] DefinitionAlignerTool (`src/agent/tools/get_stats.py`)
   - [x] ComplianceAgent error handling (`src/multi_agent/agents/compliance.py`)
   - [x] GapSynthesizer prompt updates (`prompts/agents/gap_synthesizer.txt`)
   - [x] Orchestrator routing (`prompts/agents/orchestrator.txt`)
@@ -538,7 +538,7 @@ Compliance queries → query_type="compliance"
 
 ### Modified Files
 
-- `src/agent/tools/tier3_analysis.py` (+346 lines, definition_aligner)
+- `src/agent/tools/get_stats.py` (+346 lines, definition_aligner)
 - `src/multi_agent/agents/compliance.py` (+60 lines error handling)
 - `src/graph/models.py` (+6 lines, LEGAL_TERM/DEFINITION entities)
 - `src/multi_agent/core/state.py` (+2 lines, REQUIREMENT_EXTRACTION phase)
