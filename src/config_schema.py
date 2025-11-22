@@ -138,9 +138,15 @@ class ExtractionConfig(BaseModel):
     summary_model: Optional[str] = Field(None, description="Override summary model (uses llm_model if None)")
     summary_max_chars: int = Field(
         ...,
-        description="Summary length target (research-optimal: 150 chars, valid range: 50-300)",
+        description="Summary length target for sections (research-optimal: 150 chars, valid range: 50-300)",
         ge=50,
         le=300
+    )
+    document_summary_max_chars: int = Field(
+        ...,
+        description="Document summary length target (100-1000 chars for describing document and sections)",
+        ge=100,
+        le=1000
     )
     summary_style: Literal["generic", "expert"] = Field(
         ...,

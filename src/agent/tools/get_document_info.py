@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 class GetDocumentInfoInput(ToolInput):
     """Input for unified get_document_info tool."""
 
-    document_id: str = Field(..., description="Document ID")
+    document_id: Optional[str] = Field(None, description="Document ID (optional - if None, returns list of all documents)")
     info_type: str = Field(
         ...,
-        description="Type of information: 'summary' (high-level overview), 'metadata' (comprehensive stats), 'sections' (list all sections), 'section_details' (specific section info)",
+        description="Type of information: 'list' (all documents with summaries - requires document_id=None), 'summary' (high-level overview), 'metadata' (comprehensive stats), 'sections' (list all sections), 'section_details' (specific section info)",
     )
     section_id: Optional[str] = Field(
         None, description="Section ID (required for info_type='section_details')"
@@ -33,31 +33,35 @@ class GetDocumentInfoTool(BaseTool):
     """Get document information."""
 
     name = "get_document_info"
-    description = "Get document info/metadata"
+    description = "Get document info/metadata or list all documents"
     detailed_help = """
     Unified tool for retrieving document information with multiple info types:
+    - 'list': List all indexed documents with summaries (requires document_id=None)
     - 'summary': High-level document overview
     - 'metadata': Comprehensive stats (sections, chunks, source info)
     - 'sections': List all sections with titles and hierarchy
     - 'section_details': Detailed info about a specific section
 
     **When to use:**
-    - Need document overview before detailed search
-    - Want to understand document structure
-    - Looking for specific section to search within
+    - 'list': "What documents are available?", corpus discovery
+    - 'summary': Need document overview before detailed search
+    - 'sections': Want to understand document structure
+    - 'metadata': Need comprehensive stats
+    - 'section_details': Looking for specific section to search within
 
     **Best practices:**
-    - Use 'summary' for quick overview
+    - Use 'list' with document_id=None to see all documents
+    - Use 'summary' for quick overview of specific document
     - Use 'sections' to understand structure
     - Use 'metadata' for comprehensive stats
-    - Combine with filtered_search to search within sections
+    - Combine with search (filter_type='section') to search within sections
 
     **Data source:** Vector store metadata (Layer 1/2/3)
     """
     input_schema = GetDocumentInfoInput
 
     def execute_impl(
-        self, document_id: str, info_type: str, section_id: Optional[str] = None
+        self, document_id: Optional[str] = None, info_type: str = "summary", section_id: Optional[str] = None
     ) -> ToolResult:
         try:
             # Get layer metadata
@@ -73,6 +77,51 @@ class GetDocumentInfoTool(BaseTool):
                 layer1_chunks = self.vector_store.faiss_store.metadata_layer1
                 layer2_chunks = self.vector_store.faiss_store.metadata_layer2
                 layer3_chunks = self.vector_store.faiss_store.metadata_layer3
+
+            # Handle 'list' info_type (all documents)
+            if info_type == "list":
+                if document_id is not None:
+                    return ToolResult(
+                        success=False,
+                        data=None,
+                        error="info_type='list' requires document_id=None (lists all documents)",
+                    )
+
+                # Extract document IDs and summaries from Layer 1 metadata
+                documents_map = {}  # {doc_id: summary}
+
+                for meta in layer1_chunks:
+                    doc_id = meta.get("document_id")
+                    summary = meta.get("content", "")  # Layer 1 content is the document summary
+                    if doc_id and doc_id not in documents_map:
+                        documents_map[doc_id] = summary
+
+                # Fallback: If Layer 1 is empty, extract from Layer 3
+                if not documents_map:
+                    for meta in layer3_chunks:
+                        doc_id = meta.get("document_id")
+                        if doc_id and doc_id not in documents_map:
+                            doc_title = meta.get("document_title", doc_id)
+                            documents_map[doc_id] = f"Privacy policy for {doc_title}"
+
+                # Build list of document objects
+                document_list = [
+                    {"id": doc_id, "summary": summary} for doc_id, summary in sorted(documents_map.items())
+                ]
+
+                return ToolResult(
+                    success=True,
+                    data={"documents": document_list, "count": len(document_list)},
+                    metadata={"total_documents": len(document_list)},
+                )
+
+            # For other info_types, document_id is required
+            if document_id is None:
+                return ToolResult(
+                    success=False,
+                    data=None,
+                    error=f"document_id is required for info_type='{info_type}' (use info_type='list' with document_id=None to list all documents)",
+                )
 
             if info_type == "summary":
                 # Get document summary (Layer 1)

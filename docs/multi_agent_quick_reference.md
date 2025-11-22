@@ -305,7 +305,7 @@ RAG Components:
 - Caching Layer
 ```
 
-All 17 tools are available to agents automatically.
+All 15 tools are available to agents automatically (filtered_search and similarity_search were unified into search).
 
 ---
 

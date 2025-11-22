@@ -138,6 +138,33 @@ class ModelConfig:
         if embedding_provider is None:
             embedding_provider = ModelRegistry.get_provider(config.models.embedding_model, "embedding")
 
+        # Validate required API keys based on selected providers
+        required_keys = {}
+        if llm_provider in ("claude", "anthropic"):
+            required_keys["ANTHROPIC_API_KEY"] = config.api_keys.anthropic_api_key
+        elif llm_provider == "openai":
+            required_keys["OPENAI_API_KEY"] = config.api_keys.openai_api_key
+        elif llm_provider == "google":
+            required_keys["GOOGLE_API_KEY"] = config.api_keys.google_api_key
+
+        if embedding_provider == "voyage":
+            required_keys["VOYAGE_API_KEY"] = config.api_keys.voyage_api_key
+        elif embedding_provider == "openai" and llm_provider != "openai":
+            required_keys["OPENAI_API_KEY"] = config.api_keys.openai_api_key
+
+        # Check for missing keys
+        missing_keys = [key for key, value in required_keys.items() if not value]
+        if missing_keys:
+            raise ValueError(
+                f"Missing required API keys for selected providers:\n"
+                f"  LLM Provider: {llm_provider}\n"
+                f"  Embedding Provider: {embedding_provider}\n"
+                f"  Missing keys: {', '.join(missing_keys)}\n\n"
+                f"Please set these environment variables in your .env file:\n"
+                f"  " + "\n  ".join(f"{key}=your_api_key_here" for key in missing_keys) + "\n\n"
+                f"See .env.example for reference."
+            )
+
         return cls(
             # LLM Configuration
             llm_provider=llm_provider,
@@ -249,6 +276,7 @@ class ExtractionConfig:
     generate_summaries: bool
     summary_model: Optional[str]
     summary_max_chars: int
+    document_summary_max_chars: int
     summary_style: str
     use_batch_api: bool
     batch_api_poll_interval: int
@@ -285,6 +313,7 @@ class ExtractionConfig:
             generate_summaries=extraction_config.generate_summaries,
             summary_model=extraction_config.summary_model,
             summary_max_chars=extraction_config.summary_max_chars,
+            document_summary_max_chars=extraction_config.document_summary_max_chars,
             summary_style=extraction_config.summary_style,
             use_batch_api=extraction_config.use_batch_api,
             batch_api_poll_interval=extraction_config.batch_api_poll_interval,
@@ -301,7 +330,8 @@ class SummarizationConfig:
     """
 
     # Research-backed parameters (from LegalBench-RAG) - required fields first
-    max_chars: int
+    max_chars: int  # For section summaries (150 chars)
+    document_max_chars: int  # For document summaries (1000 chars)
     style: str
     temperature: float
     max_tokens: int
@@ -350,6 +380,7 @@ class SummarizationConfig:
 
         config_dict = {
             "max_chars": extraction.summary_max_chars,
+            "document_max_chars": extraction.document_summary_max_chars,
             "style": extraction.summary_style,
             "temperature": summarization_config.temperature,
             "max_tokens": summarization_config.max_tokens,

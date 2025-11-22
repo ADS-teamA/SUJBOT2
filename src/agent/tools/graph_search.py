@@ -721,8 +721,8 @@ class GraphSearchTool(BaseTool):
                         {"value": entity.value, "type": entity.type, "hop": hop}
                     )
 
-        # Sort chunks by score and take top k
-        sorted_chunks = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+        # Sort chunks by score (ascending: lowest confidence first, highest last)
+        sorted_chunks = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=False)[:k]
 
         # Get Layer 3 metadata for chunk retrieval
         layer3_chunks = []

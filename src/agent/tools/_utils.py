@@ -399,9 +399,9 @@ def merge_chunk_lists(
     # Deduplicate
     deduplicated = deduplicate_chunks(all_chunks)
 
-    # Sort by score (descending)
+    # Sort by score (ascending: lowest confidence first, highest last)
     if sort_by in deduplicated[0] if deduplicated else False:
-        deduplicated.sort(key=lambda x: x.get(sort_by, 0), reverse=True)
+        deduplicated.sort(key=lambda x: x.get(sort_by, 0), reverse=False)
 
     # Limit to max_total
     if max_total and len(deduplicated) > max_total:

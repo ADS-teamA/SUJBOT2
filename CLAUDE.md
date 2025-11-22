@@ -21,8 +21,9 @@
 
 ```bash
 # 1. Setup
-cp config.json.example config.json
-# Edit config.json with your API keys
+# CRITICAL: API keys go in .env (NOT in config.json!)
+cp .env.example .env
+# Edit .env with your API keys (file is gitignored)
 
 # 2. Index documents
 uv run python run_pipeline.py data/document.pdf
@@ -44,12 +45,12 @@ docker-compose up -d
 ### Why This Architecture?
 
 **Full-stack RAG system:**
-- **PostgreSQL** - Vector storage (pgvector) + knowledge graph (Apache AGE) + ACID transactions
+- **Dual Storage Backends** - FAISS (fast, in-memory) OR PostgreSQL (production, pgvector + Apache AGE)
 - **FastAPI Backend** - Multi-agent orchestration + 7-phase pipeline
 - **React Frontend** - Real-time agent progress visualization
 
 **Key Design Decisions:**
-1. **PostgreSQL vs FAISS** - Production reliability, concurrent access, standard backups
+1. **Dual Backend Support** - FAISS for development/testing, PostgreSQL for production (user-selectable)
 2. **Multi-layer embeddings** - 3 separate indexes (document/section/chunk) for 2.3x better retrieval
 3. **Autonomous agents** - LLM-driven tool calling (NOT hardcoded workflows)
 4. **Hierarchical summaries** - Document summaries built from section summaries (prevents context overflow)
@@ -63,9 +64,12 @@ Orchestrator (routing + synthesis)
     ↓
 Specialized Agents (extractor, classifier, compliance, etc.)
     ↓
-RAG Tools (17 specialized tools for retrieval and analysis)
+RAG Tools (11 specialized tools for retrieval and analysis)
     ↓
-Storage (PostgreSQL: vectors, graph, checkpoints)
+Storage (FAISS or PostgreSQL: vectors, graph, checkpoints)
+           ↓                    ↓
+    Fast in-memory      Production database
+    (development)       (concurrent access, ACID)
 ```
 
 ---
@@ -81,8 +85,9 @@ These are research-backed decisions. **DO NOT modify** without explicit approval
 - **No duplicate code** - Delete obsolete implementations immediately
 - **No legacy code** - Remove unused/deprecated code
 - **Clean root directory** - Tests in `tests/`, docs in `docs/`, scripts in `scripts/`
+- **API keys in `.env` ONLY** - NEVER in config.json, NEVER in code, NEVER in git
 
-**Why:** Prevents confusion, reduces maintenance burden, keeps codebase navigable.
+**Why:** Prevents confusion, reduces maintenance burden, keeps codebase navigable, protects secrets.
 
 ### 2. AUTONOMOUS AGENTIC ARCHITECTURE
 
@@ -132,6 +137,8 @@ Flow: Sections → Section Summaries → Document Summary
 
 - **Why:** Prevents context overflow, handles 100+ page documents
 - **Implementation:** PHASE 2 generates section summaries, then aggregates to document summary
+- **Document summary content:** Describes what the document is about AND provides brief description of sections
+- **Length:** 100-1000 chars (adaptive based on document complexity)
 - **Fallback:** `"(Document summary unavailable)"` if section summaries fail
 
 ### 4. TOKEN-AWARE CHUNKING
@@ -145,9 +152,11 @@ Flow: Sections → Section Summaries → Document Summary
 
 ### 5. GENERIC SUMMARIES (Counterintuitive!)
 
-- **Length:** 150 chars
+- **Section summaries:** 300 chars
+- **Document summaries:** 100-1000 chars (describes document and sections)
 - **Style:** GENERIC (NOT expert terminology)
 - **Research:** Reuter et al. (2024) - generic summaries improve retrieval
+- **Prompts:** Stored in `prompts/` as `.txt` files (loaded as I/O)
 
 ### 6. SUMMARY-AUGMENTED CHUNKING (SAC)
 
@@ -297,20 +306,142 @@ orchestrator.run(query)  # LLM generates contextual response
 
 ## 🔧 Configuration
 
-**SSOT:** All configuration in [`config.json.example`](config.json.example)
+**CRITICAL: Two-File Configuration System**
+
+1. **`.env`** - Secrets (gitignored, NEVER commit!)
+   - API keys (Anthropic, OpenAI, Voyage, Google)
+   - Database passwords
+   - JWT secret keys
+   - Copy from `.env.example` and fill in your values
+
+2. **`config.json`** - Settings (version-controlled, public)
+   - Model selection
+   - Pipeline parameters
+   - Feature flags
+   - NO secrets allowed!
 
 ```bash
-cp config.json.example config.json
-# Edit config.json with your settings
+# Setup API keys (REQUIRED)
+cp .env.example .env
+# Edit .env with your keys
+
+# Configuration is already in config.json (no copy needed)
 ```
 
 **Key decisions:**
-- **API keys:** Required (`anthropic_api_key` or `openai_api_key`)
+- **API keys:** In `.env` file (ANTHROPIC_API_KEY or OPENAI_API_KEY)
+- **Storage backend:** `faiss` (development, fast) or `postgresql` (production, ACID)
 - **Embedding model:** `bge-m3` (free, local) or `text-embedding-3-large` (cloud)
 - **Knowledge graph:** `neo4j` (production) or `simple` (dev)
 - **Speed mode:** `fast` (dev) or `eco` (production)
 
-**See `config.json.example` for all options.**
+### Storage Backend Selection
+
+**Two backends available:**
+
+1. **FAISS** (Default for development)
+   - Fast in-memory vector search
+   - Zero setup required
+   - Perfect for testing and iteration
+   - Files saved to `vector_db/` directory
+
+2. **PostgreSQL** (Recommended for production)
+   - Persistent database storage (pgvector extension)
+   - Concurrent access from multiple agents
+   - ACID transactions
+   - Standard database backups
+   - Requires PostgreSQL with pgvector
+
+**How to choose:**
+
+```json
+// config.json
+{
+  "storage": {
+    "backend": "faiss"       // Development: fast, no setup
+    // OR
+    "backend": "postgresql"  // Production: persistent, scalable
+  }
+}
+```
+
+**CLI override:**
+```bash
+# Index to PostgreSQL (override config.json)
+python run_pipeline.py document.pdf --backend postgresql
+
+# Index to FAISS (override config.json)
+python run_pipeline.py document.pdf --backend faiss
+```
+
+**PostgreSQL setup:**
+```bash
+# 1. Set DATABASE_URL in .env
+export DATABASE_URL="postgresql://user:pass@localhost:5432/dbname"
+
+# 2. Configure in config.json
+{
+  "storage": {
+    "backend": "postgresql"
+  }
+}
+
+# 3. Index documents
+python run_pipeline.py document.pdf
+```
+
+**See `config.json` for all options.**
+
+### Migrating from Previous Versions
+
+If upgrading from a version that used `config.json` for API keys:
+
+1. **Create .env file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Move API keys** from `config.json` to `.env`:
+   ```bash
+   # Old location (config.json) - REMOVE THIS SECTION
+   {
+     "api_keys": {
+       "anthropic_api_key": "sk-ant-...",  # ❌ REMOVE
+       "openai_api_key": "sk-..."          # ❌ REMOVE
+     }
+   }
+
+   # New location (.env) - ADD YOUR KEYS HERE
+   ANTHROPIC_API_KEY=sk-ant-...  # ✅ CORRECT
+   OPENAI_API_KEY=sk-...          # ✅ CORRECT
+   ```
+
+3. **Remove `api_keys` section** from `config.json` (now ignored):
+   - The old `api_keys: {}` field is no longer used
+   - It's safe to remove it entirely from your config.json
+
+4. **Verify:**
+   ```bash
+   # .env should NOT be tracked by git
+   git status  # Should NOT show .env
+
+   # config.json should have NO secrets
+   grep -i "api_key\|password\|secret" config.json  # Should return nothing
+   ```
+
+5. **Test:**
+   ```bash
+   # Should fail with clear error if API keys missing
+   python run_pipeline.py --help
+
+   # Should work after setting keys in .env
+   python run_pipeline.py document.pdf
+   ```
+
+**Why this change?**
+- **Security:** API keys were in version-controlled files (bad practice)
+- **Best practice:** Secrets in `.env` (gitignored), settings in `config.json`
+- **Standards:** Follows 12-factor app methodology
 
 ---
 
@@ -367,11 +498,12 @@ uv run isort src/ tests/ --profile black
 
 ---
 
-**Last Updated:** 2025-11-20
-**Version:** PHASE 1-7 COMPLETE + Orchestrator-Centric Multi-Agent + HITL + Docker Web UI
+**Last Updated:** 2025-11-22
+**Version:** PHASE 1-7 COMPLETE + Dual Backend Support + Multi-Agent + HITL + Docker Web UI
 
 **Notes:**
 - Configuration: SSOT in `config.json` (strict validation, no defaults)
-- Storage: PostgreSQL with pgvector (migration from FAISS completed)
+- Storage: **Dual backend support** - FAISS (development) OR PostgreSQL (production, user-selectable)
 - Agents: 7 autonomous agents (orchestrator + 6 specialized)
-- Tools: 17 RAG tools (search, retrieval, analysis, and metadata tools)
+- Tools: 11 RAG tools (search, retrieval, analysis, and metadata tools)
+- Hybrid Search: Works seamlessly with both FAISS and PostgreSQL backends

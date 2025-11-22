@@ -145,8 +145,8 @@ class DefinitionAlignerTool(BaseTool):
                             "alignment_type": "semantic_similar"
                         })
 
-            # Sort by confidence descending
-            alignments.sort(key=lambda x: x["confidence"], reverse=True)
+            # Sort by confidence (ascending: lowest confidence first, highest last)
+            alignments.sort(key=lambda x: x["confidence"], reverse=False)
 
             # Generate alignment summary (use sanitized term)
             summary = self._generate_alignment_summary(term_sanitized, alignments)

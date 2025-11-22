@@ -67,7 +67,7 @@ class MultiDocSynthesizerTool(BaseTool):
     - Use compare mode for differences, summarize for unified overview
     - Results cite all source documents
 
-    **Method:** filtered_search per document + LLM synthesis
+    **Method:** search (with filter_type='document') per document + LLM synthesis
     
     **Cost:** Higher (multiple retrievals + LLM synthesis)
     """

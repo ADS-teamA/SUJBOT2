@@ -549,7 +549,7 @@ The multi-agent system is built on a modular architecture where:
 3. **ComplexityAnalyzer** determines routing based on query analysis
 4. **WorkflowBuilder** constructs LangGraph workflows dynamically
 5. **BaseAgent** provides template method pattern for execution
-6. **ToolAdapter** bridges to existing 17-tool infrastructure
+6. **ToolAdapter** bridges to existing 15-tool infrastructure
 7. **MultiAgentState** carries data through the workflow
 8. **PostgresCheckpointer** persists state for recovery
 9. **CacheManager** optimizes costs via multi-level caching

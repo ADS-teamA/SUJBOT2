@@ -66,6 +66,73 @@ class VectorStoreAdapter(ABC):
         pass
 
     @abstractmethod
+    def search_layer1(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 1,
+        **kwargs
+    ) -> List[Dict]:
+        """
+        Direct Layer 1 search (document-level).
+
+        Used by hybrid search for document identification.
+
+        Args:
+            query_embedding: Query vector (3072 dimensions)
+            k: Number of results to retrieve (default: 1)
+            **kwargs: Additional backend-specific parameters
+
+        Returns:
+            [
+                {
+                    'chunk_id': 'doc1',
+                    'document_id': 'doc1',
+                    'title': 'Document Title',
+                    'content': 'Document summary...',
+                    'score': 0.92,
+                    ...metadata...
+                },
+                ...
+            ]
+        """
+        pass
+
+    @abstractmethod
+    def search_layer2(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 3,
+        document_filter: Optional[str] = None,
+        **kwargs
+    ) -> List[Dict]:
+        """
+        Direct Layer 2 search (section-level).
+
+        Used by hybrid search for section context retrieval.
+
+        Args:
+            query_embedding: Query vector (3072 dimensions)
+            k: Number of results to retrieve (default: 3)
+            document_filter: Optional document_id to filter results
+            **kwargs: Additional backend-specific parameters
+
+        Returns:
+            [
+                {
+                    'chunk_id': 'doc1:sec1',
+                    'document_id': 'doc1',
+                    'section_id': 'sec1',
+                    'section_title': 'Section 1',
+                    'content': 'Section text...',
+                    'score': 0.88,
+                    ...metadata...
+                },
+                ...
+            ]
+        """
+        pass
+
+    @abstractmethod
     def search_layer3(
         self,
         query_embedding: np.ndarray,
