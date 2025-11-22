@@ -50,7 +50,7 @@ docker-compose up -d
 
 **Key Design Decisions:**
 1. **PostgreSQL vs FAISS** - Production reliability, concurrent access, standard backups
-2. **2-layer embeddings** - Document + Chunk indexes (section layer disabled for 30% faster indexing)
+2. **Multi-layer embeddings** - 3 separate indexes (document/section/chunk) for 2.3x better retrieval
 3. **Autonomous agents** - LLM-driven tool calling (NOT hardcoded workflows)
 4. **Hierarchical summaries** - Document summaries built from section summaries (prevents context overflow)
 5. **Hybrid search** - BM25 + dense embeddings + RRF fusion (+23% precision)
@@ -155,12 +155,10 @@ Flow: Sections → Section Summaries → Document Summary
 - Strip summaries during retrieval
 - **Result:** -58% context drift (Anthropic, 2024)
 
-### 7. MULTI-LAYER EMBEDDINGS (2-LAYER OPTIMIZATION)
+### 7. MULTI-LAYER EMBEDDINGS
 
-- **2 active layers:** Document (L1) + Chunk (L3) embeddings
-- **Layer 2 (sections) DISABLED** - Not used by search tool, saves ~30% indexing time
-- **Section metadata** still available via get_document_info (extracted from L3)
-- **Result:** Same retrieval quality, faster indexing/search (Lima, 2024 research still valid)
+- **3 separate indexes** (document/section/chunk) - NOT merged
+- **Result:** 2.3x essential chunks vs single-layer (Lima, 2024)
 
 ### 8. HYBRID SEARCH
 
@@ -262,8 +260,8 @@ orchestrator.run(query)  # LLM generates contextual response
 **Embedding cache:**
 - Monitor hit rate with `embedder.get_cache_stats()` (target >80%)
 
-**Vector indexes:**
-- Keep layer separation (L1 + L3 active, L2 disabled for performance)
+**FAISS indexes:**
+- Keep layer separation (DO NOT merge L1/L2/L3)
 
 **Reranker loading:**
 - Lazy load to reduce startup time (~2s savings)
@@ -320,7 +318,7 @@ cp config.json.example config.json
 
 1. **LegalBench-RAG** (Pipitone & Alami, 2024) - RCTS, reranking, 500-char chunks
 2. **Summary-Augmented Chunking** (Reuter et al., 2024) - SAC, generic summaries
-3. **Multi-Layer Embeddings** (Lima, 2024) - 2-layer implementation (L1+L3, L2 disabled for performance)
+3. **Multi-Layer Embeddings** (Lima, 2024) - 3-layer indexing
 4. **Contextual Retrieval** (Anthropic, 2024) - Context prepending (-58% drift)
 5. **HybridRAG** (2024) - Graph boosting (+8% factual correctness)
 6. **HyDE** (Gao et al., 2022) - Hypothetical Document Embeddings (+15-30% recall for zero-shot queries)

@@ -105,13 +105,12 @@ class GetDocumentInfoTool(BaseTool):
                         metadata["summary"] = meta.get("content")
                         break
 
-                # Sections: Extract unique sections from Layer 3 chunks
-                # (Layer 2 embeddings disabled for performance)
-                section_titles = set()
-                for meta in layer3_chunks:
-                    if meta.get("document_id") == document_id and meta.get("section_title"):
-                        section_titles.add(meta.get("section_title"))
-                sections = sorted(list(section_titles))
+                # Layer 2: Sections
+                sections = [
+                    meta.get("section_title")
+                    for meta in layer2_chunks
+                    if meta.get("document_id") == document_id
+                ]
                 metadata["section_count"] = len(sections)
                 metadata["sections"] = sections
 
@@ -144,19 +143,15 @@ class GetDocumentInfoTool(BaseTool):
                 )
 
             elif info_type == "sections":
-                # Get list of sections from Layer 3 chunks
-                # (Layer 2 embeddings disabled for performance)
-                sections_dict = {}  # Use dict to deduplicate by section_id
-                for meta in layer3_chunks:
+                # Get list of sections (Layer 2)
+                sections = []
+                for meta in layer2_chunks:
                     if meta.get("document_id") == document_id:
-                        section_id = meta.get("section_id")
-                        section_title = meta.get("section_title")
-                        if section_id and section_id not in sections_dict:
-                            sections_dict[section_id] = {
-                                "section_id": section_id,
-                                "section_title": section_title,
-                            }
-                sections = list(sections_dict.values())
+                        section_info = {
+                            "section_id": meta.get("section_id"),
+                            "section_title": meta.get("section_title"),
+                        }
+                        sections.append(section_info)
 
                 if not sections:
                     return ToolResult(

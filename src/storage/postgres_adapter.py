@@ -161,16 +161,14 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         document_filter: Optional[str] = None,
     ) -> Dict[str, List[Dict]]:
         """
-        Hierarchical search using PostgreSQL (Layer 1 + Layer 3 only).
+        Hierarchical 3-layer search using PostgreSQL.
 
         Strategy:
         1. Search Layer 1 (document-level) → find top document (unless document_filter provided)
         2. Use document_id to filter Layer 3 search
         3. Retrieve top-k chunks from Layer 3
         4. Apply similarity threshold filtering
-
-        Note: Layer 2 (section embeddings) disabled - not used by search tool.
-              Section metadata still available via get_document_info tool.
+        5. Search Layer 2 (section-level) for context
 
         Args:
             query_embedding: Query embedding vector
@@ -239,13 +237,14 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     f"Threshold filtering: {len(layer3_results)} results kept (threshold={threshold:.3f})"
                 )
 
-            # Layer 2 (section embeddings) DISABLED - not used by search tool
-            # Saves ~100-200ms per search and reduces storage overhead
-            # Layer 2 metadata still available via get_document_info tool
+            # Step 3: Search Layer 2 (section context)
+            layer2_results = await self._search_layer(
+                conn, layer=2, query_vec=query_vec, k=3, document_filter=document_filter
+            )
 
             return {
                 "layer1": layer1_results,
-                "layer2": [],  # Disabled - never used for retrieval
+                "layer2": layer2_results,
                 "layer3": layer3_results,
             }
 
