@@ -1,5 +1,7 @@
 Write a short, factual passage that answers this question: {query}
 
+IMPORTANT: Write the passage in the SAME LANGUAGE as the question above. If the question is in Czech, write in Czech. If in English, write in English.
+
 The passage should:
 - Be 2-3 sentences long (50-100 words)
 - Use domain-specific terminology relevant to legal/technical/nuclear documents

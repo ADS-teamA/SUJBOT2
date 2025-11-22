@@ -4,7 +4,7 @@ Interactive CLI agent powered by Claude SDK for legal and technical document ret
 
 ## ✨ Features
 
-- **16 Specialized RAG Tools** organized in 3 tiers (basic, advanced, analysis)
+- **17 Specialized RAG Tools** for retrieval, analysis, and metadata access
 - **Hybrid Search**: BM25 + Dense embeddings + RRF fusion + Cross-encoder reranking
 - **Knowledge Graph Integration**: Entity-aware search and relationship queries
 - **Query Optimization**: HyDE (Hypothetical Document Embeddings) and query decomposition
@@ -89,45 +89,35 @@ Average time per call: 234ms
 
 ## 📚 Tool Architecture
 
-The agent has access to 27 specialized tools organized in 3 performance tiers:
+The agent has access to 17 specialized RAG tools:
 
-### Tier 1: Basic Tools (12 tools, ~100ms)
+### Core Retrieval Tools
 
-Fast, frequently-used tools for common retrieval tasks:
+- **search** - Unified hybrid search (BM25 + dense + RRF) with optional query expansion, HyDE, and graph boosting
+- **graph_search** - Entity-centric search with 4 modes (requires knowledge graph)
+- **filtered_search** - Advanced search with multiple filter types (document, section, temporal, entity, metadata)
+- **similarity_search** - Find semantically similar chunks
+- **expand_context** - Expand chunk context using multiple strategies
+- **cluster_search** - Cluster-based diverse retrieval
 
-- **simple_search** - Hybrid retrieval (BM25 + dense + reranking)
-- **entity_search** - Find chunks mentioning specific entities
-- **document_search** - Search within a specific document
-- **section_search** - Search within document sections
-- **keyword_search** - Pure BM25 keyword/phrase search
-- **get_document_list** - List all indexed documents
+### Analysis Tools
 
-**Use when:** Standard retrieval, keyword matching, document browsing
-
-### Tier 2: Advanced Tools (6 tools, ~500-1000ms)
-
-Quality tools for complex retrieval scenarios:
-
-- **graph_search** - Unified graph search with 4 modes: entity_mentions, entity_details, relationships, multi_hop (requires KG)
-- **compare_documents** - Compare two documents for similarities/differences
+- **multi_doc_synthesizer** - Multi-document synthesis and comparison
+- **contextual_chunk_enricher** - Enrich chunks with document/section context (Anthropic Contextual Retrieval)
 - **explain_search_results** - Explain search scores and retrieval methods
-- **filtered_search** - Advanced search with 3 methods (hybrid/bm25_only/dense_only) + 5 filter types
-- **similarity_search** - Find semantically similar chunks (within/across documents)
-- **expand_context** - Expand chunk context with section/similarity/hybrid strategies
+- **assess_retrieval_confidence** - Assess retrieval quality and confidence
+- **browse_entities** - Browse knowledge graph entities (requires KG)
+- **get_stats** - Corpus statistics and index information
+- **definition_aligner** - Align legal definitions across documents (requires KG)
 
-**Use when:** Complex queries, document comparison, graph traversal, filtered/targeted search
+### Metadata Tools
 
-### Tier 3: Analysis Tools (5 tools, ~1-3s)
+- **get_tool_help** - Get detailed help for any tool
+- **list_available_tools** - List all available tools
+- **get_document_list** - List all indexed documents
+- **get_document_info** - Get document metadata, summary, sections, or section details
 
-Deep analysis tools for specialized insights:
-
-- **explain_entity** - Comprehensive entity information + relationships (requires KG)
-- **get_entity_relationships** - Filtered relationship queries (requires KG)
-- **timeline_view** - Extract and organize temporal information
-- **summarize_section** - Detailed section summarization
-- **get_statistics** - Corpus statistics and analytics
-
-**Use when:** Entity analysis, timeline construction, summarization, corpus analytics
+**Tool Selection:** Claude autonomously selects tools based on query requirements. Use `get_tool_help` to learn about specific tool capabilities.
 
 ## 🎮 REPL Commands
 
@@ -320,12 +310,12 @@ The agent includes several advanced features that are built into the tool system
 │  └─ Query optimizer                                         │
 ├─────────────────────────────────────────────────────────────┤
 │  Tool System (tools/)                                       │
-│  ├─ Base tool abstraction                                   │
-│  ├─ Tool registry (14 tools)                                │
-│  │   ├─ Tier 1: Basic (5 tools)                            │
-│  │   ├─ Tier 2: Advanced (6 tools)                         │
-│  │   └─ Tier 3: Analysis (3 tools)                         │
-│  └─ Utility functions                                       │
+│  ├─ Base tool abstraction (_base.py)                       │
+│  ├─ Tool registry (17 tools)                               │
+│  │   ├─ Core retrieval (6 tools)                           │
+│  │   ├─ Analysis (7 tools)                                 │
+│  │   └─ Metadata (4 tools)                                 │
+│  └─ Utility functions (_utils.py)                          │
 ├─────────────────────────────────────────────────────────────┤
 │  RAG Pipeline Components                                    │
 │  ├─ HybridVectorStore (hybrid_search.py)                   │
@@ -363,7 +353,7 @@ python run_pipeline.py data/your_documents/
 
 ### "Knowledge graph not available"
 
-**Problem:** Tier 3 KG tools failing
+**Problem:** Knowledge graph tools failing
 
 **Solutions:**
 1. **Run indexing with KG enabled:**
@@ -495,12 +485,12 @@ python run_pipeline.py data/your_documents/
 
 ### Adding New Tools
 
-1. **Create tool class** in appropriate tier file:
+1. **Create tool file** in `src/agent/tools/my_tool.py`:
 
 ```python
 from pydantic import Field
-from .base import BaseTool, ToolInput, ToolResult
-from .registry import register_tool
+from ._base import BaseTool, ToolInput, ToolResult
+from ._registry import register_tool
 
 class MyToolInput(ToolInput):
     query: str = Field(..., description="Search query")
@@ -509,19 +499,19 @@ class MyToolInput(ToolInput):
 class MyTool(BaseTool):
     name = "my_tool"
     description = "What this tool does"
-    tier = 1  # 1, 2, or 3
     input_schema = MyToolInput
-    
+
     def execute_impl(self, query: str) -> ToolResult:
         # Implementation here
         return ToolResult(success=True, data=result)
 ```
 
-2. **Tool auto-registers** via `@register_tool` decorator
-
-3. **Test tool:**
+2. **Add import** to `src/agent/tools/__init__.py`:
 ```python
-pytest tests/test_agent_tools.py::test_my_tool -v
+from . import my_tool
+```
+
+3. **Tool auto-registers** via `@register_tool` decorator when imported
 ```
 
 ### Testing
@@ -596,7 +586,7 @@ Debug mode creates `agent.log` with detailed format:
 2025-01-15 10:23:45 | src.agent.agent_core         | DEBUG    | __init__              | Initializing AgentCore...
 2025-01-15 10:23:45 | src.agent.agent_core         | DEBUG    | __init__              | Model: claude-sonnet-4-5-20250929
 2025-01-15 10:23:46 | src.agent.tools.registry     | DEBUG    | initialize_tools      | Initializing tools with dependencies
-2025-01-15 10:23:46 | src.agent.tools.tier1_basic  | DEBUG    | execute               | Executing simple_search with query='test'
+2025-01-15 10:23:46 | src.agent.tools.search       | DEBUG    | execute               | Executing search with query='test'
 ```
 
 ### Validation Checks
