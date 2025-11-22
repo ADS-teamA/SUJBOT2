@@ -1,20 +1,37 @@
 """
 RAG Tools
 
-27 specialized tools organized by tier (basic, advanced, analysis).
+17 specialized tools for retrieval and analysis.
+All tools are registered automatically via @register_tool decorator.
 """
 
-from .base import BaseTool, ToolInput, ToolResult
-from .registry import ToolRegistry, get_registry
+from ._base import BaseTool, ToolInput, ToolResult
+from ._registry import ToolRegistry, get_registry
 
 # Import all tools to trigger registration
-# TIER 1: Basic Retrieval (12 tools)
-from . import tier1_basic
+# This uses explicit imports for clarity (no auto-discovery magic)
 
-# TIER 2: Advanced Retrieval (9 tools)
-from . import tier2_advanced
+# Basic retrieval tools (5)
+from . import get_tool_help
+from . import search
+from . import get_document_list
+from . import list_available_tools
+from . import get_document_info
 
-# TIER 3: Analysis & Insights (6 tools)
-from . import tier3_analysis
+# Advanced retrieval tools (10)
+from . import graph_search
+from . import multi_doc_synthesizer
+from . import contextual_chunk_enricher
+from . import explain_search_results
+from . import assess_retrieval_confidence
+from . import filtered_search
+from . import similarity_search
+from . import expand_context
+from . import browse_entities
+from . import cluster_search
+
+# Analysis tools (2)
+from . import get_stats
+from . import definition_aligner
 
 __all__ = ["BaseTool", "ToolInput", "ToolResult", "ToolRegistry", "get_registry"]

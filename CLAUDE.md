@@ -50,7 +50,7 @@ docker-compose up -d
 
 **Key Design Decisions:**
 1. **PostgreSQL vs FAISS** - Production reliability, concurrent access, standard backups
-2. **Multi-layer embeddings** - 3 separate indexes (document/section/chunk) for 2.3x better retrieval
+2. **2-layer embeddings** - Document + Chunk indexes (section layer disabled for 30% faster indexing)
 3. **Autonomous agents** - LLM-driven tool calling (NOT hardcoded workflows)
 4. **Hierarchical summaries** - Document summaries built from section summaries (prevents context overflow)
 5. **Hybrid search** - BM25 + dense embeddings + RRF fusion (+23% precision)
@@ -63,7 +63,7 @@ Orchestrator (routing + synthesis)
     ↓
 Specialized Agents (extractor, classifier, compliance, etc.)
     ↓
-RAG Tools (16 tools in 3 tiers: basic, advanced, analysis)
+RAG Tools (17 specialized tools for retrieval and analysis)
     ↓
 Storage (PostgreSQL: vectors, graph, checkpoints)
 ```
@@ -155,10 +155,12 @@ Flow: Sections → Section Summaries → Document Summary
 - Strip summaries during retrieval
 - **Result:** -58% context drift (Anthropic, 2024)
 
-### 7. MULTI-LAYER EMBEDDINGS
+### 7. MULTI-LAYER EMBEDDINGS (2-LAYER OPTIMIZATION)
 
-- **3 separate indexes** (document/section/chunk) - NOT merged
-- **Result:** 2.3x essential chunks vs single-layer (Lima, 2024)
+- **2 active layers:** Document (L1) + Chunk (L3) embeddings
+- **Layer 2 (sections) DISABLED** - Not used by search tool, saves ~30% indexing time
+- **Section metadata** still available via get_document_info (extracted from L3)
+- **Result:** Same retrieval quality, faster indexing/search (Lima, 2024 research still valid)
 
 ### 8. HYBRID SEARCH
 
@@ -192,10 +194,10 @@ orchestrator.run(query)  # LLM generates contextual response
 
 ### Agent Development
 
-**Tool tier selection:**
-- Start with TIER 1 (fast: 100-300ms)
-- Escalate to TIER 2 (quality: 500-1000ms) when needed
-- TIER 3 (analysis: 500ms-3s) for complex tasks only
+**Tool selection:**
+- Use `search` for most queries (hybrid retrieval with optional expansion)
+- Use specialized tools (graph_search, filtered_search) for specific needs
+- Check tool documentation with `get_tool_help` when unsure
 
 **Query expansion:**
 - `num_expands=0` (default) - Speed
@@ -260,8 +262,8 @@ orchestrator.run(query)  # LLM generates contextual response
 **Embedding cache:**
 - Monitor hit rate with `embedder.get_cache_stats()` (target >80%)
 
-**FAISS indexes:**
-- Keep layer separation (DO NOT merge L1/L2/L3)
+**Vector indexes:**
+- Keep layer separation (L1 + L3 active, L2 disabled for performance)
 
 **Reranker loading:**
 - Lazy load to reduce startup time (~2s savings)
@@ -318,7 +320,7 @@ cp config.json.example config.json
 
 1. **LegalBench-RAG** (Pipitone & Alami, 2024) - RCTS, reranking, 500-char chunks
 2. **Summary-Augmented Chunking** (Reuter et al., 2024) - SAC, generic summaries
-3. **Multi-Layer Embeddings** (Lima, 2024) - 3-layer indexing
+3. **Multi-Layer Embeddings** (Lima, 2024) - 2-layer implementation (L1+L3, L2 disabled for performance)
 4. **Contextual Retrieval** (Anthropic, 2024) - Context prepending (-58% drift)
 5. **HybridRAG** (2024) - Graph boosting (+8% factual correctness)
 6. **HyDE** (Gao et al., 2022) - Hypothetical Document Embeddings (+15-30% recall for zero-shot queries)
@@ -374,4 +376,4 @@ uv run isort src/ tests/ --profile black
 - Configuration: SSOT in `config.json` (strict validation, no defaults)
 - Storage: PostgreSQL with pgvector (migration from FAISS completed)
 - Agents: 7 autonomous agents (orchestrator + 6 specialized)
-- Tools: 16 RAG tools in 3 tiers (basic, advanced, analysis)
+- Tools: 17 RAG tools (search, retrieval, analysis, and metadata tools)

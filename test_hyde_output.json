@@ -1,0 +1,146 @@
+{
+  "timestamp": "2025-11-22T10:27:37.590241",
+  "query": "voda v reaktoru",
+  "tool": "search",
+  "parameters": {
+    "k": 5,
+    "num_expands": 2,
+    "use_hyde": true,
+    "enable_graph_boost": false
+  },
+  "tool_result": {
+    "success": true,
+    "data": [
+      {
+        "content": ". Voda, která se používá v reaktoru, je čistá demineralizovaná H2O prakticky bez příměsí [10]. V případě chybné manipulace s vodním okruhem, při které by došlo k rozpuštění nějakého materiálu v demineralizované vodě, který se běžně v hale reaktoru používá, vedlo by ke zvýšení absorpce neutronů v moderátoru a tím ke konzervativní odchylce od standardního stavu kritičnosti",
+        "document_id": "BZ_VR1",
+        "section_title": "6.1 Technický popis vodního hospodářství reaktoru",
+        "chunk_id": "BZ_VR1_L3_sec_377_chunk_2",
+        "breadcrumb": "BZ_VR1 > 6.1 Technický popis vodního hospodářství reaktoru",
+        "score": 0.6186
+      },
+      {
+        "content": "NEPLATNÉ Školní reaktor VR-1 je lehkovodní reaktor bazénového typu s obohaceným uranem. Bazénové uspořádání reaktoru umožňuje jednoduchý a rychlý přístup k aktivní zóně, snadné zakládání a vyjímání různých experimentálních vzorků a detektorů, jednoduchou a bezpečnou manipulaci s palivovými články apod. Moderátorem neutronů je lehká demineralizovaná voda, která slouží i jako reflektor, chladivo a biologické stínění. Odvod tepla z aktivní zóny probíhá přirozenou konvekcí",
+        "document_id": "BZ_VR1",
+        "section_title": "5.1 Souhrnný popis",
+        "chunk_id": "BZ_VR1_L3_sec_255_chunk_0",
+        "breadcrumb": "BZ_VR1 > 5.1 Souhrnný popis",
+        "score": 0.6071
+      },
+      {
+        "content": ". Podrobný popis úpravy vody a její parametry jsou uvedeny v [51]. Vzhledem k nízkému výkonu reaktoru a také nízké koncentraci rozpuštěných látek ve vodě, nedochází během provozu k její výrazné aktivaci. Přípustné chemické parametry moderátoru jsou uvedeny v Limitech a podmínkách [10].",
+        "document_id": "BZ_VR1",
+        "section_title": "6.1 Technický popis vodního hospodářství reaktoru",
+        "chunk_id": "BZ_VR1_L3_sec_379_chunk_2",
+        "breadcrumb": "BZ_VR1 > 6.1 Technický popis vodního hospodářství reaktoru",
+        "score": 0.5823
+      },
+      {
+        "content": "V reaktorové nádobě je i plošina, která umožňuje manipulace v aktivní zóně a jejím okolí při snížené hladině vody. Reaktorové nádoby jsou zaplněny lehkou vodou, která slouží nejen jako moderátor a reflektor, ale i jako biologické stínění a chladivo. Díky malému výkonu, je pro odvod tepla uvolněného při štěpení uranu v aktivní zóně dostatečné přirozené proudění.",
+        "document_id": "BZ_VR1",
+        "section_title": "1.4.2 Popis reaktoru",
+        "chunk_id": "BZ_VR1_L3_sec_75_chunk_0",
+        "breadcrumb": "BZ_VR1 > 1.4.2 Popis reaktoru",
+        "score": 0.5821
+      },
+      {
+        "content": "aktivní zónu reaktoru. Patří mezi ně zejména nosný systém aktivní zóny, rošty, nosný systém regulace, měřicí kanály, provozní a měřicí potrubí. V reaktorové nádobě je i plošina, která umožňuje manipulace v aktivní zóně a jejím okolí při snížené hladině vody. Manipulační nádoba umožňuje plnit řadu funkcí, mimo jiné je vybavena chránilištěm pro odkládání a dočasné skladování palivových článků a také umožňuje přípravu experimentů. V případě potřeby lze obě nádoby pomocí hradítka vodotěsně oddělit",
+        "document_id": "BZ_VR1",
+        "section_title": "5.1 Souhrnný popis",
+        "chunk_id": "BZ_VR1_L3_sec_258_chunk_0",
+        "breadcrumb": "BZ_VR1 > 5.1 Souhrnný popis",
+        "score": 0.5695
+      }
+    ],
+    "error": null,
+    "metadata": {
+      "query": "voda v reaktoru",
+      "k": 5,
+      "num_expands": 2,
+      "enable_graph_boost": false,
+      "graph_boost_enabled": false,
+      "expansion_metadata": {
+        "num_expands": 2,
+        "expansion_method": "unavailable"
+      },
+      "fusion_method": "none",
+      "reranking_applied": false,
+      "method": "hybrid",
+      "candidates_retrieved": 5,
+      "chunks_before_rerank": 5,
+      "chunks_after_rerank": 5,
+      "final_count": 5,
+      "document_filter": "BZ_VR1",
+      "queries_used": [
+        "voda v reaktoru"
+      ],
+      "search_metadata": [
+        {
+          "query": "voda v reaktoru",
+          "chunks_retrieved": 5,
+          "graph_boost_applied": false
+        }
+      ],
+      "hyde_metadata": {
+        "use_hyde": true,
+        "num_hypotheses": 0,
+        "generation_method": "none"
+      },
+      "rag_confidence": {
+        "overall_confidence": 0.424,
+        "top_score": 0.619,
+        "score_gap": 0.012,
+        "score_spread": 0.018,
+        "consensus_count": 0,
+        "bm25_dense_agreement": 0.5,
+        "reranker_impact": 0.0,
+        "graph_support": false,
+        "document_diversity": 0.2,
+        "interpretation": "VERY LOW - Poor retrieval, expert review required",
+        "should_flag_for_review": true,
+        "details": {
+          "total_chunks": 5,
+          "score_distribution": {
+            "min": 0.569,
+            "max": 0.619,
+            "mean": 0.592,
+            "median": 0.582
+          },
+          "retrieval_methods": {
+            "hybrid_search": false,
+            "reranking": false,
+            "graph_boost": false,
+            "bm25_only": false,
+            "dense_only": false
+          },
+          "source_diversity": {
+            "unique_documents": 1,
+            "unique_sections": 5
+          }
+        }
+      },
+      "tool_name": "search",
+      "tier": 1,
+      "explicit_params": [
+        "query",
+        "k",
+        "num_expands",
+        "use_hyde",
+        "enable_graph_boost"
+      ],
+      "api_cost_usd": 7.799999999999756e-07,
+      "estimated_tokens": 760
+    },
+    "citations": [
+      "⚠️ VERY LOW - Poor retrieval, expert review required",
+      "[1] BZ_VR1 > 6.1 Technický popis vodního hospodářství reaktoru",
+      "[2] BZ_VR1 > 5.1 Souhrnný popis",
+      "[3] BZ_VR1 > 6.1 Technický popis vodního hospodářství reaktoru",
+      "[4] BZ_VR1 > 1.4.2 Popis reaktoru",
+      "[5] BZ_VR1 > 5.1 Souhrnný popis"
+    ],
+    "execution_time_ms": 1383.7764263153076,
+    "estimated_tokens": 760,
+    "api_cost_usd": 7.799999999999756e-07
+  }
+}

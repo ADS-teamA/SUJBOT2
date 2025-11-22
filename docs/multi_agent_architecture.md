@@ -560,30 +560,30 @@ class ToolAdapter:
         #    - error: Optional[str]
 ```
 
-**Tool Availability:** All 16 existing tools available to agents:
+**Tool Availability:** All 17 RAG tools available to agents:
 
-**Tier 1 (Fast, 100-300ms):**
-1. `search_documents` - Hybrid search
-2. `search_similar` - Semantic similarity
-3. `get_document_list` - List available docs
-4. `get_context_window` - Context around chunks
-5. `cache_query` - Prompt caching
-6. `detect_language` - Language detection
+**Core Retrieval:**
+1. `search` - Unified hybrid search with expansion, HyDE, graph boost
+2. `graph_search` - Entity-centric search (requires KG)
+3. `filtered_search` - Advanced search with filters
+4. `similarity_search` - Semantic similarity
+5. `expand_context` - Context expansion
+6. `cluster_search` - Cluster-based retrieval
 
-**Tier 2 (Quality, 500-1000ms):**
-7. `search_regulatory_graph` - Graph search
-8. `classify_document` - Doc classification
-9. `verify_compliance` - Compliance check
-10. `assess_risk` - Risk assessment
-11. `validate_citations` - Citation validation
-12. `analyze_gaps` - Gap analysis
-13. `generate_summary` - Summarization
-14. `assess_confidence` - Confidence scoring
+**Analysis:**
+7. `multi_doc_synthesizer` - Multi-document synthesis
+8. `contextual_chunk_enricher` - Contextual enrichment
+9. `explain_search_results` - Explain retrieval
+10. `assess_retrieval_confidence` - Confidence assessment
+11. `browse_entities` - Browse KG entities
+12. `get_stats` - Corpus statistics
+13. `definition_aligner` - Legal definition alignment
 
-**Tier 3 (Analysis, 1-3s):**
-15. `compare_documents` - Cross-doc analysis
-16. `expand_context` - Context expansion
-17. `extract_entities` - Entity extraction
+**Metadata:**
+14. `get_tool_help` - Tool documentation
+15. `list_available_tools` - List all tools
+16. `get_document_list` - List documents
+17. `get_document_info` - Document metadata
 
 ---
 

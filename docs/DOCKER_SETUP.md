@@ -237,7 +237,7 @@ Docker Compose automatically mounts source code and enables hot reload:
 docker-compose up -d
 
 # Edit backend code
-vim src/agent/tools/tier1_basic.py
+vim src/agent/tools/search.py
 
 # Changes auto-reload (watch backend logs)
 docker-compose logs -f backend

@@ -60,7 +60,7 @@ The RAG confidence scoring was **only implemented in the `search` tool**, but th
 
 Added RAG confidence scoring to **`exact_match_search` tool** to ensure consistent confidence display across all retrieval tools.
 
-**File modified:** `src/agent/tools/tier1_basic.py`
+**File modified:** `src/agent/tools/search.py`
 
 **Changes:**
 1. Import `RAGConfidenceScorer` in the tool execution
@@ -304,6 +304,6 @@ Potential improvements to confidence scoring:
 
 - **CLI Display Guide:** [`docs/rag-confidence-cli-display.md`](rag-confidence-cli-display.md)
 - **Core Implementation:** [`docs/rag-confidence.md`](rag-confidence.md)
-- **Search Tool:** [`src/agent/tools/tier1_basic.py`](../src/agent/tools/tier1_basic.py)
+- **Search Tool:** [`src/agent/tools/search.py`](../src/agent/tools/search.py)
 - **Confidence Scorer:** [`src/agent/rag_confidence.py`](../src/agent/rag_confidence.py)
 

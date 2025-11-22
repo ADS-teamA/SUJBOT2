@@ -143,7 +143,6 @@ class BaseTool(ABC):
     Subclasses implement:
     - name: Tool identifier
     - description: What the tool does
-    - tier: 1=basic, 2=advanced, 3=analysis
     - input_schema: Pydantic model for input validation
     - execute_impl(): Tool-specific logic
     """
@@ -152,7 +151,6 @@ class BaseTool(ABC):
     name: str = "base_tool"
     description: str = "Base tool (override in subclass)"  # Short description (API)
     detailed_help: str = ""  # Detailed help text (for get_tool_help)
-    tier: int = 1
     input_schema: type[ToolInput] = ToolInput
 
     # Metadata flags
@@ -255,7 +253,6 @@ class BaseTool(ABC):
             self.total_time_ms += elapsed_ms
             result.execution_time_ms = elapsed_ms
             result.metadata["tool_name"] = self.name
-            result.metadata["tier"] = self.tier
             result.metadata["explicit_params"] = explicit_params  # Track model-specified params
             result.metadata["api_cost_usd"] = api_cost_delta
 
@@ -283,7 +280,6 @@ class BaseTool(ABC):
                 error=f"Invalid input: {str(e)}",
                 metadata={
                     "tool_name": self.name,
-                    "tier": self.tier,
                     "execution_time_ms": elapsed_ms,
                     "error_type": "validation",
                 },
@@ -306,7 +302,6 @@ class BaseTool(ABC):
                 error=f"Internal tool error - this is a bug. {type(e).__name__}: {str(e)}",
                 metadata={
                     "tool_name": self.name,
-                    "tier": self.tier,
                     "execution_time_ms": elapsed_ms,
                     "error_type": "programming",
                 },
@@ -325,7 +320,6 @@ class BaseTool(ABC):
                 error=f"System error: {type(e).__name__}: {str(e)}. Try again or contact administrator.",
                 metadata={
                     "tool_name": self.name,
-                    "tier": self.tier,
                     "execution_time_ms": elapsed_ms,
                     "error_type": "system",
                 },
@@ -348,7 +342,6 @@ class BaseTool(ABC):
                 error=f"Unexpected error: {type(e).__name__}: {str(e)}",
                 metadata={
                     "tool_name": self.name,
-                    "tier": self.tier,
                     "execution_time_ms": elapsed_ms,
                     "error_type": "unexpected",
                 },
@@ -365,7 +358,6 @@ class BaseTool(ABC):
 
         return {
             "name": self.name,
-            "tier": self.tier,
             "execution_count": self.execution_count,
             "error_count": self.error_count,
             "success_rate": round(success_rate * 100, 1),
@@ -385,4 +377,3 @@ class BaseTool(ABC):
             "description": self.description,
             "input_schema": self.input_schema.model_json_schema(),
         }
-

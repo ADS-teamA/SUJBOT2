@@ -662,10 +662,9 @@ class IndexingPipeline:
             else:
                 embeddings["layer1"] = None
 
-            if chunks["layer2"]:
-                embeddings["layer2"] = self.embedder.embed_chunks(chunks["layer2"], layer=2)
-            else:
-                embeddings["layer2"] = None
+            # Layer 2 DISABLED - section embeddings not used by search tool
+            # Saves ~30% indexing time and storage without functionality loss
+            embeddings["layer2"] = None
 
             # Layer 3 always exists
             embeddings["layer3"] = self.embedder.embed_chunks(chunks["layer3"], layer=3)

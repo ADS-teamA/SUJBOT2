@@ -214,7 +214,7 @@ confidence = assess_retrieval_confidence(chunk_ids=chunk_ids)
 
 ## Integration Points
 
-### 1. Search Tool (`src/agent/tools/tier1_basic.py`)
+### 1. Search Tool (`src/agent/tools/search.py`)
 
 Automatically scores confidence after retrieval:
 
@@ -231,7 +231,7 @@ if confidence.should_flag:
     citations.insert(0, f"⚠️ {confidence.interpretation}")
 ```
 
-### 2. Dedicated Tool (`src/agent/tools/tier2_advanced.py`)
+### 2. Dedicated Tool (`src/agent/tools/filtered_search.py`)
 
 Provides explicit confidence assessment:
 
@@ -239,10 +239,9 @@ Provides explicit confidence assessment:
 @register_tool
 class AssessRetrievalConfidenceTool(BaseTool):
     """Assess confidence of retrieval results."""
-    
+
     name = "assess_retrieval_confidence"
-    tier = 2
-    
+
     def execute_impl(self, chunk_ids: List[str]) -> ToolResult:
         # Find chunks by ID
         chunks = self._get_chunks_by_ids(chunk_ids)
@@ -404,8 +403,8 @@ class RAGConfidenceScore:
 
 - **CLI Display Guide**: [`docs/rag-confidence-cli-display.md`](rag-confidence-cli-display.md) - **Visual examples of confidence display in CLI**
 - **Implementation**: [`src/agent/rag_confidence.py`](../src/agent/rag_confidence.py)
-- **Search Tool**: [`src/agent/tools/tier1_basic.py`](../src/agent/tools/tier1_basic.py)
-- **Assessment Tool**: [`src/agent/tools/tier2_advanced.py`](../src/agent/tools/tier2_advanced.py)
+- **Search Tool**: [`src/agent/tools/search.py`](../src/agent/tools/search.py)
+- **Assessment Tool**: [`src/agent/tools/filtered_search.py`](../src/agent/tools/filtered_search.py)
 - **CLI Integration**: [`src/agent/cli.py`](../src/agent/cli.py)
 - **Tests**: [`tests/agent/test_rag_confidence.py`](../tests/agent/test_rag_confidence.py)
 
