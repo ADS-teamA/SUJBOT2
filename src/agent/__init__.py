@@ -7,7 +7,7 @@ new multi-agent system.
 
 Modules:
 - config: Shared configuration (AgentConfig)
-- tools: 17 RAG tools organized in 3 tiers
+- tools: 15 RAG tools (filtered_search and similarity_search unified into search)
 - providers: LLM provider abstractions (Anthropic, OpenAI, Google)
 - graph_loader/graph_adapter: Knowledge graph integration
 

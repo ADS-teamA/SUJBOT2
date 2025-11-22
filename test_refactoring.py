@@ -79,7 +79,7 @@ def test_imports():
 
 
 def test_registration():
-    """Test 3: Verify all 17 tools are registered."""
+    """Test 3: Verify all 15 tools are registered."""
     print("\n" + "="*60)
     print("TEST 3: Tool Registration Count")
     print("="*60)
@@ -95,11 +95,11 @@ def test_registration():
         for name in sorted(registry._tool_classes.keys()):
             print(f"  - {name}")
 
-        if tool_count == 17:
-            print(f"\n✅ PASSED: All 17 tools registered correctly")
+        if tool_count == 15:
+            print(f"\n✅ PASSED: All 15 tools registered correctly")
             return True
         else:
-            print(f"\n❌ FAILED: Expected 17 tools, found {tool_count}")
+            print(f"\n❌ FAILED: Expected 15 tools, found {tool_count}")
             return False
 
     except Exception as e:

@@ -28,7 +28,7 @@ class SearchInput(ToolInput):
         3,
         description="Number of results to return per search (default: 3). Use targeted searches with low k and call iteratively rather than high k single searches. Recommended: k=3 for focused results, increase only if needed.",
         ge=1,
-        le=20,
+        le=20,  # Increased from 10 to handle post-filter scenarios (internally fetches k*5*2 candidates with reranking+filtering)
     )
     num_expands: int = Field(
         0,
@@ -54,7 +54,7 @@ class SearchInput(ToolInput):
     )
     filter_value: Optional[str] = Field(
         None,
-        description="Filter value (document_id, section_title, or date range). Required if filter_type is set",
+        description="Filter value (document_id, section_title). Required if filter_type is set (except 'temporal', which uses start_date/end_date instead)",
     )
     document_type: Optional[str] = Field(None, description="For metadata filter: document type")
     section_type: Optional[str] = Field(None, description="For metadata filter: section type")
@@ -105,7 +105,11 @@ class SearchTool(BaseTool):
     **HyDE (Hypothetical Document Embeddings):**
     - use_hyde=True: Generates hypothetical answer for better semantic matching
     - Slower (~1-2s) but higher quality for ambiguous queries
-    - Uses multi-hypothesis averaging (3 hypothetical documents)
+    - Uses single hypothesis for efficiency (balances quality vs. cost)
+
+    **Migration from Removed Tools:**
+    - similarity_search functionality → Use expand_context(chunk_ids=[...], expansion_mode='similarity')
+    - filtered_search → Use search with filter_type and filter_value parameters
 
     **Best Practices:**
     - Default (fast): search(query, k=3)
@@ -272,8 +276,8 @@ class SearchTool(BaseTool):
 
             if hyde_gen:
                 try:
-                    # Generate 3 hypothetical docs for original query (multi-hypothesis averaging)
-                    hyde_result = hyde_gen.generate(query, num_docs=3)
+                    # Generate 1 hypothetical doc for original query (efficiency-focused)
+                    hyde_result = hyde_gen.generate(query, num_docs=1)
                     hyde_docs = hyde_result.hypothetical_docs
 
                     hyde_metadata.update(
@@ -528,6 +532,33 @@ class SearchTool(BaseTool):
             metadata=result_metadata,
         )
 
+    def _get_query_embedding(self, query: str, hyde_docs: Optional[List[str]] = None):
+        """Get query embedding (HyDE or regular)."""
+        if hyde_docs and len(hyde_docs) > 0:
+            return self.embedder.embed_texts([hyde_docs[0]])
+        return self.embedder.embed_texts([query])
+
+    def _execute_bm25_retrieval(
+        self, query: str, k: int, document_filter: Optional[str] = None
+    ) -> List[dict]:
+        """Execute BM25 retrieval with fallback logic."""
+        if hasattr(self.vector_store, "bm25_store"):
+            return self.vector_store.bm25_store.search_layer3(
+                query=query, k=k, document_filter=document_filter
+            )
+        else:
+            # Fallback to hierarchical with dummy embedding
+            import numpy as np
+
+            dummy_embedding = np.zeros((1, self.embedder.dimensions))
+            results_dict = self.vector_store.hierarchical_search(
+                query_text=query,
+                query_embedding=dummy_embedding,
+                k_layer3=k,
+                document_filter=document_filter,
+            )
+            return results_dict.get("layer3", [])
+
     def _execute_bm25_only(
         self,
         query: str,
@@ -540,41 +571,9 @@ class SearchTool(BaseTool):
         k: int,
     ) -> List[dict]:
         """BM25-only search with optional filtering."""
-        # Document filter: index-level (fast)
-        if filter_type == "document":
-            if hasattr(self.vector_store, "bm25_store"):
-                results = self.vector_store.bm25_store.search_layer3(
-                    query=query, k=k, document_filter=filter_value
-                )
-            else:
-                # Fallback to hierarchical with dummy embedding
-                import numpy as np
-
-                dummy_embedding = np.zeros((1, self.embedder.dimensions))
-                results_dict = self.vector_store.hierarchical_search(
-                    query_text=query,
-                    query_embedding=dummy_embedding,
-                    k_layer3=k,
-                    document_filter=filter_value,
-                )
-                results = results_dict.get("layer3", [])
-        else:
-            # No filter or post-filter cases
-            if hasattr(self.vector_store, "bm25_store"):
-                results = self.vector_store.bm25_store.search_layer3(
-                    query=query, k=k, document_filter=None
-                )
-            else:
-                import numpy as np
-
-                dummy_embedding = np.zeros((1, self.embedder.dimensions))
-                results_dict = self.vector_store.hierarchical_search(
-                    query_text=query,
-                    query_embedding=dummy_embedding,
-                    k_layer3=k,
-                    document_filter=None,
-                )
-                results = results_dict.get("layer3", [])
+        # Document filter: index-level (fast), otherwise None
+        document_filter = filter_value if filter_type == "document" else None
+        results = self._execute_bm25_retrieval(query, k, document_filter)
 
         return self._apply_post_filters(
             results, filter_type, filter_value, document_type, section_type, start_date, end_date, k
@@ -593,11 +592,7 @@ class SearchTool(BaseTool):
         hyde_docs: Optional[List[str]] = None,
     ) -> List[dict]:
         """Dense-only search with optional filtering."""
-        # Use HyDE document for embedding if available
-        if hyde_docs and len(hyde_docs) > 0:
-            query_embedding = self.embedder.embed_texts([hyde_docs[0]])
-        else:
-            query_embedding = self.embedder.embed_texts([query])
+        query_embedding = self._get_query_embedding(query, hyde_docs)
 
         # Dense search
         dense_results = self.vector_store.faiss_store.search_layer3(
@@ -656,10 +651,7 @@ class SearchTool(BaseTool):
                 logger.warning(f"Graph boost failed: {e}. Falling back to standard hybrid.")
 
         # 2. Standard Hybrid
-        if hyde_docs and len(hyde_docs) > 0:
-            query_embedding = self.embedder.embed_texts([hyde_docs[0]])
-        else:
-            query_embedding = self.embedder.embed_texts([query])
+        query_embedding = self._get_query_embedding(query, hyde_docs)
 
         # Document filter: index-level (fast path for hybrid)
         if filter_type == "document":
@@ -683,6 +675,45 @@ class SearchTool(BaseTool):
         return self._apply_post_filters(
             chunks, filter_type, filter_value, document_type, section_type, start_date, end_date, k
         )
+
+    def _apply_metadata_filter(
+        self, chunks: List[dict], document_type: Optional[str], section_type: Optional[str]
+    ) -> List[dict]:
+        """Apply metadata filters (document_type, section_type)."""
+        filtered = chunks
+        if document_type:
+            filtered = [c for c in filtered if c.get("doc_type", "").lower() == document_type.lower()]
+        if section_type:
+            filtered = [
+                c for c in filtered if c.get("section_type", "").lower() == section_type.lower()
+            ]
+        return filtered
+
+    def _apply_temporal_filter(
+        self, chunks: List[dict], start_date: Optional[str], end_date: Optional[str]
+    ) -> List[dict]:
+        """Apply temporal filter (date range)."""
+        from datetime import datetime
+
+        start_dt = datetime.fromisoformat(start_date) if start_date else None
+        end_dt = datetime.fromisoformat(end_date) if end_date else None
+
+        filtered = []
+        for chunk in chunks:
+            chunk_date_str = chunk.get("date") or chunk.get("timestamp")
+            if not chunk_date_str:
+                continue
+            try:
+                chunk_date = datetime.fromisoformat(chunk_date_str)
+                if start_dt and chunk_date < start_dt:
+                    continue
+                if end_dt and chunk_date > end_dt:
+                    continue
+                filtered.append(chunk)
+            except (ValueError, TypeError):
+                # Invalid date format or type - skip this chunk
+                continue
+        return filtered
 
     def _apply_post_filters(
         self,
@@ -708,35 +739,9 @@ class SearchTool(BaseTool):
             section_lower = filter_value.lower()
             filtered = [c for c in filtered if section_lower in c.get("section_title", "").lower()]
         elif filter_type == "metadata":
-            if document_type:
-                filtered = [
-                    c for c in filtered if c.get("doc_type", "").lower() == document_type.lower()
-                ]
-            if section_type:
-                filtered = [
-                    c for c in filtered if c.get("section_type", "").lower() == section_type.lower()
-                ]
+            filtered = self._apply_metadata_filter(filtered, document_type, section_type)
         elif filter_type == "temporal":
-            from datetime import datetime
-
-            start_dt = datetime.fromisoformat(start_date) if start_date else None
-            end_dt = datetime.fromisoformat(end_date) if end_date else None
-
-            temp_filtered = []
-            for chunk in filtered:
-                chunk_date_str = chunk.get("date") or chunk.get("timestamp")
-                if not chunk_date_str:
-                    continue
-                try:
-                    chunk_date = datetime.fromisoformat(chunk_date_str)
-                    if start_dt and chunk_date < start_dt:
-                        continue
-                    if end_dt and chunk_date > end_dt:
-                        continue
-                    temp_filtered.append(chunk)
-                except:
-                    continue
-            filtered = temp_filtered
+            filtered = self._apply_temporal_filter(filtered, start_date, end_date)
 
         return filtered[:k]
 

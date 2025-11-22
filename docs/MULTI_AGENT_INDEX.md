@@ -132,7 +132,7 @@ Complex (complexity > 70):
 - **Persistence:** PostgreSQL + LangGraph Checkpointer
 - **Caching:** 3-level (Prompt, Semantic, System)
 - **Observability:** LangSmith
-- **Tools:** 17 specialized tools (existing RAG infrastructure)
+- **Tools:** 15 specialized tools (existing RAG infrastructure, filtered_search and similarity_search removed)
 
 ---
 
@@ -161,7 +161,7 @@ class BaseAgent(ABC):
 ```
 
 ### Tool Adapter Pattern
-Bridges LangGraph agents to existing 17-tool infrastructure:
+Bridges LangGraph agents to existing 15-tool infrastructure:
 ```
 Agent → ToolAdapter → Existing Tool Registry → RAG Infrastructure
 ```
@@ -281,7 +281,7 @@ See `PIPELINE.md` for complete research details.
 - [Tool Adapter Pattern](multi_agent_architecture.md#61-tool-adapter-tooldapy)
 - [Tool Execution Flow](multi_agent_components.md#tool-execution-flow)
 - [RAG Integration](multi_agent_architecture.md#14-integration-with-existing-rag-pipeline)
-- [All 17 Tools List](multi_agent_architecture.md#61-tool-adapter-tooldapy)
+- [All 15 Tools List](multi_agent_architecture.md#61-tool-adapter-tooldapy)
 
 ### Configuration & Deployment
 - [Configuration](multi_agent_architecture.md#12-configuration)

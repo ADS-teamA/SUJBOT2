@@ -4,7 +4,7 @@ Interactive CLI agent powered by Claude SDK for legal and technical document ret
 
 ## ✨ Features
 
-- **17 Specialized RAG Tools** for retrieval, analysis, and metadata access
+- **15 Specialized RAG Tools** for retrieval, analysis, and metadata access
 - **Hybrid Search**: BM25 + Dense embeddings + RRF fusion + Cross-encoder reranking
 - **Knowledge Graph Integration**: Entity-aware search and relationship queries
 - **Query Optimization**: HyDE (Hypothetical Document Embeddings) and query decomposition
@@ -89,7 +89,7 @@ Average time per call: 234ms
 
 ## 📚 Tool Architecture
 
-The agent has access to 17 specialized RAG tools:
+The agent has access to 15 specialized RAG tools (filtered_search and similarity_search were unified into search):
 
 ### Core Retrieval Tools
 
@@ -311,8 +311,8 @@ The agent includes several advanced features that are built into the tool system
 ├─────────────────────────────────────────────────────────────┤
 │  Tool System (tools/)                                       │
 │  ├─ Base tool abstraction (_base.py)                       │
-│  ├─ Tool registry (17 tools)                               │
-│  │   ├─ Core retrieval (6 tools)                           │
+│  ├─ Tool registry (15 tools)                               │
+│  │   ├─ Core retrieval (4 tools)                           │
 │  │   ├─ Analysis (7 tools)                                 │
 │  │   └─ Metadata (4 tools)                                 │
 │  └─ Utility functions (_utils.py)                          │

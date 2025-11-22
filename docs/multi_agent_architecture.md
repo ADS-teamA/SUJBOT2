@@ -17,7 +17,7 @@ The SUJBOT2 multi-agent system is a LangGraph-based orchestration framework that
 - **PostgreSQL Checkpointing** for conversation persistence
 - **3-Level Prompt Caching** (90% cost savings)
 - **LangSmith Integration** for full observability
-- **Zero-Change Integration** with existing 17-tool RAG infrastructure
+- **Zero-Change Integration** with existing 15-tool RAG infrastructure
 
 ---
 
@@ -70,7 +70,7 @@ Final Answer (Markdown Report)
 | **Prompt Caching** | Anthropic API (ephemeral) | 90% cost reduction |
 | **Observability** | LangSmith | Tracing, debugging, cost monitoring |
 | **Prompts** | File-based (prompts/agents/*.txt) | Agent system prompts |
-| **Tools** | Existing src.agent.tools infrastructure | 17 specialized tools |
+| **Tools** | Existing src.agent.tools infrastructure | 15 specialized tools |
 
 ---
 
@@ -537,7 +537,7 @@ def build_conditional_workflow(complexity_score) -> StateGraph:
 
 **File:** `/src/multi_agent/tools/adapter.py` (200+ lines)
 
-Bridges LangGraph agents with existing 17-tool infrastructure:
+Bridges LangGraph agents with existing 15-tool infrastructure:
 
 ```python
 class ToolAdapter:
@@ -560,7 +560,7 @@ class ToolAdapter:
         #    - error: Optional[str]
 ```
 
-**Tool Availability:** All 17 RAG tools available to agents:
+**Tool Availability:** All 15 RAG tools available to agents (filtered_search and similarity_search removed, unified into search):
 
 **Core Retrieval:**
 1. `search` - Unified hybrid search with expansion, HyDE, graph boost
@@ -970,7 +970,7 @@ The multi-agent system **does not modify** the existing RAG pipeline:
 - **Generic Summaries** - 150 characters (research-backed)
 - **Multi-Layer Embeddings** - 3 FAISS indexes (Layer 1, 2, 3)
 - **Hybrid Search** - BM25 + Dense + RRF fusion (k=60)
-- **All 17 Tools** - Available via ToolAdapter
+- **All 15 Tools** - Available via ToolAdapter (filtered_search and similarity_search removed)
 
 **How Integration Works:**
 ```
@@ -1186,7 +1186,7 @@ State: MultiAgentState
 | **Per-Agent Config** | Different tasks need different models/temperatures |
 | **PostgreSQL Checkpointing** | Conversation continuity; recovery from failures |
 | **Prompt Caching** | 90% cost reduction for repeated queries |
-| **ToolAdapter Pattern** | Zero changes to existing 17-tool infrastructure |
+| **ToolAdapter Pattern** | Zero changes to existing 15-tool infrastructure |
 | **LangGraph Foundation** | Industry-standard; proven for multi-agent orchestration |
 | **Sequential by Default** | Simpler mental model; easier debugging; explicit state flow |
 
