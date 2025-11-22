@@ -50,7 +50,7 @@ class GetDocumentInfoTool(BaseTool):
     - Use 'summary' for quick overview
     - Use 'sections' to understand structure
     - Use 'metadata' for comprehensive stats
-    - Combine with filtered_search to search within sections
+    - Combine with search (filter_type='section') to search within sections
 
     **Data source:** Vector store metadata (Layer 1/2/3)
     """

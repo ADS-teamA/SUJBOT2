@@ -107,10 +107,10 @@ class ListAvailableToolsTool(BaseTool):
                     "selection_strategy": {
                         "most_queries": "search (with num_expands=0 initially, 1-2 for recall)",
                         "entity_focused": "Use 'search' with entity names, or multi_hop_search if KG available",
-                        "specific_document": "Use exact_match_search or filtered_search with document_id filter",
+                        "specific_document": "Use search with filter_type='document', filter_value=<doc_id>",
                         "multi_hop_reasoning": "multi_hop_search (requires KG)",
                         "comparison": "multi_doc_synthesizer",
-                        "temporal_info": "filtered_search with filter_type='temporal' or timeline_view",
+                        "temporal_info": "search with filter_type='temporal' or timeline_view",
                     },
                 },
             },
