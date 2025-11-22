@@ -349,6 +349,7 @@ class SearchTool(BaseTool):
                         )
                         # Fallback to standard hybrid search for this query
                         results = self.vector_store.hierarchical_search(
+                            query_text=q,
                             query_embedding=query_embedding,
                             k_layer3=candidates_k,
                         )
@@ -364,6 +365,7 @@ class SearchTool(BaseTool):
                     )
                     # Fallback to standard hybrid search
                     results = self.vector_store.hierarchical_search(
+                        query_text=q,
                         query_embedding=query_embedding,
                         k_layer3=candidates_k,
                     )
@@ -401,6 +403,7 @@ class SearchTool(BaseTool):
 
                 # Hybrid search
                 results = self.vector_store.hierarchical_search(
+                    query_text=q,
                     query_embedding=query_embedding,
                     k_layer3=candidates_k,
                 )

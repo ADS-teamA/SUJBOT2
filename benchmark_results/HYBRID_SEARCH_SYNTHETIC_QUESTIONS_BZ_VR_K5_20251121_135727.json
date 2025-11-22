@@ -1,0 +1,1045 @@
+{
+  "benchmark": "hybrid_search_tool",
+  "dataset_path": "benchmark_dataset\\synthetic_questions_bz_vr.json",
+  "vector_store_path": "vector_db",
+  "k": 5,
+  "num_expands": 0,
+  "graph_boost": false,
+  "reranking": false,
+  "total_queries": 30,
+  "hits": 18,
+  "hit_rate": 0.6,
+  "aggregate_metrics": {
+    "exact_match": 0.4666666666666667,
+    "f1_score": 0.5767909339228782,
+    "precision": 0.6251519970718149,
+    "recall": 0.5638534102992788,
+    "embedding_similarity": 0.8096881965796153,
+    "combined_f1": 0.5767909339228782
+  },
+  "avg_latency_ms": 1350.122078259786,
+  "total_time_seconds": 40.50366234779358,
+  "total_cost_usd": 0.00015535,
+  "per_query": [
+    {
+      "query": "Jaké jsou nezbytné předpoklady pro bezpečný a spolehlivý provoz zařízení podle bezpečnostní zprávy?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_899_chunk_5",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_108_chunk_0",
+        "BZ_VR1_L3_sec_899_chunk_5",
+        "BZ_VR1_L3_sec_60_chunk_1",
+        "BZ_VR1_L3_sec_8_chunk_1",
+        "BZ_VR1_L3_sec_146_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_108_chunk_0",
+      "hit": true,
+      "hit_rank": 2,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.13559322033898305,
+        "precision": 0.26666666666666666,
+        "recall": 0.09090909090909091,
+        "embedding_similarity": 0.5084912180900574,
+        "combined_f1": 0.13559322033898305
+      },
+      "rag_confidence": 0.256,
+      "latency_ms": 2068.7813758850098,
+      "cost_usd": 5.98e-06,
+      "predicted_content_preview": "Níže jsou charakterizovány jednotlivé oblasti v rámci nichž je zajištěn bezpečný provoz reaktoru VR-1."
+    },
+    {
+      "query": "K jakému účelu slouží nosná deska aktivní zóny v obou nádobách?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_266_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_266_chunk_0",
+        "BZ_VR1_L3_sec_258_chunk_0",
+        "BZ_VR1_L3_sec_265_chunk_0",
+        "BZ_VR1_L3_sec_307_chunk_2",
+        "BZ_VR1_L3_sec_266_chunk_1"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_266_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.287,
+      "latency_ms": 440.3226375579834,
+      "cost_usd": 3.7699999999999995e-06,
+      "predicted_content_preview": "Nosný systém aktivní zóny je v obou nádobách a slouží k usazení roštů a nosné desky aktivní zóny, je největším a nejtěžším kusem materiálu v nádobě. Nosná deska aktivní zóny slouží k jednoznačnému ust..."
+    },
+    {
+      "query": "Jaké cíle mají být dosaženy při přípravě údržby vybraných zařízení (reaktorové nádoby, palivo, systém ochran a řízení)?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_676_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2016_151_Castka_OZ_L3_73",
+        "Sb_2016_151_Castka_OZ_L3_599",
+        "Sb_2016_151_Castka_OZ_L3_297",
+        "Sb_2016_151_Castka_OZ_L3_93",
+        "Sb_2016_151_Castka_OZ_L3_108"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ"
+      ],
+      "predicted_chunk_id": "Sb_2016_151_Castka_OZ_L3_73",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.13513513513513511,
+        "precision": 0.14705882352941177,
+        "recall": 0.125,
+        "embedding_similarity": 0.7379813194274902,
+        "combined_f1": 0.13513513513513511
+      },
+      "rag_confidence": 0.232,
+      "latency_ms": 483.40845108032227,
+      "cost_usd": 7.410000000000002e-06,
+      "predicted_content_preview": "(4) Výsledky údržby, zkoušek a kontrol podle odstavce 3 musí být vyhodnocovány, zaznamená- vány a uchovávány po dobu stanovenou v dokumen- taci systému řízení. Program pro údržbu, zkoušky a kontroly m..."
+    },
+    {
+      "query": "Jaké byly základní legislativní dokumenty, podle kterých probíhala výstavba reaktoru?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_744_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_467_chunk_1",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_446_chunk_3",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_288_chunk_2",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_470_chunk_0",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_289_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ"
+      ],
+      "predicted_chunk_id": "Sb_2016_263_2024-01-01_IZ_L3_sec_467_chunk_1",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.14678899082568808,
+        "precision": 0.16,
+        "recall": 0.13559322033898305,
+        "embedding_similarity": 0.7019575834274292,
+        "combined_f1": 0.14678899082568808
+      },
+      "rag_confidence": 0.199,
+      "latency_ms": 437.0999336242676,
+      "cost_usd": 4.290000000000001e-06,
+      "predicted_content_preview": "9. zásady zajišťování kvality následujících etap životního cyklu jaderného zařízení.\n8. popis způsobu zajišťování kvality přípravy realizace výstavby,\n- b) Dokumentace pro povolovanou činnost, kterou ..."
+    },
+    {
+      "query": "Jaké prostředky se doporučuje použít k omezení expozice radiaci při manipulaci s radioaktivními látkami?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_546_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_220_chunk_1",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_150_chunk_2",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_211_chunk_3",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_136_chunk_0",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_220_chunk_4"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ"
+      ],
+      "predicted_chunk_id": "Sb_2016_263_2024-01-01_IZ_L3_sec_220_chunk_1",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.07058823529411766,
+        "precision": 0.09375,
+        "recall": 0.05660377358490566,
+        "embedding_similarity": 0.5011129379272461,
+        "combined_f1": 0.07058823529411766
+      },
+      "rag_confidence": 0.208,
+      "latency_ms": 406.1427116394043,
+      "cost_usd": 4.94e-06,
+      "predicted_content_preview": "3. omezení používání radionuklidem kontaminovaných krmiv.\n2. omezení používání radionuklidem kontaminovaných potravin a vody,\n- (2) Každý, kdo plánuje a připravuje ochranná opatření, musí posoudit, zd..."
+    },
+    {
+      "query": "Jakým způsobem je zabezpečeno případné použití přenosných měřících přístrojů z hlediska radiační ochrany v pracovišti reaktoru VR-1?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_585_chunk_3",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_585_chunk_3",
+        "BZ_VR1_L3_sec_607_chunk_1",
+        "BZ_VR1_L3_sec_549_chunk_2",
+        "BZ_VR1_L3_sec_116_chunk_0",
+        "BZ_VR1_L3_sec_544_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_585_chunk_3",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0000001192092896,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.311,
+      "latency_ms": 3272.844076156616,
+      "cost_usd": 7.93e-06,
+      "predicted_content_preview": ". Jejich případné použití je pak z hlediska radiační ochrany zabezpečeno jak z hlediska organizace činnosti, tak i kontrolního měření pomocí přenosných měřících přístroj ů. Rozsah kontrolovaného pásma..."
+    },
+    {
+      "query": "Jaké jsou vyšetřovací a zásahové úrovně [µSv/hod] pro čidlo umístěné ve velínu reaktoru při počtu impulsů N > 1E8?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_608_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_608_chunk_6",
+        "BZ_VR1_L3_sec_608_chunk_10",
+        "BZ_VR1_L3_sec_608_chunk_8",
+        "BZ_VR1_L3_sec_608_chunk_5",
+        "BZ_VR1_L3_sec_608_chunk_2"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_608_chunk_6",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.5454545454545454,
+        "precision": 0.5714285714285714,
+        "recall": 0.5217391304347826,
+        "embedding_similarity": 0.9233245849609375,
+        "combined_f1": 0.5454545454545454
+      },
+      "rag_confidence": 0.216,
+      "latency_ms": 494.3735599517822,
+      "cost_usd": 7.4099999999999985e-06,
+      "predicted_content_preview": ". D10, N ⁄ 1E8 imp/s.Vyšetřovací úroveň [µSv/hod] = 50. D10, N ⁄ 1E8 imp/s.Zásahová úroveň [µSv/hod] = 1000. D10, N > 1E8 imp/s.Vyšetřovací úroveň [µSv/hod] = 200. D10, N > 1E8 imp/s.Zásahová úroveň [..."
+    },
+    {
+      "query": "Jaký typ vyřazování je uveden v §11 písm. a vyhlášky č. 377/2016 Sb. a jaké jsou důvody pro jeho volbu?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_872_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2016_151_Castka_OZ_L3_346",
+        "Sb_2016_151_Castka_OZ_L3_299",
+        "Sb_2016_151_Castka_OZ_L3_298",
+        "Sb_2016_151_Castka_OZ_L3_353",
+        "Sb_2016_151_Castka_OZ_L3_749"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ"
+      ],
+      "predicted_chunk_id": "Sb_2016_151_Castka_OZ_L3_346",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.13888888888888887,
+        "precision": 0.45454545454545453,
+        "recall": 0.08196721311475409,
+        "embedding_similarity": 0.6421570777893066,
+        "combined_f1": 0.13888888888888887
+      },
+      "rag_confidence": 0.189,
+      "latency_ms": 456.1045169830322,
+      "cost_usd": 6.630000000000003e-06,
+      "predicted_content_preview": "c) změny v plánovaném způsobu vyřazování z provozu a jejich zdůvodnění,"
+    },
+    {
+      "query": "Jaká je hodnota R1 v milimetrech pro polohu řídicích tyčí?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_336_chunk_2",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_336_chunk_7",
+        "BZ_VR1_L3_sec_336_chunk_6",
+        "BZ_VR1_L3_sec_336_chunk_1",
+        "BZ_VR1_L3_sec_336_chunk_2",
+        "BZ_VR1_L3_sec_336_chunk_4"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_336_chunk_7",
+      "hit": true,
+      "hit_rank": 4,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.7924528301886792,
+        "precision": 0.7777777777777778,
+        "recall": 0.8076923076923077,
+        "embedding_similarity": 0.9854571223258972,
+        "combined_f1": 0.7924528301886792
+      },
+      "rag_confidence": 0.305,
+      "latency_ms": 483.3254814147949,
+      "cost_usd": 3.379999999999998e-06,
+      "predicted_content_preview": ". 680, Polohy řídicích tyčí (mm).E2 = 300. 680, Polohy řídicích tyčí (mm).R1 = 410. 680, Polohy řídicích tyčí (mm).R2 = 680. 680, k ef.k ef = 0,98479. 680, s.s = 0,00011. 680, r p b ef q.r p b ef q = ..."
+    },
+    {
+      "query": "Jaké informace jsou uvedeny v kapitole 3.6 týkající se významných geodynamických jevů?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_157_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_157_chunk_0",
+        "BZ_VR1_L3_sec_191_chunk_2",
+        "BZ_VR1_L3_sec_204_chunk_0",
+        "BZ_VR1_L3_sec_9_chunk_13",
+        "BZ_VR1_L3_sec_158_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_157_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.325,
+      "latency_ms": 429.37755584716797,
+      "cost_usd": 4.9400000000000035e-06,
+      "predicted_content_preview": "Neexistence významných geodynamických jevů viz kap. 3.6"
+    },
+    {
+      "query": "Jaké změny v provozní a bezpečnostní dokumentaci reaktoru souvisejí se změnami v české 'atomové' legislativě?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_59_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_59_chunk_0",
+        "BZ_VR1_L3_sec_797_chunk_3",
+        "BZ_VR1_L3_sec_60_chunk_0",
+        "BZ_VR1_L3_sec_755_chunk_0",
+        "BZ_VR1_L3_sec_752_chunk_1"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_59_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.291,
+      "latency_ms": 341.1376476287842,
+      "cost_usd": 5.720000000000006e-06,
+      "predicted_content_preview": "- významné změny v české 'atomové' legislativě a s tím související změny v provozní a bezpečnostní dokumentaci reaktoru,"
+    },
+    {
+      "query": "Jaké typy dozimetrů jsou skladovány a k jakým činnostem se používají?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_556_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2025_157_PZZ_L3_238",
+        "Sb_2025_157_PZZ_L3_75",
+        "Sb_2025_157_PZZ_L3_195",
+        "Sb_2025_157_PZZ_L3_70",
+        "Sb_2025_157_PZZ_L3_216"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ"
+      ],
+      "predicted_chunk_id": "Sb_2025_157_PZZ_L3_238",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.12658227848101264,
+        "precision": 0.11363636363636363,
+        "recall": 0.14285714285714285,
+        "embedding_similarity": 0.46606382727622986,
+        "combined_f1": 0.12658227848101264
+      },
+      "rag_confidence": 0.194,
+      "latency_ms": 366.49203300476074,
+      "cost_usd": 4.03e-06,
+      "predicted_content_preview": "4. jsou splněny požadavky pro radioaktivní zásilku typu IP-2 uvedené v bodu 23 části I přílohy č. 1 k této vyhlášce; nepoužije se však požadavek na provedení zkoušky stohováním dle bodu 23 části II př..."
+    },
+    {
+      "query": "Jaké čtyři základní skupiny tvoří organizační strukturu pracoviště reaktoru VR-1?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_624_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_813_chunk_0",
+        "BZ_VR1_L3_sec_812_chunk_0",
+        "BZ_VR1_L3_sec_815_chunk_0",
+        "BZ_VR1_L3_sec_624_chunk_0",
+        "BZ_VR1_L3_sec_74_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_813_chunk_0",
+      "hit": true,
+      "hit_rank": 4,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.1702127659574468,
+        "precision": 0.3076923076923077,
+        "recall": 0.11764705882352941,
+        "embedding_similarity": 0.6848012208938599,
+        "combined_f1": 0.1702127659574468
+      },
+      "rag_confidence": 0.285,
+      "latency_ms": 424.0288734436035,
+      "cost_usd": 4.680000000000003e-06,
+      "predicted_content_preview": "Ve struktuře pracoviště z pohledu systému řízení lze vysledovat čtyři základní organizační skupiny:"
+    },
+    {
+      "query": "Jak dlouho přibližně potrvá celý proces vyřazování reaktoru VR-1 z provozu?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_886_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_886_chunk_0",
+        "BZ_VR1_L3_sec_873_chunk_0",
+        "BZ_VR1_L3_sec_877_chunk_2",
+        "BZ_VR1_L3_sec_863_chunk_1",
+        "BZ_VR1_L3_sec_12_chunk_6"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_886_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0000001192092896,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.32,
+      "latency_ms": 1410.823106765747,
+      "cost_usd": 4.03e-06,
+      "predicted_content_preview": "Z hlediska rozsahu vyřazování se předpokládá jeho provedení v jedné etapě, která bude zahrnovat jak ukončení provozu, tak i přípravu k likvidaci a vlastní likvidaci zařízení. Postup jednotlivých činno..."
+    },
+    {
+      "query": "Jaká je aktivita neutronového zdroje 241 Am/Be, označeného jako Am1.N20 013/07?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_569_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2025_157_PZZ_L3_63",
+        "Sb_2025_157_PZZ_L3_21",
+        "Sb_2025_157_PZZ_L3_26",
+        "Sb_2025_157_PZZ_L3_180",
+        "Sb_2025_157_PZZ_L3_225"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ"
+      ],
+      "predicted_chunk_id": "Sb_2025_157_PZZ_L3_63",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.1348314606741573,
+        "precision": 0.23076923076923078,
+        "recall": 0.09523809523809523,
+        "embedding_similarity": 0.7245820760726929,
+        "combined_f1": 0.1348314606741573
+      },
+      "rag_confidence": 0.184,
+      "latency_ms": 395.6573009490967,
+      "cost_usd": 4.420000000000002e-06,
+      "predicted_content_preview": "5. povolenou hodnotu pro změnu výpočtu násobení neutronů předpokláda- nou v posouzení kritičnosti jako výsledek skutečných měření vlastností ozářené štěpné látky, je-li to důvodné, a"
+    },
+    {
+      "query": "Jaké typy hodnocení jsou zmíněny v textu pro zajištění bezpečnosti reaktoru?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_847_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_847_chunk_0",
+        "BZ_VR1_L3_sec_859_chunk_0",
+        "BZ_VR1_L3_sec_136_chunk_0",
+        "BZ_VR1_L3_sec_766_chunk_0",
+        "BZ_VR1_L3_sec_770_chunk_1"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_847_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.239,
+      "latency_ms": 344.1023826599121,
+      "cost_usd": 3.9e-06,
+      "predicted_content_preview": "- hodnocení komisí pro bezpečný provoz reaktoru,\n- hodnocení externím auditem,\n- periodické hodnocení bezpečnosti."
+    },
+    {
+      "query": "Jaké byly důsledky vyplývající z nezávislosti kanálů měření výkonu?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_111_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_111_chunk_1",
+        "BZ_VR1_L3_sec_422_chunk_1",
+        "BZ_VR1_L3_sec_411_chunk_1",
+        "BZ_VR1_L3_sec_56_chunk_0",
+        "BZ_VR1_L3_sec_411_chunk_2"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_111_chunk_1",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0000001192092896,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.305,
+      "latency_ms": 394.07801628112793,
+      "cost_usd": 4.420000000000002e-06,
+      "predicted_content_preview": ". Z tohoto vyplynuly počty a vzájemná nezávislost kanálů měření výkonu, počty a funkce"
+    },
+    {
+      "query": "Jaké technické prostředky jsou k dispozici na reaktorovém pracovišti pro řešení lokální kontaminace v případě poškození palivového článku?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_299_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_555_chunk_1",
+        "BZ_VR1_L3_sec_552_chunk_1",
+        "BZ_VR1_L3_sec_299_chunk_0",
+        "BZ_VR1_L3_sec_559_chunk_0",
+        "BZ_VR1_L3_sec_552_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_555_chunk_1",
+      "hit": true,
+      "hit_rank": 3,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.10101010101010102,
+        "precision": 0.10204081632653061,
+        "recall": 0.1,
+        "embedding_similarity": 0.7001522779464722,
+        "combined_f1": 0.10101010101010102
+      },
+      "rag_confidence": 0.225,
+      "latency_ms": 503.9551258087158,
+      "cost_usd": 7.539999999999999e-06,
+      "predicted_content_preview": ". Na spodním podlaží haly reaktoru (místnost L083) se nachází hygienické zařízení (umyvadlo a dekontaminační roztoky) pro řešení dekontaminace malého rozsahu. Dále jsou v KP skladovány osobní ochranné..."
+    },
+    {
+      "query": "Jaké hodnoty má Moderátor a Palivo pro GLYPH<1> 1 v řádku s číslem 323,15?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_759_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2025_157_PZZ_L3_126",
+        "Sb_2025_157_PZZ_L3_203",
+        "Sb_2025_157_PZZ_L3_132",
+        "Sb_2025_157_PZZ_L3_200",
+        "Sb_2025_157_PZZ_L3_123"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ"
+      ],
+      "predicted_chunk_id": "Sb_2025_157_PZZ_L3_126",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.058823529411764705,
+        "precision": 0.058823529411764705,
+        "recall": 0.058823529411764705,
+        "embedding_similarity": 0.18345624208450317,
+        "combined_f1": 0.058823529411764705
+      },
+      "rag_confidence": 0.183,
+      "latency_ms": 380.9807300567627,
+      "cost_usd": 4.680000000000003e-06,
+      "predicted_content_preview": "37. V příloze č. 1 části I bodě 27 písm. a) se číslo „23“ nahrazuje číslem „22“."
+    },
+    {
+      "query": "Jaké dokumenty spadají do samostatné úrovně řízení dokumentace na reaktoru VR-1?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_697_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_697_chunk_1",
+        "BZ_VR1_L3_sec_704_chunk_1",
+        "BZ_VR1_L3_sec_699_chunk_0",
+        "BZ_VR1_L3_sec_698_chunk_0",
+        "BZ_VR1_L3_sec_704_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_697_chunk_1",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.000000238418579,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.268,
+      "latency_ms": 690.9518241882324,
+      "cost_usd": 4.160000000000001e-06,
+      "predicted_content_preview": ". Řízení dokumentace na reaktoru VR-1 je založeno na odstupňovaném přístupu, který rozděluje řízené dokumenty do tří úrovní. Do samostatné úrovně spadají ostatní dokumenty, které nejsou řízené, ale so..."
+    },
+    {
+      "query": "Kolik obyvatel se nachází v oblastech obklopujících areál reaktoru VR-1?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_218_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_218_chunk_0",
+        "BZ_VR1_L3_sec_183_chunk_0",
+        "BZ_VR1_L3_sec_164_chunk_1",
+        "BZ_VR1_L3_sec_172_chunk_0",
+        "BZ_VR1_L3_sec_164_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_218_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0000001192092896,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.253,
+      "latency_ms": 359.6503734588623,
+      "cost_usd": 4.160000000000001e-06,
+      "predicted_content_preview": "Areál reaktoru VR-1 je obklopen třemi oblastmi s následujícím počtem obyvatel:"
+    },
+    {
+      "query": "Jaké jsou tři hlavní principy systému evidence a kontroly jaderných materiálů?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_734_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_340_chunk_0",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_498_chunk_0",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_341_chunk_0",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_339_chunk_3",
+        "Sb_2016_263_2024-01-01_IZ_L3_sec_341_chunk_1"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ",
+        "Sb_2016_263_2024-01-01_IZ"
+      ],
+      "predicted_chunk_id": "Sb_2016_263_2024-01-01_IZ_L3_sec_340_chunk_0",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.16494845360824742,
+        "precision": 0.14814814814814814,
+        "recall": 0.18604651162790697,
+        "embedding_similarity": 0.8167459964752197,
+        "combined_f1": 0.16494845360824742
+      },
+      "rag_confidence": 0.225,
+      "latency_ms": 398.3783721923828,
+      "cost_usd": 3.7699999999999995e-06,
+      "predicted_content_preview": "- a) umožnit nakládání s jadernou položkou pouze osobě k tomu oprávněné,\n- (1) Držitel povolení v oblasti nešíření jaderných zbraní je povinen\n- b) provádět kontrolu jaderného materiálu způsobem stano..."
+    },
+    {
+      "query": "Jaké procesy jsou považovány za nejvýznamnější, které ovlivňují kulturu bezpečnosti?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_840_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_840_chunk_0",
+        "BZ_VR1_L3_sec_842_chunk_0",
+        "BZ_VR1_L3_sec_846_chunk_1",
+        "BZ_VR1_L3_sec_835_chunk_0",
+        "BZ_VR1_L3_sec_830_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_840_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.000000238418579,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.312,
+      "latency_ms": 401.34263038635254,
+      "cost_usd": 5.200000000000004e-06,
+      "predicted_content_preview": "NEPLATNÉ 2. Kontinuální ověřování bezpečnosti 3. Odpovědnost vedení a jednotlivců 4. Otevřená a efektivní komunikace 5. Plánování a kontrola činností 6. Předcházení rizik a chyb 7. Identifikace problé..."
+    },
+    {
+      "query": "Jaké informace jsou obsaženy v individuálních programech zajištění kvality a technické bezpečnosti pro reaktor VR-1?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_860_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_860_chunk_1",
+        "BZ_VR1_L3_sec_703_chunk_1",
+        "BZ_VR1_L3_sec_704_chunk_0",
+        "BZ_VR1_L3_sec_113_chunk_5",
+        "BZ_VR1_L3_sec_113_chunk_4"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_860_chunk_1",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0000001192092896,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.236,
+      "latency_ms": 905.2553176879883,
+      "cost_usd": 5.720000000000006e-06,
+      "predicted_content_preview": ". V případě reaktoru VR-1 jsou pro vybraná zařízení obsaženy tyto informace v individuálních programech zajištění kvality a technické bezpečnosti [41, 42, 107, 108]. Součástí hodnocení řízení kvality ..."
+    },
+    {
+      "query": "Která zařízení jsou zahrnuta do výběru komponent a celků podléhajících systému řízeného stárnutí v případě školního reaktoru VR-1?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_711_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_711_chunk_1",
+        "BZ_VR1_L3_sec_853_chunk_0",
+        "BZ_VR1_L3_sec_715_chunk_0",
+        "BZ_VR1_L3_sec_700_chunk_1",
+        "BZ_VR1_L3_sec_711_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_711_chunk_1",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.318,
+      "latency_ms": 420.35794258117676,
+      "cost_usd": 8.06e-06,
+      "predicted_content_preview": ". Do výběru komponent a celků podléhajících systému řízeného stárnutí musí být zahrnuta především vybraná zařízení a další zařízení a systémy s vlivem na jadernou bezpečnost. V případě školního reakto..."
+    },
+    {
+      "query": "Jakou konkrétní odpovědnost nese vedoucí radiační ochrany na pracovišti reaktoru?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_642_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_642_chunk_0",
+        "BZ_VR1_L3_sec_103_chunk_0",
+        "BZ_VR1_L3_sec_643_chunk_1",
+        "BZ_VR1_L3_sec_549_chunk_0",
+        "BZ_VR1_L3_sec_643_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_642_chunk_0",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 1.0,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.284,
+      "latency_ms": 396.55137062072754,
+      "cost_usd": 4.419999999999988e-06,
+      "predicted_content_preview": "Vedoucí radiační ochrany odpovídá za technické zabezpečení radiační ochrany na pracovišti reaktoru a zároveň je pomocným pracovníkem dohlížející osoby. Zajišt'uje především plnění požadavků programu m..."
+    },
+    {
+      "query": "Jaká kritéria musí splňovat materiály používané v jaderném zařízení?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_286_chunk_2",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2025_157_PZZ_L3_117",
+        "Sb_2025_157_PZZ_L3_23",
+        "Sb_2025_157_PZZ_L3_119",
+        "Sb_2025_157_PZZ_L3_20",
+        "Sb_2025_157_PZZ_L3_29"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ"
+      ],
+      "predicted_chunk_id": "Sb_2025_157_PZZ_L3_117",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.07692307692307693,
+        "precision": 0.2222222222222222,
+        "recall": 0.046511627906976744,
+        "embedding_similarity": 0.5256476998329163,
+        "combined_f1": 0.07692307692307693
+      },
+      "rag_confidence": 0.182,
+      "latency_ms": 408.19811820983887,
+      "cost_usd": 4.290000000000001e-06,
+      "predicted_content_preview": "„2. Konstrukční typ radioaktivní zásilky musí zohlednit procesy stárnutí.“."
+    },
+    {
+      "query": "Z jakých typů napájení se skládají vnitřní elektrické rozvody podle uvedeného textu?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_437_chunk_0",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2025_157_PZZ_L3_116",
+        "Sb_2025_157_PZZ_L3_162",
+        "Sb_2025_157_PZZ_L3_120",
+        "Sb_2025_157_PZZ_L3_222",
+        "Sb_2025_157_PZZ_L3_153"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ",
+        "Sb_2025_157_PZZ"
+      ],
+      "predicted_chunk_id": "Sb_2025_157_PZZ_L3_116",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.09523809523809525,
+        "precision": 0.1,
+        "recall": 0.09090909090909091,
+        "embedding_similarity": 0.48928144574165344,
+        "combined_f1": 0.09523809523809525
+      },
+      "rag_confidence": 0.254,
+      "latency_ms": 394.67692375183105,
+      "cost_usd": 4.679999999999989e-06,
+      "predicted_content_preview": "29. V příloze č. 1 části I bodě 12 se dosavadní text označuje jako odstavec 1 a doplňuje se odstavec 2, který zní:"
+    },
+    {
+      "query": "Jaká je vyhláška, která se zabývá požadavky na bezpečné nakládání s radioaktivním odpadem v České republice?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_911_chunk_5",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "Sb_2016_151_Castka_OZ_L3_16",
+        "Sb_2016_151_Castka_OZ_L3_20",
+        "Sb_2016_151_Castka_OZ_L3_173",
+        "Sb_2016_151_Castka_OZ_L3_28",
+        "Sb_2016_151_Castka_OZ_L3_7"
+      ],
+      "retrieved_document_ids": [
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ",
+        "Sb_2016_151_Castka_OZ"
+      ],
+      "predicted_chunk_id": "Sb_2016_151_Castka_OZ_L3_16",
+      "hit": false,
+      "hit_rank": null,
+      "metrics": {
+        "exact_match": 0.0,
+        "f1_score": 0.41025641025641024,
+        "precision": 1.0,
+        "recall": 0.25806451612903225,
+        "embedding_similarity": 0.6994322538375854,
+        "combined_f1": 0.41025641025641024
+      },
+      "rag_confidence": 0.211,
+      "latency_ms": 369.6737289428711,
+      "cost_usd": 5.9799999999999936e-06,
+      "predicted_content_preview": "o požadavcích na bezpečné nakládání s radioaktivním odpadem"
+    },
+    {
+      "query": "Jaká je logika vyhodnocení bezpečnostního signálu v uvedeném bezpečnostním řetězci?",
+      "ground_truth_chunk_id": "BZ_VR1_L3_sec_413_chunk_1",
+      "ground_truth_document_id": "BZ_VR1",
+      "retrieved_chunk_ids": [
+        "BZ_VR1_L3_sec_413_chunk_1",
+        "BZ_VR1_L3_sec_422_chunk_2",
+        "BZ_VR1_L3_sec_421_chunk_0",
+        "BZ_VR1_L3_sec_423_chunk_1",
+        "BZ_VR1_L3_sec_421_chunk_1"
+      ],
+      "retrieved_document_ids": [
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1",
+        "BZ_VR1"
+      ],
+      "predicted_chunk_id": "BZ_VR1_L3_sec_413_chunk_1",
+      "hit": true,
+      "hit_rank": 1,
+      "metrics": {
+        "exact_match": 1.0,
+        "f1_score": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "embedding_similarity": 0.9999999403953552,
+        "combined_f1": 1.0
+      },
+      "rag_confidence": 0.213,
+      "latency_ms": 360.5475425720215,
+      "cost_usd": 4.810000000000003e-06,
+      "predicted_content_preview": ". Tento bezpečnostní signál je bezpečnostním řetězcem vyhodnocován v logice '1 z 1' (řídicí systém má jen jeden kanál, není redundantní) a pokud je bezpečnostní signál od řídicího systému aktivní, doc..."
+    }
+  ]
+}

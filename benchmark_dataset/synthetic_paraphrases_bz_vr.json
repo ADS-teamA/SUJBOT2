@@ -1,0 +1,122 @@
+[
+  {
+    "question": "Sentence highlights k, tyto, rámci.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_94_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "tyto stavy řadí rychlé odstavení reaktoru a ztráta napájení ze sítě. K rychlému odstavení reaktoru obvykle dochází z důvodů chybné manipulace v rámci praktické přípravy studentů. Nejčastějším důvodem ..."
+  },
+  {
+    "question": "Sentence highlights všechna, displeje, využívat.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_407_chunk_2",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". V případě selhání řídicího systému nebo rozhraní člověk-stroj (oba systémy nejsou redundantní), poskytují tyto displeje informace o výkonu a rychlosti změny výkonu reaktoru. Systém HMI byl v rámci i..."
+  },
+  {
+    "question": "Sentence highlights projekt, žádné, základních.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_147_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Komplexnější analýza k tomuto tvrzení je nutná pouze pro kombinaci vnitřních podmínek reaktoru a chyby (sabotáže) pracovníků obsluhy jaderného zařízení. Této části se věnuje kap. 16. Výsledky potvrzuj..."
+  },
+  {
+    "question": "Sentence highlights opatřeními, i, nakládat.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_581_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Vymezení pásem je provedeno tak, aby regulací pohybu osob, vytvořením ochranných bariér a případně i stavebními úpravami, režimem práce, rozsahem monitorování a dalšími opatřeními přiměřenými používan..."
+  },
+  {
+    "question": "Sentence highlights místnosti, v, dochází.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_406_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Velmi důležitým tlačítkem na pultu operátora je tlačítko pro manuální odstavení reaktoru, po stisknutí tohoto tlačítka dochází k okamžitému odstavení reaktoru. Toto tlačítko pro odstavení není však v ..."
+  },
+  {
+    "question": "Sentence highlights šířku, 19, 300kpa.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_184_chunk_3",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". 225 kPa pro šířku základu 1 m a Rdt 300kPa pro šířku základu 3 m, další charakteristiky: g : 18 - 19,5 kN/m 3 , cef : 0 - 8 kPa, E def : 4 - 15 MPa, F ef : 27 - 33°. GT2 Povodňové hlíny Jílovité až ..."
+  },
+  {
+    "question": "Sentence highlights nádoby, je, mokré.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_73_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Manipulační nádoba umožňuje plnit řadu pomocných funkcí, mimo jiné je vybavena chránilištěm pro mokré skladování palivových článků. V případě potřeby lze obě nádoby pomocí hradítka vodotěsně oddělit..."
+  },
+  {
+    "question": "Sentence highlights zdroje, potřebné, jako.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_546_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "- zkrácením doby pobytu, doby manipulace (včetně možnosti nacvičení manipulace s maketou zdroje), zamezením přístupu osob do míst se zvýšenou radiací, omezeným přístupem nepovolaným osobám k ZIZ vytvo..."
+  },
+  {
+    "question": "Sentence highlights odstavení, bilance, základního.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_751_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "NEPLATNÉ Pro aktivní zkoušky a fyzikální spouštění reaktoru, které probíhaly v listopadu a prosinci 1990, byly zpracovány programy fyzikálního spouštění - etapový program, program základního kritickéh..."
+  },
+  {
+    "question": "Sentence highlights hodnocení, dosáhnout, rozšířené.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_790_chunk_2",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". 16.4 Zvládání událostí a scénářů rozšířených projektových podmínek Hlavním cílem hodnocení schopnosti jaderného zařízení zvládat rozšířené projektové podmínky je prokázání schopnosti dlouhodobě dosá..."
+  },
+  {
+    "question": "Sentence highlights objektu, stavební, sbt.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_490_chunk_2",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". 10.6 Závěry k pomocným systémům Skladování jaderného paliva Kontroly skladu jako stavební součásti objektu TL, ve kterém je reaktor umístěn, je stanoven, podobně jako u ostatních stavebních částí, H..."
+  },
+  {
+    "question": "Sentence highlights studentů, vr, a.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_503_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Školní reaktor VR-1 patří do kategorie výzkumných reaktorů s hlavním zaměřením na výuku a výcvik. Hlavním důvodem pro výstavbu reaktoru bylo vytvoření experimentálního zařízení, na kterém by probíhala..."
+  },
+  {
+    "question": "Sentence highlights abnormálním, fyzikálních, přičemž.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_93_chunk_2",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Abnormálním provozem reaktoru VR-1 je stav reaktoru, který se odchyluje od normálního provozu, nicméně jeho výskyt lze očekávat, přičemž nevede k závažnému poškození systémů, konstrukcí a komponent ..."
+  },
+  {
+    "question": "Sentence highlights umístěných, h01, je.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_268_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Nosný systém regulace v nádobě H01 je konstrukce určená pro zavěšení a upevnění absorpčních tyčí a měřících kanál ů umístěných v aktivní zóně reaktoru. Nachází se v prostoru nad hladinou moderátoru a ..."
+  },
+  {
+    "question": "Sentence highlights okruhů, centrálního, prvky.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_232_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "- vytápění a větrání haly reaktoru je zajišt'ováno z centrálního velínu areálu, ve kterém jsou umístěny ovládací prvky všech technologických okruhů areálu a kde provozovatel areálu zajišt'uje nepřetrž..."
+  },
+  {
+    "question": "Sentence highlights oknu, záznamem, filtrů.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_499_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Aktivní klimatizace podléhá provozní kontrole v souladu s [17]. Kontrola funkčnosti aktivní klimatizace je prováděna obsluhou před každým spouštěním reaktoru. Záznam o kontrole je uveden v oknu provoz..."
+  },
+  {
+    "question": "Sentence highlights na, tab, 47.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_789_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Z prezentovaných dat na obr. 45, 46 a 47 je patrné, že žádný z důležitých parametrů nepřekračuje kritéria přijatelnosti pro zachování integrity paliva poskytnutá výrobcem paliva, uvedená v tab. 31. Te..."
+  },
+  {
+    "question": "Sentence highlights každou, kontrolováno, počítači.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_493_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Dostatečné množství vody v nádobách H01, H02 a H03 je kontrolováno v rámci provozních kontrol před každou směnou reaktoru, se záznamem v oknu provozních kontrol na počítači HMI."
+  },
+  {
+    "question": "Sentence highlights postupnému, důsledku, demivodou.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_378_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Náhlé zaplavení obnažených palivových článků demivodou (tj. moderátorem) a dosažení nekontrolované štěpné řetězové reakce je prakticky nemožné, protože i ve vyčerpané nádobě H01 jsou v palivu vždy zas..."
+  },
+  {
+    "question": "Sentence highlights držák, stínění, manipulační.",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_274_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Vnitřní pr ůměr hlavice kanálu je 56 mm, samotná trubka má vnitřní průměr 60 mm a vnější průměr 70 mm, délka kanálu je 4400 mm. Do hlavice kanálů lze pomocí bajonetového uzávěru upevnit závěs detekt..."
+  }
+]

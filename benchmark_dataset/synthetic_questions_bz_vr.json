@@ -1,0 +1,182 @@
+[
+  {
+    "question": "Jaké jsou nezbytné předpoklady pro bezpečný a spolehlivý provoz zařízení podle bezpečnostní zprávy?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_899_chunk_5",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "- Souhrnně lze konstatovat, že za předpokladů uvedených v této bezpečnostní zprávě, dodržování platných limitů a podmínek a ostatní provozní dokumentace, pečlivém výběru a přípravě provozního personál..."
+  },
+  {
+    "question": "K jakému účelu slouží nosná deska aktivní zóny v obou nádobách?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_266_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Nosný systém aktivní zóny je v obou nádobách a slouží k usazení roštů a nosné desky aktivní zóny, je největším a nejtěžším kusem materiálu v nádobě. Nosná deska aktivní zóny slouží k jednoznačnému ust..."
+  },
+  {
+    "question": "Jaké cíle mají být dosaženy při přípravě údržby vybraných zařízení (reaktorové nádoby, palivo, systém ochran a řízení)?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_676_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Údržba je v první řadě zaměřená na vybraná zařízení (reaktorové nádoby, palivo, systém ochran a řízení), následně na pomocné systémy a v neposlední řadě na experimentální vybavení reaktoru. Jak plán..."
+  },
+  {
+    "question": "Jaké byly základní legislativní dokumenty, podle kterých probíhala výstavba reaktoru?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_744_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Schvalovací řízení pro tyto tři etapy probíhalo v souladu s tehdy platnou československou legislativou, zejména se stavebním zákonem a vyhláškami ČSKAE - Československá komise pro atomovou energii, ..."
+  },
+  {
+    "question": "Jaké prostředky se doporučuje použít k omezení expozice radiaci při manipulaci s radioaktivními látkami?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_546_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "- zkrácením doby pobytu, doby manipulace (včetně možnosti nacvičení manipulace s maketou zdroje), zamezením přístupu osob do míst se zvýšenou radiací, omezeným přístupem nepovolaným osobám k ZIZ vytvo..."
+  },
+  {
+    "question": "Jakým způsobem je zabezpečeno případné použití přenosných měřících přístrojů z hlediska radiační ochrany v pracovišti reaktoru VR-1?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_585_chunk_3",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Jejich případné použití je pak z hlediska radiační ochrany zabezpečeno jak z hlediska organizace činnosti, tak i kontrolního měření pomocí přenosných měřících přístroj ů. Rozsah kontrolovaného pásma..."
+  },
+  {
+    "question": "Jaké jsou vyšetřovací a zásahové úrovně [µSv/hod] pro čidlo umístěné ve velínu reaktoru při počtu impulsů N > 1E8?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_608_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "D1, Umístění čidla = Velín reaktoru. D1, N ⁄ 1E8 imp/s.Vyšetřovací úroveň [µSv/hod] = 3. D1, N ⁄ 1E8 imp/s.Zásahová úroveň [µSv/hod] = 1000. D1, N > 1E8 imp/s.Vyšetřovací úroveň [µSv/hod] = 10. D1, N ..."
+  },
+  {
+    "question": "Jaký typ vyřazování je uveden v §11 písm. a vyhlášky č. 377/2016 Sb. a jaké jsou důvody pro jeho volbu?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_872_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Z hlediska způsobu vyřazování se bude jednat o okamžité vyřazování (§11 písm. a vyhlášky č. 377/2016 Sb. [109]), při kterém budou vyřazovací činnosti prováděny plynule v nepřetržitém sledu od okamžiku..."
+  },
+  {
+    "question": "Jaká je hodnota R1 v milimetrech pro polohu řídicích tyčí?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_336_chunk_2",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". 680, Polohy řídicích tyčí (mm).R1 = 410. 680, Polohy řídicích tyčí (mm).R2 = 680. 680, k ef.k ef = 0,99999. 680, s.s = 0,00011. 680, r p b ef q.r p b ef q = 0,00. 680, s r.s r = 0,01. 680, Polohy ří..."
+  },
+  {
+    "question": "Jaké informace jsou uvedeny v kapitole 3.6 týkající se významných geodynamických jevů?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_157_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Neexistence významných geodynamických jevů viz kap. 3.6..."
+  },
+  {
+    "question": "Jaké změny v provozní a bezpečnostní dokumentaci reaktoru souvisejí se změnami v české 'atomové' legislativě?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_59_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "- významné změny v české 'atomové' legislativě a s tím související změny v provozní a bezpečnostní dokumentaci reaktoru,..."
+  },
+  {
+    "question": "Jaké typy dozimetrů jsou skladovány a k jakým činnostem se používají?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_556_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "- pistolové a klešt'ové manipulátory a manipulátory pro jednotlivé komponenty aktivní zóny. Dále jsou zde skladovány operativní signální přímoodečítací dozimetry DMC 2000, používané při činnostech, kd..."
+  },
+  {
+    "question": "Jaké čtyři základní skupiny tvoří organizační strukturu pracoviště reaktoru VR-1?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_624_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "NEPLATNÉ 13.1 Organizační struktura provozovatele reaktoru Organizační struktura pracoviště reaktoru VR-1 je zřejmá z Obr. 40, přičemž ji lze rozdělit do čtyř základních skupin: 1. Vrcholní představit..."
+  },
+  {
+    "question": "Jak dlouho přibližně potrvá celý proces vyřazování reaktoru VR-1 z provozu?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_886_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Z hlediska rozsahu vyřazování se předpokládá jeho provedení v jedné etapě, která bude zahrnovat jak ukončení provozu, tak i přípravu k likvidaci a vlastní likvidaci zařízení. Postup jednotlivých činno..."
+  },
+  {
+    "question": "Jaká je aktivita neutronového zdroje 241 Am/Be, označeného jako Am1.N20 013/07?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_569_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "NEPLATNÉ Na pracovišti jsou využívány tři neutronové radionuklidové zdroje typu Am/Be. Neutronový zdroj 241 Am/Be, ozn. Am1.N20 013/07 je zařazen jako vysokoaktivní zdroj s aktivitou 241 Am 185 GBq a ..."
+  },
+  {
+    "question": "Jaké typy hodnocení jsou zmíněny v textu pro zajištění bezpečnosti reaktoru?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_847_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "- hodnocení komisí pro bezpečný provoz reaktoru,\n- hodnocení externím auditem,\n- periodické hodnocení bezpečnosti...."
+  },
+  {
+    "question": "Jaké byly důsledky vyplývající z nezávislosti kanálů měření výkonu?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_111_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Z tohoto vyplynuly počty a vzájemná nezávislost kanálů měření výkonu, počty a funkce..."
+  },
+  {
+    "question": "Jaké technické prostředky jsou k dispozici na reaktorovém pracovišti pro řešení lokální kontaminace v případě poškození palivového článku?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_299_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Vzhledem k zanedbatelnému vyhoření paliva na reaktoru nemůže při případném poškození dojít k úniku významného množství radioaktivních látek. Nepředpokládá se ani únik radioaktivních látek do životního..."
+  },
+  {
+    "question": "Jaké hodnoty má Moderátor a Palivo pro GLYPH<1> 1 v řádku s číslem 323,15?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_759_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "293,15, Moderátor [K GLYPH<1> 1 ] = 0. 293,15, Palivo [K GLYPH<1> 1 ] = 0. 316,15, Moderátor [K GLYPH<1> 1 ] = GLYPH<1> 1,1 GLYPH<2> 10 GLYPH<1> 4. 316,15, Palivo [K GLYPH<1> 1 ] = -. 323,15, Moderáto..."
+  },
+  {
+    "question": "Jaké dokumenty spadají do samostatné úrovně řízení dokumentace na reaktoru VR-1?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_697_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Řízení dokumentace na reaktoru VR-1 je založeno na odstupňovaném přístupu, který rozděluje řízené dokumenty do tří úrovní. Do samostatné úrovně spadají ostatní dokumenty, které nejsou řízené, ale so..."
+  },
+  {
+    "question": "Kolik obyvatel se nachází v oblastech obklopujících areál reaktoru VR-1?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_218_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Areál reaktoru VR-1 je obklopen třemi oblastmi s následujícím počtem obyvatel:..."
+  },
+  {
+    "question": "Jaké jsou tři hlavní principy systému evidence a kontroly jaderných materiálů?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_734_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Systém evidence a kontroly jaderných materiálů je navržen tak, aby bylo zajištěno, že: · manipulace s jadernými materiály je prováděna jen se svolením osoby zodpovědné za manipulace s jadernými mate..."
+  },
+  {
+    "question": "Jaké procesy jsou považovány za nejvýznamnější, které ovlivňují kulturu bezpečnosti?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_840_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "NEPLATNÉ 2. Kontinuální ověřování bezpečnosti 3. Odpovědnost vedení a jednotlivců 4. Otevřená a efektivní komunikace 5. Plánování a kontrola činností 6. Předcházení rizik a chyb 7. Identifikace problé..."
+  },
+  {
+    "question": "Jaké informace jsou obsaženy v individuálních programech zajištění kvality a technické bezpečnosti pro reaktor VR-1?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_860_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". V případě reaktoru VR-1 jsou pro vybraná zařízení obsaženy tyto informace v individuálních programech zajištění kvality a technické bezpečnosti [41, 42, 107, 108]. Součástí hodnocení řízení kvality ..."
+  },
+  {
+    "question": "Která zařízení jsou zahrnuta do výběru komponent a celků podléhajících systému řízeného stárnutí v případě školního reaktoru VR-1?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_711_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Do výběru komponent a celků podléhajících systému řízeného stárnutí musí být zahrnuta především vybraná zařízení a další zařízení a systémy s vlivem na jadernou bezpečnost. V případě školního reakto..."
+  },
+  {
+    "question": "Jakou konkrétní odpovědnost nese vedoucí radiační ochrany na pracovišti reaktoru?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_642_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Vedoucí radiační ochrany odpovídá za technické zabezpečení radiační ochrany na pracovišti reaktoru a zároveň je pomocným pracovníkem dohlížející osoby. Zajišt'uje především plnění požadavků programu m..."
+  },
+  {
+    "question": "Jaká kritéria musí splňovat materiály používané v jaderném zařízení?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_286_chunk_2",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". 5.2.13 Materiály Výběr konstrukčních materiálů, paliva i absorpčních materiálů ovlivňuje spolehlivost jaderného zařízení, proto všechny materiály musí splňovat následující kritéria: · spolehlivě pln..."
+  },
+  {
+    "question": "Z jakých typů napájení se skládají vnitřní elektrické rozvody podle uvedeného textu?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_437_chunk_0",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "Vnitřní elektrické rozvody se skládají z obvodů napájených z nezálohovaného napětí 400/230 Vst, obvodů napájených ze zálohovaného střídavého napájení 230 Vst a zálohovaného stejnosměrného napájení 48 ..."
+  },
+  {
+    "question": "Jaká je vyhláška, která se zabývá požadavky na bezpečné nakládání s radioaktivním odpadem v České republice?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_911_chunk_5",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": "109. ČESKO. Vyhláška č. 377/2016 Sb., o požadavcích na bezpečné nakládání s radioaktivním odpadem a o vyřazování z provozu jaderného zařízení nebo pracoviště III. nebo IV. kategorie. In: Sbírka zákonů..."
+  },
+  {
+    "question": "Jaká je logika vyhodnocení bezpečnostního signálu v uvedeném bezpečnostním řetězci?",
+    "ground_truth_chunk_id": "BZ_VR1_L3_sec_413_chunk_1",
+    "ground_truth_document_id": "BZ_VR1",
+    "chunk_content_preview": ". Tento bezpečnostní signál je bezpečnostním řetězcem vyhodnocován v logice '1 z 1' (řídicí systém má jen jeden kanál, není redundantní) a pokud je bezpečnostní signál od řídicího systému aktivní, doc..."
+  }
+]

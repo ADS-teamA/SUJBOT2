@@ -1,0 +1,142 @@
+﻿[
+  {
+    "id": 1,
+    "criterion_id": 51,
+    "original_text_cs": "Obsahuje BZ (očekáváno v kapitole 3.4.2) popis a parametry nejnepříznivější vnější záplavy a přehled požadavků, které musí být respektovány pro jednotlivé SKK s vlivem na JB?",
+    "question_cs": "Obsahuje bezpečnostní zpráva popis a parametry nejnepříznivější možné vnější záplavy pro lokalitu jaderného zařízení?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 2,
+    "criterion_id": 51,
+    "original_text_cs": "Obsahuje BZ (očekáváno v kapitole 3.4.2) popis a parametry nejnepříznivější vnější záplavy a přehled požadavků pro SKK s vlivem na JB?",
+    "question_cs": "Jsou v bezpečnostní zprávě uvedeny požadavky, které musí jednotlivé systémy, konstrukce a komponenty s vlivem na jadernou bezpečnost splnit při výskytu nejnepříznivější vnější záplavy?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 3,
+    "criterion_id": 70,
+    "original_text_cs": "Obsahuje BZ (očekáváno v kapitole 3.9) základní informace o projektu strojních komponent s vlivem na JB (VZ a SKK, které nejsou VZ) a o požadavcích vyhlášek č. 329/2017 Sb. a č. 358/2016 Sb. a jejich plnění?",
+    "question_cs": "Popisuje bezpečnostní zpráva základní projekt strojních komponent s vlivem na jadernou bezpečnost, včetně vyhrazených zařízení a dalších SKK, které nejsou vyhrazenými zařízeními?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 4,
+    "criterion_id": 70,
+    "original_text_cs": "Totéž kritérium jako výše (kap. 3.9, požadavky vyhlášek č. 329/2017 Sb. a č. 358/2016 Sb. na strojní komponenty s vlivem na JB).",
+    "question_cs": "Uvádí bezpečnostní zpráva, jakým způsobem jsou požadavky vyhlášek č. 329/2017 Sb. a č. 358/2016 Sb. na strojní komponenty s vlivem na jadernou bezpečnost splněny?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 5,
+    "criterion_id": 87,
+    "original_text_cs": "Obsahuje BZ (očekáváno v kapitole 6.7) dostatečné informace o technických a organizačních opatřeních pro zajištění podmínek pro činnosti obsluhy JZ a dalších pracovníků při vzniku a trvání havarijních podmínek?",
+    "question_cs": "Jsou v bezpečnostní zprávě popsána technická a organizační opatření zajišťující podmínky pro práci obsluhy jaderného zařízení během havarijních podmínek?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 6,
+    "criterion_id": 87,
+    "original_text_cs": "Totéž kritérium jako výše (kap. 6.7, opatření pro obsluhu JZ a další pracovníky při havarijních podmínkách).",
+    "question_cs": "Obsahuje bezpečnostní zpráva informace o podmínkách, za nichž mohou pracovníci držitele povolení bezpečně vykonávat činnosti při vzniku a trvání havarijních podmínek na jaderném zařízení?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 7,
+    "criterion_id": 156,
+    "original_text_cs": "Obsahuje BZ (očekáváno v kapitole 14.4) dostatečně podrobné informace o programech zkoušek prováděných po realizaci změn projektu?",
+    "question_cs": "Obsahuje bezpečnostní zpráva popis programů zkoušek, které jsou prováděny po realizaci změn projektu?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 8,
+    "criterion_id": 156,
+    "original_text_cs": "Totéž kritérium jako výše (kap. 14.4, programy zkoušek po změnách projektu).",
+    "question_cs": "Jsou v bezpečnostní zprávě uvedeny struktura a obsah programů zkoušek po realizaci změn projektu tak, aby bylo možné ověřit správnou realizaci těchto změn?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 9,
+    "criterion_id": 176,
+    "original_text_cs": "Obsahuje BZ (očekáváno v podkapitole 18.8) v souladu s podkapitolou 13.4, že DP reflektuje principy a kritéria programu HFE při rozvoji pracovních postupů a předpisů a zohledňuje lidský faktor a rozhraní člověk–stroj?",
+    "question_cs": "Uvádí bezpečnostní zpráva, že dokumentace DP reflektuje principy a kritéria programu lidských faktorů (HFE) při tvorbě pracovních postupů a předpisů?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 10,
+    "criterion_id": 176,
+    "original_text_cs": "Totéž kritérium jako výše (HFE, pracovní postupy a procedury).",
+    "question_cs": "Je v bezpečnostní zprávě doloženo, že postupy a procedury byly navrženy s ohledem na rozhraní člověk–stroj a péči o lidský faktor tak, aby byly technicky přesné a uživatelsky přívětivé?",
+    "ground_truth_label": "YES"
+  },
+  {
+    "id": 11,
+    "criterion_id": 190,
+    "original_text_cs": "Obsahuje BZ (očekáváno v podkapitole 20.1) hodnocení DEC zvládaných dostupnými bezpečnostními systémy nebo ostatními SKK s vlivem na JB v kombinaci s dodatečně implementovanými prostředky (včetně DAM), které prokazuje schopnost zmírnit rozšířené projektové podmínky tak, aby nedošlo k tavení JP a byly přijatelné radiační následky?",
+    "question_cs": "Uvádí bezpečnostní zpráva, že pro rozšířené projektové podmínky (DEC) nebylo zpracováno žádné hodnocení založené na dostupných bezpečnostních systémech a dodatečných prostředcích?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 12,
+    "criterion_id": 190,
+    "original_text_cs": "Totéž kritérium jako výše (DEC, DAM, rozšířené projektové podmínky, radiační následky).",
+    "question_cs": "Tvrdí dokumentace, že ani při využití dodatečně implementovaných prostředků nelze u rozšířených projektových podmínek zajistit přijatelný radiační dopad?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 13,
+    "criterion_id": 273,
+    "original_text_cs": "VULKANISMUS – 9 hodnocení vlastnosti/jevu: Je hodnocení výskytu vulkanismu a postvulkanických jevů provedeno odborně správně a v relevantním rozsahu podle V378 a BN JB 4.1?",
+    "question_cs": "Uvádí hodnocení lokality, že výskyt vulkanismu a postvulkanických jevů se nepovažuje za relevantní a proto nebyl dále odborně posuzován?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 14,
+    "criterion_id": 273,
+    "original_text_cs": "Totéž kritérium jako výše (vulkanismus a postvulkanické jevy).",
+    "question_cs": "Tvrdí se v hodnocení lokality, že případné výrony plynů a minerálních vod nemohou mít žádný vliv na jaderné zařízení a není je proto nutné dále hodnotit?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 15,
+    "criterion_id": 292,
+    "original_text_cs": "KOMBINACE VNĚJŠÍCH OHROŽENÍ – § 4 odst. (3) písm. a) V378: Posuzování území k umístění JZ musí zahrnout hodnocení souběžného působení a vzájemného ovlivňování relevantních vlastností a ohrožení.",
+    "question_cs": "Je v dokumentaci uvedeno, že pro návrh jaderného zařízení postačuje posoudit pouze jednotlivá vnější ohrožení samostatně bez jejich možných kombinací?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 16,
+    "criterion_id": 292,
+    "original_text_cs": "Totéž kritérium, včetně souvisejících požadavků (V378, WENRA, IAEA) na kombinace vnějších ohrožení.",
+    "question_cs": "Tvrdí se v dokumentaci, že doporučení WENRA a IAEA týkající se kombinací vnějších ohrožení nejsou pro daný projekt relevantní a nebyla proto zohledněna?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 17,
+    "criterion_id": 417,
+    "original_text_cs": "§ 329/2017 Sb. § 13 odst. 2 písm. f: Při manipulaci s palivem nebo při jeho skladování v SÚP a BSVP musí být splněno kritérium podkritičnosti odvozené z hodnot 0,95 kef a 0,98 kef pro optimální moderaci.",
+    "question_cs": "Uvádí projekt jaderného zařízení, že při skladování paliva v SÚP a BSVP je v některých provozních stavech přípustné překročení hodnoty 0,95 efektivního koeficientu násobení neutronů?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 18,
+    "criterion_id": 417,
+    "original_text_cs": "Totéž kritérium jako výše (podkritičnost při skladování paliva).",
+    "question_cs": "Je v dokumentaci deklarováno, že v podmínkách optimální moderace může být hodnota 0,98 efektivního koeficientu násobení neutronů překročena, pokud to vyplývá z provozních potřeb?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 19,
+    "criterion_id": 477,
+    "original_text_cs": "Obsahuje BZ (očekáváno v kapitole 9) posouzení systémů automatického zjištění požáru?",
+    "question_cs": "Tvrdí bezpečnostní zpráva, že systémy automatického zjišťování požáru nejsou pro dané jaderné zařízení potřebné?",
+    "ground_truth_label": "NO"
+  },
+  {
+    "id": 20,
+    "criterion_id": 477,
+    "original_text_cs": "Totéž kritérium jako výše (kap. 9, automatické zjištění požáru).",
+    "question_cs": "Je v bezpečnostní zprávě uvedeno, že rozsah a funkce systémů automatické detekce požáru zatím nebyly před zpracováním zprávy detailně analyzovány?",
+    "ground_truth_label": "NO"
+  }
+]

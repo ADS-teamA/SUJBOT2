@@ -12,7 +12,6 @@ import logging
 from typing import Any, Dict, List, Optional, Callable
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.types import interrupt
 
 from ..core.state import MultiAgentState, ExecutionPhase
@@ -36,7 +35,7 @@ class WorkflowBuilder:
     def __init__(
         self,
         agent_registry: AgentRegistry,
-        checkpointer: Optional[PostgresSaver] = None,
+        checkpointer: Optional[Any] = None,
         hitl_config: Optional[HITLConfig] = None,
         quality_detector: Optional[QualityDetector] = None,
         clarification_generator: Optional[ClarificationGenerator] = None,
