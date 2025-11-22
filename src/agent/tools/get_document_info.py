@@ -78,6 +78,51 @@ class GetDocumentInfoTool(BaseTool):
                 layer2_chunks = self.vector_store.faiss_store.metadata_layer2
                 layer3_chunks = self.vector_store.faiss_store.metadata_layer3
 
+            # Handle 'list' info_type (all documents)
+            if info_type == "list":
+                if document_id is not None:
+                    return ToolResult(
+                        success=False,
+                        data=None,
+                        error="info_type='list' requires document_id=None (lists all documents)",
+                    )
+
+                # Extract document IDs and summaries from Layer 1 metadata
+                documents_map = {}  # {doc_id: summary}
+
+                for meta in layer1_chunks:
+                    doc_id = meta.get("document_id")
+                    summary = meta.get("content", "")  # Layer 1 content is the document summary
+                    if doc_id and doc_id not in documents_map:
+                        documents_map[doc_id] = summary
+
+                # Fallback: If Layer 1 is empty, extract from Layer 3
+                if not documents_map:
+                    for meta in layer3_chunks:
+                        doc_id = meta.get("document_id")
+                        if doc_id and doc_id not in documents_map:
+                            doc_title = meta.get("document_title", doc_id)
+                            documents_map[doc_id] = f"Privacy policy for {doc_title}"
+
+                # Build list of document objects
+                document_list = [
+                    {"id": doc_id, "summary": summary} for doc_id, summary in sorted(documents_map.items())
+                ]
+
+                return ToolResult(
+                    success=True,
+                    data={"documents": document_list, "count": len(document_list)},
+                    metadata={"total_documents": len(document_list)},
+                )
+
+            # For other info_types, document_id is required
+            if document_id is None:
+                return ToolResult(
+                    success=False,
+                    data=None,
+                    error=f"document_id is required for info_type='{info_type}' (use info_type='list' with document_id=None to list all documents)",
+                )
+
             if info_type == "summary":
                 # Get document summary (Layer 1)
                 doc_summary = None
