@@ -138,6 +138,33 @@ class ModelConfig:
         if embedding_provider is None:
             embedding_provider = ModelRegistry.get_provider(config.models.embedding_model, "embedding")
 
+        # Validate required API keys based on selected providers
+        required_keys = {}
+        if llm_provider in ("claude", "anthropic"):
+            required_keys["ANTHROPIC_API_KEY"] = config.api_keys.anthropic_api_key
+        elif llm_provider == "openai":
+            required_keys["OPENAI_API_KEY"] = config.api_keys.openai_api_key
+        elif llm_provider == "google":
+            required_keys["GOOGLE_API_KEY"] = config.api_keys.google_api_key
+
+        if embedding_provider == "voyage":
+            required_keys["VOYAGE_API_KEY"] = config.api_keys.voyage_api_key
+        elif embedding_provider == "openai" and llm_provider != "openai":
+            required_keys["OPENAI_API_KEY"] = config.api_keys.openai_api_key
+
+        # Check for missing keys
+        missing_keys = [key for key, value in required_keys.items() if not value]
+        if missing_keys:
+            raise ValueError(
+                f"Missing required API keys for selected providers:\n"
+                f"  LLM Provider: {llm_provider}\n"
+                f"  Embedding Provider: {embedding_provider}\n"
+                f"  Missing keys: {', '.join(missing_keys)}\n\n"
+                f"Please set these environment variables in your .env file:\n"
+                f"  " + "\n  ".join(f"{key}=your_api_key_here" for key in missing_keys) + "\n\n"
+                f"See .env.example for reference."
+            )
+
         return cls(
             # LLM Configuration
             llm_provider=llm_provider,

@@ -348,11 +348,13 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                     print_info(f"[ERROR] Cannot write to vector store: {e}")
                     logger.error(f"Vector store merge failed - IO error: {e}", exc_info=True)
                     print_info(f"Vector store merge skipped - keeping separate stores")
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
+                    # Expected errors from merge validation/corruption detection
                     print()
-                    print_info(f"[ERROR] Unexpected error during vector store merge: {e}")
-                    logger.error(f"Vector store merge failed - unexpected error: {e}", exc_info=True)
-                    print_info(f"Vector store merge skipped")
+                    print_info(f"[ERROR] Vector store validation failed: {e}")
+                    logger.error(f"Vector store merge failed - validation error: {e}", exc_info=True)
+                    print_info(f"Vector store merge skipped - store may be corrupted")
+                # Removed broad Exception catch - let programming errors propagate!
 
                 # Knowledge graph merging
                 try:
@@ -419,7 +421,8 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                     print_info(f"[ERROR] Cannot write to {merge_target}: Permission denied")
                     logger.error(f"KG merge failed - permission error: {e}", exc_info=True)
                     print_info(f"Document '{doc_name}' KG will not be merged")
-                except (KeyError, AttributeError, TypeError) as e:
+                except (KeyError, AttributeError) as e:
+                    # Data structure errors - likely data corruption
                     print()
                     print_info(f"[ERROR] KG data structure error: {e}")
                     logger.error(f"KG merge failed - data integrity issue: {e}", exc_info=True)
@@ -428,14 +431,13 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                         logger.error(f"Unified KG state: {len(unified_kg.entities)} entities, {len(unified_kg.relationships)} relationships")
                     logger.error(f"New KG state: {len(knowledge_graph.entities)} entities, {len(knowledge_graph.relationships)} relationships")
                     print_info(f"Document '{doc_name}' KG appears corrupted - skipping merge")
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
+                    # Expected validation/merge errors
                     print()
-                    print_info(f"[ERROR] Unexpected merge failure: {e}")
-                    logger.error(f"KG merge unexpected error: {e}", exc_info=True)
-                    logger.error(f"Document: {doc_name}, Merge target: {merge_target}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    print_info(f"Document '{doc_name}' KG not merged - indexing will continue")
+                    print_info(f"[ERROR] KG merge validation failed: {e}")
+                    logger.error(f"KG merge failed - validation error: {e}", exc_info=True)
+                    print_info(f"Document '{doc_name}' KG validation failed - skipping merge")
+                # Removed broad Exception catch - let unexpected errors propagate!
 
         # Print comprehensive statistics
         print_header("INDEXING COMPLETE")

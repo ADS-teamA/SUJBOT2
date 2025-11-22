@@ -64,7 +64,7 @@ Orchestrator (routing + synthesis)
     ↓
 Specialized Agents (extractor, classifier, compliance, etc.)
     ↓
-RAG Tools (17 specialized tools for retrieval and analysis)
+RAG Tools (11 specialized tools for retrieval and analysis)
     ↓
 Storage (FAISS or PostgreSQL: vectors, graph, checkpoints)
            ↓                    ↓
@@ -392,6 +392,57 @@ python run_pipeline.py document.pdf
 
 **See `config.json` for all options.**
 
+### Migrating from Previous Versions
+
+If upgrading from a version that used `config.json` for API keys:
+
+1. **Create .env file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Move API keys** from `config.json` to `.env`:
+   ```bash
+   # Old location (config.json) - REMOVE THIS SECTION
+   {
+     "api_keys": {
+       "anthropic_api_key": "sk-ant-...",  # ❌ REMOVE
+       "openai_api_key": "sk-..."          # ❌ REMOVE
+     }
+   }
+
+   # New location (.env) - ADD YOUR KEYS HERE
+   ANTHROPIC_API_KEY=sk-ant-...  # ✅ CORRECT
+   OPENAI_API_KEY=sk-...          # ✅ CORRECT
+   ```
+
+3. **Remove `api_keys` section** from `config.json` (now ignored):
+   - The old `api_keys: {}` field is no longer used
+   - It's safe to remove it entirely from your config.json
+
+4. **Verify:**
+   ```bash
+   # .env should NOT be tracked by git
+   git status  # Should NOT show .env
+
+   # config.json should have NO secrets
+   grep -i "api_key\|password\|secret" config.json  # Should return nothing
+   ```
+
+5. **Test:**
+   ```bash
+   # Should fail with clear error if API keys missing
+   python run_pipeline.py --help
+
+   # Should work after setting keys in .env
+   python run_pipeline.py document.pdf
+   ```
+
+**Why this change?**
+- **Security:** API keys were in version-controlled files (bad practice)
+- **Best practice:** Secrets in `.env` (gitignored), settings in `config.json`
+- **Standards:** Follows 12-factor app methodology
+
 ---
 
 ## 📖 Research Papers (DO NOT CONTRADICT)
@@ -454,5 +505,5 @@ uv run isort src/ tests/ --profile black
 - Configuration: SSOT in `config.json` (strict validation, no defaults)
 - Storage: **Dual backend support** - FAISS (development) OR PostgreSQL (production, user-selectable)
 - Agents: 7 autonomous agents (orchestrator + 6 specialized)
-- Tools: 17 RAG tools (search, retrieval, analysis, and metadata tools)
+- Tools: 11 RAG tools (search, retrieval, analysis, and metadata tools)
 - Hybrid Search: Works seamlessly with both FAISS and PostgreSQL backends

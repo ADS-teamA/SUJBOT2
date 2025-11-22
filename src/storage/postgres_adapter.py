@@ -8,11 +8,14 @@ Replaces FAISS in-memory store with persistent database backend.
 import asyncio
 import asyncpg
 import numpy as np
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, TYPE_CHECKING
 import logging
 import nest_asyncio
 
 from .vector_store_adapter import VectorStoreAdapter
+
+if TYPE_CHECKING:
+    from src.multi_layer_chunker import Chunk
 
 logger = logging.getLogger(__name__)
 
@@ -858,7 +861,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
 
     def add_chunks(
         self,
-        chunks_dict: Dict[str, List],
+        chunks_dict: Dict[str, List["Chunk"]],
         embeddings_dict: Dict[str, np.ndarray]
     ) -> None:
         """
@@ -879,7 +882,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
 
     async def _async_add_chunks(
         self,
-        chunks_dict: Dict[str, List],
+        chunks_dict: Dict[str, List["Chunk"]],
         embeddings_dict: Dict[str, np.ndarray]
     ) -> None:
         """
@@ -912,7 +915,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
     async def _add_layer_batch(
         self,
         layer: int,
-        chunks: List,
+        chunks: List["Chunk"],
         embeddings: np.ndarray
     ) -> None:
         """
