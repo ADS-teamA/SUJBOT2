@@ -5,6 +5,7 @@ Auto-extracted and cleaned from tier3_analysis.py
 """
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 from pydantic import Field
 

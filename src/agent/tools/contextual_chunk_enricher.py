@@ -15,6 +15,27 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class ContextualChunkEnricherInput(ToolInput):
+    """Input for contextual_chunk_enricher tool."""
+
+    chunk_ids: List[str] = Field(
+        ...,
+        description="Chunk IDs to enrich with contextual information",
+        min_items=1,
+        max_items=50,
+    )
+    enrichment_mode: str = Field(
+        "auto",
+        description="Enrichment mode: 'auto' (detect best mode), 'document_summary', 'section_summary', 'both'",
+    )
+    include_metadata: bool = Field(
+        True, description="Include metadata (page numbers, section titles) in enriched output"
+    )
+
+
+
+
 @register_tool
 class ContextualChunkEnricherTool(BaseTool):
     """Enrich chunks with contextual information."""

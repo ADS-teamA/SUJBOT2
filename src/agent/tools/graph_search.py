@@ -15,6 +15,82 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+class GraphSearchInput(ToolInput):
+    """Input for unified graph_search tool with multiple modes."""
+
+    mode: str = Field(
+        ...,
+        description=(
+            "Search mode:\n"
+            "- 'entity_mentions': Find chunks mentioning an entity (fast, ~300ms)\n"
+            "- 'entity_details': Get entity details + relationships + mentions (medium, ~500ms)\n"
+            "- 'relationships': Query relationships between entities (medium, ~400ms)\n"
+            "- 'multi_hop': Multi-hop BFS graph traversal (slow, ~1-2s)"
+        ),
+    )
+
+    entity_value: str = Field(
+        ...,
+        description=(
+            "REQUIRED: Specific entity name to search for (e.g., 'GRI 306', 'GSSB', 'waste management'). "
+            "This tool requires a concrete entity - it cannot search ALL entities at once. "
+            "Use browse_entities first to find entities, then use graph_search on each one."
+        ),
+    )
+
+    entity_type: Optional[str] = Field(
+        None,
+        description=(
+            "Entity type filter (optional): 'standard', 'organization', 'date', 'clause', "
+            "'topic', 'person', 'location', 'regulation', 'contract'"
+        ),
+    )
+
+    k: int = Field(
+        6,
+        description="Maximum number of results to return",
+        ge=1,
+        le=50,
+    )
+
+    relationship_types: Optional[List[str]] = Field(
+        None,
+        description=(
+            "Filter by relationship types (optional): 'superseded_by', 'references', 'issued_by', "
+            "'effective_date', 'covers_topic', 'contains_clause', 'applies_to', 'part_of', etc."
+        ),
+    )
+
+    direction: str = Field(
+        "both",
+        description="Relationship direction: 'outgoing' (from entity), 'incoming' (to entity), 'both'",
+    )
+
+    max_hops: int = Field(
+        2,
+        description="Maximum hops for multi-hop traversal (1-3)",
+        ge=1,
+        le=3,
+    )
+
+    min_confidence: float = Field(
+        0.0,
+        description="Minimum confidence score for entities/relationships (0.0-1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+
+    cross_document: bool = Field(
+        True,
+        description="Allow traversal across documents (True) or stay within same document (False)",
+    )
+
+    include_metadata: bool = Field(
+        True,
+        description="Include detailed entity/relationship metadata in results",
+    )
+
+
 @register_tool
 class GraphSearchTool(BaseTool):
     """Unified knowledge graph search with multiple modes."""

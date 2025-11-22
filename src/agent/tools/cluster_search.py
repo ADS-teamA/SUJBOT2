@@ -15,6 +15,42 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class ClusterSearchInput(ToolInput):
+    """Input for cluster_search tool."""
+
+    query: str = Field(
+        ...,
+        description="Search query to find relevant chunks",
+    )
+
+    cluster_ids: Optional[List[int]] = Field(
+        None,
+        description=(
+            "Filter to specific cluster IDs (optional). "
+            "If None, searches all clusters. "
+            "Use get_stats tool first to see available clusters."
+        ),
+    )
+
+    diversity_mode: bool = Field(
+        False,
+        description=(
+            "Enable diversity mode: return max 1 result per cluster. "
+            "Useful to avoid redundant results from the same topic."
+        ),
+    )
+
+    k: int = Field(
+        10,
+        description="Maximum number of results to return",
+        ge=1,
+        le=50,
+    )
+
+
+
+
 @register_tool
 class ClusterSearchTool(BaseTool):
     """

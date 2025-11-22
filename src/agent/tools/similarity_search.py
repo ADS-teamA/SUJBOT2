@@ -15,6 +15,22 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class SimilaritySearchInput(ToolInput):
+    """Input for unified similarity_search tool."""
+
+    chunk_id: str = Field(..., description="Chunk ID to find similar content for")
+    search_mode: str = Field(
+        ..., description="Search mode: 'related' (semantically related), 'similar' (more like this)"
+    )
+    cross_document: bool = Field(
+        True, description="Search across all documents or within same document"
+    )
+    k: int = Field(6, description="Number of results", ge=1, le=10)
+
+
+
+
 @register_tool
 class SimilaritySearchTool(BaseTool):
     """Find similar chunks."""

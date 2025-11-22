@@ -15,6 +15,15 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class ExplainSearchResultsInput(ToolInput):
+    """Input for explain_search_results tool."""
+
+    chunk_ids: List[str] = Field(..., description="Chunk IDs from search results to explain")
+
+
+
+
 @register_tool
 class ExplainSearchResultsTool(BaseTool):
     """Debug search results."""

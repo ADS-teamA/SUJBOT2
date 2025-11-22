@@ -15,6 +15,48 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class FilteredSearchInput(ToolInput):
+    """Input for unified filtered_search tool with search method control."""
+
+    query: str = Field(..., description="Search query")
+    search_method: str = Field(
+        "hybrid",
+        description="Search method: 'hybrid' (BM25+Dense+RRF, default, ~200-300ms), 'bm25_only' (keyword only, ~50-100ms), 'dense_only' (semantic only, ~100-200ms)"
+    )
+    filter_type: Optional[str] = Field(
+        None, description="Type of filter to apply: 'document', 'section', 'metadata', 'temporal'. If None, searches entire database"
+    )
+    filter_value: Optional[str] = Field(
+        None, description="Filter value (document_id, section_title, or date range). Required if filter_type is set"
+    )
+    document_type: Optional[str] = Field(None, description="For metadata filter: document type")
+    section_type: Optional[str] = Field(None, description="For metadata filter: section type")
+    start_date: Optional[str] = Field(
+        None, description="For temporal filter: start date (ISO: YYYY-MM-DD)"
+    )
+    end_date: Optional[str] = Field(
+        None, description="For temporal filter: end date (ISO: YYYY-MM-DD)"
+    )
+    k: int = Field(6, description="Number of results", ge=1, le=10)
+
+    # Legacy compatibility for exact_match_search
+    search_type: Optional[str] = Field(
+        None, description="DEPRECATED: Use search_method='bm25_only' instead. Maps 'keywords'/'cross_references' to bm25_only"
+    )
+    document_id: Optional[str] = Field(
+        None, description="DEPRECATED: Use filter_type='document', filter_value=<doc_id> instead"
+    )
+    section_id: Optional[str] = Field(
+        None, description="DEPRECATED: Use filter_type='section', filter_value=<section_title> instead"
+    )
+    use_hyde: bool = Field(
+        False, description="Enable HyDE (Hypothetical Document Embeddings) for better zero-shot retrieval. Slower (~1-2s) but higher quality."
+    )
+
+
+
+
 @register_tool
 class FilteredSearchTool(BaseTool):
     """Unified search with filters and search method control."""

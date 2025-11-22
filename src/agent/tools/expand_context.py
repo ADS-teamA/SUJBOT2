@@ -15,6 +15,20 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class ExpandContextInput(ToolInput):
+    """Input for unified expand_context tool."""
+
+    chunk_ids: List[str] = Field(..., description="List of chunk IDs to expand")
+    expansion_mode: str = Field(
+        ...,
+        description="Expansion mode: 'adjacent' (before/after chunks), 'section' (same section), 'similarity' (semantically similar), 'hybrid' (section + similarity)",
+    )
+    k: int = Field(3, description="Number of additional chunks per input chunk", ge=1, le=10)
+
+
+
+
 @register_tool
 class ExpandContextTool(BaseTool):
     """Expand chunk context."""

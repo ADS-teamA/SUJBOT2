@@ -15,6 +15,15 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class AssessRetrievalConfidenceInput(ToolInput):
+    """Input for assess_retrieval_confidence tool."""
+
+    chunk_ids: List[str] = Field(..., description="Chunk IDs from search results to assess")
+
+
+
+
 @register_tool
 class AssessRetrievalConfidenceTool(BaseTool):
     """Assess confidence of retrieval results."""

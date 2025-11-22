@@ -15,6 +15,31 @@ from ._utils import format_chunk_result, generate_citation, validate_k_parameter
 logger = logging.getLogger(__name__)
 
 
+
+class MultiDocSynthesizerInput(ToolInput):
+    """Input for multi_doc_synthesizer tool."""
+
+    document_ids: List[str] = Field(
+        ...,
+        description="List of document IDs to synthesize (2-5 documents recommended)",
+        min_items=2,
+        max_items=10,
+    )
+    synthesis_query: str = Field(
+        ...,
+        description="Query describing what to synthesize from the documents (e.g., 'Compare privacy policies', 'Summarize requirements')",
+    )
+    k_per_document: int = Field(
+        5, description="Number of chunks to retrieve per document", ge=1, le=20
+    )
+    synthesis_mode: str = Field(
+        "compare",
+        description="Synthesis mode: 'compare' (find differences/similarities), 'summarize' (unified summary), 'analyze' (deep analysis)",
+    )
+
+
+
+
 @register_tool
 class MultiDocSynthesizerTool(BaseTool):
     """Synthesize information from multiple documents."""
