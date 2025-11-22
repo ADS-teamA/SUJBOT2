@@ -254,6 +254,12 @@ orchestrator.run(query)  # LLM generates contextual response
 **Documentation:**
 - Update PIPELINE.md if research constraints change
 
+**Shared Utilities:**
+- Extract common helper functions to `src/utils/` modules
+- Examples: `faiss_utils.py` for FAISS operations, `api_clients.py` for API wrappers
+- NEVER duplicate helper functions across scripts - use shared utilities
+- DRY principle: Each function should have exactly ONE implementation
+
 **Git workflow:**
 - **ALWAYS use `gh` CLI** for pull requests (NOT curl or web interface)
 - Command: `gh pr create --title "..." --body "..."`
