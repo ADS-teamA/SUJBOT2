@@ -463,6 +463,58 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
 
         return results
 
+    def search_layer1(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 1,
+        **kwargs
+    ) -> List[Dict]:
+        """Direct Layer 1 search (document-level)."""
+        return _run_async_safe(
+            self._async_search_layer1(query_embedding, k)
+        )
+
+    async def _async_search_layer1(
+        self,
+        query_embedding: np.ndarray,
+        k: int,
+    ) -> List[Dict]:
+        """Async Layer 1 search."""
+        query_vec = self._normalize_vector(query_embedding)
+
+        async with self.pool.acquire() as conn:
+            results = await self._search_layer(
+                conn, layer=1, query_vec=query_vec, k=k
+            )
+            return results
+
+    def search_layer2(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 3,
+        document_filter: Optional[str] = None,
+        **kwargs
+    ) -> List[Dict]:
+        """Direct Layer 2 search (section-level)."""
+        return _run_async_safe(
+            self._async_search_layer2(query_embedding, k, document_filter)
+        )
+
+    async def _async_search_layer2(
+        self,
+        query_embedding: np.ndarray,
+        k: int,
+        document_filter: Optional[str],
+    ) -> List[Dict]:
+        """Async Layer 2 search."""
+        query_vec = self._normalize_vector(query_embedding)
+
+        async with self.pool.acquire() as conn:
+            results = await self._search_layer(
+                conn, layer=2, query_vec=query_vec, k=k, document_filter=document_filter
+            )
+            return results
+
     def search_layer3(
         self,
         query_embedding: np.ndarray,
@@ -799,6 +851,188 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             deleted = result.split()[-1] == "1"
             logger.debug(f"Delete conversation {conversation_id} for user {user_id}: {deleted}")
             return deleted
+
+    # ============================================================================
+    # Indexing: Add Chunks (for pipeline)
+    # ============================================================================
+
+    def add_chunks(
+        self,
+        chunks_dict: Dict[str, List],
+        embeddings_dict: Dict[str, np.ndarray]
+    ) -> None:
+        """
+        Add chunks and embeddings to PostgreSQL (batch INSERT with deduplication).
+
+        Sync wrapper for async _async_add_chunks (pipeline is synchronous).
+
+        Args:
+            chunks_dict: Dict with keys 'layer1', 'layer2', 'layer3' containing Chunk objects
+            embeddings_dict: Dict with keys 'layer1', 'layer2', 'layer3' containing embedding arrays
+
+        Example:
+            >>> adapter = PostgresVectorStoreAdapter(connection_string="...")
+            >>> await adapter.initialize()
+            >>> adapter.add_chunks(chunks_dict, embeddings_dict)
+        """
+        return _run_async_safe(self._async_add_chunks(chunks_dict, embeddings_dict))
+
+    async def _async_add_chunks(
+        self,
+        chunks_dict: Dict[str, List],
+        embeddings_dict: Dict[str, np.ndarray]
+    ) -> None:
+        """
+        Async implementation of add_chunks.
+
+        Uses batch INSERT with ON CONFLICT DO NOTHING for incremental indexing.
+        """
+        logger.info("Adding chunks to PostgreSQL...")
+
+        # Add each layer
+        for layer in [1, 2, 3]:
+            layer_key = f"layer{layer}"
+            chunks = chunks_dict.get(layer_key, [])
+            embeddings = embeddings_dict.get(layer_key)
+
+            if chunks and embeddings is not None and embeddings.size > 0:
+                await self._add_layer_batch(layer, chunks, embeddings)
+            else:
+                logger.info(f"Layer {layer}: Skipped (empty layer)")
+
+        # Update stats
+        async with self.pool.acquire() as conn:
+            await conn.execute("SELECT metadata.update_vector_store_stats()")
+
+        # Clear metadata cache (invalidate after adding new chunks)
+        self._metadata_cache = {1: None, 2: None, 3: None}
+
+        logger.info("✓ Chunks added to PostgreSQL")
+
+    async def _add_layer_batch(
+        self,
+        layer: int,
+        chunks: List,
+        embeddings: np.ndarray
+    ) -> None:
+        """
+        Add chunks to a specific layer using batch INSERT.
+
+        Args:
+            layer: Layer number (1, 2, or 3)
+            chunks: List of Chunk objects
+            embeddings: Embedding matrix (N x dimensions)
+        """
+        import json
+
+        # Ensure embeddings are float32
+        if embeddings.dtype != np.float32:
+            embeddings = embeddings.astype(np.float32)
+
+        # Ensure 2D array
+        if embeddings.ndim == 1:
+            embeddings = embeddings.reshape(1, -1)
+
+        # Normalize embeddings for cosine similarity (pgvector requires unit vectors)
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        embeddings = embeddings / np.where(norms > 0, norms, 1)
+
+        # Prepare batch records
+        records = []
+        for i, chunk in enumerate(chunks):
+            # Build hierarchical path
+            hierarchical_path = chunk.metadata.document_id
+            if chunk.metadata.section_path:
+                hierarchical_path = f"{chunk.metadata.document_id} > {chunk.metadata.section_path}"
+
+            # Convert embedding to pgvector string format
+            embedding_str = self._vector_to_pgvector_string(embeddings[i])
+
+            # Build metadata JSONB (flexible storage)
+            metadata_json = json.dumps({
+                "layer": layer,
+                "section_path": chunk.metadata.section_path,
+                "section_level": getattr(chunk.metadata, 'section_level', None),
+                "section_depth": getattr(chunk.metadata, 'section_depth', None),
+                "char_start": getattr(chunk.metadata, 'char_start', None),
+                "char_end": getattr(chunk.metadata, 'char_end', None),
+            })
+
+            # Layer-specific record structure
+            if layer == 1:
+                # Layer 1: Documents (no section columns)
+                record = (
+                    chunk.chunk_id,
+                    chunk.metadata.document_id,
+                    chunk.metadata.section_title or chunk.metadata.document_id,  # title
+                    embedding_str,
+                    chunk.raw_content,  # content without SAC
+                    chunk.metadata.cluster_id,
+                    chunk.metadata.cluster_label,
+                    chunk.metadata.cluster_confidence,
+                    hierarchical_path,
+                    chunk.metadata.page_number,
+                    metadata_json,
+                )
+            else:
+                # Layer 2/3: Sections/Chunks (have section columns)
+                record = (
+                    chunk.chunk_id,
+                    chunk.metadata.document_id,
+                    chunk.metadata.section_id,
+                    chunk.metadata.section_title,
+                    chunk.metadata.section_path,
+                    getattr(chunk.metadata, 'section_level', None),
+                    getattr(chunk.metadata, 'section_depth', None),
+                    hierarchical_path,
+                    chunk.metadata.page_number,
+                    getattr(chunk.metadata, 'char_start', None) if layer == 3 else None,
+                    getattr(chunk.metadata, 'char_end', None) if layer == 3 else None,
+                    embedding_str,
+                    chunk.raw_content,
+                    chunk.metadata.cluster_id,
+                    chunk.metadata.cluster_label,
+                    chunk.metadata.cluster_confidence,
+                    metadata_json,
+                )
+
+            records.append(record)
+
+        # Batch INSERT with ON CONFLICT DO NOTHING (deduplication)
+        async with self.pool.acquire() as conn:
+            if layer == 1:
+                sql = """
+                    INSERT INTO vectors.layer1
+                    (chunk_id, document_id, title, embedding, content,
+                     cluster_id, cluster_label, cluster_confidence,
+                     hierarchical_path, page_number, metadata)
+                    VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, $10, $11::jsonb)
+                    ON CONFLICT (chunk_id) DO NOTHING
+                """
+            elif layer == 2:
+                sql = """
+                    INSERT INTO vectors.layer2
+                    (chunk_id, document_id, section_id, section_title, section_path,
+                     section_level, section_depth, hierarchical_path, page_number,
+                     embedding, content, cluster_id, cluster_label, cluster_confidence, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector, $11, $12, $13, $14, $15::jsonb)
+                    ON CONFLICT (chunk_id) DO NOTHING
+                """
+            else:  # layer == 3
+                sql = """
+                    INSERT INTO vectors.layer3
+                    (chunk_id, document_id, section_id, section_title, section_path,
+                     section_level, section_depth, hierarchical_path, page_number,
+                     char_start, char_end, embedding, content,
+                     cluster_id, cluster_label, cluster_confidence, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::vector, $13, $14, $15, $16, $17::jsonb)
+                    ON CONFLICT (chunk_id) DO NOTHING
+                """
+
+            # Execute batch insert
+            await conn.executemany(sql, records)
+
+        logger.info(f"Layer {layer}: Added {len(records)} chunks to PostgreSQL")
 
     # ============================================================================
     # Cleanup

@@ -232,6 +232,9 @@ class IndexingConfig:
     duplicate_sample_pages: int = 1  # Pages to sample for detection (1 = first page)
     vector_store_path: str = "vector_db"  # Path to vector store for duplicate checking
 
+    # Storage Backend Selection (PHASE 4)
+    storage_backend: str = "faiss"  # "faiss" or "postgresql" - where to index vectors
+
     def __post_init__(self):
         """Configure speed mode and validate settings."""
         # Validate speed mode
@@ -289,6 +292,15 @@ class IndexingConfig:
         from src.config import get_config
         root_config = get_config()
 
+        # Get storage backend from config (RootConfig has extra="allow")
+        storage_backend = "faiss"  # Default to FAISS
+        if hasattr(root_config, "storage"):
+            storage_config = root_config.storage
+            if isinstance(storage_config, dict):
+                storage_backend = storage_config.get("backend", "faiss")
+            else:
+                storage_backend = getattr(storage_config, "backend", "faiss")
+
         # Create config with sub-configs loaded from config.json
         config = cls(
             speed_mode=root_config.summarization.speed_mode,
@@ -303,6 +315,7 @@ class IndexingConfig:
             duplicate_similarity_threshold=0.98,  # Default value
             duplicate_sample_pages=1,  # Default value
             vector_store_path=root_config.agent.vector_store_path,
+            storage_backend=storage_backend,
             **overrides,
         )
 
@@ -735,15 +748,60 @@ class IndexingPipeline:
                     logger.warning(f"Clustering module not available: {e}")
                     logger.warning("Skipping semantic clustering")
 
-            # PHASE 4: FAISS Indexing
-            logger.info("PHASE 4: FAISS Indexing")
-            vector_store = FAISSVectorStore(dimensions=self.embedder.dimensions)
-            vector_store.add_chunks(chunks, embeddings)
-            store_stats = vector_store.get_stats()
-            logger.info(
-                f"Indexed: {store_stats['total_vectors']} vectors "
-                f"({store_stats['documents']} documents)"
-            )
+            # PHASE 4: Vector Store Indexing (backend-agnostic)
+            backend = self.config.storage_backend
+            logger.info(f"PHASE 4: Vector Store Indexing (backend={backend})")
+
+            if backend == "postgresql":
+                # PostgreSQL backend - use async adapter
+                import asyncio
+                import nest_asyncio
+
+                # Enable nested event loops (for running async in sync context)
+                nest_asyncio.apply()
+
+                # Get connection string from environment
+                connection_string = os.getenv("DATABASE_URL")
+                if not connection_string:
+                    raise ValueError(
+                        "DATABASE_URL environment variable is required for PostgreSQL backend.\n"
+                        "Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/dbname'"
+                    )
+
+                # Create PostgreSQL adapter
+                async def create_postgres_adapter():
+                    adapter = await create_vector_store_adapter(
+                        backend="postgresql",
+                        connection_string=connection_string,
+                        dimensions=self.embedder.dimensions
+                    )
+                    await adapter.initialize()
+                    return adapter
+
+                vector_store = asyncio.run(create_postgres_adapter())
+                vector_store.add_chunks(chunks, embeddings)  # Sync wrapper
+                store_stats = vector_store.get_stats()
+                logger.info(
+                    f"PostgreSQL indexed: {store_stats['total_vectors']} vectors "
+                    f"({store_stats['documents']} documents)"
+                )
+
+            elif backend == "faiss":
+                # FAISS backend - traditional file-based storage
+                vector_store = FAISSVectorStore(dimensions=self.embedder.dimensions)
+                vector_store.add_chunks(chunks, embeddings)
+                store_stats = vector_store.get_stats()
+                logger.info(
+                    f"FAISS indexed: {store_stats['total_vectors']} vectors "
+                    f"({store_stats['documents']} documents)"
+                )
+
+            else:
+                raise ValueError(
+                    f"Unknown storage backend: {backend}\n"
+                    f"Supported backends: 'faiss', 'postgresql'\n"
+                    f"Set storage.backend in config.json"
+                )
 
         # PHASE 5B: Hybrid Search (optional, skip if exists)
         if self.config.enable_hybrid_search:
@@ -767,9 +825,9 @@ class IndexingPipeline:
                         f"L3={len(bm25_store.index_layer3.corpus)}"
                     )
 
-                    # Wrap FAISS + BM25 into HybridVectorStore
+                    # Wrap vector store (FAISS or PostgreSQL) + BM25 into HybridVectorStore
                     hybrid_store = HybridVectorStore(
-                        faiss_store=vector_store,
+                        vector_store=vector_store,
                         bm25_store=bm25_store,
                         fusion_k=self.config.hybrid_fusion_k,
                     )

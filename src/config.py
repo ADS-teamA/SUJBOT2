@@ -249,6 +249,7 @@ class ExtractionConfig:
     generate_summaries: bool
     summary_model: Optional[str]
     summary_max_chars: int
+    document_summary_max_chars: int
     summary_style: str
     use_batch_api: bool
     batch_api_poll_interval: int
@@ -285,6 +286,7 @@ class ExtractionConfig:
             generate_summaries=extraction_config.generate_summaries,
             summary_model=extraction_config.summary_model,
             summary_max_chars=extraction_config.summary_max_chars,
+            document_summary_max_chars=extraction_config.document_summary_max_chars,
             summary_style=extraction_config.summary_style,
             use_batch_api=extraction_config.use_batch_api,
             batch_api_poll_interval=extraction_config.batch_api_poll_interval,
@@ -301,7 +303,8 @@ class SummarizationConfig:
     """
 
     # Research-backed parameters (from LegalBench-RAG) - required fields first
-    max_chars: int
+    max_chars: int  # For section summaries (150 chars)
+    document_max_chars: int  # For document summaries (1000 chars)
     style: str
     temperature: float
     max_tokens: int
@@ -350,6 +353,7 @@ class SummarizationConfig:
 
         config_dict = {
             "max_chars": extraction.summary_max_chars,
+            "document_max_chars": extraction.document_summary_max_chars,
             "style": extraction.summary_style,
             "temperature": summarization_config.temperature,
             "max_tokens": summarization_config.max_tokens,

@@ -93,9 +93,9 @@ class SearchTool(BaseTool):
     - Example: 3 searches with k=3 (9 results total) > 1 search with k=9
 
     **Query Expansion:**
-    - num_expands=0: Use original query only (fast, ~200ms)
-    - num_expands=1: Original + 1 paraphrase (2 queries, ~500ms)
-    - num_expands=2: Original + 2 paraphrases (3 queries, ~800ms)
+    - num_expands=0: Use original query only
+    - num_expands=1: Original + 1 paraphrase
+    - num_expands=2: Original + 2 paraphrases
 
     **Graph Boosting:**
     - enable_graph_boost=True: Boosts chunks mentioning query entities (+30% score boost)
@@ -112,6 +112,7 @@ class SearchTool(BaseTool):
     - filtered_search → Use search with filter_type and filter_value parameters
 
     **Best Practices:**
+    - IMPORTANT: Use targeted within document or section search when you are sure about target document or section!
     - Default (fast): search(query, k=3)
     - Entity query: search(query, k=3, enable_graph_boost=True)
     - Ambiguous query: search(query, k=3, num_expands=1-2)
@@ -795,8 +796,8 @@ class SearchTool(BaseTool):
                 }
             )
 
-        # Sort by RRF score (descending)
-        rrf_scores.sort(key=lambda x: x["rrf_score"], reverse=True)
+        # Sort by RRF score (ascending: lowest confidence first, highest last)
+        rrf_scores.sort(key=lambda x: x["rrf_score"], reverse=False)
 
         # Return top chunks
         return [item["chunk"] for item in rrf_scores]

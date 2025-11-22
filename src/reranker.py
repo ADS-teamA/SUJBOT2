@@ -199,8 +199,8 @@ class CrossEncoderReranker:
             # Preserve original scores for analysis
             candidate["original_score"] = candidate.get("rrf_score", candidate.get("score", 0.0))
 
-        # Sort by rerank score and take top-k
-        reranked = sorted(candidates, key=lambda x: x["rerank_score"], reverse=True)[:top_k]
+        # Sort by rerank score (ascending: lowest confidence first, highest last)
+        reranked = sorted(candidates, key=lambda x: x["rerank_score"], reverse=False)[:top_k]
 
         # Calculate statistics
         elapsed_ms = (time.time() - start_time) * 1000

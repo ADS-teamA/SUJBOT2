@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 class GetDocumentInfoInput(ToolInput):
     """Input for unified get_document_info tool."""
 
-    document_id: str = Field(..., description="Document ID")
+    document_id: Optional[str] = Field(None, description="Document ID (optional - if None, returns list of all documents)")
     info_type: str = Field(
         ...,
-        description="Type of information: 'summary' (high-level overview), 'metadata' (comprehensive stats), 'sections' (list all sections), 'section_details' (specific section info)",
+        description="Type of information: 'list' (all documents with summaries - requires document_id=None), 'summary' (high-level overview), 'metadata' (comprehensive stats), 'sections' (list all sections), 'section_details' (specific section info)",
     )
     section_id: Optional[str] = Field(
         None, description="Section ID (required for info_type='section_details')"
@@ -33,21 +33,25 @@ class GetDocumentInfoTool(BaseTool):
     """Get document information."""
 
     name = "get_document_info"
-    description = "Get document info/metadata"
+    description = "Get document info/metadata or list all documents"
     detailed_help = """
     Unified tool for retrieving document information with multiple info types:
+    - 'list': List all indexed documents with summaries (requires document_id=None)
     - 'summary': High-level document overview
     - 'metadata': Comprehensive stats (sections, chunks, source info)
     - 'sections': List all sections with titles and hierarchy
     - 'section_details': Detailed info about a specific section
 
     **When to use:**
-    - Need document overview before detailed search
-    - Want to understand document structure
-    - Looking for specific section to search within
+    - 'list': "What documents are available?", corpus discovery
+    - 'summary': Need document overview before detailed search
+    - 'sections': Want to understand document structure
+    - 'metadata': Need comprehensive stats
+    - 'section_details': Looking for specific section to search within
 
     **Best practices:**
-    - Use 'summary' for quick overview
+    - Use 'list' with document_id=None to see all documents
+    - Use 'summary' for quick overview of specific document
     - Use 'sections' to understand structure
     - Use 'metadata' for comprehensive stats
     - Combine with search (filter_type='section') to search within sections
@@ -57,7 +61,7 @@ class GetDocumentInfoTool(BaseTool):
     input_schema = GetDocumentInfoInput
 
     def execute_impl(
-        self, document_id: str, info_type: str, section_id: Optional[str] = None
+        self, document_id: Optional[str] = None, info_type: str = "summary", section_id: Optional[str] = None
     ) -> ToolResult:
         try:
             # Get layer metadata
