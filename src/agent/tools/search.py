@@ -25,10 +25,10 @@ class SearchInput(ToolInput):
 
     query: str = Field(..., description="Natural language search query")
     k: int = Field(
-        3,
-        description="Number of results to return per search (default: 3). Use targeted searches with low k and call iteratively rather than high k single searches. Recommended: k=3 for focused results, increase only if needed.",
+        10,
+        description="Number of results to return per search (default: 10). Provides comprehensive coverage for most queries. Use lower k for very targeted searches, higher k (up to 200) for benchmarks/evaluation.",
         ge=1,
-        le=20,  # Increased from 10 to handle post-filter scenarios (internally fetches k*5*2 candidates with reranking+filtering)
+        le=200,  # Increased for benchmark/evaluation scenarios (internally fetches k*5*2 candidates with reranking+filtering)
     )
     num_expands: int = Field(
         0,
@@ -37,8 +37,8 @@ class SearchInput(ToolInput):
         le=5,
     )
     enable_graph_boost: bool = Field(
-        False,
-        description="Enable knowledge graph boosting for entity-centric queries. Boosts chunks mentioning query entities (+30%) and high-centrality concepts (+15%). Use when query mentions specific entities (organizations, standards, regulations). Performance overhead: +200-500ms. Default: False (performance-first).",
+        True,
+        description="Enable knowledge graph boosting for entity-centric queries. Boosts chunks mentioning query entities (+30%) and high-centrality concepts (+15%). Use when query mentions specific entities (organizations, standards, regulations). Performance overhead: +200-500ms. Default: True (recall-first).",
     )
     use_hyde: bool = Field(
         False,
@@ -87,10 +87,11 @@ class SearchTool(BaseTool):
     - 'metadata': Filter by document_type/section_type (post-filter)
     - 'temporal': Search within date range (post-filter)
 
-    **Targeted Search Strategy:**
-    - Use LOW k values (k=3 default) for focused, high-quality results
-    - Call search ITERATIVELY multiple times with different queries rather than high k single searches
-    - Example: 3 searches with k=3 (9 results total) > 1 search with k=9
+    **Search Strategy:**
+    - Default k=10 provides comprehensive coverage for most queries
+    - Use lower k (e.g., k=3-5) for very focused searches
+    - Call search ITERATIVELY with different queries for complex information needs
+    - Example: 2 searches with k=10 (20 results total) covers multiple aspects
 
     **Query Expansion:**
     - num_expands=0: Use original query only
@@ -345,8 +346,8 @@ class SearchTool(BaseTool):
             logger.debug(f"No expansion (num_expands=0): using original query only")
 
         # === STEP 2: Retrieval for Each Query ===
-        # Optimization: Retrieve more candidates (5x) for reranking to improve recall
-        candidates_k = k * 5 if self.reranker else k
+        # Optimization: Retrieve more candidates (10x) for reranking to improve recall
+        candidates_k = k * 10 if self.reranker else k
         if filter_type in {"section", "metadata", "temporal"}:
             # Fetch even more if we have post-filters
             candidates_k = candidates_k * 2
@@ -543,7 +544,7 @@ class SearchTool(BaseTool):
         self, query: str, k: int, document_filter: Optional[str] = None
     ) -> List[dict]:
         """Execute BM25 retrieval with fallback logic."""
-        if hasattr(self.vector_store, "bm25_store"):
+        if hasattr(self.vector_store, "bm25_store") and self.vector_store.bm25_store:
             return self.vector_store.bm25_store.search_layer3(
                 query=query, k=k, document_filter=document_filter
             )
@@ -595,9 +596,10 @@ class SearchTool(BaseTool):
         """Dense-only search with optional filtering."""
         query_embedding = self._get_query_embedding(query, hyde_docs)
 
-        # Dense search
-        dense_results = self.vector_store.faiss_store.search_layer3(
-            query_embedding=query_embedding, k=k, document_filter=None
+        # Dense search - use adapter interface (works with both FAISS and PostgreSQL)
+        document_filter = filter_value if filter_type == "document" else None
+        dense_results = self.vector_store.search_layer3(
+            query_embedding=query_embedding, k=k, document_filter=document_filter
         )
 
         return self._apply_post_filters(
@@ -654,22 +656,13 @@ class SearchTool(BaseTool):
         # 2. Standard Hybrid
         query_embedding = self._get_query_embedding(query, hyde_docs)
 
-        # Document filter: index-level (fast path for hybrid)
-        if filter_type == "document":
-            dense_results = self.vector_store.faiss_store.search_layer3(
-                query_embedding=query_embedding, k=k, document_filter=filter_value
-            )
-            sparse_results = self.vector_store.bm25_store.search_layer3(
-                query=query, k=k, document_filter=filter_value
-            )
-            chunks = self.vector_store._rrf_fusion(dense_results, sparse_results, k=k)
-            return chunks
-
-        # No filter or post-filter cases
+        # Document filter: use hierarchical search (works with both backends)
+        document_filter = filter_value if filter_type == "document" else None
         results = self.vector_store.hierarchical_search(
             query_text=query,
             query_embedding=query_embedding,
             k_layer3=k,
+            document_filter=document_filter,
         )
         chunks = results.get("layer3", [])
 
@@ -796,8 +789,9 @@ class SearchTool(BaseTool):
                 }
             )
 
-        # Sort by RRF score (ascending: lowest confidence first, highest last)
-        rrf_scores.sort(key=lambda x: x["rrf_score"], reverse=False)
+        # Sort by RRF score (descending: highest confidence first)
+        # Higher RRF score = chunk appears in more queries at better ranks = BETTER result
+        rrf_scores.sort(key=lambda x: x["rrf_score"], reverse=True)
 
         # Return top chunks
         return [item["chunk"] for item in rrf_scores]

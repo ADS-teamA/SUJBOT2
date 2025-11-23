@@ -84,3 +84,4 @@ data_legacy/
 *.bak
 *.backup
 config.json
+results_all/

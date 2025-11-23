@@ -6,6 +6,7 @@ All tools are registered automatically via @register_tool decorator.
 """
 
 import logging
+import importlib
 
 from ._base import BaseTool, ToolInput, ToolResult
 from ._registry import ToolRegistry, get_registry
@@ -21,7 +22,7 @@ _failed_imports = []
 def _safe_import(module_name: str):
     """Import a tool module with error handling."""
     try:
-        return __import__(f".{module_name}", globals(), locals(), ["*"], 1)
+        return importlib.import_module(f".{module_name}", package=__name__)
     except Exception as e:
         logger.error(f"Failed to import tool module '{module_name}': {e}", exc_info=True)
         _failed_imports.append((module_name, str(e)))

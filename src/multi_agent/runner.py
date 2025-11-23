@@ -146,7 +146,7 @@ class MultiAgentRunner:
 
             error_msg = (
                 f"[{error_id}] Failed to initialize multi-agent system: {type(e).__name__}: {e}. "
-                f"Check: (1) API keys are valid in config.json, (2) PostgreSQL is running (if checkpointing enabled), "
+                f"Check: (1) API keys are set in .env file (ANTHROPIC_API_KEY or OPENAI_API_KEY), (2) PostgreSQL is running (if checkpointing enabled), "
                 f"(3) all agent configs are present, (4) dependencies are installed."
             )
 
@@ -210,7 +210,7 @@ class MultiAgentRunner:
 
     async def _initialize_tools(self) -> None:
         """Initialize tool registry with RAG components."""
-        from ..agent.tools.registry import get_registry
+        from ..agent.tools import get_registry
         # Tool modules are auto-imported via tools/__init__.py
         from ..storage import load_vector_store_adapter
         from ..embedding_generator import EmbeddingGenerator
@@ -441,6 +441,9 @@ class MultiAgentRunner:
                 lazy_load_reranker=agent_tools_config.get("lazy_load_reranker", False),
                 lazy_load_graph=agent_tools_config.get("lazy_load_graph", True),
                 cache_embeddings=agent_tools_config.get("cache_embeddings", True),
+                hyde_num_hypotheses=agent_tools_config.get("hyde_num_hypotheses", 3),
+                query_expansion_provider=agent_tools_config.get("query_expansion_provider", "openai"),
+                query_expansion_model=agent_tools_config.get("query_expansion_model", "gpt-4o-mini"),
             )
 
             # Initialize tools in registry
@@ -454,10 +457,7 @@ class MultiAgentRunner:
                 knowledge_graph=knowledge_graph,
                 context_assembler=None,  # TODO: Add context assembler if needed
                 llm_provider=self.llm_provider,
-                config=ToolConfig(
-                    default_k=6,
-                    enable_reranking=reranker is not None,
-                ),
+                config=tool_config,  # Use the full config from above, not minimal config
             )
 
             # Log results

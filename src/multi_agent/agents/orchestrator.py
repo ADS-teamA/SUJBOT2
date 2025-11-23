@@ -71,7 +71,7 @@ class OrchestratorAgent(BaseAgent):
 
         # Initialize orchestrator tools using registry (tier1 tools)
         # Orchestrator uses same tools as agents for consistency
-        from src.agent.tools.registry import get_registry
+        from src.agent.tools import get_registry
 
         self.tool_registry = get_registry()
 

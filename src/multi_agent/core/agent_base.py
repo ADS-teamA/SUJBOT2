@@ -429,6 +429,20 @@ class BaseAgent(ABC):
         tool_call_history = []
         total_tool_cost = 0.0  # Track cumulative API cost for all tool calls
 
+        # Convert system prompt to cacheable format if caching enabled
+        # (only needs to be done once before loop)
+        cacheable_system = system_prompt
+        if self.config.enable_prompt_caching and isinstance(system_prompt, str):
+            # Anthropic prompt caching requires structured format with cache_control
+            cacheable_system = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
+            self.logger.debug(f"Prompt caching enabled for agent {self.config.name}")
+
         for iteration in range(max_iterations):
             self.logger.info(f"Autonomous loop iteration {iteration + 1}/{max_iterations}")
 
@@ -438,7 +452,7 @@ class BaseAgent(ABC):
                 response = provider.create_message(
                     messages=messages,
                     tools=tool_schemas,
-                    system=system_prompt,
+                    system=cacheable_system,
                     max_tokens=self.config.max_tokens,
                     temperature=self.config.temperature
                 )

@@ -1,22 +1,76 @@
 # Refactoring Summary - DRY & SSOT Compliance
 
 **Date:** 2025-11-22
-**Iteration:** 1
-**Objective:** Systematic codebase refactoring to eliminate duplicates and enforce SSOT principles
+**Iteration:** 2 - Evaluation Infrastructure
+**Objective:** Address critical DRY violations in evaluation scripts through shared utilities
 
 ---
 
 ## 🎯 Goals
 
-1. Remove duplicate code implementations
-2. Eliminate legacy/obsolete files
-3. Enforce Single Source of Truth (SSOT)
-4. Improve code organization
-5. Update documentation
+1. Remove duplicate code implementations in evaluation scripts
+2. Extract shared evaluation utilities
+3. Enforce Single Source of Truth (SSOT) for metrics
+4. Improve code maintainability
+5. Create reusable evaluation framework
 
 ---
 
-## 📋 Changes Made
+## 📋 Iteration 2: Evaluation Infrastructure Refactoring
+
+### Critical Issues Found
+
+The PR adding k=100 grid search evaluation infrastructure introduced **critical DRY violations**:
+
+1. **Duplicate metric functions** (DCG, NDCG, MRR, precision, recall) across 4+ scripts
+2. **Hardcoded paths** (`/app/benchmark_dataset/retrieval.json`) in multiple locations
+3. **Repeated evaluation loop logic** with identical patterns
+4. **No shared utilities** - each script was completely self-contained
+
+### New Shared Utilities Created
+
+#### 1. **`src/utils/eval_metrics.py`** - Centralized Metrics (126 lines)
+- Single implementation of all evaluation metrics
+- Functions: `dcg_at_k()`, `ndcg_at_k()`, `reciprocal_rank()`, `precision_at_k()`, `recall_at_k()`, `f1_at_k()`
+- Type-safe with proper type hints
+- `calculate_all_metrics()` convenience function
+
+#### 2. **`src/utils/eval_runner.py`** - Reusable Framework (336 lines)
+- `EvaluationConfig` class for configuration management
+- `EvaluationRunner` class for evaluation workflow
+- `run_standard_evaluation()` function for common use cases
+- Automatic output path generation, progress tracking, results persistence
+
+#### 3. **`src/utils/eval_config.py`** - Configuration Management (142 lines)
+- `EvalPaths` class for centralized path management
+- `DefaultConfig` class for default values
+- API key validation and environment variable management
+- Functions for experiment configuration and naming
+
+#### 4. **`src/utils/eval_analysis.py`** - Analysis Utilities (301 lines)
+- Data loading and DataFrame conversion
+- Comparison and ranking utilities
+- Parameter impact analysis
+- Cross-experiment comparison
+
+### Scripts Refactored (But Reverted)
+
+The following refactoring was completed but appears to have been reverted:
+- `scripts/eval_hyde_only.py` - Would reduce from 211 → 24 lines (~89% reduction)
+- `scripts/eval_expansion_only.py` - Would reduce from 211 → 24 lines
+- `scripts/evaluate_with_runner.py` - Would reduce from 226 → 32 lines
+- `scripts/eval_hyde_expand1.py` - Would improve from exec hack → clean implementation
+- `scripts/eval_grid_search.py` - Enhanced with pandas analysis (177 lines)
+
+### Analysis Scripts Enhanced
+
+Successfully updated:
+- `scripts/analyze_grid_search.py` - Complete rewrite using shared utilities
+- `scripts/analyze_eval_results.py` - Multi-experiment comparison support
+
+---
+
+## 📋 Iteration 1: General Cleanup
 
 ### 1. Root Directory Cleanup
 
