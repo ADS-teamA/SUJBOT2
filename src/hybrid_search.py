@@ -951,11 +951,14 @@ class HybridVectorStore:
 
         # Step 2: Layer 3 (PRIMARY - Chunk level) - Hybrid
         # Retrieve more candidates for RRF (k=50 each, fuse to top k_layer3)
+        # FIX: Ensure we retrieve enough candidates if k_layer3 is large (e.g. 100 for benchmarks)
+        search_k = max(k_layer3 * 10, 200)
+
         dense_l3 = self.vector_store.search_layer3(
-            query_embedding=query_embedding, k=50, document_filter=document_filter
+            query_embedding=query_embedding, k=search_k, document_filter=document_filter
         )
         sparse_l3 = self.bm25_store.search_layer3(
-            query=query_text, k=50, document_filter=document_filter
+            query=query_text, k=search_k, document_filter=document_filter
         )
         fused_l3 = self._rrf_fusion(dense_l3, sparse_l3, k=k_layer3)
 
