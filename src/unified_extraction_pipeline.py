@@ -474,4 +474,16 @@ def test_single_document(file_path_str: str, output_dir: str = "test_results_pip
         import traceback
         traceback.print_exc()
 
-test_single_document(file_path_str=r"C:\Users\Majitel\Desktop\VŠ\FJFI\NMS\ADS\testing\cez-zour-cz-2022.pdf",output_dir=r"C:\Users\Majitel\Desktop\VŠ\FJFI\NMS\ADS\vysledky")
+
+if __name__ == "__main__":
+    # Example usage - run this file directly to test
+    import sys
+
+    if len(sys.argv) < 2:
+        print("Usage: python unified_extraction_pipeline.py <file_path> [output_dir]")
+        print("Example: python unified_extraction_pipeline.py document.pdf test_results")
+        sys.exit(1)
+
+    file_path = sys.argv[1]
+    output_dir = sys.argv[2] if len(sys.argv) > 2 else "test_results_pipeline"
+    test_single_document(file_path_str=file_path, output_dir=output_dir)

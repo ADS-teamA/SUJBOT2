@@ -24,11 +24,12 @@ STATUS CODES:
 """
 
 # ==============================================================================
-# 0. ZÁKLADNÍ DEFINICE, IMPORTY A POMOCNÉ FUNKCE
+# 0. IMPORTS AND HELPERS
 # ==============================================================================
 import os
 import re
 import json
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any, Type
 from dotenv import load_dotenv
@@ -36,6 +37,8 @@ from dotenv import load_dotenv
 import fitz
 import google.generativeai as genai
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -171,12 +174,12 @@ class LLMAgent:
     }
 
     def __init__(self):
-        # Load API key from project's config.json
+        # Load API key from .env file
         load_dotenv()
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("GOOGLE_API_KEY")
 
         if not api_key:
-            raise ValueError("Chyba: 'GEMINI_API_KEY' není nastaven v .env.")
+            raise ValueError("Error: 'GOOGLE_API_KEY' not set in .env file. Set it to use ToC extraction via Gemini LLM.")
 
         genai.configure(api_key=api_key)
 
@@ -184,7 +187,7 @@ class LLMAgent:
         self.model = genai.GenerativeModel(self.model_name)
         self.pricing = self.MODEL_PRICING.get(self.model_name, self.MODEL_PRICING["default"])
 
-        print(f"✅ LLM Agent (Gemini) inicializován. Model: {self.model_name}")
+        logger.info(f"LLM Agent (Gemini) initialized with model: {self.model_name}")
 
     def _execute_json_prompt(self, prompt: str, schema_dict: Dict[str, Any]) -> Tuple[Optional[dict], float]:
         """Vrací (výsledek_json, vypočtená_cena)."""
@@ -203,14 +206,17 @@ class LLMAgent:
                 
                 cost = ((in_tokens / 1_000_000) * self.pricing["input"]) + \
                        ((out_tokens / 1_000_000) * self.pricing["output"])
-                
-                print(f"   (LLM Info: Vstup {in_tokens} t, Výstup {out_tokens} t. Cena: ${cost:.6f})")
+
+                logger.debug(f"LLM usage: Input {in_tokens} tokens, Output {out_tokens} tokens, Cost: ${cost:.6f}")
 
             return json.loads(response.text), cost
-        
+
+        except json.JSONDecodeError as e:
+            logger.error(f"LLM returned invalid JSON: {e}", exc_info=True)
+            raise RuntimeError("ToC extraction failed: LLM returned malformed response") from e
         except Exception as e:
-            print(f"❌ Kritická chyba LLM Agenta: {e}")
-            return None, 0.0
+            logger.error(f"Unexpected error in LLM execution: {e}", exc_info=True)
+            raise RuntimeError(f"ToC extraction failed unexpectedly: {str(e)}") from e
 
     def find_first_chapter_page(self, toc_page_text: str) -> Tuple[Optional[int], float]:
         """Fáze 1: Nyní vrací (číslo_stránky, cena)."""
@@ -277,13 +283,19 @@ class PDFParser(BaseDocumentParser):
         return "PDF"
         
     def parse_document(self) -> Dict[str, Any]:
-        """Otevře PDF dokument."""
+        """Open PDF document and return metadata."""
         try:
             doc = fitz.open(self.file_path)
             return {"doc_object": doc, "page_count": doc.page_count}
+        except fitz.FileDataError as e:
+            logger.error(f"PDF file is corrupted or malformed: {self.file_path}", exc_info=True)
+            raise RuntimeError(f"Cannot open PDF: file is corrupted or password-protected") from e
+        except PermissionError as e:
+            logger.error(f"Permission denied reading PDF: {self.file_path}", exc_info=True)
+            raise RuntimeError(f"Cannot open PDF: permission denied") from e
         except Exception as e:
-            print(f"❌ Chyba při otevírání PDF: {e}")
-            return {"doc_object": None, "page_count": 0}
+            logger.error(f"Unexpected error opening PDF {self.file_path}: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to open PDF: {str(e)}") from e
 
     def find_toc_scope(self) -> Tuple[Optional[int], Optional[int], Optional[str], float, str]:
         """
