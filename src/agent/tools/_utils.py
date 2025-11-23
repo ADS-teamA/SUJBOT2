@@ -209,6 +209,12 @@ def format_chunk_result(
     if was_truncated:
         result["truncated"] = True
 
+    # Preserve dense_score and bm25_score for training data collection
+    if "dense_score" in chunk:
+        result["dense_score"] = chunk["dense_score"]
+    if "bm25_score" in chunk:
+        result["bm25_score"] = chunk["bm25_score"]
+
     return result
 
 

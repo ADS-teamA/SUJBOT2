@@ -27,10 +27,17 @@ from src.utils.eval_metrics import calculate_all_metrics
 # Grid search parameters
 HYDE_VALUES = [True, False]
 NUM_EXPANDS_VALUES = [0, 1, 2]
-SEARCH_METHOD_VALUES = ['hybrid', 'dense_only', 'bm25_only']
+SEARCH_METHOD_VALUES = ['hybrid', 'dense_only', 'bm25_only']  # All methods (CSV only for dense/bm25)
 K = 100
-DATASET_PATH = "/app/benchmark_dataset/retrieval.json"
-OUTPUT_DIR = "/app/results/grid_search_k100"
+
+# Auto-detect paths (Docker vs local)
+import os
+if os.path.exists("/app/benchmark_dataset/retrieval.json"):
+    DATASET_PATH = "/app/benchmark_dataset/retrieval.json"
+    OUTPUT_DIR = "/app/results/grid_search_k100"
+else:
+    DATASET_PATH = "benchmark_dataset/retrieval.json"
+    OUTPUT_DIR = "results/grid_search_k100"
 
 
 def get_config_name(use_hyde, num_expands, search_method):

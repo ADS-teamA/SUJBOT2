@@ -123,6 +123,16 @@ services:
       - ./config.json:/app/config.json:ro
       # Document data (read-only)
       - ./data:/app/data:ro
+      # Benchmark dataset (read-only, for evaluation)
+      - ./benchmark_dataset:/app/benchmark_dataset:ro
+      # Vector database (read-only, contains BM25 + FAISS indexes)
+      - ./vector_db:/app/vector_db:ro
+      # Scripts directory (read-only, for evaluation scripts)
+      - ./scripts:/app/scripts:ro
+      # Source code (read-only, for hot-reload of Python modules)
+      - ./src:/app/src:ro
+      # Results directory (read-write, for evaluation outputs)
+      - ./results:/app/results
       # Logs (optional, for debugging)
       - ./logs:/app/logs
     # No external ports - accessed via nginx reverse proxy

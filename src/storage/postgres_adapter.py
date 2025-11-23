@@ -87,14 +87,32 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         self.dimensions = dimensions
         self.pool: Optional[asyncpg.Pool] = None
         self._initialized = False
+        self._bm25_store = None  # Will be loaded during initialization (private attribute)
 
         # Metadata cache (materialized on-demand)
         self._metadata_cache = {1: None, 2: None, 3: None}
 
+    @property
+    def bm25_store(self) -> Optional[Any]:
+        """Return BM25 store loaded from PostgreSQL."""
+        return self._bm25_store
+
     async def initialize(self):
-        """Initialize connection pool. Must be called before using the adapter."""
+        """Initialize connection pool and BM25 store."""
         if not self._initialized:
             await self._initialize_pool()
+
+            # Load BM25 store from PostgreSQL
+            try:
+                from src.storage.postgres_bm25 import PostgresBM25Store
+
+                self._bm25_store = PostgresBM25Store(self.pool)
+                await self._bm25_store.load()
+                logger.info("PostgreSQL BM25 store loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load BM25 store: {e}. BM25 search will be unavailable.")
+                self._bm25_store = None
+
             self._initialized = True
 
     async def _initialize_pool(self):
@@ -363,122 +381,156 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         document_filter: Optional[str] = None,
     ) -> List[Dict]:
         """
-        Hybrid search: Dense (pgvector) + Sparse (full-text) with RRF fusion.
+        Hybrid search: Dense (pgvector) + Sparse (BM25) with RRF fusion.
 
+        Uses BM25 from bm25_layer{layer} tables (NOT PostgreSQL full-text search).
         RRF (Reciprocal Rank Fusion): score = 1/(k + rank)
         k=60 (standard parameter from research)
         """
-        # Convert query vector to PostgreSQL-compatible string format
+        # Strategy: Get dense from PostgreSQL, sparse from BM25, fuse in Python
+        # This matches how FAISS hybrid works and avoids complex SQL
+
+        # 1. Get dense results from PostgreSQL
         query_str = self._vector_to_pgvector_string(query_vec)
+        section_columns = "section_id, section_title," if layer > 1 else ""
 
-        # Layer-specific columns (Layer 1 doesn't have section_id, section_title)
-        # All layers have hierarchical_path
-        section_columns = (
-            "l.section_id, l.section_title,"
-            if layer > 1
-            else ""
-        )
+        # Fetch MORE candidates for effective RRF (k * 10 for selectivity)
+        # Research shows fetching 10x the final k improves hybrid quality and reduces
+        # missing score penalty (chunks found by only one method)
+        candidates_k = max(k * 10, 200)  # At least 200 for good fusion
 
-        # Build hybrid search with RRF fusion
+        # Get dense results
         if document_filter:
-            sql = f"""
-                WITH dense AS (
-                    SELECT chunk_id, 1 - (embedding <=> $1::vector) AS dense_score,
-                           ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) AS dense_rank
-                    FROM vectors.layer{layer}
-                    WHERE document_id = $3
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT 50
-                ),
-                sparse AS (
-                    SELECT chunk_id, ts_rank(content_tsv, to_tsquery('english', $2)) AS sparse_score,
-                           ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, to_tsquery('english', $2)) DESC) AS sparse_rank
-                    FROM vectors.layer{layer}
-                    WHERE content_tsv @@ to_tsquery('english', $2)
-                      AND document_id = $3
-                    ORDER BY sparse_score DESC
-                    LIMIT 50
-                ),
-                fused AS (
-                    SELECT
-                        COALESCE(d.chunk_id, s.chunk_id) AS chunk_id,
-                        COALESCE(1.0 / (60 + d.dense_rank), 0) + COALESCE(1.0 / (60 + s.sparse_rank), 0) AS rrf_score
-                    FROM dense d
-                    FULL OUTER JOIN sparse s USING (chunk_id)
-                )
-                SELECT
-                    f.chunk_id,
-                    l.document_id,
-                    l.content,
-                    l.metadata,
-                    {section_columns}
-                    l.hierarchical_path,
-                    f.rrf_score AS score
-                FROM fused f
-                JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
-                ORDER BY f.rrf_score DESC
-                LIMIT $4
-            """
-            # Sanitize query text for tsquery (remove special chars, replace spaces with &)
-            tsquery = _sanitize_tsquery(query_text)
-            rows = await conn.fetch(sql, query_str, tsquery, document_filter, k)
-        else:
-            # Same query without document filter
-            sql = f"""
-                WITH dense AS (
-                    SELECT chunk_id, 1 - (embedding <=> $1::vector) AS dense_score,
-                           ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) AS dense_rank
-                    FROM vectors.layer{layer}
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT 50
-                ),
-                sparse AS (
-                    SELECT chunk_id, ts_rank(content_tsv, to_tsquery('english', $2)) AS sparse_score,
-                           ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, to_tsquery('english', $2)) DESC) AS sparse_rank
-                    FROM vectors.layer{layer}
-                    WHERE content_tsv @@ to_tsquery('english', $2)
-                    ORDER BY sparse_score DESC
-                    LIMIT 50
-                ),
-                fused AS (
-                    SELECT
-                        COALESCE(d.chunk_id, s.chunk_id) AS chunk_id,
-                        COALESCE(1.0 / (60 + d.dense_rank), 0) + COALESCE(1.0 / (60 + s.sparse_rank), 0) AS rrf_score
-                    FROM dense d
-                    FULL OUTER JOIN sparse s USING (chunk_id)
-                )
-                SELECT
-                    f.chunk_id,
-                    l.document_id,
-                    l.content,
-                    l.metadata,
-                    {section_columns}
-                    l.hierarchical_path,
-                    f.rrf_score AS score
-                FROM fused f
-                JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
-                ORDER BY f.rrf_score DESC
+            dense_sql = f"""
+                SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
+                       1 - (embedding <=> $1::vector) AS score
+                FROM vectors.layer{layer}
+                WHERE document_id = $2
+                ORDER BY embedding <=> $1::vector
                 LIMIT $3
             """
-            tsquery = _sanitize_tsquery(query_text)
-            rows = await conn.fetch(sql, query_str, tsquery, k)
+            dense_rows = await conn.fetch(dense_sql, query_str, document_filter, candidates_k)
+        else:
+            dense_sql = f"""
+                SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
+                       1 - (embedding <=> $1::vector) AS score
+                FROM vectors.layer{layer}
+                ORDER BY embedding <=> $1::vector
+                LIMIT $2
+            """
+            dense_rows = await conn.fetch(dense_sql, query_str, candidates_k)
 
-        # Convert to dicts
+        # 2. Get BM25 results (same number of candidates for balanced fusion)
+        bm25_results = []
+        if self.bm25_store:
+            try:
+                if layer == 1:
+                    bm25_results = self.bm25_store.search_layer1(query_text, k=candidates_k)
+                elif layer == 2:
+                    bm25_results = self.bm25_store.search_layer2(
+                        query_text, k=candidates_k, document_filter=document_filter
+                    )
+                else:  # layer == 3
+                    bm25_results = self.bm25_store.search_layer3(
+                        query_text, k=candidates_k, document_filter=document_filter
+                    )
+            except Exception as e:
+                logger.warning(f"BM25 search failed: {e}. Using dense-only.")
+                bm25_results = []
+
+        # 3. RRF Fusion with Missing Rank Imputation (k=60 from research)
+        rrf_k = 60
+        chunk_scores = {}  # {chunk_id: rrf_score}
+        chunk_dense_scores = {}  # {chunk_id: dense_score} - preserve original
+        chunk_bm25_scores = {}  # {chunk_id: bm25_score} - preserve original
+        chunk_dense_ranks = {}  # {chunk_id: dense_rank} - for imputation
+        chunk_bm25_ranks = {}   # {chunk_id: bm25_rank} - for imputation
+
+        logger.debug(
+            f"Hybrid search layer{layer}: {len(dense_rows)} dense + {len(bm25_results)} BM25 "
+            f"candidates → RRF fusion to select top {k}"
+        )
+
+        # Add dense ranks and preserve scores
+        for rank, row in enumerate(dense_rows):
+            chunk_id = row["chunk_id"]
+            chunk_dense_ranks[chunk_id] = rank
+            chunk_dense_scores[chunk_id] = float(row["score"])  # Preserve original dense score
+
+        # Add BM25 ranks and preserve scores
+        for rank, result in enumerate(bm25_results):
+            chunk_id = result.get("chunk_id")
+            if chunk_id:
+                chunk_bm25_ranks[chunk_id] = rank
+                # Preserve original BM25 score (None if missing = not found by BM25)
+                score = result.get("score")
+                if score is not None:
+                    chunk_bm25_scores[chunk_id] = float(score)
+
+        # Compute RRF scores with missing rank imputation
+        # For chunks missing in one method, use default rank = len(candidates)
+        # This gives them a small contribution instead of zero (fairer than pure penalty)
+        all_chunk_ids = set(chunk_dense_ranks.keys()) | set(chunk_bm25_ranks.keys())
+        default_dense_rank = len(dense_rows)  # Rank for chunks not found by dense
+        default_bm25_rank = len(bm25_results)  # Rank for chunks not found by BM25
+
+        for chunk_id in all_chunk_ids:
+            dense_rank = chunk_dense_ranks.get(chunk_id, default_dense_rank)
+            bm25_rank = chunk_bm25_ranks.get(chunk_id, default_bm25_rank)
+            chunk_scores[chunk_id] = (1.0 / (rrf_k + dense_rank)) + (1.0 / (rrf_k + bm25_rank))
+
+        # Check overlap for diagnostics
+        dense_ids = set(chunk_dense_ranks.keys())
+        bm25_ids = set(chunk_bm25_ranks.keys())
+        overlap_ids = dense_ids & bm25_ids
+        dense_only = len(dense_ids - bm25_ids)
+        bm25_only = len(bm25_ids - dense_ids)
+
+        logger.debug(
+            f"RRF fusion stats: total={len(all_chunk_ids)}, "
+            f"both_methods={len(overlap_ids)} ({len(overlap_ids)*100/len(all_chunk_ids):.1f}%), "
+            f"dense_only={dense_only} ({dense_only*100/len(all_chunk_ids):.1f}%), "
+            f"bm25_only={bm25_only} ({bm25_only*100/len(all_chunk_ids):.1f}%)"
+        )
+
+        # 4. Sort by RRF score and get top k
+        sorted_chunk_ids = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+
+        # 5. Fetch full metadata for top chunks
+        top_chunk_ids = [cid for cid, _ in sorted_chunk_ids]
+        if not top_chunk_ids:
+            return []
+
+        # Batch fetch from PostgreSQL
+        placeholders = ", ".join(f"${i+1}" for i in range(len(top_chunk_ids)))
+        fetch_sql = f"""
+            SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path
+            FROM vectors.layer{layer}
+            WHERE chunk_id IN ({placeholders})
+        """
+        final_rows = await conn.fetch(fetch_sql, *top_chunk_ids)
+
+        # 6. Build results with RRF scores, preserving rank order AND original scores
+        chunk_id_to_row = {row["chunk_id"]: row for row in final_rows}
         results = []
-        for row in rows:
-            result = {
-                "chunk_id": row["chunk_id"],
-                "document_id": row["document_id"],
-                "content": row["content"],
-                "score": float(row["score"]),
-                "section_id": row.get("section_id"),
-                "section_title": row.get("section_title"),
-                "hierarchical_path": row.get("hierarchical_path"),
-            }
-            # Merge JSONB metadata (PostgreSQL returns JSONB as dict)
-            if row["metadata"] and isinstance(row["metadata"], dict):
-                result.update(row["metadata"])
-            results.append(result)
+        for chunk_id, rrf_score in sorted_chunk_ids:
+            if chunk_id in chunk_id_to_row:
+                row = chunk_id_to_row[chunk_id]
+                result = {
+                    "chunk_id": chunk_id,
+                    "document_id": row["document_id"],
+                    "content": row["content"],
+                    "score": float(rrf_score),  # RRF score (for compatibility)
+                    "dense_score": chunk_dense_scores.get(chunk_id),  # Original dense score
+                    "bm25_score": chunk_bm25_scores.get(chunk_id),    # Original BM25 score
+                    "section_id": row.get("section_id"),
+                    "section_title": row.get("section_title"),
+                    "hierarchical_path": row.get("hierarchical_path"),
+                }
+                # Merge JSONB metadata
+                if row["metadata"] and isinstance(row["metadata"], dict):
+                    result.update(row["metadata"])
+                results.append(result)
 
         return results
 
