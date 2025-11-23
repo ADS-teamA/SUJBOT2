@@ -92,8 +92,24 @@ class EvaluationRunner:
             config_path = Path("config.json")
             vector_store_path = "vector_db"
 
-        with open(config_path) as f:
-            full_config = json.load(f)
+        try:
+            with open(config_path) as f:
+                full_config = json.load(f)
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"Configuration file not found: {config_path}\n"
+                "Please create config.json with evaluation settings.\n"
+                "See config.json.example for template."
+            )
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"Invalid JSON in configuration file {config_path}: {e}\n"
+                "Fix JSON syntax errors and try again."
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load configuration from {config_path}: {e}"
+            ) from e
 
         # Build runner configuration
         # Use PostgreSQL backend (has both dense vectors + BM25)

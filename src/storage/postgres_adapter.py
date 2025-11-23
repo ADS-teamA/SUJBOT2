@@ -109,8 +109,31 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 self._bm25_store = PostgresBM25Store(self.pool)
                 await self._bm25_store.load()
                 logger.info("PostgreSQL BM25 store loaded successfully")
+            except ImportError as e:
+                logger.error(
+                    f"Failed to import PostgresBM25Store: {e}. "
+                    "BM25 search unavailable. Check that postgres_bm25.py exists."
+                )
+                self._bm25_store = None
+            except asyncpg.UndefinedTableError as e:
+                logger.error(
+                    f"BM25 tables missing: {e}. "
+                    "Run 'scripts/migrate_bm25_to_postgres.py' to populate BM25 data."
+                )
+                self._bm25_store = None
+            except asyncpg.PostgresError as e:
+                logger.error(
+                    f"Database error loading BM25 store: {e}. "
+                    "BM25 search unavailable. Check database schema and permissions.",
+                    exc_info=True
+                )
+                self._bm25_store = None
             except Exception as e:
-                logger.warning(f"Failed to load BM25 store: {e}. BM25 search will be unavailable.")
+                logger.error(
+                    f"Unexpected error loading BM25 store: {type(e).__name__}: {e}. "
+                    "This may indicate a bug - please report with logs.",
+                    exc_info=True
+                )
                 self._bm25_store = None
 
             self._initialized = True
@@ -395,8 +418,9 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         section_columns = "section_id, section_title," if layer > 1 else ""
 
         # Fetch MORE candidates for effective RRF (k * 10 for selectivity)
-        # Research shows fetching 10x the final k improves hybrid quality and reduces
-        # missing score penalty (chunks found by only one method)
+        # Empirically optimized: 10x candidates improves hybrid recall by allowing
+        # better fusion of dense and sparse methods. Minimum 200 candidates ensures
+        # sufficient diversity for RRF when k is small (k < 20).
         candidates_k = max(k * 10, 200)  # At least 200 for good fusion
 
         # Get dense results
@@ -438,7 +462,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 logger.warning(f"BM25 search failed: {e}. Using dense-only.")
                 bm25_results = []
 
-        # 3. RRF Fusion with Missing Rank Imputation (k=60 from research)
+        # 3. RRF Fusion with Missing Rank Imputation
+        # RRF k=60 is research-optimal (see hybrid_search.py and CLAUDE.md #8)
         rrf_k = 60
         chunk_scores = {}  # {chunk_id: rrf_score}
         chunk_dense_scores = {}  # {chunk_id: dense_score} - preserve original
@@ -469,7 +494,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
 
         # Compute RRF scores with missing rank imputation
         # For chunks missing in one method, use default rank = len(candidates)
-        # This gives them a small contribution instead of zero (fairer than pure penalty)
+        # This gives them a small RRF contribution (1/(k+len)) instead of excluding
+        # them entirely (infinite rank). Balances precision and recall.
         all_chunk_ids = set(chunk_dense_ranks.keys()) | set(chunk_bm25_ranks.keys())
         default_dense_rank = len(dense_rows)  # Rank for chunks not found by dense
         default_bm25_rank = len(bm25_results)  # Rank for chunks not found by BM25
