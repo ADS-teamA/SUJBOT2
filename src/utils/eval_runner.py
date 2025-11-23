@@ -84,25 +84,54 @@ class EvaluationRunner:
             True if initialization successful, False otherwise
         """
         print("Loading configuration...")
-        config_path = Path("/app/config.json")
-        with open(config_path) as f:
-            full_config = json.load(f)
+        # Auto-detect paths (Docker vs local)
+        if Path("/app/config.json").exists():
+            config_path = Path("/app/config.json")
+            vector_store_path = "/app/vector_db"
+        else:
+            config_path = Path("config.json")
+            vector_store_path = "vector_db"
+
+        try:
+            with open(config_path) as f:
+                full_config = json.load(f)
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"Configuration file not found: {config_path}\n"
+                "Please create config.json with evaluation settings.\n"
+                "See config.json.example for template."
+            )
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"Invalid JSON in configuration file {config_path}: {e}\n"
+                "Fix JSON syntax errors and try again."
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load configuration from {config_path}: {e}"
+            ) from e
 
         # Build runner configuration
+        # Use PostgreSQL backend (has both dense vectors + BM25)
+        storage_config = full_config.get("storage", {}).copy()
+
         runner_config = {
             "api_keys": {
                 "anthropic_api_key": os.getenv("ANTHROPIC_API_KEY"),
                 "openai_api_key": os.getenv("OPENAI_API_KEY"),
                 "google_api_key": os.getenv("GOOGLE_API_KEY"),
             },
-            "vector_store_path": "/app/vector_db",
+            "vector_store_path": vector_store_path,
             "models": full_config.get("models", {}),
-            "storage": full_config.get("storage", {}),
+            "storage": storage_config,
             "agent_tools": full_config.get("agent_tools", {}),
             "knowledge_graph": full_config.get("knowledge_graph", {}),
             "neo4j": full_config.get("neo4j", {}),
             "multi_agent": full_config.get("multi_agent", {}),
         }
+
+        backend = storage_config.get("backend", "postgresql")
+        print(f"Evaluation using storage backend: {backend}")
 
         print("Initializing MultiAgentRunner...")
         self.runner = MultiAgentRunner(runner_config)
@@ -115,6 +144,67 @@ class EvaluationRunner:
         self.registry = get_registry()
         print(f"Tool registry has {len(self.registry._tools)} tools")
         return True
+
+    def _save_training_data(self, chunks: List[Dict], relevant_ids: List[str], metrics: Dict) -> None:
+        """
+        Save training data for score distribution analysis.
+
+        NEW FORMAT:
+        - Only for dense_only and bm25_only (skip hybrid)
+        - Format: recall@100, score1, score2, ..., score100 (101 columns)
+        - Scores sorted descending (highest score = most relevant = rank 1)
+        - One row per query
+
+        Args:
+            chunks: Retrieved chunks with scores (k=100)
+            relevant_ids: Ground truth relevant chunk IDs
+            metrics: Calculated metrics including recall@100
+        """
+        import csv
+        from pathlib import Path
+
+        method = self.config.search_method
+
+        # Only save for dense_only and bm25_only (skip hybrid)
+        if method not in ["dense_only", "bm25_only"]:
+            return
+
+        # Determine output directory and file
+        output_dir = Path(self.config.output_path).parent if self.config.output_path else Path("results/grid_search_k100")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if method == "dense_only":
+            filepath = output_dir / "dense_training_data.csv"
+        else:  # bm25_only
+            filepath = output_dir / "bm25_training_data.csv"
+
+        # Create file with headers if doesn't exist
+        if not filepath.exists():
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                # Header: recall@100, score1, score2, ..., score100
+                headers = ["recall@100"] + [f"score{i+1}" for i in range(100)]
+                writer.writerow(headers)
+
+        # Extract scores from chunks (already sorted by search method)
+        scores = []
+        for chunk in chunks[:100]:  # Ensure exactly 100 scores
+            score = chunk.get("score", 0.0)
+            scores.append(score)
+
+        # Pad with zeros if less than 100 results
+        while len(scores) < 100:
+            scores.append(0.0)
+
+        # Get recall@100 from metrics
+        recall_key = f"recall@{self.config.k}"
+        recall = metrics.get(recall_key, 0.0)
+
+        # Write one row: recall@100, score1, score2, ..., score100
+        with open(filepath, 'a', newline='') as f:
+            writer = csv.writer(f)
+            row = [f"{recall:.6f}"] + [f"{s:.6f}" for s in scores]
+            writer.writerow(row)
 
     async def run_single_query(self, query: str, relevant_ids: List[str]) -> Dict[str, Any]:
         """
@@ -146,11 +236,15 @@ class EvaluationRunner:
                     "error": result.error
                 }
 
-            # Extract retrieved chunk IDs
+            # Extract retrieved chunk IDs and scores
             retrieved_ids = [c.get("chunk_id") or c.get("id") for c in result.data]
+            retrieved_chunks = result.data  # Full chunk data with scores
 
             # Calculate metrics
             metrics = calculate_all_metrics(retrieved_ids, relevant_ids, self.config.k)
+
+            # Save training data (scores + recall@100)
+            self._save_training_data(retrieved_chunks, relevant_ids, metrics)
 
             return {
                 "query": query,
