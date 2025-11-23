@@ -419,7 +419,9 @@ class SearchTool(BaseTool):
 
         # === STEP 4: RRF Fusion (if multiple queries) ===
         if len(queries) > 1 and search_method != "bm25_only":
-            chunks = self._rrf_fusion(all_chunks, k=candidates_k)
+            # Use default k=60 for RRF constant (optimal from research)
+            # Do NOT pass candidates_k here, as that would flatten the scores
+            chunks = self._rrf_fusion(all_chunks)
             fusion_method = "rrf"
         else:
             chunks = all_chunks
@@ -549,17 +551,16 @@ class SearchTool(BaseTool):
                 query=query, k=k, document_filter=document_filter
             )
         else:
-            # Fallback to hierarchical with dummy embedding
+            # Fallback: use vector search layer3 directly
+            logger.warning(
+                "BM25 store not available. Using dense search as fallback."
+            )
             import numpy as np
 
             dummy_embedding = np.zeros((1, self.embedder.dimensions))
-            results_dict = self.vector_store.hierarchical_search(
-                query_text=query,
-                query_embedding=dummy_embedding,
-                k_layer3=k,
-                document_filter=document_filter,
+            return self.vector_store.search_layer3(
+                query_embedding=dummy_embedding, k=k, document_filter=document_filter
             )
-            return results_dict.get("layer3", [])
 
     def _execute_bm25_only(
         self,
@@ -656,13 +657,12 @@ class SearchTool(BaseTool):
         # 2. Standard Hybrid
         query_embedding = self._get_query_embedding(query, hyde_docs)
 
-        # Document filter: use hierarchical search (works with both backends)
-        document_filter = filter_value if filter_type == "document" else None
+        # Use hierarchical search (document filtering handled via post-filter)
         results = self.vector_store.hierarchical_search(
             query_text=query,
             query_embedding=query_embedding,
             k_layer3=k,
-            document_filter=document_filter,
+            use_doc_filtering=(filter_type != "document"),  # Disable auto-filtering if explicit filter
         )
         chunks = results.get("layer3", [])
 
