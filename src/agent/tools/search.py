@@ -419,7 +419,9 @@ class SearchTool(BaseTool):
 
         # === STEP 4: RRF Fusion (if multiple queries) ===
         if len(queries) > 1 and search_method != "bm25_only":
-            chunks = self._rrf_fusion(all_chunks, k=candidates_k)
+            # Use default k=60 for RRF constant (optimal from research)
+            # Do NOT pass candidates_k here, as that would flatten the scores
+            chunks = self._rrf_fusion(all_chunks)
             fusion_method = "rrf"
         else:
             chunks = all_chunks

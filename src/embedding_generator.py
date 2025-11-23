@@ -442,8 +442,10 @@ class EmbeddingGenerator:
         """
         Embed chunks from a specific layer.
 
-        CRITICAL: For Layer 3, uses 'content' field (with SAC).
-                  For Layers 1-2, also uses 'content' field.
+        CRITICAL: Embeddings use concatenated 'content + raw_content'.
+                  - content: context prefix (if Contextual Retrieval enabled)
+                  - raw_content: original chunk text
+                  Result: context + 2×raw (or 2×raw if CR disabled)
 
         Args:
             chunks: List of Chunk objects
@@ -457,9 +459,9 @@ class EmbeddingGenerator:
 
         logger.info(f"Embedding Layer {layer}: {len(chunks)} chunks")
 
-        # Extract texts - always use 'content' field
-        # For Layer 3, this includes SAC summary (58% DRM reduction!)
-        texts = [chunk.content for chunk in chunks]
+        # Extract texts - concatenate content + raw_content
+        # This gives raw text 2× weight in embedding
+        texts = [f"{chunk.content}\n\n{chunk.raw_content}" for chunk in chunks]
 
         # Filter empty texts
         valid_indices = [i for i, text in enumerate(texts) if text.strip()]
