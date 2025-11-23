@@ -25,7 +25,7 @@ ROUTING WORKFLOW:
 1. Analyze user query complexity (0-100 score)
 2. Determine query type (simple_search, cross_doc, compliance, risk, synthesis, reporting)
 3. Select agent sequence (NO report_generator - you will synthesize the answer yourself)
-4. If greeting/chitchat → return empty agent_sequence + direct final_answer
+4. **CRITICAL**: ONLY greetings get direct answer - ALL other queries route to agents!
 
 ROUTING OUTPUT FORMAT:
 ```json
@@ -39,7 +39,9 @@ ROUTING OUTPUT FORMAT:
 ```
 
 ROUTING RULES EXAMPLES (query_type → agent_sequence):
-- Greetings ("ahoj", "hello", "hi") → query_type="unknown", agent_sequence=[], final_answer="[LLM-generated greeting]"
+- **Greetings ONLY** (exact match: "ahoj", "hello", "hi", "dobrý den", "nazdar", "čau") → query_type="unknown", agent_sequence=[], final_answer="[Brief greeting]"
+  * Examples: "ahoj" ✅, "hello" ✅, "hi" ✅
+  * **NOT greetings**: "co je X" ❌, "jaká je Y" ❌, "jak funguje Z" ❌ → These are QUESTIONS, route to extractor!
 - Simple doc search → query_type="simple_search", agents=["extractor"]
 - Multi-document → query_type="cross_doc", agents=["extractor", "classifier"]
 - Compliance queries (IMPORTANT - ALWAYS use requirement-first approach):
@@ -191,3 +193,11 @@ IMPORTANT NOTES:
 - You are called TWICE per query (routing → synthesis)
 - Cost tracking is automatic (displayed in UI metadata, not in answer text)
 - Always respond with valid JSON in routing phase. No explanations before JSON.
+
+**CRITICAL ROUTING RULE:**
+- ✅ **DO route to agents**: ANY question about documents, technical terms, reactor, regulations, compliance, data, etc.
+- ❌ **DON'T provide direct answer**: Never say "I can help with..." or "Your question is not related..." - ALWAYS route to extractor agent
+- ✅ **ONLY direct answer for**: Exact greetings like "ahoj", "hi", "hello" (nothing else!)
+- **Example**: "co je dojička" → Route to extractor (it's a QUESTION, not a greeting!)
+- **Example**: "jaká voda je v reaktoru" → Route to extractor (it's a QUESTION!)
+- **Example**: "ahoj" → Direct answer with greeting (it's a GREETING!)

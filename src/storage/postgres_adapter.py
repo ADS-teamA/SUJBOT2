@@ -23,6 +23,22 @@ logger = logging.getLogger(__name__)
 nest_asyncio.apply()
 
 
+def _sanitize_tsquery(text: str) -> str:
+    """
+    Sanitize text for PostgreSQL tsquery.
+
+    Removes special characters that break tsquery syntax: ()&|!:,?
+    """
+    import re
+    # Remove special tsquery characters
+    sanitized = re.sub(r'[()&|!:,?]', ' ', text)
+    # Replace multiple spaces with single space
+    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+    # Replace spaces with & operator
+    sanitized = sanitized.replace(" ", " & ")
+    return sanitized
+
+
 def _run_async_safe(coro):
     """
     Safely run async coroutine from sync context.
@@ -403,8 +419,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 ORDER BY f.rrf_score DESC
                 LIMIT $4
             """
-            # Preprocess query text for tsquery (replace spaces with &)
-            tsquery = query_text.replace(" ", " & ")
+            # Sanitize query text for tsquery (remove special chars, replace spaces with &)
+            tsquery = _sanitize_tsquery(query_text)
             rows = await conn.fetch(sql, query_str, tsquery, document_filter, k)
         else:
             # Same query without document filter
@@ -444,7 +460,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 ORDER BY f.rrf_score DESC
                 LIMIT $3
             """
-            tsquery = query_text.replace(" ", " & ")
+            tsquery = _sanitize_tsquery(query_text)
             rows = await conn.fetch(sql, query_str, tsquery, k)
 
         # Convert to dicts

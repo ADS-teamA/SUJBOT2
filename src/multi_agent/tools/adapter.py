@@ -9,8 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
 
-from ...agent.tools.registry import get_registry as get_old_registry
-from ...agent.tools.base import ToolResult
+from ...agent.tools import get_registry as get_old_registry, ToolResult
 from ..core.state import ToolExecution
 
 logger = logging.getLogger(__name__)
@@ -228,6 +227,44 @@ class ToolAdapter:
             return False
 
         return True
+
+    def get_tool_schema(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get Anthropic-compatible tool schema for a tool.
+
+        Args:
+            tool_name: Name of tool
+
+        Returns:
+            Tool schema dict in Anthropic format, or None if tool not found
+        """
+        tool = self.registry.get_tool(tool_name)
+
+        if tool is None:
+            logger.warning(f"Tool not found for schema: {tool_name}")
+            return None
+
+        try:
+            # Get Pydantic schema from input_schema class
+            pydantic_schema = tool.input_schema.model_json_schema()
+
+            # Convert to Anthropic format
+            # Anthropic expects: {name, description, input_schema: {type, properties, required}}
+            anthropic_schema = {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": {
+                    "type": "object",
+                    "properties": pydantic_schema.get("properties", {}),
+                    "required": pydantic_schema.get("required", [])
+                }
+            }
+
+            return anthropic_schema
+
+        except Exception as e:
+            logger.error(f"Failed to generate schema for tool {tool_name}: {e}")
+            return None
 
     def get_execution_stats(self) -> Dict[str, Any]:
         """Get execution statistics."""

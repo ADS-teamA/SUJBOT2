@@ -40,7 +40,8 @@ def _ensure_token_manager_imported():
             _SmartTruncator = SmartTruncator
             _token_manager_imported = True
         except ImportError as e:
-            logger.warning(f"Could not import token_manager, using legacy limits: {e}")
+            # token_manager is optional - silently fall back to legacy limits
+            logger.debug(f"token_manager not available, using legacy limits: {e}")
             _token_manager_imported = False
 
 
@@ -325,7 +326,7 @@ def validate_k_parameter(
             tokens_per_item = formatter.budget.tokens_per_item(level)
 
             calculated_k, reason = formatter.adaptive_k(
-                requested_k=k, tokens_per_item=tokens_per_item, min_k=3, max_k=50  # Safety limit
+                requested_k=k, tokens_per_item=tokens_per_item, min_k=3, max_k=200  # Safety limit (increased for benchmarks)
             )
 
             if calculated_k != k:
@@ -338,11 +339,11 @@ def validate_k_parameter(
                 return k, None
         else:
             # Fallback: use hardcoded max_k
-            max_k = 10
+            max_k = 200  # Increased for benchmarks/evaluation
 
     # Use provided or fallback max_k
     if max_k is None:
-        max_k = 10  # Legacy default
+        max_k = 200  # Increased for benchmarks/evaluation (legacy default was 10)
 
     if k > max_k:
         logger.warning(f"k={k} exceeds maximum {max_k}, clamping to {max_k}")
