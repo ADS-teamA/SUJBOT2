@@ -176,7 +176,7 @@ class LLMAgent:
         api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
-            raise ValueError("Chyba: 'google_api_key' není nastaven v config.json.")
+            raise ValueError("Chyba: 'GEMINI_API_KEY' není nastaven v .env.")
 
         genai.configure(api_key=api_key)
 

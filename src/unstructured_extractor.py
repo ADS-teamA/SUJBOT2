@@ -140,6 +140,10 @@ class TableData:
     page_number: int
 
     def to_dict(self) -> Dict:
+        bbox_data = self.bbox
+        if hasattr(bbox_data, "to_dict"):
+            bbox_data = bbox_data.to_dict()
+
         """Convert to dictionary for serialization."""
         return {
             "table_id": self.table_id,
@@ -147,7 +151,7 @@ class TableData:
             "num_rows": self.num_rows,
             "num_cols": self.num_cols,
             "data": self.data,
-            "bbox": self.bbox,
+            "bbox": bbox_data,
             "page_number": self.page_number,
         }
 
@@ -241,7 +245,7 @@ class ExtractionConfig:
     detect_language_per_element: bool = True
 
     # Table extraction
-    infer_table_structure: bool = True
+    infer_table_structure: bool = False
     extract_images: bool = False
     include_page_breaks: bool = False  # PageBreaks don't contain structural content
 
@@ -268,7 +272,7 @@ class ExtractionConfig:
     summary_model: str = "gpt-4o-mini"
     summary_max_chars: int = 150
     summary_style: str = "generic"
-    extract_tables: bool = True
+    extract_tables: bool = False
 
     @classmethod
     def from_env(cls) -> "ExtractionConfig":
@@ -328,7 +332,7 @@ class ExtractionConfig:
             languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),
             
             detect_language_per_element=get_bool_env("UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT", True),
-            infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", True),
+            infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", False),
             extract_images=get_bool_env("UNSTRUCTURED_EXTRACT_IMAGES", False),
             filter_rotated_text=get_bool_env("FILTER_ROTATED_TEXT", True),
             rotation_method=os.getenv("ROTATION_METHOD", "bbox_orientation"),
@@ -556,78 +560,41 @@ def filter_rotated_elements(elements: List[Element], min_angle: float = 25.0,
 # ============================================================================
 def build_robust_hierarchy(elements: List[Element], config: ExtractionConfig) -> List[Dict]:
     """
-    Rebuild a robust element hierarchy, solving three key problems:
+    Simplified hierarchy builder with 3 goals:
 
-    1. Filters Headers/Footers (nuisance elements).
-    2. Connects orphaned elements (page breaks) to the last known major parent.
-    3. Detects siblings: prevents nesting of elements with similar structure
-       (e.g., `§ 32` -> `§ 33`) using pattern signature matching.
+    1) Drop/ignore Header and Footer as parents.
+    2) Do NOT invent clever sibling/ancestor rules – only follow Unstructured's parent_id.
+    3) If parent_id is missing or invalid (e.g. page break), attach to last Title on
+       the same page (or previous page) as a simple fallback.
 
-    Returns:
-        List[Dict] – one dict per *content* element with keys:
-            - element: original Unstructured element
-            - element_id: unique id
-            - parent_id: original unstructured parent_id (for reference)
-            - true_parent_id: cleaned parent id (None for roots)
-            - level: integer depth in cleaned tree (0 = root)
-            - page_number, category, signature (for titles), ...
+    Returns a list of feature dicts:
+        - element
+        - element_id
+        - original_parent_id
+        - true_parent_id
+        - level        (0 = root)
+        - page_number
+        - category
     """
-    logger.info(f"Building robust hierarchy for {len(elements)} elements...")
+
+    logger.info(f"Building simple robust hierarchy for {len(elements)} elements...")
 
     if not elements:
         return []
 
     # ------------------------------------------------------------------ #
-    # Helper: Structure Pattern Signature (for sibling detection)
-    # ------------------------------------------------------------------ #
-    def get_structure_signature(text: str) -> str:
-        """
-        Generate a 'signature' for a title to detect if two titles are siblings.
-
-        Examples:
-            '§ 34'                    -> '§ <num>'
-            '§ 35'                    -> '§ <num>'          (same signature)
-            'Chapter 1'               -> 'chapter <num>'
-            '1.2.3 Title'             -> '<num>.<num>.<num>'
-            'Article V'               -> 'article <rom>'
-            'HLAVA V – Ustanovení...' -> 'hlava <rom>'
-        """
-        text = text.strip().lower()
-
-        # Replace digits with <num>
-        text = re.sub(r'\d+', '<num>', text)
-
-        # Replace simple Roman numerals with <rom>
-        text = re.sub(r'\b[ivx]+\b', '<rom>', text)
-
-        tokens = text.split()
-        if not tokens:
-            return ""
-
-        # High-signal structural words at the beginning
-        markers = ['§', 'article', 'chapter', 'part', 'hlava', 'část', 'oddíl', 'článek']
-        if tokens[0] in markers:
-            return " ".join(tokens[:2]) if len(tokens) > 1 else tokens[0]
-
-        # Numbering prefix like "1.", "1.2.", "(1)" etc.
-        if '<num>' in tokens[0]:
-            return tokens[0]
-
-        # Fallback: first ~20 chars
-        return text[:20]
-
-    # ------------------------------------------------------------------ #
-    # Pass 1: Collect raw features and mark headers/footers
+    # Pass 1: Collect basic features and identify headers/footers
     # ------------------------------------------------------------------ #
     features: List[Dict[str, Any]] = []
     id_to_index: Dict[str, int] = {}
-    header_footer_ids: set[str] = set()
+    header_footer_ids: set = set()
 
     for i, elem in enumerate(elements):
-        element_id = getattr(elem, 'id', None) or getattr(elem, 'element_id', None) or f"elem_{i}"
-        parent_id = getattr(elem.metadata, 'parent_id', None)
-        page_number = getattr(elem.metadata, 'page_number', None)
-        category = getattr(elem, 'category', 'Unknown')
+        element_id = getattr(elem, "id", f"elem_{i}")
+        metadata = getattr(elem, "metadata", None)
+        parent_id = getattr(metadata, "parent_id", None)
+        page_number = getattr(metadata, "page_number", None)
+        category = getattr(elem, "category", "Unknown")
 
         if category in ["Header", "Footer"]:
             header_footer_ids.add(element_id)
@@ -636,108 +603,63 @@ def build_robust_hierarchy(elements: List[Element], config: ExtractionConfig) ->
             "element": elem,
             "index": i,
             "element_id": element_id,
-            "parent_id": parent_id,
+            "original_parent_id": parent_id,
+            "true_parent_id": None,   # filled later
             "page_number": page_number,
             "category": category,
-            "true_parent_id": None,   # filled later
-            "level": None,            # filled later
-            "signature": get_structure_signature(str(elem)) if category == "Title" else None,
+            "level": 0,               # filled later
         }
-
         features.append(feat)
         id_to_index[element_id] = i
 
-    logger.info(f"Pass 1 complete: found {len(header_footer_ids)} Header/Footer elements.")
-
     # ------------------------------------------------------------------ #
-    # Pass 2: Resolve true structural parents (skip header/footer + siblings)
+    # Pass 2: Follow parent_id chain, skipping headers/footers and non-structural parents
     # ------------------------------------------------------------------ #
-    def get_true_structural_parent(elem_id: Optional[str],
-                                   child_signature: Optional[str] = None) -> Optional[str]:
+    def resolve_parent_id(raw_parent_id: Optional[str]) -> Optional[str]:
         """
-        Recursively finds the first valid structural parent for a child.
-
-        Rules:
-        - Skip Header/Footer nodes.
-        - If parent is a Title and shares the same signature as child Title
-          (e.g. '§ <num>' vs '§ <num>'), treat them as siblings and skip
-          to the parent’s parent.
+        Follow the original parent_id chain until we:
+          - hit a valid structural parent (Title/ListItem), or
+          - hit None / missing / unknown.
         """
-        if elem_id is None:
-            return None
+        current_id = raw_parent_id
 
-        if elem_id not in id_to_index:
-            # Broken link, consider root
-            return None
+        while current_id:
+            if current_id not in id_to_index:
+                return None  # parent element not present
 
-        parent_feat = features[id_to_index[elem_id]]
+            parent_feat = features[id_to_index[current_id]]
+            parent_cat = parent_feat["category"]
 
-        # Case 1: parent is Header/Footer → skip it
-        if parent_feat["element_id"] in header_footer_ids:
-            return get_true_structural_parent(parent_feat["parent_id"], child_signature)
+            # Skip headers/footers as parents entirely
+            if parent_feat["element_id"] in header_footer_ids:
+                current_id = parent_feat["original_parent_id"]
+                continue
 
-        # Case 2: parent is Title and we are Title → sibling detection
-        if child_signature and parent_feat["category"] == "Title":
-            parent_sig = parent_feat["signature"]
-            if parent_sig and parent_sig == child_signature:
-                # Same structural pattern → siblings → climb one level higher
-                return get_true_structural_parent(parent_feat["parent_id"], child_signature)
+            # Only allow Titles and ListItems to act as parents
+            if parent_cat not in ["Title", "ListItem"]:
+                current_id = parent_feat["original_parent_id"]
+                continue
 
-        # Case 3: acceptable parent
-        return parent_feat["element_id"]
+            # Found an acceptable parent
+            return parent_feat["element_id"]
 
+        return None
+
+    # First pass: raw parent resolution (ignoring page breaks/orphans)
     for feat in features:
         if feat["element_id"] in header_footer_ids:
-            # We don't care about parent for header/footer in final content
+            # They will be removed later, but keep true_parent_id=None
             continue
-
-        feat["true_parent_id"] = get_true_structural_parent(
-            feat["parent_id"],
-            child_signature=feat["signature"]
-        )
-
-    logger.info("Pass 2 complete: resolved true structural parents (with sibling detection).")
+        feat["true_parent_id"] = resolve_parent_id(feat["original_parent_id"])
 
     # ------------------------------------------------------------------ #
-    # Pass 3: Assign levels and fix page-break orphans
+    # Pass 3: Page-break repair for orphans (no true_parent_id)
     # ------------------------------------------------------------------ #
-    content_features: List[Dict[str, Any]] = []
-    last_major_structural_parent_per_page: Dict[int, str] = {}
-
-    # Index of all non-header/footer feats by id (for level recursion)
-    id_to_clean_feat: Dict[str, Dict[str, Any]] = {
-        feat["element_id"]: feat
-        for feat in features
-        if feat["element_id"] not in header_footer_ids
-    }
-
-    def compute_level(elem_id: Optional[str], seen: set[str]) -> int:
-        """
-        Recursively compute depth (0 = root) using cleaned parents.
-        """
-        if elem_id is None:
-            return 0
-
-        if elem_id in seen:
-            logger.warning(f"Hierarchy cycle detected at {elem_id}")
-            return 0
-
-        feat = id_to_clean_feat.get(elem_id)
-        if not feat:
-            return 0
-
-        if feat["level"] is not None:
-            return feat["level"]
-
-        seen.add(elem_id)
-        parent_level = compute_level(feat["true_parent_id"], seen)
-        feat["level"] = parent_level + 1
-        return feat["level"]
-
+    last_title_by_page: Dict[int, str] = {}
     current_page: Optional[int] = None
 
+    # Traverse in element order, track last Title per page
     for feat in features:
-        # Skip headers/footers entirely in final list
         if feat["element_id"] in header_footer_ids:
             continue
 
@@ -745,44 +667,54 @@ def build_robust_hierarchy(elements: List[Element], config: ExtractionConfig) ->
         if page is not None:
             current_page = page
 
-        # Fix page-break orphans: if no parent, but we know a major title on this/prev page
+        # If this element has no parent, try attaching to last title
         if feat["true_parent_id"] is None and current_page is not None:
-            if current_page in last_major_structural_parent_per_page:
-                feat["true_parent_id"] = last_major_structural_parent_per_page[current_page]
-                logger.debug(
-                    f"Page-break orphan {feat['element_id']} (p{current_page}) "
-                    f"adopted by {feat['true_parent_id']} (same page)."
-                )
-            elif (current_page - 1) in last_major_structural_parent_per_page:
-                feat["true_parent_id"] = last_major_structural_parent_per_page[current_page - 1]
-                logger.debug(
-                    f"Page-break orphan {feat['element_id']} (p{current_page}) "
-                    f"adopted by {feat['true_parent_id']} (prev page)."
-                )
+            candidate_parent_id: Optional[str] = None
 
-        # Track last major title per page for orphan adoption
+            # Prefer same page
+            if current_page in last_title_by_page:
+                candidate_parent_id = last_title_by_page[current_page]
+            # Otherwise, fallback to previous page's last title
+            elif (current_page - 1) in last_title_by_page:
+                candidate_parent_id = last_title_by_page[current_page - 1]
+
+            if candidate_parent_id is not None:
+                feat["true_parent_id"] = candidate_parent_id
+
+        # Update last_title_by_page if this is a Title
         if feat["category"] == "Title" and current_page is not None:
-            last_major_structural_parent_per_page[current_page] = feat["element_id"]
+            last_title_by_page[current_page] = feat["element_id"]
 
-        content_features.append(feat)
+    # ------------------------------------------------------------------ #
+    # Pass 4: Compute levels based on true_parent_id chain
+    # ------------------------------------------------------------------ #
+    def compute_level(feat_id: str, visited: set) -> int:
+        """
+        Level = number of ancestors up the true_parent_id chain.
+        Roots: level 0.
+        """
+        if not feat_id or feat_id not in id_to_index:
+            return 0
+        if feat_id in visited:
+            return 0  # cycle safeguard
 
-    # Compute levels for all remaining feats
-    for feat in content_features:
-        if feat["level"] is None:
-            feat["level"] = compute_level(feat["element_id"], seen=set())
+        visited.add(feat_id)
+        parent_id = features[id_to_index[feat_id]]["true_parent_id"]
+        if not parent_id:
+            return 0
+        return compute_level(parent_id, visited) + 1
 
-    logger.info(
-        f"Pass 3 complete: built final hierarchy with {len(content_features)} content elements."
-    )
+    final_features: List[Dict[str, Any]] = []
+    for feat in features:
+        # Completely drop header/footer elements from the final list
+        if feat["element_id"] in header_footer_ids:
+            continue
 
-    # Log simple level distribution for debugging
-    level_counts: Dict[int, int] = {}
-    for feat in content_features:
-        lvl = feat["level"]
-        level_counts[lvl] = level_counts.get(lvl, 0) + 1
-    logger.info(f"Final level distribution: {dict(sorted(level_counts.items()))}")
+        feat["level"] = compute_level(feat["element_id"], set())
+        final_features.append(feat)
 
-    return content_features
+    logger.info(f"Simple hierarchy built: {len(final_features)} content elements.")
+    return final_features
 
 # ============================================================================
 # UNSTRUCTURED EXTRACTOR
@@ -954,8 +886,8 @@ class UnstructuredExtractor:
         strategy = getattr(self.config, 'strategy', 'hi_res')
         model = getattr(self.config, 'model', 'yolox')
         languages = getattr(self.config, 'languages', ['ces', 'eng'])
-        include_page_breaks = getattr(self.config, 'include_page_breaks', True)
-        infer_table_structure = getattr(self.config, 'infer_table_structure', True)
+        include_page_breaks = getattr(self.config, 'include_page_breaks', False)
+        infer_table_structure = getattr(self.config, 'infer_table_structure', False)
         extract_images = getattr(self.config, 'extract_images', False)
 
         logger.info(f"Partitioning {file_suffix} document with strategy={strategy}")

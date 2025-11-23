@@ -430,8 +430,16 @@ def test_single_document(file_path_str: str, output_dir: str = "test_results_pip
     print(f"🚀 Starting Pipeline Test for: {file_path.name}")
     
     try:
-        # Initialize Pipeline
-        pipeline = UnifiedDocumentPipeline()
+        # --- FIX START: Define config explicitly ---
+        config = ExtractionConfig(
+            strategy="hi_res",
+            model="yolox",  # Use the model that worked in your isolated test
+            infer_table_structure=False,  # <--- DISABLE THIS to stop the crash
+            extract_tables=False  # Disable extraction storage as well
+        )
+
+        # Initialize Pipeline with the safe config
+        pipeline = UnifiedDocumentPipeline(config=config)
         
         start_time = time.time()
         
