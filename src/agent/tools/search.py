@@ -544,7 +544,7 @@ class SearchTool(BaseTool):
         self, query: str, k: int, document_filter: Optional[str] = None
     ) -> List[dict]:
         """Execute BM25 retrieval with fallback logic."""
-        if hasattr(self.vector_store, "bm25_store"):
+        if hasattr(self.vector_store, "bm25_store") and self.vector_store.bm25_store:
             return self.vector_store.bm25_store.search_layer3(
                 query=query, k=k, document_filter=document_filter
             )
@@ -596,9 +596,10 @@ class SearchTool(BaseTool):
         """Dense-only search with optional filtering."""
         query_embedding = self._get_query_embedding(query, hyde_docs)
 
-        # Dense search
-        dense_results = self.vector_store.faiss_store.search_layer3(
-            query_embedding=query_embedding, k=k, document_filter=None
+        # Dense search - use adapter interface (works with both FAISS and PostgreSQL)
+        document_filter = filter_value if filter_type == "document" else None
+        dense_results = self.vector_store.search_layer3(
+            query_embedding=query_embedding, k=k, document_filter=document_filter
         )
 
         return self._apply_post_filters(
@@ -655,22 +656,13 @@ class SearchTool(BaseTool):
         # 2. Standard Hybrid
         query_embedding = self._get_query_embedding(query, hyde_docs)
 
-        # Document filter: index-level (fast path for hybrid)
-        if filter_type == "document":
-            dense_results = self.vector_store.faiss_store.search_layer3(
-                query_embedding=query_embedding, k=k, document_filter=filter_value
-            )
-            sparse_results = self.vector_store.bm25_store.search_layer3(
-                query=query, k=k, document_filter=filter_value
-            )
-            chunks = self.vector_store._rrf_fusion(dense_results, sparse_results, k=k)
-            return chunks
-
-        # No filter or post-filter cases
+        # Document filter: use hierarchical search (works with both backends)
+        document_filter = filter_value if filter_type == "document" else None
         results = self.vector_store.hierarchical_search(
             query_text=query,
             query_embedding=query_embedding,
             k_layer3=k,
+            document_filter=document_filter,
         )
         chunks = results.get("layer3", [])
 

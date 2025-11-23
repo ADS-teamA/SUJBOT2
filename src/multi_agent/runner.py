@@ -146,7 +146,7 @@ class MultiAgentRunner:
 
             error_msg = (
                 f"[{error_id}] Failed to initialize multi-agent system: {type(e).__name__}: {e}. "
-                f"Check: (1) API keys are valid in config.json, (2) PostgreSQL is running (if checkpointing enabled), "
+                f"Check: (1) API keys are set in .env file (ANTHROPIC_API_KEY or OPENAI_API_KEY), (2) PostgreSQL is running (if checkpointing enabled), "
                 f"(3) all agent configs are present, (4) dependencies are installed."
             )
 

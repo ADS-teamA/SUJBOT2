@@ -2,116 +2,118 @@
 """
 Grid Search Results Analyzer
 
-Analyzuje výsledky grid search a vytváří přehledné reporty.
+Analyzes grid search results and creates comprehensive reports.
 """
 
-import json
 import sys
 from pathlib import Path
-from typing import Dict, List
-import pandas as pd
 
-def load_summary(summary_path: str) -> Dict:
-    """Load grid search summary."""
-    with open(summary_path) as f:
-        return json.load(f)
+sys.path.insert(0, '/app')
+from src.utils.eval_analysis import (
+    load_grid_search_summary,
+    extract_metrics_dataframe,
+    print_analysis_summary,
+    get_top_configurations,
+    analyze_by_parameter,
+    find_best_configuration_per_method
+)
+from src.utils.eval_config import EvalPaths
 
-def create_comparison_table(results: List[Dict]) -> pd.DataFrame:
-    """Create comparison table from results."""
-    rows = []
-
-    for r in results:
-        if not r.get("aggregate_metrics"):
-            continue
-
-        metrics = r["aggregate_metrics"]
-        rows.append({
-            "Config": r["config_name"],
-            "HyDE": "✓" if r["use_hyde"] else "✗",
-            "Expands": r["num_expands"],
-            "Method": r["search_method"],
-            "NDCG@100": metrics.get("mean_ndcg@100", 0),
-            "MRR": metrics.get("mean_reciprocal_rank", 0),
-            "Precision@100": metrics.get("mean_precision@100", 0),
-            "Recall@100": metrics.get("mean_recall@100", 0),
-            "Success Rate": r["success_rate"],
-        })
-
-    df = pd.DataFrame(rows)
-    return df.sort_values("NDCG@100", ascending=False)
-
-def print_top_configs(df: pd.DataFrame, n: int = 5):
-    """Print top N configurations."""
-    print(f"\n{'='*80}")
-    print(f"TOP {n} CONFIGURATIONS BY NDCG@100")
-    print(f"{'='*80}\n")
-
-    for i, row in df.head(n).iterrows():
-        print(f"{i+1}. {row['Config']}")
-        print(f"   HyDE={row['HyDE']}, Expands={row['Expands']}, Method={row['Method']}")
-        print(f"   NDCG@100={row['NDCG@100']:.4f}, MRR={row['MRR']:.4f}, "
-              f"P@100={row['Precision@100']:.4f}, R@100={row['Recall@100']:.4f}")
-        print()
-
-def analyze_by_dimension(df: pd.DataFrame, dimension: str, metric: str = "NDCG@100"):
-    """Analyze results by specific dimension."""
-    print(f"\n{'='*80}")
-    print(f"ANALYSIS BY {dimension.upper()}")
-    print(f"{'='*80}\n")
-
-    grouped = df.groupby(dimension)[metric].agg(['mean', 'std', 'min', 'max'])
-    print(grouped.to_string())
-    print()
 
 def main():
+    """Analyze grid search results."""
+    # Determine summary path
     if len(sys.argv) < 2:
-        summary_path = "results/grid_search_k100/grid_search_summary_k100.json"
+        summary_path = EvalPaths.GRID_SEARCH_RESULTS / "grid_search_summary.json"
     else:
-        summary_path = sys.argv[1]
+        summary_path = Path(sys.argv[1])
 
-    if not Path(summary_path).exists():
+    if not summary_path.exists():
         print(f"ERROR: Summary file not found: {summary_path}")
         print("Usage: python analyze_grid_search.py [path/to/summary.json]")
         sys.exit(1)
 
-    print("="*80)
+    print("=" * 80)
     print("GRID SEARCH RESULTS ANALYSIS")
-    print("="*80)
+    print("=" * 80)
 
-    # Load data
-    summary = load_summary(summary_path)
+    # Load summary
+    summary = load_grid_search_summary(summary_path)
     print(f"\nSummary file: {summary_path}")
     print(f"Timestamp: {summary['timestamp']}")
-    print(f"Total configurations: {summary['total_configurations']}")
+    print(f"Dataset size: {summary['dataset_size']}")
+    print(f"Total configurations: {len(summary['configurations'])}")
 
-    # Create comparison table
-    df = create_comparison_table(summary['results'])
+    # Extract metrics to DataFrame
+    df = extract_metrics_dataframe(summary['configurations'])
 
-    # Print top configs
-    print_top_configs(df, n=5)
+    # Print comprehensive analysis
+    print_analysis_summary(df, k=summary['k'])
 
-    # Analyze by dimensions
-    analyze_by_dimension(df, "HyDE", "NDCG@100")
-    analyze_by_dimension(df, "Expands", "NDCG@100")
-    analyze_by_dimension(df, "Method", "NDCG@100")
+    # Additional analyses
+    print("\n" + "=" * 80)
+    print("PARAMETER IMPACT ANALYSIS")
+    print("=" * 80)
 
-    # Overall statistics
-    print(f"\n{'='*80}")
-    print("OVERALL STATISTICS")
-    print(f"{'='*80}\n")
-    print(f"Mean NDCG@100: {df['NDCG@100'].mean():.4f} ± {df['NDCG@100'].std():.4f}")
-    print(f"Mean MRR: {df['MRR'].mean():.4f} ± {df['MRR'].std():.4f}")
-    print(f"Mean Recall@100: {df['Recall@100'].mean():.4f} ± {df['Recall@100'].std():.4f}")
-    print(f"\nBest NDCG@100: {df['NDCG@100'].max():.4f}")
-    print(f"Worst NDCG@100: {df['NDCG@100'].min():.4f}")
-    print(f"Range: {df['NDCG@100'].max() - df['NDCG@100'].min():.4f}")
+    # Effect of HyDE
+    print("\n--- HyDE Effect ---")
+    hyde_analysis = analyze_by_parameter(df, 'use_hyde', f"ndcg@{summary['k']}_mean")
+    print(hyde_analysis)
+
+    # Effect of expansions
+    print("\n--- Query Expansion Effect ---")
+    expand_analysis = analyze_by_parameter(df, 'num_expands', f"ndcg@{summary['k']}_mean")
+    print(expand_analysis)
+
+    # Effect of search method
+    print("\n--- Search Method Effect ---")
+    method_analysis = analyze_by_parameter(df, 'search_method', f"ndcg@{summary['k']}_mean")
+    print(method_analysis)
+
+    # Find best configuration per search method
+    print("\n" + "=" * 80)
+    print("OPTIMAL CONFIGURATIONS PER SEARCH METHOD")
+    print("=" * 80)
+    best_per_method = find_best_configuration_per_method(df, f"ndcg@{summary['k']}_mean")
+    for _, row in best_per_method.iterrows():
+        print(f"\n{row['search_method'].upper()}:")
+        print(f"  Configuration: {row['name']}")
+        print(f"  HyDE: {row['use_hyde']}, Expands: {row['num_expands']}")
+        print(f"  NDCG@{summary['k']}: {row[f'ndcg@{summary["k"]}_mean']:.4f}")
 
     # Save detailed CSV
-    csv_path = Path(summary_path).parent / "grid_search_comparison.csv"
+    csv_path = summary_path.parent / "grid_search_analysis.csv"
     df.to_csv(csv_path, index=False)
-    print(f"\n✓ Detailed comparison saved to: {csv_path}")
+    print(f"\n✓ Detailed analysis saved to: {csv_path}")
 
-    print("="*80)
+    # Print recommendations
+    print("\n" + "=" * 80)
+    print("RECOMMENDATIONS")
+    print("=" * 80)
+
+    top_config = df.nlargest(1, f"ndcg@{summary['k']}_mean").iloc[0]
+    print(f"\n1. Best overall configuration: {top_config['name']}")
+    print(f"   - HyDE: {'Enabled' if top_config['use_hyde'] else 'Disabled'}")
+    print(f"   - Query Expansions: {top_config['num_expands']}")
+    print(f"   - Search Method: {top_config['search_method']}")
+    print(f"   - NDCG@{summary['k']}: {top_config[f'ndcg@{summary["k"]}_mean']:.4f}")
+
+    # Analyze if HyDE helps
+    hyde_grouped = df.groupby('use_hyde')[f"ndcg@{summary['k']}_mean"].mean()
+    if hyde_grouped[True] > hyde_grouped[False]:
+        improvement = (hyde_grouped[True] - hyde_grouped[False]) / hyde_grouped[False] * 100
+        print(f"\n2. HyDE improves NDCG by {improvement:.1f}% on average - RECOMMEND ENABLING")
+    else:
+        decline = (hyde_grouped[False] - hyde_grouped[True]) / hyde_grouped[True] * 100
+        print(f"\n2. HyDE reduces NDCG by {decline:.1f}% on average - RECOMMEND DISABLING")
+
+    # Optimal number of expansions
+    expand_grouped = df.groupby('num_expands')[f"ndcg@{summary['k']}_mean"].mean()
+    best_expands = expand_grouped.idxmax()
+    print(f"\n3. Optimal number of query expansions: {best_expands}")
+
+    print("\n" + "=" * 80)
+
 
 if __name__ == "__main__":
     main()
