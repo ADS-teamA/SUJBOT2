@@ -171,7 +171,16 @@ class EvaluationRunner:
 
         # Determine output directory and file
         output_dir = Path(self.config.output_path).parent if self.config.output_path else Path("results/grid_search_k100")
-        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create output directory (including all parent directories)
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            # If mkdir fails due to permissions or other OS issues, log error
+            logger.error(f"Failed to create output directory {output_dir}: {e}")
+            # Don't raise - allow evaluation to continue without saving training data
+            # (better than failing entire evaluation)
+            return
 
         if method == "dense_only":
             filepath = output_dir / "dense_training_data.csv"
