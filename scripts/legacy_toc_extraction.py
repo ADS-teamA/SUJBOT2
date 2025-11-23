@@ -229,7 +229,7 @@ class LLMAgent:
         if result and 'first_chapter_page' in result:
             return int(result['first_chapter_page']), cost
 
-        print("⚠️ LLM (Fáze 1) selhal při hledání 'first_chapter_page'.")
+        logger.warning("LLM Phase 1 failed to find 'first_chapter_page'")
         return None, cost
 
     def extract_full_structure(self, full_toc_text: str) -> Tuple[List[HeadingData], float]:
@@ -254,7 +254,7 @@ class LLMAgent:
                     (item['title'], item['level'], item['page_number'])
                 )
         else:
-             print("⚠️ LLM (Fáze 2) selhal při extrakci 'headings'.")
+            logger.warning("LLM Phase 2 failed to extract 'headings'")
 
         return headings_list, cost
 # ==============================================================================
@@ -270,7 +270,8 @@ class PDFParser(BaseDocumentParser):
         try:
             self.llm_agent = LLMAgent()
         except ValueError as e:
-            print(f"🛑 {e}")
+            logger.error(f"Failed to initialize LLM agent: {e}", exc_info=True)
+            logger.warning("ToC extraction via LLM will be unavailable. Set GOOGLE_API_KEY in .env to enable.")
             self.llm_agent = None
 
     def get_document_type(self) -> str:
@@ -287,28 +288,27 @@ class PDFParser(BaseDocumentParser):
 
     def find_toc_scope(self) -> Tuple[Optional[int], Optional[int], Optional[str], float, str]:
         """
-        FÁZE 1: Najde počáteční a koncový index stránky obsahu.
-        Vrací (start_index, end_index, text_první_stránky, cena, STATUS)
+        PHASE 1: Find start and end page indices of table of contents.
+        Returns (start_index, end_index, first_page_text, cost, STATUS)
         """
-        print("--- PDFParser: Spouštím Fázi 1 (Hledání Rozsahu TOC) ---")
+        logger.info("PDFParser: Starting Phase 1 (ToC Scope Detection)")
         total_cost = 0.0
         data = self.parse_document()
         doc: fitz.Document = data.get("doc_object")
-        
+
         if not doc:
             return None, None, None, 0.0, "ERROR_DOC_OPEN"
         if not self.llm_agent:
             doc.close()
             return None, None, None, 0.0, "ERROR_AGENT_INIT"
 
-        # Tier 1 (Outline) má přednost
+        # Tier 1 (Outline) has priority
         if doc.get_toc():
-            print("INFO: Dokument má Tier 1 Outline, Fáze 1 se přeskakuje.")
+            logger.info("Document has Tier 1 Outline, Phase 1 skipped")
             doc.close()
-            # Vracíme nový stavový kód
-            return None, None, None, 0.0, "TIER_1_SUCCESS" 
+            return None, None, None, 0.0, "TIER_1_SUCCESS"
 
-        # Fáze 1A: Detekce *začátku* TOC (Heuristika)
+        # Phase 1A: Detect ToC *start* (Heuristic)
         toc_start_page_index = -1
         first_page_text = ""
         for i in range(min(doc.page_count, self.max_toc_pages_search)):
@@ -317,55 +317,53 @@ class PDFParser(BaseDocumentParser):
                 toc_start_page_index = i
                 first_page_text = text
                 break
-        
+
         if toc_start_page_index == -1:
-            print("⚠️ Fáze 1: Začátek TOC nenalezen (Tier 2 Heuristika selhala).")
+            logger.warning("Phase 1: ToC start not found (Tier 2 Heuristic failed)")
             doc.close()
-            # Vracíme nový stavový kód
             return None, None, None, 0.0, "TIER_2_FAILURE"
 
-        # Fáze 1B: Detekce *konce* TOC (Volání LLM č. 1)
-        print("🤖 LLM Agent (Fáze 1): Hledám konec TOC...")
+        # Phase 1B: Detect ToC *end* (LLM call #1)
+        logger.info("LLM Agent Phase 1: Finding ToC end page...")
         first_chapter_page, cost1 = self.llm_agent.find_first_chapter_page(first_page_text)
         total_cost += cost1
-        
+
         toc_end_page_index: int
         if not first_chapter_page:
-            print("⚠️ LLM (Fáze 1) selhal. Používám fallback (pouze 1 stránka TOC).")
+            logger.warning("LLM Phase 1 failed. Using fallback (single-page ToC)")
             toc_end_page_index = toc_start_page_index
         else:
-            toc_end_page_index = first_chapter_page - 2 # 1-based stranu na 0-based index
+            toc_end_page_index = first_chapter_page - 2  # 1-based page to 0-based index
             if toc_end_page_index < toc_start_page_index:
                 toc_end_page_index = toc_start_page_index
-        
+
         doc.close()
-        print(f"✅ Fáze 1: Rozsah TOC definován: Strany {toc_start_page_index + 1} až {toc_end_page_index + 1}.")
-        # Vracíme nový stavový kód
+        logger.info(f"Phase 1: ToC scope defined - Pages {toc_start_page_index + 1} to {toc_end_page_index + 1}")
         return toc_start_page_index, toc_end_page_index, first_page_text, total_cost, "TIER_2_SUCCESS"
 
     def extract_structure_from_scope(self, toc_start_page_index: int, toc_end_page_index: int) -> Tuple[List[HeadingData], Optional[str], float]:
         """
-        FÁZE 2: Extrahuje kompletní strukturu z daného rozsahu stránek.
-        Vrací (nadpisy, surový_text, cena).
+        PHASE 2: Extract complete structure from given page range.
+        Returns (headings, raw_text, cost).
         """
-        print("--- PDFParser: Spouštím Fázi 2 (Extrakce Struktury) ---")
+        logger.info("PDFParser: Starting Phase 2 (Structure Extraction)")
         data = self.parse_document()
         doc: fitz.Document = data.get("doc_object")
         if not doc or not self.llm_agent:
             if doc: doc.close()
             return [], None, 0.0
-            
-        # Fáze 2A: Extrakce kompletního textu TOC
+
+        # Phase 2A: Extract complete ToC text
         full_toc_text = ""
         for i in range(toc_start_page_index, min(toc_end_page_index + 1, doc.page_count)):
             full_toc_text += doc[i].get_text("text") + "\n--- Page Break ---\n"
-        
+
         doc.close()
 
-        # Fáze 2B: Extrakce struktury (Volání LLM č. 2)
-        print("🤖 LLM Agent (Fáze 2): Extrahuje kompletní strukturu...")
+        # Phase 2B: Extract structure (LLM call #2)
+        logger.info("LLM Agent Phase 2: Extracting complete structure...")
         structured_headings, cost2 = self.llm_agent.extract_full_structure(full_toc_text)
-             
+
         return structured_headings, full_toc_text, cost2
 
     def extract_structured_headings(self) -> Tuple[List[HeadingData], Optional[str], float]:
@@ -378,13 +376,13 @@ class PDFParser(BaseDocumentParser):
         if not doc: 
             return [], None, 0.0
 
-        # TIER 1 (Outline) má stále přednost
+        # TIER 1 (Outline) has priority
         outline = doc.get_toc()
         if outline:
-            print("✅ Struktura Extrahována z PDF Outline/Bookmarks (Tier 1).")
+            logger.info("Structure extracted from PDF Outline/Bookmarks (Tier 1)")
             headings = [(title, level, page + 1) for level, title, page in outline]
             doc.close()
-            return headings, None, 0.0 # Vracíme (data, text, cena)
+            return headings, None, 0.0  # Returns (data, text, cost)
 
         # Tier 1 selhal, voláme Fázi 1
         doc.close() # Zavřeme dokument, Fáze 1 si ho otevře znovu
