@@ -48,7 +48,7 @@ from src.config import (
     ChunkingConfig,
     EmbeddingConfig,
 )
-from src.unstructured_extractor import UnstructuredExtractor
+from src.unified_extraction_pipeline import UnifiedDocumentPipeline
 from src.multi_layer_chunker import MultiLayerChunker
 from src.embedding_generator import EmbeddingGenerator
 from src.faiss_vector_store import FAISSVectorStore
@@ -358,7 +358,8 @@ class IndexingPipeline:
         logger.info("Initializing IndexingPipeline...")
 
         # Initialize PHASE 1: Extraction (uses nested config)
-        self.extractor = UnstructuredExtractor(self.config.extraction_config)
+        # UnifiedDocumentPipeline combines ToC retrieval + Unstructured extraction
+        self.extractor = UnifiedDocumentPipeline(self.config.extraction_config)
 
         # Initialize PHASE 3: Chunking (uses nested config)
         self.chunker = MultiLayerChunker(config=self.config.chunking_config)
@@ -595,9 +596,13 @@ class IndexingPipeline:
             )
         else:
             logger.info("PHASE 1+2: Extraction + Summaries")
-            result = self.extractor.extract(document_path)
+            # UnifiedDocumentPipeline.process_document() returns ExtractedDocument
+            # Automatically uses ToC extraction for PDFs when available
+            result = self.extractor.process_document(Path(document_path))
             logger.info(
-                f"Extracted: {result.num_sections} sections, " f"depth={result.hierarchy_depth}"
+                f"Extracted: {result.num_sections} sections, "
+                f"depth={result.hierarchy_depth}, "
+                f"method={result.extraction_method}"
             )
 
         # Check existing components in vector_db AFTER extraction
