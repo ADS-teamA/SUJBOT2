@@ -116,7 +116,7 @@ def get_supported_documents(directory: Path) -> list:
     return documents
 
 
-def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_target: Path = None):
+def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_target: Path = None, storage_backend: str = None):
     """
     Run complete SOTA 2025 RAG pipeline.
 
@@ -132,6 +132,7 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
         input_path: Path to document file or directory
         output_base: Base output directory (default: output/)
         merge_target: Path to existing vector store to merge into (e.g., vector_db/)
+        storage_backend: Storage backend override ('faiss' or 'postgresql', default: from config.json)
     """
     input_path = Path(input_path)
 
@@ -160,7 +161,7 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
             print(f"PROCESSING [{i}/{len(documents)}]: {document_path.name}")
             print("=" * 80)
             print()
-            run_single_document(document_path, output_base, merge_target)
+            run_single_document(document_path, output_base, merge_target, storage_backend)
 
         print_header("BATCH PROCESSING COMPLETE")
         print_success(f"Processed {len(documents)} documents")
@@ -168,10 +169,10 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
         return
 
     # Single document processing
-    run_single_document(input_path, output_base, merge_target)
+    run_single_document(input_path, output_base, merge_target, storage_backend)
 
 
-def run_single_document(document_path: Path, output_base: Path = None, merge_target: Path = None):
+def run_single_document(document_path: Path, output_base: Path = None, merge_target: Path = None, storage_backend: str = None):
     """
     Process single document through complete SOTA 2025 pipeline.
 
@@ -179,6 +180,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
         document_path: Path to document file
         output_base: Base output directory (default: output/)
         merge_target: Path to existing vector store to merge into (e.g., vector_db/)
+        storage_backend: Storage backend override ('faiss' or 'postgresql', default: from config.json)
     """
     document_path = Path(document_path)
 
@@ -204,7 +206,13 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
 
     # Create pipeline with FULL SOTA configuration from .env
     print_info("Initializing pipeline with SOTA 2025 configuration...")
-    config = IndexingConfig.from_env()  # Loads all settings from .env
+
+    # Create config with optional storage backend override
+    config_overrides = {}
+    if storage_backend is not None:
+        config_overrides["storage_backend"] = storage_backend
+
+    config = IndexingConfig.from_env(**config_overrides)  # Loads all settings from config.json
 
     # Print active configuration
     print_info(f"LLM Model: {config.summarization_config.model}")
@@ -213,6 +221,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
     print_info(f"SAC (Contextual Retrieval): {'ON' if config.chunking_config.enable_contextual else 'OFF'}")
     print_info(f"Hybrid Search (BM25+Dense): {'ON ✅' if config.enable_hybrid_search else 'OFF'}")
     print_info(f"Knowledge Graph: {'ON ✅' if config.enable_knowledge_graph else 'OFF'}")
+    print_info(f"Storage Backend: {config.storage_backend.upper()}")
     print_info(f"Output: {output_dir}")
     print()
 
@@ -339,11 +348,13 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                     print_info(f"[ERROR] Cannot write to vector store: {e}")
                     logger.error(f"Vector store merge failed - IO error: {e}", exc_info=True)
                     print_info(f"Vector store merge skipped - keeping separate stores")
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
+                    # Expected errors from merge validation/corruption detection
                     print()
-                    print_info(f"[ERROR] Unexpected error during vector store merge: {e}")
-                    logger.error(f"Vector store merge failed - unexpected error: {e}", exc_info=True)
-                    print_info(f"Vector store merge skipped")
+                    print_info(f"[ERROR] Vector store validation failed: {e}")
+                    logger.error(f"Vector store merge failed - validation error: {e}", exc_info=True)
+                    print_info(f"Vector store merge skipped - store may be corrupted")
+                # Removed broad Exception catch - let programming errors propagate!
 
                 # Knowledge graph merging
                 try:
@@ -410,7 +421,8 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                     print_info(f"[ERROR] Cannot write to {merge_target}: Permission denied")
                     logger.error(f"KG merge failed - permission error: {e}", exc_info=True)
                     print_info(f"Document '{doc_name}' KG will not be merged")
-                except (KeyError, AttributeError, TypeError) as e:
+                except (KeyError, AttributeError) as e:
+                    # Data structure errors - likely data corruption
                     print()
                     print_info(f"[ERROR] KG data structure error: {e}")
                     logger.error(f"KG merge failed - data integrity issue: {e}", exc_info=True)
@@ -419,14 +431,13 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
                         logger.error(f"Unified KG state: {len(unified_kg.entities)} entities, {len(unified_kg.relationships)} relationships")
                     logger.error(f"New KG state: {len(knowledge_graph.entities)} entities, {len(knowledge_graph.relationships)} relationships")
                     print_info(f"Document '{doc_name}' KG appears corrupted - skipping merge")
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
+                    # Expected validation/merge errors
                     print()
-                    print_info(f"[ERROR] Unexpected merge failure: {e}")
-                    logger.error(f"KG merge unexpected error: {e}", exc_info=True)
-                    logger.error(f"Document: {doc_name}, Merge target: {merge_target}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    print_info(f"Document '{doc_name}' KG not merged - indexing will continue")
+                    print_info(f"[ERROR] KG merge validation failed: {e}")
+                    logger.error(f"KG merge failed - validation error: {e}", exc_info=True)
+                    print_info(f"Document '{doc_name}' KG validation failed - skipping merge")
+                # Removed broad Exception catch - let unexpected errors propagate!
 
         # Print comprehensive statistics
         print_header("INDEXING COMPLETE")
@@ -627,10 +638,18 @@ Examples:
         help="Disable automatic merging to vector_db (keep documents separate)"
     )
 
+    parser.add_argument(
+        "--backend",
+        type=str,
+        choices=["faiss", "postgresql"],
+        default=None,
+        help="Storage backend for vectors (default: from config.json). Options: faiss, postgresql"
+    )
+
     args = parser.parse_args()
 
     input_path = Path(args.input_path)
     # Use merge target unless --no-merge is specified
     merge_target = None if args.no_merge else Path(args.merge)
 
-    run_complete_pipeline(input_path, merge_target=merge_target)
+    run_complete_pipeline(input_path, merge_target=merge_target, storage_backend=args.backend)

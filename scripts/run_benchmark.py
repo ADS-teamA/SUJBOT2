@@ -1,114 +1,77 @@
+#!/usr/bin/env python3
 """
-Run benchmark evaluation.
-
-Evaluates RAG pipeline on PrivacyQA benchmark (194 QA pairs).
+Multi-Agent Benchmark CLI - Evaluates multi-agent system on QA datasets.
 
 Usage:
-    # Full benchmark (all queries)
-    uv run python scripts/run_benchmark.py
+    # Run full benchmark
+    uv run python run_benchmark.py
 
-    # Quick test (first 5 queries)
-    uv run python scripts/run_benchmark.py --max-queries 5
+    # Quick test (10 queries)
+    uv run python run_benchmark.py --max-queries 10
 
-    # Debug mode (verbose output + per-query JSON)
-    uv run python scripts/run_benchmark.py --debug
+    # With custom model
+    uv run python run_benchmark.py --model claude-sonnet-4-5
+
+    # Debug mode
+    uv run python run_benchmark.py --debug --max-queries 3
+
+Outputs:
+    - benchmark_results/MULTI-AGENT_YYYYMMDD_HHMMSS.json
+    - benchmark_results/MULTI-AGENT_YYYYMMDD_HHMMSS.md
 """
 
+import asyncio
 import argparse
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
-from src.benchmark import BenchmarkConfig, BenchmarkRunner
-from src.benchmark.report import generate_reports
-from src.benchmark.metrics import METRIC_ABBREVIATIONS
-
+# Setup logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)-8s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-
-def print_summary(result, config: BenchmarkConfig) -> None:
-    """Print benchmark result summary."""
-    # Define metric display labels
-    metric_labels = {
-        "exact_match": "Exact Match (EM)",
-        "f1_score": "F1 Score",
-        "precision": "Precision",
-        "recall": "Recall",
-        "embedding_similarity": "Embedding Similarity",
-        "combined_f1": "Combined F1",
-        "rag_confidence": "RAG Confidence",
-    }
-
-    print("\n" + "=" * 80)
-    print("BENCHMARK SUMMARY")
-    print("=" * 80)
-    print(f"Dataset:       {result.dataset_name}")
-    print(f"Total Queries: {result.total_queries}")
-    print(f"Total Time:    {result.total_time_seconds:.1f}s")
-    print(f"Total Cost:    ${result.total_cost_usd:.4f}")
-    print("\nAggregate Metrics:")
-
-    for metric_name, score in sorted(result.aggregate_metrics.items()):
-        label = metric_labels.get(metric_name, metric_name.replace("_", " ").title())
-        print(f"  {label:25s}: {score:.4f}")
-
-    print("\nReports saved to:")
-    print(f"  {Path(config.output_dir).absolute()}")
-    print("=" * 80 + "\n")
-
-
-def print_configuration(config: BenchmarkConfig) -> None:
-    """Print benchmark configuration in a clean format."""
-    config_items = [
-        ("Dataset", config.dataset_path),
-        ("Vector Store", config.vector_store_path),
-        ("Max Queries", config.max_queries if config.max_queries else "all (194)"),
-        ("Retrieval k", config.k),
-        ("Reranking", "enabled" if config.enable_reranking else "disabled"),
-        ("Graph Boost", "enabled" if config.enable_graph_boost else "disabled"),
-        ("Agent Model", config.agent_model),
-        ("Output Dir", config.output_dir),
-        ("Debug Mode", config.debug_mode),
-        ("Fail Fast", config.fail_fast),
-    ]
-
-    logger.info("\nConfiguration:")
-    for label, value in config_items:
-        logger.info(f"  {label}: {value}")
 
 
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Run RAG benchmark evaluation on PrivacyQA dataset",
+        description="Run multi-agent benchmark evaluation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Full benchmark (all 194 queries)
-  uv run python scripts/run_benchmark.py
+  # Run full benchmark
+  uv run python run_benchmark.py
 
-  # Quick test (first 5 queries)
-  uv run python scripts/run_benchmark.py --max-queries 5
+  # Quick test with 10 queries
+  uv run python run_benchmark.py --max-queries 10
 
-  # Debug mode (verbose + per-query JSONs)
-  uv run python scripts/run_benchmark.py --debug
+  # Debug mode with verbose logging
+  uv run python run_benchmark.py --debug --max-queries 3
 
-  # Custom vector store path
-  uv run python scripts/run_benchmark.py --vector-store my_benchmark_db
+  # Use Sonnet model instead of Haiku
+  uv run python run_benchmark.py --model claude-sonnet-4-5
+
+  # Custom dataset and vector store
+  uv run python run_benchmark.py \\
+    --dataset my_dataset/qa.json \\
+    --vector-store my_dataset_db
         """,
     )
 
     parser.add_argument(
         "--dataset",
+        type=str,
         default="benchmark_dataset/privacy_qa.json",
-        help="Path to QA JSON file (default: benchmark_dataset/privacy_qa.json)",
+        help="Path to QA dataset JSON (default: benchmark_dataset/privacy_qa.json)",
     )
 
     parser.add_argument(
         "--vector-store",
+        type=str,
         default="benchmark_db",
         help="Path to indexed vector store (default: benchmark_db)",
     )
@@ -116,119 +79,166 @@ Examples:
     parser.add_argument(
         "--max-queries",
         type=int,
-        help="Limit number of queries for testing (default: all queries)",
+        default=None,
+        help="Limit number of queries to evaluate (default: all queries in dataset)",
+    )
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="claude-haiku-4-5",
+        help="Model to use for evaluation (default: claude-haiku-4-5)",
+    )
+
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="LLM temperature (default: 0.0 for deterministic evaluation)",
     )
 
     parser.add_argument(
         "--k",
         type=int,
         default=5,
-        help="Number of chunks to retrieve per query (default: 5)",
+        help="Number of chunks to retrieve (default: 5)",
     )
 
     parser.add_argument(
-        "--no-reranking", action="store_true", help="Disable cross-encoder reranking"
+        "--no-reranking",
+        action="store_true",
+        help="Disable reranking (default: enabled)",
+    )
+
+    parser.add_argument(
+        "--no-caching",
+        action="store_true",
+        help="Disable prompt caching (default: enabled)",
+    )
+
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode (save per-query JSONs, verbose logging)",
     )
 
     parser.add_argument(
         "--output-dir",
+        type=str,
         default="benchmark_results",
-        help="Output directory for reports (default: benchmark_results)",
+        help="Output directory for results (default: benchmark_results)",
     )
 
     parser.add_argument(
-        "--debug", action="store_true", help="Enable debug mode (verbose + per-query JSON)"
-    )
-
-    parser.add_argument(
-        "--no-fail-fast",
-        action="store_true",
-        help="Continue on agent errors (default: fail on first error)",
-    )
-
-    parser.add_argument(
-        "--agent-model",
-        default="claude-haiku-4-5",
-        help="Agent model to use (default: claude-haiku-4-5). "
-        "Supported: claude-haiku-4-5, claude-sonnet-4-5, gpt-5-mini, gpt-5-nano, "
-        "gemini-2.5-flash, gemini-2.5-pro",
+        "--rate-limit-delay",
+        type=float,
+        default=0.0,
+        help="Delay between queries in seconds (for API rate limits, default: 0.0)",
     )
 
     return parser.parse_args()
 
 
-def main():
-    """Main entry point."""
+async def main():
+    """Main benchmark execution."""
     args = parse_args()
 
-    # Enable debug logging if requested
+    # Set debug logging if requested
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("Debug mode enabled")
 
-    logger.info("=" * 80)
-    logger.info("BENCHMARK EVALUATION - PRIVACY QA")
-    logger.info("=" * 80)
-
-    # Create config
     try:
-        config = BenchmarkConfig.from_env(
+        # Import here to show clearer error if dependencies missing
+        from src.benchmark.config import BenchmarkConfig
+        from src.benchmark.multi_agent_runner import MultiAgentBenchmarkRunner
+        from src.benchmark.report import save_benchmark_report
+
+        logger.info("=" * 80)
+        logger.info("MULTI-AGENT BENCHMARK EVALUATION")
+        logger.info("=" * 80)
+
+        # Create configuration
+        config = BenchmarkConfig(
             dataset_path=args.dataset,
             vector_store_path=args.vector_store,
             max_queries=args.max_queries,
+            agent_model=args.model,
+            agent_temperature=args.temperature,
             k=args.k,
             enable_reranking=not args.no_reranking,
-            output_dir=args.output_dir,
+            enable_prompt_caching=not args.no_caching,
             debug_mode=args.debug,
-            fail_fast=not args.no_fail_fast,
-            agent_model=args.agent_model,
-        )
-    except (FileNotFoundError, ValueError) as e:
-        logger.error(f"Configuration error: {e}")
-        sys.exit(1)
-
-    # Print configuration
-    print_configuration(config)
-
-    # Initialize runner
-    try:
-        logger.info("\nInitializing benchmark runner...")
-        runner = BenchmarkRunner(config)
-    except Exception as e:
-        logger.error(f"Failed to initialize runner: {e}")
-        sys.exit(1)
-
-    # Run benchmark
-    try:
-        logger.info("\nStarting evaluation...\n")
-        result = runner.run()
-    except Exception as e:
-        logger.error(f"Benchmark failed: {e}", exc_info=True)
-        sys.exit(1)
-
-    # Generate reports
-    try:
-        logger.info("\nGenerating reports...")
-        report_paths = generate_reports(
-            result,
-            output_dir=config.output_dir,
-            save_markdown=config.save_markdown,
-            save_json=config.save_json,
-            save_per_query=config.save_per_query,
+            output_dir=args.output_dir,
+            rate_limit_delay=args.rate_limit_delay,
         )
 
-        logger.info("\nReports generated:")
-        for report_type, path in report_paths.items():
-            logger.info(f"  {report_type}: {path}")
+        logger.info(f"Configuration:")
+        logger.info(f"  Dataset: {config.dataset_path}")
+        logger.info(f"  Vector Store: {config.vector_store_path}")
+        logger.info(f"  Model: {config.agent_model}")
+        logger.info(f"  Temperature: {config.agent_temperature}")
+        logger.info(f"  Retrieval k: {config.k}")
+        logger.info(f"  Reranking: {'enabled' if config.enable_reranking else 'disabled'}")
+        logger.info(f"  Prompt Caching: {'enabled' if config.enable_prompt_caching else 'disabled'}")
+        logger.info(f"  Max Queries: {config.max_queries if config.max_queries else 'all'}")
+        logger.info("")
 
-    except Exception as e:
-        logger.error(f"Failed to generate reports: {e}")
+        # Create runner
+        runner = MultiAgentBenchmarkRunner(config)
+
+        # Run evaluation
+        result = await runner.run()
+
+        # Save results
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_name = args.model.upper().replace("-", "_").replace(".", "_")
+        output_prefix = f"MULTI-AGENT_{model_name}_{timestamp}"
+
+        save_benchmark_report(
+            result=result,
+            output_dir=Path(args.output_dir),
+            output_prefix=output_prefix,
+            save_markdown=True,
+            save_json=True,
+        )
+
+        logger.info("")
+        logger.info("=" * 80)
+        logger.info("BENCHMARK COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Results saved:")
+        logger.info(f"  - {args.output_dir}/{output_prefix}.json")
+        logger.info(f"  - {args.output_dir}/{output_prefix}.md")
+        logger.info("")
+        logger.info(f"Final Metrics:")
+        logger.info(f"  Exact Match: {result.aggregate_metrics.get('exact_match', 0):.3f}")
+        logger.info(f"  F1 Score: {result.aggregate_metrics.get('f1_score', 0):.3f}")
+        logger.info(f"  Precision: {result.aggregate_metrics.get('precision', 0):.3f}")
+        logger.info(f"  Recall: {result.aggregate_metrics.get('recall', 0):.3f}")
+        logger.info("")
+        logger.info(f"Performance:")
+        logger.info(f"  Total Time: {result.total_time_seconds:.1f}s")
+        logger.info(f"  Avg Time/Query: {(result.total_time_seconds * 1000 / result.total_queries):.0f}ms")
+        logger.info(f"  Total Cost: ${result.total_cost_usd:.4f}")
+        logger.info(f"  Avg Cost/Query: ${(result.total_cost_usd / result.total_queries):.6f}")
+
+    except KeyboardInterrupt:
+        logger.warning("\nBenchmark interrupted by user")
+        sys.exit(130)
+
+    except FileNotFoundError as e:
+        logger.error(f"\nError: {e}")
+        logger.error("\nPlease ensure:")
+        logger.error("  1. Dataset exists (or use --dataset flag)")
+        logger.error("  2. Vector store is indexed (or use --vector-store flag)")
+        logger.error("\nRun 'uv run python scripts/index_benchmark_docs.py' to index documents first.")
         sys.exit(1)
 
-    # Print summary
-    print_summary(result, config)
-
-    logger.info("Benchmark evaluation complete!")
+    except Exception as e:
+        logger.error(f"\nUnexpected error: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -17,29 +17,7 @@ from src.faiss_vector_store import FAISSVectorStore
 from src.embedding_generator import EmbeddingGenerator, EmbeddingConfig
 from src.summary_generator import SummaryGenerator
 from src.config import SummarizationConfig
-
-
-def _reconstruct_all_vectors(index, dim: int) -> np.ndarray:
-    """Reconstruct all vectors from a FAISS IndexFlatIP (float32)."""
-    import faiss
-
-    n = index.ntotal
-    if n == 0:
-        return np.zeros((0, dim), dtype=np.float32)
-
-    if hasattr(index, "reconstruct_n"):
-        try:
-            return index.reconstruct_n(0, n)
-        except Exception:
-            pass
-
-    vecs: List[np.ndarray] = []
-    for i in range(n):
-        v = index.reconstruct(i)
-        if not isinstance(v, np.ndarray):
-            v = np.array(v, dtype=np.float32)
-        vecs.append(v.astype(np.float32, copy=False))
-    return np.vstack(vecs) if vecs else np.zeros((0, dim), dtype=np.float32)
+from src.utils.faiss_utils import reconstruct_all_vectors
 
 
 def run_nn_viz(
@@ -79,7 +57,7 @@ def run_nn_viz(
         raise RuntimeError(f"Layer {layer} index is empty")
 
     logger.info(f"Reconstructing {index.ntotal} vectors from layer {layer}...")
-    emb = _reconstruct_all_vectors(index, dims)
+    emb = reconstruct_all_vectors(index, dims)
 
     # Embed the query
     embedder = EmbeddingGenerator(EmbeddingConfig.from_env())

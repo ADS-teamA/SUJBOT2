@@ -15,6 +15,10 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Backend limit: 50,000 characters (see backend/models.py ChatRequest)
+  const MAX_MESSAGE_LENGTH = 50000;
+  const isMessageTooLong = message.length > MAX_MESSAGE_LENGTH;
+
   // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
@@ -26,7 +30,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (message.trim() && !disabled) {
+    if (message.trim() && !disabled && !isMessageTooLong) {
       onSend(message.trim());
       setMessage('');
     }
@@ -74,7 +78,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           />
           <button
             type="submit"
-            disabled={disabled || !message.trim()}
+            disabled={disabled || !message.trim() || isMessageTooLong}
             className={cn(
               'flex-shrink-0',
               'w-10 h-10 rounded-xl',
@@ -87,7 +91,13 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
               'flex items-center justify-center',
               'shadow-md hover:shadow-lg'
             )}
-            title={disabled ? 'Processing...' : 'Send message'}
+            title={
+              disabled
+                ? 'Processing...'
+                : isMessageTooLong
+                ? `Message too long (${message.length.toLocaleString()}/${MAX_MESSAGE_LENGTH.toLocaleString()} chars)`
+                : 'Send message'
+            }
           >
             {disabled ? (
               <Loader2 size={18} className="animate-spin" />
@@ -100,11 +110,16 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           <div
             className={cn(
               'mt-2 px-2 text-xs',
-              'text-accent-500 dark:text-accent-500',
-              'text-right'
+              'text-right transition-colors duration-200',
+              isMessageTooLong
+                ? 'text-red-600 dark:text-red-400 font-medium'
+                : 'text-accent-500 dark:text-accent-500'
             )}
           >
-            {message.length} characters
+            {isMessageTooLong && (
+              <span className="mr-2">⚠️ Message too long -</span>
+            )}
+            {message.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()} characters
           </div>
         )}
       </div>

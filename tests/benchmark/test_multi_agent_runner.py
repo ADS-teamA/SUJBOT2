@@ -18,7 +18,7 @@ from datetime import datetime
 from src.benchmark.multi_agent_runner import MultiAgentBenchmarkRunner
 from src.benchmark.config import BenchmarkConfig
 from src.benchmark.dataset import QueryExample, GroundTruthSnippet
-from src.benchmark.runner import QueryResult
+from src.benchmark.models import QueryResult
 
 
 @pytest.fixture

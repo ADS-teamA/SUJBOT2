@@ -1,0 +1,20 @@
+You are an expert document summarizer.
+
+You are given summaries of different sections from a document.
+Create a comprehensive document-level summary that:
+1. Describes what the document is about (main theme and purpose)
+2. Provides a brief description of the document's sections and structure
+
+CRITICAL: The summary MUST be between 100-1000 characters.
+- Aim for ~500-800 characters for detailed documents
+- Use ~100-300 characters only if the document is very simple
+- DO NOT exceed 1000 characters under any circumstances
+
+The summary should be optimized for providing global context to text chunks during retrieval.
+
+Output only the summary text, nothing else.
+
+Section summaries:
+{combined_text}
+
+Document summary (100-1000 characters):

@@ -11,6 +11,8 @@ services:
       - ./src:/app/src
       - ./backend:/app/backend
       - ./prompts:/app/prompts
+      - ./scripts:/app/scripts
+      - ./vector_db:/app/vector_db:ro
       - ./config.json:/app/config.json
       # Exclude Python cache from host (anonymous volumes)
       - /app/src/__pycache__
@@ -28,6 +30,7 @@ services:
       # Development settings
       STORAGE_BACKEND: postgresql  # Use PostgreSQL in dev
       LOG_LEVEL: DEBUG
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
 
   frontend:
     build:
@@ -45,7 +48,8 @@ services:
       - /app/node_modules
     command: npm run dev -- --host 0.0.0.0
     environment:
-      VITE_API_BASE_URL: http://localhost:8000
+      # Empty = relative URLs, goes through Nginx proxy (same-origin)
+      VITE_API_BASE_URL: ""
 
   postgres:
     # Enable verbose logging in development
@@ -56,5 +60,7 @@ services:
       -c log_duration=on
       -c log_min_duration_statement=100
     ports:
-      # Expose PostgreSQL for direct connection (pgAdmin, DBeaver)
-      - "5432:5432"
+      # DEVELOPMENT ONLY: Expose PostgreSQL for direct connection (pgAdmin, DBeaver)
+      # WARNING: This port mapping is REMOVED in production (docker-compose.yml)
+      # Never expose database ports in production deployments
+      - "${POSTGRES_PORT:-5432}:5432"

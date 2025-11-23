@@ -2,9 +2,10 @@
  * Header Component - Top navigation with theme toggle and sidebar control
  */
 
-import { Sun, Moon, Menu } from 'lucide-react';
+import { Sun, Moon, Menu, LogOut } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 import { useHover } from '../../design-system/animations/hooks/useHover';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface HeaderProps {
   theme: 'light' | 'dark';
@@ -19,9 +20,13 @@ export function Header({
   onToggleSidebar,
   sidebarOpen,
 }: HeaderProps) {
+  // Authentication
+  const { logout } = useAuth();
+
   // Animation hooks
   const hamburgerHover = useHover({ scale: true });
   const themeHover = useHover({ scale: true });
+  const logoutHover = useHover({ scale: true });
 
   return (
     <header className={cn(
@@ -153,6 +158,22 @@ export function Header({
                 )}
               />
             </div>
+          </button>
+
+          {/* Logout button */}
+          <button
+            onClick={logout}
+            {...logoutHover.hoverProps}
+            style={logoutHover.style}
+            className={cn(
+              'p-2 rounded-lg',
+              'text-accent-700 dark:text-accent-300',
+              'hover:bg-accent-100 dark:hover:bg-accent-800',
+              'transition-all duration-700'
+            )}
+            title="Sign out"
+          >
+            <LogOut size={20} className="transition-all duration-700" />
           </button>
         </div>
       </div>

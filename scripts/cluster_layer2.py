@@ -14,34 +14,7 @@ import numpy as np
 
 from src.faiss_vector_store import FAISSVectorStore
 from src.clustering import SemanticClusterer, ClusteringConfig
-
-
-def _reconstruct_all_vectors(index, dim: int) -> np.ndarray:
-    """Reconstruct all vectors from a FAISS IndexFlatIP.
-
-    Falls back to per-row reconstruction if bulk method is unavailable.
-    """
-    import faiss
-
-    n = index.ntotal
-    if n == 0:
-        return np.zeros((0, dim), dtype=np.float32)
-
-    # Prefer fast bulk reconstruction if available
-    if hasattr(index, "reconstruct_n"):
-        try:
-            return index.reconstruct_n(0, n)
-        except Exception:
-            pass
-
-    # Fallback: reconstruct row-by-row
-    vectors: List[np.ndarray] = []
-    for i in range(n):
-        v = index.reconstruct(i)
-        if not isinstance(v, np.ndarray):
-            v = np.array(v, dtype=np.float32)
-        vectors.append(v.astype(np.float32, copy=False))
-    return np.vstack(vectors) if vectors else np.zeros((0, dim), dtype=np.float32)
+from src.utils.faiss_utils import reconstruct_all_vectors
 
 
 def main(vector_db_path: str = "vector_db", algorithm: str = "agglomerative", min_size: int = 5, n_clusters: int | None = None) -> None:
@@ -61,7 +34,7 @@ def main(vector_db_path: str = "vector_db", algorithm: str = "agglomerative", mi
         return
 
     logger.info(f"Reconstructing {n_layer2} vectors from Layer 2 (dim={dim})...")
-    embeddings = _reconstruct_all_vectors(store.index_layer2, dim)
+    embeddings = reconstruct_all_vectors(store.index_layer2, dim)
 
     # Build chunk_id list from layer2 metadata
     chunk_ids = [meta.get("chunk_id", f"layer2_idx_{i}") for i, meta in enumerate(store.metadata_layer2)]

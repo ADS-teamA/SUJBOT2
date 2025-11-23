@@ -17,7 +17,7 @@ The SUJBOT2 multi-agent system is a LangGraph-based orchestration framework that
 - **PostgreSQL Checkpointing** for conversation persistence
 - **3-Level Prompt Caching** (90% cost savings)
 - **LangSmith Integration** for full observability
-- **Zero-Change Integration** with existing 17-tool RAG infrastructure
+- **Zero-Change Integration** with existing 15-tool RAG infrastructure
 
 ---
 
@@ -70,7 +70,7 @@ Final Answer (Markdown Report)
 | **Prompt Caching** | Anthropic API (ephemeral) | 90% cost reduction |
 | **Observability** | LangSmith | Tracing, debugging, cost monitoring |
 | **Prompts** | File-based (prompts/agents/*.txt) | Agent system prompts |
-| **Tools** | Existing src.agent.tools infrastructure | 17 specialized tools |
+| **Tools** | Existing src.agent.tools infrastructure | 15 specialized tools |
 
 ---
 
@@ -537,7 +537,7 @@ def build_conditional_workflow(complexity_score) -> StateGraph:
 
 **File:** `/src/multi_agent/tools/adapter.py` (200+ lines)
 
-Bridges LangGraph agents with existing 17-tool infrastructure:
+Bridges LangGraph agents with existing 15-tool infrastructure:
 
 ```python
 class ToolAdapter:
@@ -560,30 +560,30 @@ class ToolAdapter:
         #    - error: Optional[str]
 ```
 
-**Tool Availability:** All 16 existing tools available to agents:
+**Tool Availability:** All 15 RAG tools available to agents (filtered_search and similarity_search removed, unified into search):
 
-**Tier 1 (Fast, 100-300ms):**
-1. `search_documents` - Hybrid search
-2. `search_similar` - Semantic similarity
-3. `get_document_list` - List available docs
-4. `get_context_window` - Context around chunks
-5. `cache_query` - Prompt caching
-6. `detect_language` - Language detection
+**Core Retrieval:**
+1. `search` - Unified hybrid search with expansion, HyDE, graph boost
+2. `graph_search` - Entity-centric search (requires KG)
+3. `filtered_search` - Advanced search with filters
+4. `similarity_search` - Semantic similarity
+5. `expand_context` - Context expansion
+6. `cluster_search` - Cluster-based retrieval
 
-**Tier 2 (Quality, 500-1000ms):**
-7. `search_regulatory_graph` - Graph search
-8. `classify_document` - Doc classification
-9. `verify_compliance` - Compliance check
-10. `assess_risk` - Risk assessment
-11. `validate_citations` - Citation validation
-12. `analyze_gaps` - Gap analysis
-13. `generate_summary` - Summarization
-14. `assess_confidence` - Confidence scoring
+**Analysis:**
+7. `multi_doc_synthesizer` - Multi-document synthesis
+8. `contextual_chunk_enricher` - Contextual enrichment
+9. `explain_search_results` - Explain retrieval
+10. `assess_retrieval_confidence` - Confidence assessment
+11. `browse_entities` - Browse KG entities
+12. `get_stats` - Corpus statistics
+13. `definition_aligner` - Legal definition alignment
 
-**Tier 3 (Analysis, 1-3s):**
-15. `compare_documents` - Cross-doc analysis
-16. `expand_context` - Context expansion
-17. `extract_entities` - Entity extraction
+**Metadata:**
+14. `get_tool_help` - Tool documentation
+15. `list_available_tools` - List all tools
+16. `get_document_list` - List documents
+17. `get_document_info` - Document metadata
 
 ---
 
@@ -970,7 +970,7 @@ The multi-agent system **does not modify** the existing RAG pipeline:
 - **Generic Summaries** - 150 characters (research-backed)
 - **Multi-Layer Embeddings** - 3 FAISS indexes (Layer 1, 2, 3)
 - **Hybrid Search** - BM25 + Dense + RRF fusion (k=60)
-- **All 17 Tools** - Available via ToolAdapter
+- **All 15 Tools** - Available via ToolAdapter (filtered_search and similarity_search removed)
 
 **How Integration Works:**
 ```
@@ -1186,7 +1186,7 @@ State: MultiAgentState
 | **Per-Agent Config** | Different tasks need different models/temperatures |
 | **PostgreSQL Checkpointing** | Conversation continuity; recovery from failures |
 | **Prompt Caching** | 90% cost reduction for repeated queries |
-| **ToolAdapter Pattern** | Zero changes to existing 17-tool infrastructure |
+| **ToolAdapter Pattern** | Zero changes to existing 15-tool infrastructure |
 | **LangGraph Foundation** | Industry-standard; proven for multi-agent orchestration |
 | **Sequential by Default** | Simpler mental model; easier debugging; explicit state flow |
 

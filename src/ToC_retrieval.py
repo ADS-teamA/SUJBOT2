@@ -24,46 +24,49 @@ STATUS CODES:
 """
 
 # ==============================================================================
-# 0. ZÁKLADNÍ DEFINICE, IMPORTY A POMOCNÉ FUNKCE
+# 0. IMPORTS AND HELPERS
 # ==============================================================================
 import os
 import re
 import json
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any, Type
+from dotenv import load_dotenv
 
 import fitz
 import google.generativeai as genai
 from pydantic import BaseModel, Field
 
-from src.config import Config
+logger = logging.getLogger(__name__)
+
 
 
 
 
 
 # ==============================================================================
-# 1. TŘÍDY DAT A ARCHITEKTURY
+# 1. DATA CLASSES AND ARCHITECTURE
 # ==============================================================================
 
 HeadingData = Tuple[str, int, int] # (title, level, page_number)
 
-# --- Abstraktní Třída (Kontrakt) ---
+# --- Abstract Base Class (Contract) ---
 class BaseDocumentParser(ABC):
     def __init__(self, file_path: str):
         self.file_path: str = file_path
-        
+
     @abstractmethod
     def get_document_type(self) -> str:
         pass
 
-    # Všimněte si, že vracíme TROJICI: (List nadpisů, Surový OCR text, celková_cena)
+    # Returns triple: (List of headings, Raw OCR text, total cost)
     @abstractmethod
     def extract_structured_headings(self) -> Tuple[List[HeadingData], Optional[str], float]:
         pass
 
 class HierarchyNode:
-    """Reprezentuje jeden uzel v hierarchické stromové struktuře."""
+    """Represents a node in hierarchical tree structure."""
     def __init__(self, title: str, level: int, page_number: Optional[int] = None):
         self.title: str = title
         self.level: int = level 
@@ -78,20 +81,20 @@ class HierarchyNode:
 
 
 class HierarchyBuilder:
-    """Sestavuje hierarchický strom z plochého seznamu nadpisů pomocí zásobníku."""
-    
+    """Builds hierarchical tree from flat list of headings using stack."""
+
     def __init__(self):
         self.ROOT_TITLE = "Document Root"
         self.ROOT_LEVEL = 0
         self.ROOT_PAGE = 1
-        
+
     def build_tree(self, headings: List[HeadingData]) -> Optional['HierarchyNode']:
-        """Konstruuje strom."""
+        """Constructs tree from flat heading list."""
         if not headings:
             return None
 
         root = HierarchyNode(self.ROOT_TITLE, self.ROOT_LEVEL, self.ROOT_PAGE)
-        # Zásobník drží (úroveň, uzel)
+        # Stack holds (level, node)
         node_stack: List[Tuple[int, 'HierarchyNode']] = [(self.ROOT_LEVEL, root)]
 
         for title, level, page_num in headings:
@@ -170,24 +173,26 @@ class LLMAgent:
         }
     }
 
-    def __init__(self):
-        # Load API key from project's config.json
-        config = Config.load()
-        api_key = config.api_keys.google_api_key
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "models/gemini-2.5-flash"):
+        # Accept API key as parameter (preferably from centralized config)
+        # Fallback to environment variable for backward compatibility
+        if api_key is None:
+            load_dotenv()
+            api_key = os.getenv("GOOGLE_API_KEY")
 
         if not api_key:
-            raise ValueError("Chyba: 'google_api_key' není nastaven v config.json.")
+            raise ValueError("GOOGLE_API_KEY not provided. Pass api_key parameter or set GOOGLE_API_KEY environment variable.")
 
         genai.configure(api_key=api_key)
 
-        self.model_name = "models/gemini-2.5-flash"
+        self.model_name = model_name
         self.model = genai.GenerativeModel(self.model_name)
         self.pricing = self.MODEL_PRICING.get(self.model_name, self.MODEL_PRICING["default"])
 
-        print(f"✅ LLM Agent (Gemini) inicializován. Model: {self.model_name}")
+        logger.info(f"LLM Agent (Gemini) initialized with model: {self.model_name}")
 
     def _execute_json_prompt(self, prompt: str, schema_dict: Dict[str, Any]) -> Tuple[Optional[dict], float]:
-        """Vrací (výsledek_json, vypočtená_cena)."""
+        """Returns (json_result, calculated_cost)."""
         try:
             config = genai.GenerationConfig(
                 response_mime_type="application/json",
@@ -203,24 +208,27 @@ class LLMAgent:
                 
                 cost = ((in_tokens / 1_000_000) * self.pricing["input"]) + \
                        ((out_tokens / 1_000_000) * self.pricing["output"])
-                
-                print(f"   (LLM Info: Vstup {in_tokens} t, Výstup {out_tokens} t. Cena: ${cost:.6f})")
+
+                logger.debug(f"LLM usage: Input {in_tokens} tokens, Output {out_tokens} tokens, Cost: ${cost:.6f}")
 
             return json.loads(response.text), cost
-        
+
+        except json.JSONDecodeError as e:
+            logger.error(f"LLM returned invalid JSON: {e}", exc_info=True)
+            raise RuntimeError("ToC extraction failed: LLM returned malformed response") from e
         except Exception as e:
-            print(f"❌ Kritická chyba LLM Agenta: {e}")
-            return None, 0.0
+            logger.error(f"Unexpected error in LLM execution: {e}", exc_info=True)
+            raise RuntimeError(f"ToC extraction failed unexpectedly: {str(e)}") from e
 
     def find_first_chapter_page(self, toc_page_text: str) -> Tuple[Optional[int], float]:
-        """Fáze 1: Nyní vrací (číslo_stránky, cena)."""
+        """Phase 1: Returns (page_number, cost)."""
         prompt = f"""
-        Analyzuj následující text první stránky obsahu.
-        Identifikuj první záznam, který se v obsahu nachází. Ten označuje začátek první sekce skutečného obsahu dokumentu. Vrať číslo stránky (1-based), kde tato sekce začíná.
-        Nezáleží na tom, jakou má tato sekce úroveň (kapitola, podkapitola atd.). Řiď se tím, že by to měl být první záznam. Ignoruj položku jako 'Obsah', 'Contents'nebo 'Table of Contents'. 
-        Vrať POUZE JSON objekt podle schématu.
+        Analyze the following text from the first page of the table of contents.
+        Identify the first entry that appears in the contents. This marks the beginning of the first section of the document's actual content. Return the page number (1-based) where this section begins.
+        The level of this section (chapter, subchapter, etc.) doesn't matter. Focus on finding the first content entry. Ignore entries like 'Contents', 'Obsah', or 'Table of Contents'.
+        Return ONLY JSON object according to schema.
 
-        TEXT PRVNÍ STRÁNKY OBSAHU:
+        TEXT FROM FIRST TOC PAGE:
         {toc_page_text[:4000]} 
         """ 
         
@@ -229,19 +237,19 @@ class LLMAgent:
         if result and 'first_chapter_page' in result:
             return int(result['first_chapter_page']), cost
 
-        print("⚠️ LLM (Fáze 1) selhal při hledání 'first_chapter_page'.")
+        logger.warning("LLM Phase 1 failed to find 'first_chapter_page'")
         return None, cost
 
     def extract_full_structure(self, full_toc_text: str) -> Tuple[List[HeadingData], float]:
-        """Fáze 2: Nyní vrací (seznam_nadpisů, cena)."""
+        """Phase 2: Returns (list_of_headings, cost)."""
         prompt = f"""
-        Analyzuj kompletní text obsahu (TOC) dokumentu. 
-        Ignoruj položky jako 'Obsah' nebo 'Seznam obrázků'.
-        Extrahuj kompletní hierarchickou strukturu (kapitoly, sekce, podsekce).
-        Odvoď úroveň (level) z číslování (např. 1.1 = level 2, A. = level 2) a odsazení.
-        Vrať POUZE JSON objekt podle schématu.
+        Analyze complete table of contents (TOC) text from document.
+        Ignore meta-entries like 'Contents' or 'List of Figures'.
+        Extract complete hierarchical structure (chapters, sections, subsections).
+        Infer level from numbering (e.g., 1.1 = level 2, A. = level 2) and indentation.
+        Return ONLY JSON object according to schema.
 
-        KOMPLETNÍ TEXT OBSAHU:
+        COMPLETE TOC TEXT:
         {full_toc_text}
         """
         
@@ -254,7 +262,7 @@ class LLMAgent:
                     (item['title'], item['level'], item['page_number'])
                 )
         else:
-             print("⚠️ LLM (Fáze 2) selhal při extrakci 'headings'.")
+            logger.warning("LLM Phase 2 failed to extract 'headings'")
 
         return headings_list, cost
 # ==============================================================================
@@ -270,45 +278,51 @@ class PDFParser(BaseDocumentParser):
         try:
             self.llm_agent = LLMAgent()
         except ValueError as e:
-            print(f"🛑 {e}")
+            logger.error(f"Failed to initialize LLM agent: {e}", exc_info=True)
+            logger.warning("ToC extraction via LLM will be unavailable. Set GOOGLE_API_KEY in .env to enable.")
             self.llm_agent = None
 
     def get_document_type(self) -> str:
         return "PDF"
         
     def parse_document(self) -> Dict[str, Any]:
-        """Otevře PDF dokument."""
+        """Open PDF document and return metadata."""
         try:
             doc = fitz.open(self.file_path)
             return {"doc_object": doc, "page_count": doc.page_count}
+        except fitz.FileDataError as e:
+            logger.error(f"PDF file is corrupted or malformed: {self.file_path}", exc_info=True)
+            raise RuntimeError(f"Cannot open PDF: file is corrupted or password-protected") from e
+        except PermissionError as e:
+            logger.error(f"Permission denied reading PDF: {self.file_path}", exc_info=True)
+            raise RuntimeError(f"Cannot open PDF: permission denied") from e
         except Exception as e:
-            print(f"❌ Chyba při otevírání PDF: {e}")
-            return {"doc_object": None, "page_count": 0}
+            logger.error(f"Unexpected error opening PDF {self.file_path}: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to open PDF: {str(e)}") from e
 
     def find_toc_scope(self) -> Tuple[Optional[int], Optional[int], Optional[str], float, str]:
         """
-        FÁZE 1: Najde počáteční a koncový index stránky obsahu.
-        Vrací (start_index, end_index, text_první_stránky, cena, STATUS)
+        PHASE 1: Find start and end page indices of table of contents.
+        Returns (start_index, end_index, first_page_text, cost, STATUS)
         """
-        print("--- PDFParser: Spouštím Fázi 1 (Hledání Rozsahu TOC) ---")
+        logger.info("PDFParser: Starting Phase 1 (ToC Scope Detection)")
         total_cost = 0.0
         data = self.parse_document()
         doc: fitz.Document = data.get("doc_object")
-        
+
         if not doc:
             return None, None, None, 0.0, "ERROR_DOC_OPEN"
         if not self.llm_agent:
             doc.close()
             return None, None, None, 0.0, "ERROR_AGENT_INIT"
 
-        # Tier 1 (Outline) má přednost
+        # Tier 1 (Outline) has priority
         if doc.get_toc():
-            print("INFO: Dokument má Tier 1 Outline, Fáze 1 se přeskakuje.")
+            logger.info("Document has Tier 1 Outline, Phase 1 skipped")
             doc.close()
-            # Vracíme nový stavový kód
-            return None, None, None, 0.0, "TIER_1_SUCCESS" 
+            return None, None, None, 0.0, "TIER_1_SUCCESS"
 
-        # Fáze 1A: Detekce *začátku* TOC (Heuristika)
+        # Phase 1A: Detect ToC *start* (Heuristic)
         toc_start_page_index = -1
         first_page_text = ""
         for i in range(min(doc.page_count, self.max_toc_pages_search)):
@@ -317,109 +331,107 @@ class PDFParser(BaseDocumentParser):
                 toc_start_page_index = i
                 first_page_text = text
                 break
-        
+
         if toc_start_page_index == -1:
-            print("⚠️ Fáze 1: Začátek TOC nenalezen (Tier 2 Heuristika selhala).")
+            logger.warning("Phase 1: ToC start not found (Tier 2 Heuristic failed)")
             doc.close()
-            # Vracíme nový stavový kód
             return None, None, None, 0.0, "TIER_2_FAILURE"
 
-        # Fáze 1B: Detekce *konce* TOC (Volání LLM č. 1)
-        print("🤖 LLM Agent (Fáze 1): Hledám konec TOC...")
+        # Phase 1B: Detect ToC *end* (LLM call #1)
+        logger.info("LLM Agent Phase 1: Finding ToC end page...")
         first_chapter_page, cost1 = self.llm_agent.find_first_chapter_page(first_page_text)
         total_cost += cost1
-        
+
         toc_end_page_index: int
         if not first_chapter_page:
-            print("⚠️ LLM (Fáze 1) selhal. Používám fallback (pouze 1 stránka TOC).")
+            logger.warning("LLM Phase 1 failed. Using fallback (single-page ToC)")
             toc_end_page_index = toc_start_page_index
         else:
-            toc_end_page_index = first_chapter_page - 2 # 1-based stranu na 0-based index
+            toc_end_page_index = first_chapter_page - 2  # 1-based page to 0-based index
             if toc_end_page_index < toc_start_page_index:
                 toc_end_page_index = toc_start_page_index
-        
+
         doc.close()
-        print(f"✅ Fáze 1: Rozsah TOC definován: Strany {toc_start_page_index + 1} až {toc_end_page_index + 1}.")
-        # Vracíme nový stavový kód
+        logger.info(f"Phase 1: ToC scope defined - Pages {toc_start_page_index + 1} to {toc_end_page_index + 1}")
         return toc_start_page_index, toc_end_page_index, first_page_text, total_cost, "TIER_2_SUCCESS"
 
     def extract_structure_from_scope(self, toc_start_page_index: int, toc_end_page_index: int) -> Tuple[List[HeadingData], Optional[str], float]:
         """
-        FÁZE 2: Extrahuje kompletní strukturu z daného rozsahu stránek.
-        Vrací (nadpisy, surový_text, cena).
+        PHASE 2: Extract complete structure from given page range.
+        Returns (headings, raw_text, cost).
         """
-        print("--- PDFParser: Spouštím Fázi 2 (Extrakce Struktury) ---")
+        logger.info("PDFParser: Starting Phase 2 (Structure Extraction)")
         data = self.parse_document()
         doc: fitz.Document = data.get("doc_object")
         if not doc or not self.llm_agent:
             if doc: doc.close()
             return [], None, 0.0
-            
-        # Fáze 2A: Extrakce kompletního textu TOC
+
+        # Phase 2A: Extract complete ToC text
         full_toc_text = ""
         for i in range(toc_start_page_index, min(toc_end_page_index + 1, doc.page_count)):
             full_toc_text += doc[i].get_text("text") + "\n--- Page Break ---\n"
-        
+
         doc.close()
 
-        # Fáze 2B: Extrakce struktury (Volání LLM č. 2)
-        print("🤖 LLM Agent (Fáze 2): Extrahuje kompletní strukturu...")
+        # Phase 2B: Extract structure (LLM call #2)
+        logger.info("LLM Agent Phase 2: Extracting complete structure...")
         structured_headings, cost2 = self.llm_agent.extract_full_structure(full_toc_text)
-             
+
         return structured_headings, full_toc_text, cost2
 
     def extract_structured_headings(self) -> Tuple[List[HeadingData], Optional[str], float]:
         """
-        Orchestrační metoda (Fáze 0), která volá F1 i F2.
-        Vrací (nadpisy, surový_text, celková_cena)
+        Orchestration method (Phase 0) that calls Phase 1 and Phase 2.
+        Returns (headings, raw_text, total_cost)
         """
         data = self.parse_document()
         doc: fitz.Document = data.get("doc_object")
         if not doc: 
             return [], None, 0.0
 
-        # TIER 1 (Outline) má stále přednost
+        # TIER 1 (Outline) has priority
         outline = doc.get_toc()
         if outline:
-            print("✅ Struktura Extrahována z PDF Outline/Bookmarks (Tier 1).")
+            logger.info("Structure extracted from PDF Outline/Bookmarks (Tier 1)")
             headings = [(title, level, page + 1) for level, title, page in outline]
             doc.close()
-            return headings, None, 0.0 # Vracíme (data, text, cena)
+            return headings, None, 0.0  # Returns (data, text, cost)
 
-        # Tier 1 selhal, voláme Fázi 1
-        doc.close() # Zavřeme dokument, Fáze 1 si ho otevře znovu
+        # Tier 1 failed, calling Phase 1
+        doc.close()  # Close document, Phase 1 will reopen it
         toc_start, toc_end, _, cost1, status = self.find_toc_scope()
-        
-        # Kontrolujeme explicitní úspěch Fáze 1
-        if status != "TIER_2_SUCCESS":
-            # Toto nyní pokryje TIER_1_SUCCESS (který by se zde neměl stát)
-            # a hlavně TIER_2_FAILURE
-            return [], None, cost1 
 
-        # Voláme Fázi 2
+        # Check for explicit Phase 1 success
+        if status != "TIER_2_SUCCESS":
+            # This now covers TIER_1_SUCCESS (which shouldn't happen here)
+            # and especially TIER_2_FAILURE
+            return [], None, cost1
+
+        # Call Phase 2
         headings, ocr_text, cost2 = self.extract_structure_from_scope(toc_start, toc_end)
         
         total_cost = cost1 + cost2
         return headings, ocr_text, total_cost
 # ==============================================================================
-# 3. ŘÍDICÍ MODUL A TESTOVACÍ RÁMEC
+# 3. ORCHESTRATOR MODULE AND TEST FRAMEWORK
 # ==============================================================================
 
-# Mapování pro řídicí modul
+# Mapping for orchestrator module
 PARSER_MAPPING: Dict[str, Type[BaseDocumentParser]] = {
     '.pdf': PDFParser
-    # .tex a .txt by zde byly, pokud by byly implementovány
+    # .tex and .txt would be here if implemented
 }
 
 class DocumentHierarchyTool:
     """
-    Hlavní řídicí třída (Facade/Factory). Nyní správně propaguje náklady.
+    Main orchestrator class (Facade/Factory). Properly propagates costs.
     """
-    
+
     def __init__(self):
         self.builder = HierarchyBuilder()
-        # Předpoklad: PARSER_MAPPING je definován globálně nebo jako atribut
-        self.PARSER_MAPPING = PARSER_MAPPING 
+        # Assumption: PARSER_MAPPING is defined globally or as attribute
+        self.PARSER_MAPPING = PARSER_MAPPING
 
     def get_parser(self, file_path: str) -> Optional[BaseDocumentParser]:
         ext = os.path.splitext(file_path)[-1].lower()
@@ -430,7 +442,7 @@ class DocumentHierarchyTool:
 
     def process_document(self, file_path: str) -> Tuple[Optional['HierarchyNode'], Optional[str], float]:
         """
-        Spouští proces a vrací strom, surový OCR text a CELKOVOU CENU.
+        Runs process and returns tree, raw OCR text, and TOTAL COST.
         """
         if not os.path.exists(file_path):
             return None, None, 0.0
@@ -439,7 +451,7 @@ class DocumentHierarchyTool:
         if not parser:
             return None, None, 0.0
 
-        # Rozbalíme 3 hodnoty: nadpisy, OCR text, náklady na LLM
+        # Unpack 3 values: headings, OCR text, LLM costs
         structured_headings, ocr_text, total_cost = parser.extract_structured_headings()
 
         if not structured_headings:
@@ -449,13 +461,13 @@ class DocumentHierarchyTool:
 
         return document_tree, ocr_text, total_cost
 
-# --- Pomocná funkce pro vizualizaci (pro kontext, měla by být definována globálně/jinde) ---
+# --- Helper function for visualization (should be defined globally elsewhere for context) ---
 def visualize_tree_to_string(node: 'HierarchyNode', prefix: str = "", is_last: bool = True) -> List[str]:
-    """Rekurzivní funkce, která vizualizuje strom do seznamu řetězců."""
+    """Recursive function that visualizes tree into list of strings."""
     lines = []
-    if node.level != 0: # Nezobrazujeme virtuální kořen
+    if node.level != 0:  # Don't display virtual root
         line = prefix + ("└── " if is_last else "├── ") + \
-               f"[{node.level}] {node.title[:80]} (Strana {node.page_number})"
+               f"[{node.level}] {node.title[:80]} (Page {node.page_number})"
         lines.append(line)
     
     child_count = len(node.children)

@@ -35,13 +35,14 @@ export interface ToolCall {
 }
 
 export interface AgentCostBreakdown {
-  agent: string;
-  cost: number;
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_tokens: number;
-  cache_creation_tokens: number;
-  call_count: number;
+  agent: string;                    // Agent name (e.g., "orchestrator", "extractor")
+  cost: number;                     // Total cost in USD
+  input_tokens: number;             // Total input tokens consumed
+  output_tokens: number;            // Total output tokens generated
+  cache_read_tokens: number;        // Tokens read from cache (Anthropic only)
+  cache_creation_tokens: number;    // Tokens written to cache (Anthropic only)
+  call_count: number;               // Number of LLM calls made by this agent
+  response_time_ms: number;         // Total accumulated LLM response time in milliseconds
 }
 
 export interface CostInfo {
@@ -62,6 +63,7 @@ export interface Conversation {
   messages: Message[];
   createdAt: string;  // ISO 8601 format for JSON serialization safety
   updatedAt: string;  // ISO 8601 format for JSON serialization safety
+  userId?: number;  // Optional: included in responses from backend (user_id field)
 }
 
 export interface Model {

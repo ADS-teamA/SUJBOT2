@@ -15,6 +15,7 @@ PHASE 2 - SYNTHESIS:
 
 import json
 import logging
+import time  # For LLM response time measurement
 from typing import Any, Dict, List, Optional
 import re
 
@@ -70,7 +71,7 @@ class OrchestratorAgent(BaseAgent):
 
         # Initialize orchestrator tools using registry (tier1 tools)
         # Orchestrator uses same tools as agents for consistency
-        from src.agent.tools.registry import get_registry
+        from src.agent.tools import get_registry
 
         self.tool_registry = get_registry()
 
@@ -268,14 +269,26 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
             max_tool_iterations = 3  # Prevent infinite loops
 
             for iteration in range(max_tool_iterations):
-                # Call provider's unified create_message API (synchronous)
-                response = self.provider.create_message(
-                    messages=messages,
-                    tools=self.orchestrator_tool_schemas,
-                    system=system,
-                    max_tokens=self.config.max_tokens,
-                    temperature=self.config.temperature
-                )
+                # Call provider's unified create_message API (synchronous) with timing
+                llm_start_time = time.time()
+                try:
+                    response = self.provider.create_message(
+                        messages=messages,
+                        tools=self.orchestrator_tool_schemas,
+                        system=system,
+                        max_tokens=self.config.max_tokens,
+                        temperature=self.config.temperature
+                    )
+                    llm_response_time_ms = (time.time() - llm_start_time) * 1000
+                except Exception as e:
+                    # Measure time to failure - valuable for debugging timeout/performance issues
+                    llm_response_time_ms = (time.time() - llm_start_time) * 1000
+                    logger.error(
+                        f"LLM call FAILED after {llm_response_time_ms:.2f}ms for orchestrator: {e}",
+                        exc_info=True
+                    )
+                    # Re-raise to allow upstream error handling
+                    raise
 
                 # Track token usage and cost
                 from src.cost_tracker import get_global_tracker
@@ -308,9 +321,17 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                         output_tokens=output_tokens,
                         operation="agent_orchestrator",
                         cache_creation_tokens=cache_creation_tokens,
-                        cache_read_tokens=cache_read_tokens
+                        cache_read_tokens=cache_read_tokens,
+                        response_time_ms=llm_response_time_ms
                     )
                     logger.debug(f"Tracked orchestrator routing: {input_tokens} in, {output_tokens} out")
+                else:
+                    # Warn when response time is measured but not tracked
+                    logger.warning(
+                        f"Response missing usage data for orchestrator - "
+                        f"response time ({llm_response_time_ms:.2f}ms) not tracked in cost tracker. "
+                        f"Response type: {type(response)}, has 'usage' attr: {hasattr(response, 'usage')}"
+                    )
 
                 # Log response structure for debugging
                 content_types = [block.get("type") if isinstance(block, dict) else getattr(block, "type", "unknown")
@@ -463,6 +484,9 @@ Ensure language matching and proper citations."""
             else:
                 system = self.system_prompt
 
+            # Call LLM for synthesis with timing
+            import time
+            llm_start_time = time.time()
             response = self.provider.create_message(
                 messages=[{"role": "user", "content": user_message}],
                 tools=None,  # No tools in synthesis phase
@@ -470,6 +494,7 @@ Ensure language matching and proper citations."""
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature
             )
+            llm_response_time_ms = (time.time() - llm_start_time) * 1000
 
             # Track token usage and cost for synthesis
             from src.cost_tracker import get_global_tracker
@@ -501,7 +526,8 @@ Ensure language matching and proper citations."""
                     output_tokens=output_tokens,
                     operation="agent_orchestrator",
                     cache_creation_tokens=cache_creation_tokens,
-                    cache_read_tokens=cache_read_tokens
+                    cache_read_tokens=cache_read_tokens,
+                    response_time_ms=llm_response_time_ms
                 )
                 logger.debug(f"Tracked orchestrator synthesis: {input_tokens} in, {output_tokens} out")
 

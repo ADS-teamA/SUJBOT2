@@ -23,9 +23,14 @@ def _load_agent_base_prompt() -> str:
     Task-specific prompts (chat, benchmark) should be appended separately.
     """
     try:
-        from .prompt_loader import load_prompt
-
-        return load_prompt("base_agent_prompt")
+        # Use centralized prompt loader from multi_agent module
+        from pathlib import Path
+        prompt_file = Path(__file__).parent.parent.parent / "prompts" / "base_agent_prompt.txt"
+        if prompt_file.exists():
+            return prompt_file.read_text(encoding="utf-8").strip()
+        else:
+            logger.warning(f"Prompt file not found: {prompt_file}")
+            return "You are a RAG-powered assistant for legal and technical documents."
     except Exception as e:
         logger.error(f"Failed to load base agent prompt: {e}")
         # Fallback to minimal prompt
@@ -104,6 +109,9 @@ class ToolConfig:
     # Query expansion settings (for unified search tool)
     query_expansion_provider: str = "openai"  # "openai" or "anthropic"
     query_expansion_model: str = "gpt-4o-mini"  # Stable, fast model for expansion
+
+    # HyDE (Hypothetical Document Embeddings) settings
+    hyde_num_hypotheses: int = 3  # Number of hypothetical documents to generate
 
     # Performance
     lazy_load_reranker: bool = False  # Load reranker at startup for better tool availability

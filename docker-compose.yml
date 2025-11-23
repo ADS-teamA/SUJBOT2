@@ -7,9 +7,11 @@ services:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env file}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
-      NEO4J_dbms_memory_heap_initial__size: 512m
-      NEO4J_dbms_memory_heap_max__size: 2G
-      NEO4J_dbms_memory_pagecache_size: 1G
+      # Memory settings (optimized for development - 8-16GB RAM systems)
+      # For production with 32GB+ RAM, use: heap_max=2G, pagecache=1G
+      NEO4J_dbms_memory_heap_initial__size: 256m
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512m
     volumes:
       # Persistent data
       - neo4j_data:/data
@@ -29,14 +31,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # Resource limits (optimized for development)
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 3G
-        reservations:
           cpus: '1'
-          memory: 1G
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 768M
 
   # PostgreSQL with pgvector and Apache AGE extensions
   postgres:
@@ -48,11 +51,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}
       POSTGRES_DB: ${POSTGRES_DB:-sujbot}
-      # Performance tuning
-      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-4GB}
-      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE:-12GB}
-      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-64MB}
-      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-1GB}
+      # Performance tuning (optimized for development - 8-16GB RAM systems)
+      # For production with 32GB+ RAM, use: shared_buffers=4GB, effective_cache=12GB
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-512MB}
+      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE:-2GB}
+      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-32MB}
+      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-256MB}
     volumes:
       # Persistent data
       - postgres_data:/var/lib/postgresql/data
@@ -60,11 +64,8 @@ services:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       # Performance config
       - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-    ports:
-      # WARNING: SECURITY RISK - PostgreSQL exposed on host network
-      # Remove this port mapping in production or use docker-compose.override.yml
-      # For production: Comment out this entire ports section
-      - "${POSTGRES_PORT:-5432}:5432"
+    # NOTE: Port mapping removed for security (production default)
+    # For local development, use docker-compose.override.yml to expose ports
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sujbot}"]
       interval: 5s
@@ -74,15 +75,16 @@ services:
     networks:
       - sujbot_net
     restart: unless-stopped
-    # Resource limits (adjust based on your hardware)
+    # Resource limits (optimized for development - 8-16GB RAM systems)
+    # For production with 32GB+ RAM, use: cpus=4, memory=8G
     deploy:
       resources:
         limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
           cpus: '2'
-          memory: 4G
+          memory: 3G
+        reservations:
+          cpus: '1'
+          memory: 1G
 
   # Backend - FastAPI with multi-agent RAG system
   backend:
@@ -121,10 +123,21 @@ services:
       - ./config.json:/app/config.json:ro
       # Document data (read-only)
       - ./data:/app/data:ro
+      # Benchmark dataset (read-only, for evaluation)
+      - ./benchmark_dataset:/app/benchmark_dataset:ro
+      # Vector database (read-only, contains BM25 + FAISS indexes)
+      - ./vector_db:/app/vector_db:ro
+      # Scripts directory (read-only, for evaluation scripts)
+      - ./scripts:/app/scripts:ro
+      # Source code (read-only, for hot-reload of Python modules)
+      - ./src:/app/src:ro
+      # Results directory (read-write, for evaluation outputs)
+      - ./results:/app/results
       # Logs (optional, for debugging)
       - ./logs:/app/logs
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+    # No external ports - accessed via nginx reverse proxy
+    expose:
+      - "8000"
     networks:
       - sujbot_net
     restart: unless-stopped
@@ -134,15 +147,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    # Resource limits
+    # Resource limits (optimized for development)
     deploy:
       resources:
         limits:
           cpus: '2'
-          memory: 4G
+          memory: 3G
         reservations:
           cpus: '1'
-          memory: 2G
+          memory: 1.5G
 
   # Frontend - React + Vite (dev) or Nginx (prod)
   frontend:
@@ -160,10 +173,10 @@ services:
     environment:
       # Development mode environment variables
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
-    ports:
-      # Dev mode: 5173, Prod mode: 80
-      - "${FRONTEND_DEV_PORT:-5173}:5173"
-      - "${FRONTEND_PROD_PORT:-80}:80"
+    # No external ports - accessed via nginx reverse proxy
+    expose:
+      - "80"
+      - "5173"
     networks:
       - sujbot_net
     restart: unless-stopped
@@ -177,6 +190,57 @@ services:
           cpus: '0.5'
           memory: 512M
 
+  # Nginx - Reverse proxy with SSL termination
+  nginx:
+    image: nginx:alpine
+    container_name: sujbot_nginx
+    depends_on:
+      - frontend
+      - backend
+    volumes:
+      # Nginx configuration
+      - ./docker/nginx/reverse-proxy.conf:/etc/nginx/nginx.conf:ro
+      # SSL certificates (Let's Encrypt)
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      # Logs
+      - ./logs/nginx:/var/log/nginx
+    ports:
+      # HTTP and HTTPS
+      - "80:80"
+      - "443:443"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://backend:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Certbot - SSL certificate management
+  certbot:
+    image: certbot/certbot:latest
+    container_name: sujbot_certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+      - ./logs/certbot:/var/log/letsencrypt
+    # Certbot runs on-demand, not as persistent service
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+
 volumes:
   # PostgreSQL data - CRITICAL (contains all vectors, graphs, checkpoints)
   postgres_data:
@@ -188,6 +252,14 @@ volumes:
 
   # Model cache - Speeds up startup (sentence-transformers models)
   model_cache:
+    driver: local
+
+  # SSL certificates (Let's Encrypt via Certbot)
+  certbot_certs:
+    driver: local
+
+  # Certbot ACME challenge files
+  certbot_www:
     driver: local
 
 networks:

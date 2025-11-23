@@ -65,6 +65,36 @@ class FAISSVectorStoreAdapter(VectorStoreAdapter):
                 similarity_threshold_offset=similarity_threshold_offset,
             )
 
+    def search_layer1(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 3,
+        document_filter: Optional[str] = None,
+        similarity_threshold: Optional[float] = None,
+    ) -> List[Dict]:
+        """Delegate to FAISSVectorStore."""
+        return self._faiss_store.search_layer1(
+            query_embedding=query_embedding,
+            k=k,
+            document_filter=document_filter,
+            similarity_threshold=similarity_threshold,
+        )
+
+    def search_layer2(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 10,
+        document_filter: Optional[str] = None,
+        similarity_threshold: Optional[float] = None,
+    ) -> List[Dict]:
+        """Delegate to FAISSVectorStore."""
+        return self._faiss_store.search_layer2(
+            query_embedding=query_embedding,
+            k=k,
+            document_filter=document_filter,
+            similarity_threshold=similarity_threshold,
+        )
+
     def search_layer3(
         self,
         query_embedding: np.ndarray,

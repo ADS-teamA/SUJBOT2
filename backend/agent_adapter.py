@@ -397,7 +397,8 @@ class AgentAdapter:
                         "output_tokens": stats.get("output_tokens", 0),
                         "cache_read_tokens": stats.get("cache_read_tokens", 0),
                         "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
-                        "call_count": stats.get("call_count", 0)
+                        "call_count": stats.get("call_count", 0),
+                        "response_time_ms": stats.get("response_time_ms", 0.0)
                     })
                 except Exception as e:
                     logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)
@@ -646,7 +647,8 @@ class AgentAdapter:
                         "output_tokens": stats.get("output_tokens", 0),
                         "cache_read_tokens": stats.get("cache_read_tokens", 0),
                         "cache_creation_tokens": stats.get("cache_creation_tokens", 0),
-                        "call_count": stats.get("call_count", 0)
+                        "call_count": stats.get("call_count", 0),
+                        "response_time_ms": stats.get("response_time_ms", 0.0)
                     })
                 except Exception as e:
                     logger.error(f"Failed to format cost for agent {agent_name}: {e}", exc_info=True)

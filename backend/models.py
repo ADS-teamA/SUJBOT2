@@ -26,6 +26,10 @@ class ChatRequest(BaseModel):
         description="User message (max 50K chars to prevent abuse)",
     )
     conversation_id: Optional[str] = Field(None, description="Conversation ID for history")
+    skip_save_user_message: bool = Field(
+        False,
+        description="Skip saving user message to database (for regenerate where message already exists)",
+    )
 
 
 class HealthResponse(BaseModel):

@@ -8,16 +8,35 @@ Replaces FAISS in-memory store with persistent database backend.
 import asyncio
 import asyncpg
 import numpy as np
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, TYPE_CHECKING
 import logging
 import nest_asyncio
 
 from .vector_store_adapter import VectorStoreAdapter
 
+if TYPE_CHECKING:
+    from src.multi_layer_chunker import Chunk
+
 logger = logging.getLogger(__name__)
 
 # Enable nested event loops
 nest_asyncio.apply()
+
+
+def _sanitize_tsquery(text: str) -> str:
+    """
+    Sanitize text for PostgreSQL tsquery.
+
+    Removes special characters that break tsquery syntax: ()&|!:,?
+    """
+    import re
+    # Remove special tsquery characters
+    sanitized = re.sub(r'[()&|!:,?]', ' ', text)
+    # Replace multiple spaces with single space
+    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+    # Replace spaces with & operator
+    sanitized = sanitized.replace(" ", " & ")
+    return sanitized
 
 
 def _run_async_safe(coro):
@@ -68,14 +87,55 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         self.dimensions = dimensions
         self.pool: Optional[asyncpg.Pool] = None
         self._initialized = False
+        self._bm25_store = None  # Will be loaded during initialization (private attribute)
 
         # Metadata cache (materialized on-demand)
         self._metadata_cache = {1: None, 2: None, 3: None}
 
+    @property
+    def bm25_store(self) -> Optional[Any]:
+        """Return BM25 store loaded from PostgreSQL."""
+        return self._bm25_store
+
     async def initialize(self):
-        """Initialize connection pool. Must be called before using the adapter."""
+        """Initialize connection pool and BM25 store."""
         if not self._initialized:
             await self._initialize_pool()
+
+            # Load BM25 store from PostgreSQL
+            try:
+                from src.storage.postgres_bm25 import PostgresBM25Store
+
+                self._bm25_store = PostgresBM25Store(self.pool)
+                await self._bm25_store.load()
+                logger.info("PostgreSQL BM25 store loaded successfully")
+            except ImportError as e:
+                logger.error(
+                    f"Failed to import PostgresBM25Store: {e}. "
+                    "BM25 search unavailable. Check that postgres_bm25.py exists."
+                )
+                self._bm25_store = None
+            except asyncpg.UndefinedTableError as e:
+                logger.error(
+                    f"BM25 tables missing: {e}. "
+                    "Run 'scripts/migrate_bm25_to_postgres.py' to populate BM25 data."
+                )
+                self._bm25_store = None
+            except asyncpg.PostgresError as e:
+                logger.error(
+                    f"Database error loading BM25 store: {e}. "
+                    "BM25 search unavailable. Check database schema and permissions.",
+                    exc_info=True
+                )
+                self._bm25_store = None
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error loading BM25 store: {type(e).__name__}: {e}. "
+                    "This may indicate a bug - please report with logs.",
+                    exc_info=True
+                )
+                self._bm25_store = None
+
             self._initialized = True
 
     async def _initialize_pool(self):
@@ -344,124 +404,213 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         document_filter: Optional[str] = None,
     ) -> List[Dict]:
         """
-        Hybrid search: Dense (pgvector) + Sparse (full-text) with RRF fusion.
+        Hybrid search: Dense (pgvector) + Sparse (BM25) with RRF fusion.
 
+        Uses BM25 from bm25_layer{layer} tables (NOT PostgreSQL full-text search).
         RRF (Reciprocal Rank Fusion): score = 1/(k + rank)
         k=60 (standard parameter from research)
         """
-        # Convert query vector to PostgreSQL-compatible string format
+        # Strategy: Get dense from PostgreSQL, sparse from BM25, fuse in Python
+        # This matches how FAISS hybrid works and avoids complex SQL
+
+        # 1. Get dense results from PostgreSQL
         query_str = self._vector_to_pgvector_string(query_vec)
+        section_columns = "section_id, section_title," if layer > 1 else ""
 
-        # Layer-specific columns (Layer 1 doesn't have section_id, section_title)
-        # All layers have hierarchical_path
-        section_columns = (
-            "l.section_id, l.section_title,"
-            if layer > 1
-            else ""
-        )
+        # Fetch MORE candidates for effective RRF (k * 10 for selectivity)
+        # Empirically optimized: 10x candidates improves hybrid recall by allowing
+        # better fusion of dense and sparse methods. Minimum 200 candidates ensures
+        # sufficient diversity for RRF when k is small (k < 20).
+        candidates_k = max(k * 10, 200)  # At least 200 for good fusion
 
-        # Build hybrid search with RRF fusion
+        # Get dense results
         if document_filter:
-            sql = f"""
-                WITH dense AS (
-                    SELECT chunk_id, 1 - (embedding <=> $1::vector) AS dense_score,
-                           ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) AS dense_rank
-                    FROM vectors.layer{layer}
-                    WHERE document_id = $3
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT 50
-                ),
-                sparse AS (
-                    SELECT chunk_id, ts_rank(content_tsv, to_tsquery('english', $2)) AS sparse_score,
-                           ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, to_tsquery('english', $2)) DESC) AS sparse_rank
-                    FROM vectors.layer{layer}
-                    WHERE content_tsv @@ to_tsquery('english', $2)
-                      AND document_id = $3
-                    ORDER BY sparse_score DESC
-                    LIMIT 50
-                ),
-                fused AS (
-                    SELECT
-                        COALESCE(d.chunk_id, s.chunk_id) AS chunk_id,
-                        COALESCE(1.0 / (60 + d.dense_rank), 0) + COALESCE(1.0 / (60 + s.sparse_rank), 0) AS rrf_score
-                    FROM dense d
-                    FULL OUTER JOIN sparse s USING (chunk_id)
-                )
-                SELECT
-                    f.chunk_id,
-                    l.document_id,
-                    l.content,
-                    l.metadata,
-                    {section_columns}
-                    l.hierarchical_path,
-                    f.rrf_score AS score
-                FROM fused f
-                JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
-                ORDER BY f.rrf_score DESC
-                LIMIT $4
-            """
-            # Preprocess query text for tsquery (replace spaces with &)
-            tsquery = query_text.replace(" ", " & ")
-            rows = await conn.fetch(sql, query_str, tsquery, document_filter, k)
-        else:
-            # Same query without document filter
-            sql = f"""
-                WITH dense AS (
-                    SELECT chunk_id, 1 - (embedding <=> $1::vector) AS dense_score,
-                           ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) AS dense_rank
-                    FROM vectors.layer{layer}
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT 50
-                ),
-                sparse AS (
-                    SELECT chunk_id, ts_rank(content_tsv, to_tsquery('english', $2)) AS sparse_score,
-                           ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, to_tsquery('english', $2)) DESC) AS sparse_rank
-                    FROM vectors.layer{layer}
-                    WHERE content_tsv @@ to_tsquery('english', $2)
-                    ORDER BY sparse_score DESC
-                    LIMIT 50
-                ),
-                fused AS (
-                    SELECT
-                        COALESCE(d.chunk_id, s.chunk_id) AS chunk_id,
-                        COALESCE(1.0 / (60 + d.dense_rank), 0) + COALESCE(1.0 / (60 + s.sparse_rank), 0) AS rrf_score
-                    FROM dense d
-                    FULL OUTER JOIN sparse s USING (chunk_id)
-                )
-                SELECT
-                    f.chunk_id,
-                    l.document_id,
-                    l.content,
-                    l.metadata,
-                    {section_columns}
-                    l.hierarchical_path,
-                    f.rrf_score AS score
-                FROM fused f
-                JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
-                ORDER BY f.rrf_score DESC
+            dense_sql = f"""
+                SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
+                       1 - (embedding <=> $1::vector) AS score
+                FROM vectors.layer{layer}
+                WHERE document_id = $2
+                ORDER BY embedding <=> $1::vector
                 LIMIT $3
             """
-            tsquery = query_text.replace(" ", " & ")
-            rows = await conn.fetch(sql, query_str, tsquery, k)
+            dense_rows = await conn.fetch(dense_sql, query_str, document_filter, candidates_k)
+        else:
+            dense_sql = f"""
+                SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
+                       1 - (embedding <=> $1::vector) AS score
+                FROM vectors.layer{layer}
+                ORDER BY embedding <=> $1::vector
+                LIMIT $2
+            """
+            dense_rows = await conn.fetch(dense_sql, query_str, candidates_k)
 
-        # Convert to dicts
+        # 2. Get BM25 results (same number of candidates for balanced fusion)
+        bm25_results = []
+        if self.bm25_store:
+            try:
+                if layer == 1:
+                    bm25_results = self.bm25_store.search_layer1(query_text, k=candidates_k)
+                elif layer == 2:
+                    bm25_results = self.bm25_store.search_layer2(
+                        query_text, k=candidates_k, document_filter=document_filter
+                    )
+                else:  # layer == 3
+                    bm25_results = self.bm25_store.search_layer3(
+                        query_text, k=candidates_k, document_filter=document_filter
+                    )
+            except Exception as e:
+                logger.warning(f"BM25 search failed: {e}. Using dense-only.")
+                bm25_results = []
+
+        # 3. RRF Fusion with Missing Rank Imputation
+        # RRF k=60 is research-optimal (see hybrid_search.py and CLAUDE.md #8)
+        rrf_k = 60
+        chunk_scores = {}  # {chunk_id: rrf_score}
+        chunk_dense_scores = {}  # {chunk_id: dense_score} - preserve original
+        chunk_bm25_scores = {}  # {chunk_id: bm25_score} - preserve original
+        chunk_dense_ranks = {}  # {chunk_id: dense_rank} - for imputation
+        chunk_bm25_ranks = {}   # {chunk_id: bm25_rank} - for imputation
+
+        logger.debug(
+            f"Hybrid search layer{layer}: {len(dense_rows)} dense + {len(bm25_results)} BM25 "
+            f"candidates → RRF fusion to select top {k}"
+        )
+
+        # Add dense ranks and preserve scores
+        for rank, row in enumerate(dense_rows):
+            chunk_id = row["chunk_id"]
+            chunk_dense_ranks[chunk_id] = rank
+            chunk_dense_scores[chunk_id] = float(row["score"])  # Preserve original dense score
+
+        # Add BM25 ranks and preserve scores
+        for rank, result in enumerate(bm25_results):
+            chunk_id = result.get("chunk_id")
+            if chunk_id:
+                chunk_bm25_ranks[chunk_id] = rank
+                # Preserve original BM25 score (None if missing = not found by BM25)
+                score = result.get("score")
+                if score is not None:
+                    chunk_bm25_scores[chunk_id] = float(score)
+
+        # Compute RRF scores with missing rank imputation
+        # For chunks missing in one method, use default rank = len(candidates)
+        # This gives them a small RRF contribution (1/(k+len)) instead of excluding
+        # them entirely (infinite rank). Balances precision and recall.
+        all_chunk_ids = set(chunk_dense_ranks.keys()) | set(chunk_bm25_ranks.keys())
+        default_dense_rank = len(dense_rows)  # Rank for chunks not found by dense
+        default_bm25_rank = len(bm25_results)  # Rank for chunks not found by BM25
+
+        for chunk_id in all_chunk_ids:
+            dense_rank = chunk_dense_ranks.get(chunk_id, default_dense_rank)
+            bm25_rank = chunk_bm25_ranks.get(chunk_id, default_bm25_rank)
+            chunk_scores[chunk_id] = (1.0 / (rrf_k + dense_rank)) + (1.0 / (rrf_k + bm25_rank))
+
+        # Check overlap for diagnostics
+        dense_ids = set(chunk_dense_ranks.keys())
+        bm25_ids = set(chunk_bm25_ranks.keys())
+        overlap_ids = dense_ids & bm25_ids
+        dense_only = len(dense_ids - bm25_ids)
+        bm25_only = len(bm25_ids - dense_ids)
+
+        logger.debug(
+            f"RRF fusion stats: total={len(all_chunk_ids)}, "
+            f"both_methods={len(overlap_ids)} ({len(overlap_ids)*100/len(all_chunk_ids):.1f}%), "
+            f"dense_only={dense_only} ({dense_only*100/len(all_chunk_ids):.1f}%), "
+            f"bm25_only={bm25_only} ({bm25_only*100/len(all_chunk_ids):.1f}%)"
+        )
+
+        # 4. Sort by RRF score and get top k
+        sorted_chunk_ids = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+
+        # 5. Fetch full metadata for top chunks
+        top_chunk_ids = [cid for cid, _ in sorted_chunk_ids]
+        if not top_chunk_ids:
+            return []
+
+        # Batch fetch from PostgreSQL
+        placeholders = ", ".join(f"${i+1}" for i in range(len(top_chunk_ids)))
+        fetch_sql = f"""
+            SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path
+            FROM vectors.layer{layer}
+            WHERE chunk_id IN ({placeholders})
+        """
+        final_rows = await conn.fetch(fetch_sql, *top_chunk_ids)
+
+        # 6. Build results with RRF scores, preserving rank order AND original scores
+        chunk_id_to_row = {row["chunk_id"]: row for row in final_rows}
         results = []
-        for row in rows:
-            result = {
-                "chunk_id": row["chunk_id"],
-                "document_id": row["document_id"],
-                "content": row["content"],
-                "score": float(row["score"]),
-                "section_id": row.get("section_id"),
-                "section_title": row.get("section_title"),
-                "hierarchical_path": row.get("hierarchical_path"),
-            }
-            # Merge JSONB metadata (PostgreSQL returns JSONB as dict)
-            if row["metadata"] and isinstance(row["metadata"], dict):
-                result.update(row["metadata"])
-            results.append(result)
+        for chunk_id, rrf_score in sorted_chunk_ids:
+            if chunk_id in chunk_id_to_row:
+                row = chunk_id_to_row[chunk_id]
+                result = {
+                    "chunk_id": chunk_id,
+                    "document_id": row["document_id"],
+                    "content": row["content"],
+                    "score": float(rrf_score),  # RRF score (for compatibility)
+                    "dense_score": chunk_dense_scores.get(chunk_id),  # Original dense score
+                    "bm25_score": chunk_bm25_scores.get(chunk_id),    # Original BM25 score
+                    "section_id": row.get("section_id"),
+                    "section_title": row.get("section_title"),
+                    "hierarchical_path": row.get("hierarchical_path"),
+                }
+                # Merge JSONB metadata
+                if row["metadata"] and isinstance(row["metadata"], dict):
+                    result.update(row["metadata"])
+                results.append(result)
 
         return results
+
+    def search_layer1(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 1,
+        **kwargs
+    ) -> List[Dict]:
+        """Direct Layer 1 search (document-level)."""
+        return _run_async_safe(
+            self._async_search_layer1(query_embedding, k)
+        )
+
+    async def _async_search_layer1(
+        self,
+        query_embedding: np.ndarray,
+        k: int,
+    ) -> List[Dict]:
+        """Async Layer 1 search."""
+        query_vec = self._normalize_vector(query_embedding)
+
+        async with self.pool.acquire() as conn:
+            results = await self._search_layer(
+                conn, layer=1, query_vec=query_vec, k=k
+            )
+            return results
+
+    def search_layer2(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 3,
+        document_filter: Optional[str] = None,
+        **kwargs
+    ) -> List[Dict]:
+        """Direct Layer 2 search (section-level)."""
+        return _run_async_safe(
+            self._async_search_layer2(query_embedding, k, document_filter)
+        )
+
+    async def _async_search_layer2(
+        self,
+        query_embedding: np.ndarray,
+        k: int,
+        document_filter: Optional[str],
+    ) -> List[Dict]:
+        """Async Layer 2 search."""
+        query_vec = self._normalize_vector(query_embedding)
+
+        async with self.pool.acquire() as conn:
+            results = await self._search_layer(
+                conn, layer=2, query_vec=query_vec, k=k, document_filter=document_filter
+            )
+            return results
 
     def search_layer3(
         self,
@@ -605,6 +754,384 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             return results
 
     # ============================================================================
+    # Conversation Ownership Management
+    # ============================================================================
+
+    async def create_conversation(
+        self,
+        conversation_id: str,
+        user_id: int,
+        title: Optional[str] = None
+    ) -> None:
+        """
+        Create new conversation owned by user.
+
+        Args:
+            conversation_id: UUID string for conversation
+            user_id: Owner user ID
+            title: Optional conversation title
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO auth.conversations (id, user_id, title, created_at, updated_at)
+                VALUES ($1, $2, $3, NOW(), NOW())
+                """,
+                conversation_id, user_id, title
+            )
+            logger.debug(f"Created conversation {conversation_id} for user {user_id}")
+
+    async def get_user_conversations(
+        self,
+        user_id: int,
+        limit: int = 50
+    ) -> List[Dict]:
+        """
+        Get all conversations for user (ordered by most recent).
+
+        Args:
+            user_id: User ID
+            limit: Maximum conversations to return
+
+        Returns:
+            List of conversation dicts with id, title, created_at, updated_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, title, created_at, updated_at
+                FROM auth.conversations
+                WHERE user_id = $1
+                ORDER BY updated_at DESC
+                LIMIT $2
+                """,
+                user_id, limit
+            )
+            conversations = [dict(row) for row in rows]
+            logger.debug(f"Retrieved {len(conversations)} conversations for user {user_id}")
+            return conversations
+
+    async def verify_conversation_ownership(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Check if user owns conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID to check
+
+        Returns:
+            True if user owns conversation, False otherwise
+        """
+        async with self.pool.acquire() as conn:
+            owner_id = await conn.fetchval(
+                "SELECT user_id FROM auth.conversations WHERE id = $1",
+                conversation_id
+            )
+            is_owner = owner_id == user_id
+            logger.debug(
+                f"Ownership check: conversation {conversation_id}, "
+                f"user {user_id}, owner {owner_id}, result {is_owner}"
+            )
+            return is_owner
+
+    async def get_conversation_history(
+        self,
+        conversation_id: str,
+        limit: int = 100
+    ) -> List[Dict]:
+        """
+        Get message history for conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            limit: Maximum messages to return
+
+        Returns:
+            List of message dicts with id, role, content, metadata, created_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, role, content, metadata, created_at
+                FROM auth.messages
+                WHERE conversation_id = $1
+                ORDER BY created_at ASC
+                LIMIT $2
+                """,
+                conversation_id, limit
+            )
+            # Convert rows to dicts and parse metadata JSON string back to dict
+            import json
+            messages = []
+            for row in rows:
+                msg = dict(row)
+                # Parse metadata from JSON string to dict (asyncpg returns JSONB as string)
+                if msg.get('metadata') and isinstance(msg['metadata'], str):
+                    msg['metadata'] = json.loads(msg['metadata'])
+                messages.append(msg)
+
+            logger.debug(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
+            return messages
+
+    async def append_message(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        metadata: Optional[Dict] = None
+    ) -> int:
+        """
+        Append message to conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            role: Message role ('user', 'assistant', 'system')
+            content: Message content
+            metadata: Optional metadata (tool calls, costs, etc.)
+
+        Returns:
+            Message ID
+        """
+        import json
+
+        async with self.pool.acquire() as conn:
+            # Convert metadata dict to JSON string for JSONB column
+            metadata_json = json.dumps(metadata) if metadata else None
+
+            # Insert message
+            message_id = await conn.fetchval(
+                """
+                INSERT INTO auth.messages (conversation_id, role, content, metadata, created_at)
+                VALUES ($1, $2, $3, $4::jsonb, NOW())
+                RETURNING id
+                """,
+                conversation_id, role, content, metadata_json
+            )
+
+            # Update conversation updated_at timestamp
+            await conn.execute(
+                "UPDATE auth.conversations SET updated_at = NOW() WHERE id = $1",
+                conversation_id
+            )
+
+            logger.debug(
+                f"Appended {role} message (id={message_id}) to conversation {conversation_id}"
+            )
+            return message_id
+
+    async def delete_conversation(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Delete conversation (with ownership check).
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID (must be owner)
+
+        Returns:
+            True if deleted, False if not found or not owned
+        """
+        async with self.pool.acquire() as conn:
+            # Verify ownership and delete in single transaction
+            result = await conn.execute(
+                "DELETE FROM auth.conversations WHERE id = $1 AND user_id = $2",
+                conversation_id, user_id
+            )
+            # result is like "DELETE 1" or "DELETE 0"
+            deleted = result.split()[-1] == "1"
+            logger.debug(f"Delete conversation {conversation_id} for user {user_id}: {deleted}")
+            return deleted
+
+    # ============================================================================
+    # Indexing: Add Chunks (for pipeline)
+    # ============================================================================
+
+    def add_chunks(
+        self,
+        chunks_dict: Dict[str, List["Chunk"]],
+        embeddings_dict: Dict[str, np.ndarray]
+    ) -> None:
+        """
+        Add chunks and embeddings to PostgreSQL (batch INSERT with deduplication).
+
+        Sync wrapper for async _async_add_chunks (pipeline is synchronous).
+
+        Args:
+            chunks_dict: Dict with keys 'layer1', 'layer2', 'layer3' containing Chunk objects
+            embeddings_dict: Dict with keys 'layer1', 'layer2', 'layer3' containing embedding arrays
+
+        Example:
+            >>> adapter = PostgresVectorStoreAdapter(connection_string="...")
+            >>> await adapter.initialize()
+            >>> adapter.add_chunks(chunks_dict, embeddings_dict)
+        """
+        return _run_async_safe(self._async_add_chunks(chunks_dict, embeddings_dict))
+
+    async def _async_add_chunks(
+        self,
+        chunks_dict: Dict[str, List["Chunk"]],
+        embeddings_dict: Dict[str, np.ndarray]
+    ) -> None:
+        """
+        Async implementation of add_chunks.
+
+        Uses batch INSERT with ON CONFLICT DO NOTHING for incremental indexing.
+        """
+        logger.info("Adding chunks to PostgreSQL...")
+
+        # Add each layer
+        for layer in [1, 2, 3]:
+            layer_key = f"layer{layer}"
+            chunks = chunks_dict.get(layer_key, [])
+            embeddings = embeddings_dict.get(layer_key)
+
+            if chunks and embeddings is not None and embeddings.size > 0:
+                await self._add_layer_batch(layer, chunks, embeddings)
+            else:
+                logger.info(f"Layer {layer}: Skipped (empty layer)")
+
+        # Update stats
+        async with self.pool.acquire() as conn:
+            await conn.execute("SELECT metadata.update_vector_store_stats()")
+
+        # Clear metadata cache (invalidate after adding new chunks)
+        self._metadata_cache = {1: None, 2: None, 3: None}
+
+        logger.info("✓ Chunks added to PostgreSQL")
+
+    async def _add_layer_batch(
+        self,
+        layer: int,
+        chunks: List["Chunk"],
+        embeddings: np.ndarray
+    ) -> None:
+        """
+        Add chunks to a specific layer using batch INSERT.
+
+        Args:
+            layer: Layer number (1, 2, or 3)
+            chunks: List of Chunk objects
+            embeddings: Embedding matrix (N x dimensions)
+        """
+        import json
+
+        # Ensure embeddings are float32
+        if embeddings.dtype != np.float32:
+            embeddings = embeddings.astype(np.float32)
+
+        # Ensure 2D array
+        if embeddings.ndim == 1:
+            embeddings = embeddings.reshape(1, -1)
+
+        # Normalize embeddings for cosine similarity (pgvector requires unit vectors)
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        embeddings = embeddings / np.where(norms > 0, norms, 1)
+
+        # Prepare batch records
+        records = []
+        for i, chunk in enumerate(chunks):
+            # Build hierarchical path
+            hierarchical_path = chunk.metadata.document_id
+            if chunk.metadata.section_path:
+                hierarchical_path = f"{chunk.metadata.document_id} > {chunk.metadata.section_path}"
+
+            # Convert embedding to pgvector string format
+            embedding_str = self._vector_to_pgvector_string(embeddings[i])
+
+            # Build metadata JSONB (flexible storage)
+            metadata_json = json.dumps({
+                "layer": layer,
+                "section_path": chunk.metadata.section_path,
+                "section_level": getattr(chunk.metadata, 'section_level', None),
+                "section_depth": getattr(chunk.metadata, 'section_depth', None),
+                "char_start": getattr(chunk.metadata, 'char_start', None),
+                "char_end": getattr(chunk.metadata, 'char_end', None),
+            })
+
+            # Layer-specific record structure
+            if layer == 1:
+                # Layer 1: Documents (no section columns)
+                record = (
+                    chunk.chunk_id,
+                    chunk.metadata.document_id,
+                    chunk.metadata.section_title or chunk.metadata.document_id,  # title
+                    embedding_str,
+                    chunk.raw_content,  # content without SAC
+                    chunk.metadata.cluster_id,
+                    chunk.metadata.cluster_label,
+                    chunk.metadata.cluster_confidence,
+                    hierarchical_path,
+                    chunk.metadata.page_number,
+                    metadata_json,
+                )
+            else:
+                # Layer 2/3: Sections/Chunks (have section columns)
+                record = (
+                    chunk.chunk_id,
+                    chunk.metadata.document_id,
+                    chunk.metadata.section_id,
+                    chunk.metadata.section_title,
+                    chunk.metadata.section_path,
+                    getattr(chunk.metadata, 'section_level', None),
+                    getattr(chunk.metadata, 'section_depth', None),
+                    hierarchical_path,
+                    chunk.metadata.page_number,
+                    getattr(chunk.metadata, 'char_start', None) if layer == 3 else None,
+                    getattr(chunk.metadata, 'char_end', None) if layer == 3 else None,
+                    embedding_str,
+                    chunk.raw_content,
+                    chunk.metadata.cluster_id,
+                    chunk.metadata.cluster_label,
+                    chunk.metadata.cluster_confidence,
+                    metadata_json,
+                )
+
+            records.append(record)
+
+        # Batch INSERT with ON CONFLICT DO NOTHING (deduplication)
+        async with self.pool.acquire() as conn:
+            if layer == 1:
+                sql = """
+                    INSERT INTO vectors.layer1
+                    (chunk_id, document_id, title, embedding, content,
+                     cluster_id, cluster_label, cluster_confidence,
+                     hierarchical_path, page_number, metadata)
+                    VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, $10, $11::jsonb)
+                    ON CONFLICT (chunk_id) DO NOTHING
+                """
+            elif layer == 2:
+                sql = """
+                    INSERT INTO vectors.layer2
+                    (chunk_id, document_id, section_id, section_title, section_path,
+                     section_level, section_depth, hierarchical_path, page_number,
+                     embedding, content, cluster_id, cluster_label, cluster_confidence, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector, $11, $12, $13, $14, $15::jsonb)
+                    ON CONFLICT (chunk_id) DO NOTHING
+                """
+            else:  # layer == 3
+                sql = """
+                    INSERT INTO vectors.layer3
+                    (chunk_id, document_id, section_id, section_title, section_path,
+                     section_level, section_depth, hierarchical_path, page_number,
+                     char_start, char_end, embedding, content,
+                     cluster_id, cluster_label, cluster_confidence, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::vector, $13, $14, $15, $16, $17::jsonb)
+                    ON CONFLICT (chunk_id) DO NOTHING
+                """
+
+            # Execute batch insert
+            await conn.executemany(sql, records)
+
+        logger.info(f"Layer {layer}: Added {len(records)} chunks to PostgreSQL")
+
+    # ============================================================================
     # Cleanup
     # ============================================================================
 
@@ -617,3 +1144,252 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             except Exception:
                 # Ignore errors during destruction (Python may be shutting down)
                 pass
+
+# ====================================================================================
+# PostgreSQL Storage Adapter for Authentication & User Data
+# ====================================================================================
+
+class PostgreSQLStorageAdapter:
+    """
+    PostgreSQL connection pool for auth/user data.
+    
+    Separate from PostgresVectorStoreAdapter (vector search).
+    This adapter provides connection pooling for:
+    - auth.users (user accounts)
+    - auth.conversations (chat sessions)
+    - auth.messages (message history)
+    
+    Used by AuthQueries for user management and conversation storage.
+    """
+    
+    def __init__(self):
+        """Initialize adapter (connection pool created in initialize())."""
+        import os
+        self.pool: Optional[asyncpg.Pool] = None
+        self.db_url = os.getenv("DATABASE_URL")
+        
+        if not self.db_url:
+            raise ValueError(
+                "DATABASE_URL environment variable is required. "
+                "Set in .env file (e.g., postgresql://postgres:password@postgres:5432/sujbot)"
+            )
+    
+    async def initialize(self):
+        """Create connection pool."""
+        logger.info("Creating PostgreSQL connection pool for auth/user storage...")
+        
+        self.pool = await asyncpg.create_pool(
+            self.db_url,
+            min_size=2,
+            max_size=10,
+            command_timeout=60
+        )
+        
+        # Test connection
+        async with self.pool.acquire() as conn:
+            version = await conn.fetchval("SELECT version()")
+            logger.info(f"PostgreSQL connected: {version}")
+        
+        logger.info("✓ Connection pool created (2-10 connections)")
+    
+    async def close(self):
+        """Close connection pool."""
+        if self.pool:
+            await self.pool.close()
+            logger.info("PostgreSQL connection pool closed")
+
+    # ============================================================================
+    # Conversation Management Methods
+    # ============================================================================
+
+    async def create_conversation(
+        self,
+        conversation_id: str,
+        user_id: int,
+        title: Optional[str] = None
+    ) -> None:
+        """
+        Create new conversation owned by user.
+
+        Args:
+            conversation_id: UUID string for conversation
+            user_id: Owner user ID
+            title: Optional conversation title
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO auth.conversations (id, user_id, title, created_at, updated_at)
+                VALUES ($1, $2, $3, NOW(), NOW())
+                """,
+                conversation_id, user_id, title
+            )
+            logger.debug(f"Created conversation {conversation_id} for user {user_id}")
+
+    async def get_user_conversations(
+        self,
+        user_id: int,
+        limit: int = 50
+    ) -> List[Dict]:
+        """
+        Get all conversations for user (ordered by most recent).
+
+        Args:
+            user_id: User ID
+            limit: Maximum conversations to return
+
+        Returns:
+            List of conversation dicts with id, title, created_at, updated_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, title, created_at, updated_at
+                FROM auth.conversations
+                WHERE user_id = $1
+                ORDER BY updated_at DESC
+                LIMIT $2
+                """,
+                user_id, limit
+            )
+            conversations = [dict(row) for row in rows]
+            logger.debug(f"Retrieved {len(conversations)} conversations for user {user_id}")
+            return conversations
+
+    async def verify_conversation_ownership(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Check if user owns conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID to check
+
+        Returns:
+            True if user owns conversation, False otherwise
+        """
+        async with self.pool.acquire() as conn:
+            owner_id = await conn.fetchval(
+                "SELECT user_id FROM auth.conversations WHERE id = $1",
+                conversation_id
+            )
+            is_owner = owner_id == user_id
+            logger.debug(
+                f"Ownership check: conversation {conversation_id}, "
+                f"user {user_id}, owner {owner_id}, result {is_owner}"
+            )
+            return is_owner
+
+    async def get_conversation_history(
+        self,
+        conversation_id: str,
+        limit: int = 100
+    ) -> List[Dict]:
+        """
+        Get message history for conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            limit: Maximum messages to return
+
+        Returns:
+            List of message dicts with id, role, content, metadata, created_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, role, content, metadata, created_at
+                FROM auth.messages
+                WHERE conversation_id = $1
+                ORDER BY created_at ASC
+                LIMIT $2
+                """,
+                conversation_id, limit
+            )
+            # Convert rows to dicts and parse metadata JSON string back to dict
+            import json
+            messages = []
+            for row in rows:
+                msg = dict(row)
+                # Parse metadata from JSON string to dict (asyncpg returns JSONB as string)
+                if msg.get('metadata') and isinstance(msg['metadata'], str):
+                    msg['metadata'] = json.loads(msg['metadata'])
+                messages.append(msg)
+
+            logger.debug(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
+            return messages
+
+    async def append_message(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        metadata: Optional[Dict] = None
+    ) -> int:
+        """
+        Append message to conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            role: Message role ('user', 'assistant', 'system')
+            content: Message content
+            metadata: Optional metadata (tool calls, costs, etc.)
+
+        Returns:
+            Message ID
+        """
+        import json
+
+        async with self.pool.acquire() as conn:
+            # Convert metadata dict to JSON string for JSONB column
+            metadata_json = json.dumps(metadata) if metadata else None
+
+            # Insert message
+            message_id = await conn.fetchval(
+                """
+                INSERT INTO auth.messages (conversation_id, role, content, metadata, created_at)
+                VALUES ($1, $2, $3, $4::jsonb, NOW())
+                RETURNING id
+                """,
+                conversation_id, role, content, metadata_json
+            )
+
+            # Update conversation updated_at timestamp
+            await conn.execute(
+                "UPDATE auth.conversations SET updated_at = NOW() WHERE id = $1",
+                conversation_id
+            )
+
+            logger.debug(
+                f"Appended {role} message (id={message_id}) to conversation {conversation_id}"
+            )
+            return message_id
+
+    async def delete_conversation(
+        self,
+        conversation_id: str,
+        user_id: int
+    ) -> bool:
+        """
+        Delete conversation (with ownership check).
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID (must be owner)
+
+        Returns:
+            True if deleted, False if not found or not owned
+        """
+        async with self.pool.acquire() as conn:
+            # Verify ownership and delete in single transaction
+            result = await conn.execute(
+                "DELETE FROM auth.conversations WHERE id = $1 AND user_id = $2",
+                conversation_id, user_id
+            )
+            # result is like "DELETE 1" or "DELETE 0"
+            deleted = result.split()[-1] == "1"
+            logger.debug(f"Delete conversation {conversation_id} for user {user_id}: {deleted}")
+            return deleted

@@ -3,22 +3,46 @@ FastAPI Backend for SUJBOT2 Web Interface
 
 Provides RESTful API and SSE streaming for the agent.
 Strictly imports from src/ without modifications.
+
+Security features:
+- JWT authentication with Argon2 password hashing
+- httpOnly cookies for token storage (XSS protection)
+- Password strength validation (OWASP requirements)
+- Rate limiting (token bucket algorithm per IP)
+- Security headers (CSP, HSTS, X-Frame-Options, etc.)
+- CORS configuration with explicit allow-lists
+- Per-user conversation isolation
+- SQL injection protection (parameterized queries)
 """
 
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
+# Import agent adapter and models
 from .agent_adapter import AgentAdapter
 from .models import ChatRequest, HealthResponse, ModelsResponse, ModelInfo, ClarificationRequest
+
+# Import new authentication system (Argon2 + PostgreSQL)
+from backend.auth.manager import AuthManager
+from backend.database.auth_queries import AuthQueries
+from backend.middleware.auth import AuthMiddleware, get_current_user, set_auth_instances
+from backend.middleware.rate_limit import RateLimitMiddleware
+from backend.middleware.security_headers import SecurityHeadersMiddleware
+from backend.routes.auth import router as auth_router, set_dependencies
+from backend.routes.conversations import router as conversations_router, set_postgres_adapter, get_postgres_adapter
+
+# Import PostgreSQL adapter for user/conversation storage
+from src.storage.postgres_adapter import PostgreSQLStorageAdapter
 
 # Configure logging
 logging.basicConfig(
@@ -27,21 +51,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global agent adapter instance
+# Global instances
 agent_adapter: Optional[AgentAdapter] = None
+postgres_adapter: Optional[PostgreSQLStorageAdapter] = None
+auth_manager: Optional[AuthManager] = None
+auth_queries: Optional[AuthQueries] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup/shutdown events."""
-    global agent_adapter
+    """
+    Lifespan context manager for startup/shutdown events.
+
+    Initializes:
+    1. PostgreSQL connection pool (for user/conversation storage)
+    2. Authentication system (AuthManager + AuthQueries)
+    3. Multi-agent system (AgentAdapter)
+    """
+    global agent_adapter, postgres_adapter, auth_manager, auth_queries
 
     # Startup
     try:
-        # Validate required API keys before initialization
-        import os
+        # =====================================================================
+        # 1. Validate Environment Variables
+        # =====================================================================
+
         anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         openai_key = os.getenv("OPENAI_API_KEY")
+        db_url = os.getenv("DATABASE_URL")
+        auth_secret = os.getenv("AUTH_SECRET_KEY")
 
         if not anthropic_key and not openai_key:
             raise ValueError(
@@ -49,55 +87,165 @@ async def lifespan(app: FastAPI):
                 "Set in .env file or environment variables."
             )
 
+        if not db_url:
+            raise ValueError(
+                "DATABASE_URL environment variable is required. "
+                "Set in .env file (e.g., postgresql://postgres:password@postgres:5432/sujbot)"
+            )
+
+        if not auth_secret or len(auth_secret) < 32:
+            raise ValueError(
+                "AUTH_SECRET_KEY environment variable is required (min 32 chars). "
+                "Generate with: openssl rand -base64 64"
+            )
+
         if anthropic_key:
             logger.info("✓ Anthropic API key found")
         if openai_key:
             logger.info("✓ OpenAI API key found")
+        logger.info("✓ Database URL configured")
+        logger.info("✓ Auth secret key configured")
+
+        # =====================================================================
+        # 2. Initialize PostgreSQL Connection Pool
+        # =====================================================================
+
+        logger.info("Initializing PostgreSQL connection pool...")
+        postgres_adapter = PostgreSQLStorageAdapter()
+        await postgres_adapter.initialize()
+        logger.info("✓ PostgreSQL connection pool initialized")
+
+        # Set PostgreSQL adapter for conversation routes
+        set_postgres_adapter(postgres_adapter)
+
+        # =====================================================================
+        # 3. Initialize Authentication System
+        # =====================================================================
+
+        logger.info("Initializing authentication system...")
+        auth_manager = AuthManager(
+            secret_key=auth_secret,
+            token_expiry_hours=24
+        )
+        auth_queries = AuthQueries(postgres_adapter)
+
+        # Set dependencies for auth routes and middleware
+        set_dependencies(auth_manager, auth_queries)
+        set_auth_instances(auth_manager, auth_queries)
+
+        logger.info("✓ Authentication system initialized (Argon2 + JWT)")
+
+        # =====================================================================
+        # 4. Initialize Multi-Agent System
+        # =====================================================================
 
         logger.info("Initializing agent adapter...")
         agent_adapter = AgentAdapter()
 
-        # Initialize multi-agent system
         logger.info("Initializing multi-agent system...")
         success = await agent_adapter.initialize()
         if not success:
             raise RuntimeError("Multi-agent system initialization failed")
 
-        logger.info("Agent adapter initialized successfully")
+        logger.info("✓ Agent adapter initialized successfully")
+
+        logger.info("=" * 60)
+        logger.info("🚀 SUJBOT2 Backend Ready")
+        logger.info("=" * 60)
+
     except Exception as e:
-        logger.error(f"FATAL: Failed to initialize agent: {e}", exc_info=True)
-        logger.error("Server cannot start without agent. Fix configuration and restart.")
+        logger.error(f"FATAL: Failed to initialize backend: {e}", exc_info=True)
+        logger.error("Server cannot start. Fix configuration and restart.")
         # Fail fast - prevent server from starting in broken state
-        raise RuntimeError("Cannot start server without initialized agent") from e
+        raise RuntimeError("Cannot start server without proper initialization") from e
 
     yield
 
-    # Shutdown (cleanup if needed)
+    # Shutdown (cleanup)
     logger.info("Shutting down...")
+
     if agent_adapter and hasattr(agent_adapter, 'runner'):
         agent_adapter.runner.shutdown()
+
+    if postgres_adapter:
+        await postgres_adapter.close()
+        logger.info("✓ PostgreSQL connection pool closed")
+
+    logger.info("Shutdown complete")
 
 
 # Initialize FastAPI app with lifespan
 app = FastAPI(
     title="SUJBOT2 Web API",
-    description="Web interface for SUJBOT2 RAG system",
-    version="1.0.0",
+    description="Web interface for SUJBOT2 RAG system with authentication",
+    version="2.0.0",  # Incremented for security update
     lifespan=lifespan
 )
 
-# Enable CORS for localhost development
+# =========================================================================
+# Middleware Configuration (ORDER MATTERS!)
+# =========================================================================
+
+# 1. Security Headers (must be first to apply to all responses)
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    environment=os.getenv("BUILD_TARGET", "development"),
+    enable_hsts=True  # HSTS only enabled in production
+)
+
+# 2. CORS (cross-origin resource sharing)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        # Development
         "http://localhost:5173",
         "http://localhost:5174",  # Vite alternative port
-        "http://localhost:3000"
+        "http://localhost:3000",
+        # Production
+        "https://sujbot.fjfi.cvut.cz",
+        "http://sujbot.fjfi.cvut.cz",
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True,  # Required for cookies
+    # Restrict methods (NOT wildcard for security)
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    # Restrict headers (NOT wildcard for security)
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Cookie",
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "User-Agent",
+        "DNT",
+        "Cache-Control",
+        "X-Mx-ReqToken",
+        "Keep-Alive",
+        "If-Modified-Since",
+        "X-CSRF-Token"
+    ],
 )
+
+# 3. Rate Limiting (prevents abuse at network level)
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_per_minute=60,
+    burst_size=10
+)
+
+# Note: Authentication is handled via FastAPI dependencies (Depends(get_current_user))
+# rather than global middleware, because auth_manager is initialized in lifespan.
+# This is more FastAPI-idiomatic and avoids initialization order issues.
+
+# =========================================================================
+# Router Registration
+# =========================================================================
+
+# Register authentication routes (/auth/login, /auth/logout, /auth/me, /auth/register)
+app.include_router(auth_router)
+
+# Register conversation routes (/conversations, /conversations/{id}/messages, etc.)
+app.include_router(conversations_router)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -126,8 +274,14 @@ async def health_check():
     return HealthResponse(**health_status)
 
 
+# =========================================================================
+# Protected Endpoints (require authentication)
+# =========================================================================
+# Note: Authentication endpoints are in routes/auth.py (/auth/login, /auth/logout, etc.)
+
+
 @app.get("/models", response_model=ModelsResponse, deprecated=True)
-async def get_models():
+async def get_models(user: Dict = Depends(get_current_user)):
     """
     [DEPRECATED] Get list of available models.
 
@@ -160,7 +314,11 @@ async def get_models():
 
 
 @app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(
+    request: ChatRequest,
+    user: Dict = Depends(get_current_user),
+    adapter: PostgreSQLStorageAdapter = Depends(get_postgres_adapter)
+):
     """
     Stream chat response using Server-Sent Events (SSE).
 
@@ -173,6 +331,11 @@ async def chat_stream(request: ChatRequest):
     - error: Error occurred
 
     Note: Cost tracking is automatic and displayed in UI message metadata.
+
+    Database Storage:
+    - User message is saved immediately before streaming starts
+    - Assistant message is saved after streaming completes successfully
+    - If streaming fails, partial assistant message is NOT saved (as per requirements)
 
     Example event format:
     ```
@@ -199,8 +362,28 @@ async def chat_stream(request: ChatRequest):
             detail="Agent not initialized"
         )
 
+    # Save user message to database immediately (before streaming)
+    # Skip if regenerating (message already exists in database)
+    if request.conversation_id and not request.skip_save_user_message:
+        try:
+            await adapter.append_message(
+                conversation_id=request.conversation_id,
+                role="user",
+                content=request.message,
+                metadata=None
+            )
+            logger.debug(f"Saved user message to conversation {request.conversation_id}")
+        except Exception as e:
+            logger.error(f"Failed to save user message: {e}", exc_info=True)
+            # Don't block streaming if database save fails - continue gracefully
+            # Frontend will retry if needed
+
     async def event_generator():
-        """Generate SSE events from agent stream."""
+        """Generate SSE events from agent stream and collect response for database storage."""
+        # Collect assistant response for database storage
+        collected_response = ""
+        collected_metadata = {}
+
         try:
             async for event in agent_adapter.stream_response(
                 query=request.message,
@@ -208,6 +391,14 @@ async def chat_stream(request: ChatRequest):
             ):
                 # Format as SSE event
                 event_type = event["event"]
+
+                # Collect data for database storage
+                if event_type == "text_delta":
+                    collected_response += event["data"].get("content", "")
+                elif event_type == "cost_summary":
+                    collected_metadata["cost"] = event["data"]
+                elif event_type == "tool_calls_summary":
+                    collected_metadata["tool_calls"] = event["data"].get("tool_calls", [])
 
                 # Try to serialize with UTF-8, fall back to ASCII on error
                 try:
@@ -238,6 +429,20 @@ async def chat_stream(request: ChatRequest):
                     "event": event_type,
                     "data": event_data
                 }
+
+            # Stream completed successfully - save assistant message to database
+            if request.conversation_id and collected_response:
+                try:
+                    await adapter.append_message(
+                        conversation_id=request.conversation_id,
+                        role="assistant",
+                        content=collected_response,
+                        metadata=collected_metadata if collected_metadata else None
+                    )
+                    logger.debug(f"Saved assistant message to conversation {request.conversation_id}")
+                except Exception as e:
+                    logger.error(f"Failed to save assistant message: {e}", exc_info=True)
+                    # Don't crash stream if database save fails - message was already sent to client
 
         except asyncio.CancelledError:
             # Client disconnected - this is normal, don't log as error
@@ -271,7 +476,7 @@ async def chat_stream(request: ChatRequest):
 
 
 @app.post("/chat/clarify")
-async def chat_clarify(request: ClarificationRequest):
+async def chat_clarify(request: ClarificationRequest, user: Dict = Depends(get_current_user)):
     """
     Resume interrupted workflow with user clarification.
 

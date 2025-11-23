@@ -146,7 +146,7 @@ class MultiAgentRunner:
 
             error_msg = (
                 f"[{error_id}] Failed to initialize multi-agent system: {type(e).__name__}: {e}. "
-                f"Check: (1) API keys are valid in config.json, (2) PostgreSQL is running (if checkpointing enabled), "
+                f"Check: (1) API keys are set in .env file (ANTHROPIC_API_KEY or OPENAI_API_KEY), (2) PostgreSQL is running (if checkpointing enabled), "
                 f"(3) all agent configs are present, (4) dependencies are installed."
             )
 
@@ -210,13 +210,13 @@ class MultiAgentRunner:
 
     async def _initialize_tools(self) -> None:
         """Initialize tool registry with RAG components."""
-        from ..agent.tools.registry import get_registry
-        # Import tool modules to trigger @register_tool decorators
-        from ..agent.tools import tier1_basic, tier2_advanced, tier3_analysis
+        from ..agent.tools import get_registry
+        # Tool modules are auto-imported via tools/__init__.py
         from ..storage import load_vector_store_adapter
         from ..embedding_generator import EmbeddingGenerator
         from ..reranker import CrossEncoderReranker
         from ..agent.config import ToolConfig
+        from ..agent.providers.factory import create_provider
         import os
 
         logger.info("Initializing tool registry with RAG components...")
@@ -224,6 +224,18 @@ class MultiAgentRunner:
         # Get storage backend from config
         storage_config = self.config.get("storage", {})
         backend = storage_config.get("backend", "postgresql")
+
+        # Initialize LLM provider for tools (HyDE, Synthesis)
+        # Use same model as orchestrator or default to Claude
+        tool_model = self.multi_agent_config.get("orchestrator", {}).get("model", "claude-3-5-sonnet-20241022")
+        api_key = self.config.get("api_keys", {}).get("anthropic_api_key")
+
+        try:
+            self.llm_provider = create_provider(model=tool_model, api_key=api_key)
+            logger.info(f"Initialized LLM provider for tools: {tool_model}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize LLM provider for tools: {e}. HyDE and Synthesis will be disabled.")
+            self.llm_provider = None
 
         try:
             # Load vector store adapter (PostgreSQL or FAISS)
@@ -429,18 +441,23 @@ class MultiAgentRunner:
                 lazy_load_reranker=agent_tools_config.get("lazy_load_reranker", False),
                 lazy_load_graph=agent_tools_config.get("lazy_load_graph", True),
                 cache_embeddings=agent_tools_config.get("cache_embeddings", True),
+                hyde_num_hypotheses=agent_tools_config.get("hyde_num_hypotheses", 3),
+                query_expansion_provider=agent_tools_config.get("query_expansion_provider", "openai"),
+                query_expansion_model=agent_tools_config.get("query_expansion_model", "gpt-4o-mini"),
             )
 
             # Initialize tools in registry
             registry = get_registry()
+
             registry.initialize_tools(
                 vector_store=vector_store,
                 embedder=embedder,
                 reranker=reranker,
-                graph_retriever=None,  # Not used in multi-agent system
+                graph_retriever=None,  # TODO: Add graph retriever if needed
                 knowledge_graph=knowledge_graph,
-                context_assembler=context_assembler,
-                config=tool_config,
+                context_assembler=None,  # TODO: Add context assembler if needed
+                llm_provider=self.llm_provider,
+                config=tool_config,  # Use the full config from above, not minimal config
             )
 
             # Log results

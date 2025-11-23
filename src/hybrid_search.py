@@ -859,10 +859,10 @@ class BM25Store:
 
 class HybridVectorStore:
     """
-    Hybrid vector store combining FAISS (dense) + BM25 (sparse) with RRF fusion.
+    Hybrid vector store combining dense (FAISS/PostgreSQL) + sparse (BM25) with RRF fusion.
 
     Architecture:
-    - Wraps FAISSVectorStore for dense retrieval
+    - Wraps VectorStoreAdapter for dense retrieval (FAISS or PostgreSQL)
     - Wraps BM25Store for sparse retrieval
     - Applies Reciprocal Rank Fusion (RRF) to combine rankings
     - Supports all 3 layers (document, section, chunk)
@@ -877,23 +877,33 @@ class HybridVectorStore:
     - Retrieve k_dense=50, k_sparse=50, fuse to top_k
     """
 
-    def __init__(self, faiss_store, bm25_store: BM25Store, fusion_k: int = 60):  # FAISSVectorStore
+    def __init__(self, vector_store, bm25_store: BM25Store, fusion_k: int = 60, faiss_store=None):
         """
         Initialize hybrid vector store.
 
         Args:
-            faiss_store: FAISSVectorStore instance (existing dense retrieval)
-            bm25_store: BM25Store instance (new sparse retrieval)
+            vector_store: VectorStoreAdapter instance (FAISS or PostgreSQL backend)
+            bm25_store: BM25Store instance (sparse retrieval)
             fusion_k: RRF constant (default: 60, research-optimal)
+            faiss_store: DEPRECATED - use vector_store instead (backward compatibility)
         """
-        self.faiss_store = faiss_store
+        # Backward compatibility: accept faiss_store parameter
+        if faiss_store is not None and vector_store is None:
+            logger.warning(
+                "Parameter 'faiss_store' is deprecated. Use 'vector_store' instead. "
+                "This compatibility shim will be removed in a future version."
+            )
+            vector_store = faiss_store
+
+        self.vector_store = vector_store
+        self.faiss_store = vector_store  # Backward compatibility alias
         self.bm25_store = bm25_store
         self.fusion_k = fusion_k
 
         logger.info(
             f"HybridVectorStore initialized: "
             f"fusion_k={fusion_k}, "
-            f"dense_dims={faiss_store.dimensions}"
+            f"backend={getattr(vector_store, 'backend', 'unknown')}"
         )
 
     def hierarchical_search(
@@ -928,7 +938,7 @@ class HybridVectorStore:
         results = {}
 
         # Step 1: Layer 1 (Document identification) - Hybrid
-        dense_l1 = self.faiss_store.search_layer1(query_embedding, k=3)
+        dense_l1 = self.vector_store.search_layer1(query_embedding, k=3)
         sparse_l1 = self.bm25_store.search_layer1(query_text, k=3)
         fused_l1 = self._rrf_fusion(dense_l1, sparse_l1, k=1)
         results["layer1"] = fused_l1
@@ -941,11 +951,14 @@ class HybridVectorStore:
 
         # Step 2: Layer 3 (PRIMARY - Chunk level) - Hybrid
         # Retrieve more candidates for RRF (k=50 each, fuse to top k_layer3)
-        dense_l3 = self.faiss_store.search_layer3(
-            query_embedding=query_embedding, k=50, document_filter=document_filter
+        # FIX: Ensure we retrieve enough candidates if k_layer3 is large (e.g. 100 for benchmarks)
+        search_k = max(k_layer3 * 10, 200)
+
+        dense_l3 = self.vector_store.search_layer3(
+            query_embedding=query_embedding, k=search_k, document_filter=document_filter
         )
         sparse_l3 = self.bm25_store.search_layer3(
-            query=query_text, k=50, document_filter=document_filter
+            query=query_text, k=search_k, document_filter=document_filter
         )
         fused_l3 = self._rrf_fusion(dense_l3, sparse_l3, k=k_layer3)
 
@@ -965,7 +978,7 @@ class HybridVectorStore:
         results["layer3"] = fused_l3
 
         # Step 3: Optional Layer 2 (Section context) - Hybrid
-        dense_l2 = self.faiss_store.search_layer2(
+        dense_l2 = self.vector_store.search_layer2(
             query_embedding=query_embedding, k=10, document_filter=document_filter
         )
         sparse_l2 = self.bm25_store.search_layer2(
@@ -1001,8 +1014,8 @@ class HybridVectorStore:
 
         logger.info("Merging hybrid vector stores...")
 
-        # Merge FAISS stores
-        self.faiss_store.merge(other.faiss_store)
+        # Merge vector stores (FAISS or PostgreSQL)
+        self.vector_store.merge(other.vector_store)
 
         # Merge BM25 stores
         self.bm25_store.merge(other.bm25_store)
@@ -1127,8 +1140,8 @@ class HybridVectorStore:
 
         logger.info(f"Saving hybrid store to {output_dir}")
 
-        # Save FAISS store (uses existing save method)
-        self.faiss_store.save(output_dir)
+        # Save vector store (FAISS or PostgreSQL)
+        self.vector_store.save(output_dir)
 
         # Save BM25 store
         self.bm25_store.save(output_dir)
@@ -1203,8 +1216,8 @@ class HybridVectorStore:
         Returns:
             Dict with chunk metadata and content, or None if not found
         """
-        # Search in FAISS metadata_layer3
-        for meta in self.faiss_store.metadata_layer3:
+        # Search in vector store metadata_layer3
+        for meta in self.vector_store.metadata_layer3:
             if meta.get("chunk_id") == chunk_id:
                 return meta
 
@@ -1216,12 +1229,12 @@ class HybridVectorStore:
         Get combined statistics from both stores.
 
         Returns:
-            Dict with statistics from FAISS and BM25
+            Dict with statistics from vector store (FAISS/PostgreSQL) and BM25
         """
-        faiss_stats = self.faiss_store.get_stats()
+        vector_stats = self.vector_store.get_stats()
 
         return {
-            **faiss_stats,
+            **vector_stats,
             "hybrid_enabled": True,
             "fusion_k": self.fusion_k,
             "bm25_layer1_count": len(self.bm25_store.index_layer1.corpus),

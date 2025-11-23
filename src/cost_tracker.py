@@ -133,6 +133,7 @@ class UsageEntry:
     operation: str  # "summary", "context", "embedding", "agent", etc.
     cache_creation_tokens: int = 0  # Tokens written to cache
     cache_read_tokens: int = 0  # Tokens read from cache
+    response_time_ms: float = 0.0  # LLM response time in milliseconds (measured via time.time()). Accumulates per agent in get_agent_breakdown(). Always 0.0 for embedding operations.
 
 
 class CostTracker:
@@ -221,6 +222,7 @@ class CostTracker:
         operation: str = "llm",
         cache_creation_tokens: int = 0,
         cache_read_tokens: int = 0,
+        response_time_ms: float = 0.0,
     ) -> float:
         """
         Track LLM usage and calculate cost.
@@ -233,6 +235,7 @@ class CostTracker:
             operation: Operation type ("summary", "context", "agent", etc.)
             cache_creation_tokens: Tokens written to cache (Anthropic only)
             cache_read_tokens: Tokens read from cache (Anthropic only)
+            response_time_ms: Response time in milliseconds
 
         Returns:
             Cost in USD for this call
@@ -257,7 +260,15 @@ class CostTracker:
             operation=operation,
             cache_creation_tokens=cache_creation_tokens,
             cache_read_tokens=cache_read_tokens,
+            response_time_ms=response_time_ms,
         )
+
+        # Debug log response time tracking (always log to debug the issue)
+        logger.info(
+            f"💫 track_llm: operation={operation}, response_time={response_time_ms:.2f}ms, "
+            f"input={input_tokens}, output={output_tokens}"
+        )
+
         self._entries.append(entry)
 
         # Update accumulators
@@ -461,10 +472,14 @@ class CostTracker:
                     "output_tokens": 45,
                     "cache_read_tokens": 0,
                     "cache_creation_tokens": 0,
-                    "call_count": 1
+                    "call_count": 1,
+                    "response_time_ms": 1234.56  # Total accumulated time (sum of all calls)
                 },
                 "orchestrator": {...}
             }
+
+        Note: response_time_ms is the sum of all LLM response times for that agent.
+        Divide by call_count to get average response time per call.
         """
         agent_stats: Dict[str, Dict[str, Any]] = {}
 
@@ -485,6 +500,7 @@ class CostTracker:
                     "cache_read_tokens": 0,
                     "cache_creation_tokens": 0,
                     "call_count": 0,
+                    "response_time_ms": 0.0,
                 }
 
             # Accumulate stats
@@ -495,6 +511,14 @@ class CostTracker:
             stats["cache_read_tokens"] += entry.cache_read_tokens
             stats["cache_creation_tokens"] += entry.cache_creation_tokens
             stats["call_count"] += 1
+            stats["response_time_ms"] += entry.response_time_ms
+
+        # Debug log final breakdown
+        for agent_name, stats in agent_stats.items():
+            logger.info(
+                f"💫 Agent breakdown: {agent_name} - response_time={stats['response_time_ms']:.2f}ms, "
+                f"cost=${stats['cost']:.6f}, calls={stats['call_count']}"
+            )
 
         return agent_stats
 
