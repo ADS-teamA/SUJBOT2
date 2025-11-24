@@ -69,20 +69,17 @@ class GetStatsTool(BaseTool):
                 vs_stats = self.vector_store.get_stats()
                 stats["vector_store"] = vs_stats
 
-                # Get unique documents count from stats (FAISS provides this)
+                # Get unique documents count from stats
                 if "documents" in vs_stats:
                     stats["unique_documents"] = vs_stats["documents"]
 
-                # Try to get document list from FAISS metadata (if available)
+                # Try to get document list from PostgreSQL (if available)
                 try:
-                    from src.faiss_vector_store import FAISSVectorStore
-                    if isinstance(self.vector_store.vector_store, FAISSVectorStore):
-                        # Extract document IDs from layer1 metadata (document summaries)
-                        unique_docs = set()
-                        for metadata in self.vector_store.vector_store.metadata_layer1:
-                            doc_id = metadata.get("document_id") or metadata.get("doc_id", "Unknown")
-                            unique_docs.add(doc_id)
-                        stats["document_list"] = sorted(list(unique_docs))
+                    from src.storage import PostgresVectorStoreAdapter
+                    if isinstance(self.vector_store, PostgresVectorStoreAdapter):
+                        # Get document list from PostgreSQL
+                        doc_list = self.vector_store.get_document_list()
+                        stats["document_list"] = sorted(doc_list) if doc_list else []
                 except Exception as e:
                     # If we can't get document list, skip it (non-critical)
                     logger.debug(f"Could not extract document list: {e}")

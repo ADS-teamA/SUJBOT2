@@ -72,7 +72,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         self,
         connection_string: str,
         pool_size: int = 20,
-        dimensions: int = 3072,
+        dimensions: int = 4096,  # Qwen3-Embedding-8B (was 3072 for OpenAI)
     ):
         """
         Initialize PostgreSQL adapter.

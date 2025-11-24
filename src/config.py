@@ -577,9 +577,9 @@ class EmbeddingConfig:
             raise ValueError(f"dimensions must be positive if specified, got {self.dimensions}")
         if self.cache_max_size <= 0:
             raise ValueError(f"cache_max_size must be positive, got {self.cache_max_size}")
-        if self.provider is not None and self.provider not in ["voyage", "openai", "huggingface"]:
+        if self.provider is not None and self.provider not in ["voyage", "openai", "huggingface", "deepinfra"]:
             raise ValueError(
-                f"provider must be 'voyage', 'openai', or 'huggingface', got {self.provider}"
+                f"provider must be 'voyage', 'openai', 'huggingface', or 'deepinfra', got {self.provider}"
             )
 
     @classmethod

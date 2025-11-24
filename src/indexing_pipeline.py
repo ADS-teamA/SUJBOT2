@@ -3,31 +3,28 @@ PHASE 1-6: Complete Indexing Pipeline
 
 Orchestrates:
 1. PHASE 1-3: Extraction, hierarchy, summaries, chunking
-2. PHASE 4: Embedding generation + FAISS indexing
+2. PHASE 4: Embedding generation + PostgreSQL pgvector indexing
 3. PHASE 5A: Knowledge Graph construction (optional)
-4. PHASE 5B: Hybrid Search with BM25 + RRF (optional)
-5. PHASE 5C: Cross-Encoder Reranking (optional)
-6. PHASE 5D: Graph-Vector Integration (optional)
-7. PHASE 6: Context Assembly for LLM (optional)
+4. PHASE 5C: Cross-Encoder Reranking (optional)
+5. PHASE 5D: Graph-Vector Integration (optional)
+6. PHASE 6: Context Assembly for LLM (optional)
 
 Supported formats: PDF, DOCX, PPTX, XLSX, HTML
 
 Based on research:
-- LegalBench-RAG: text-embedding-3-large + RCTS
-- Multi-Layer Embeddings: 3 separate indexes
-- Hybrid Search: BM25 + Dense + RRF fusion
-- Cross-Encoder Reranking: Two-stage retrieval
-- Graph Integration: Entity-aware boosting
-- Context Assembly: SAC stripping + citations
+- LegalBench-RAG: Multi-Layer Embeddings (3 separate indexes)
+- HyDE: Gao et al. (2022) - Hypothetical Document Embeddings
+- Query Expansion: Vocabulary coverage via paraphrasing
+- Weighted Fusion: w_hyde=0.6, w_exp=0.4 (empirically optimized)
+
+Embedding model: Qwen3-Embedding-8B (4096 dims) via DeepInfra
+Storage: PostgreSQL with pgvector extension
 
 Usage:
     pipeline = IndexingPipeline(
-        embedding_model="text-embedding-3-large",
+        embedding_model="Qwen/Qwen3-Embedding-8B",
         enable_sac=True,
         enable_knowledge_graph=True,
-        enable_hybrid_search=True,
-        enable_reranking=True,
-        enable_context_assembly=True
     )
 
     result = pipeline.index_document("document.pdf")
@@ -51,8 +48,7 @@ from src.config import (
 from src.unified_extraction_pipeline import UnifiedDocumentPipeline
 from src.multi_layer_chunker import MultiLayerChunker
 from src.embedding_generator import EmbeddingGenerator
-from src.faiss_vector_store import FAISSVectorStore
-from src.storage import create_vector_store_adapter
+from src.storage import create_vector_store_adapter, load_vector_store_adapter
 from src.cost_tracker import get_global_tracker, reset_global_tracker
 
 # Knowledge Graph imports (optional)
@@ -93,79 +89,67 @@ def _make_relative_path(path: Path) -> str:
         return str(path)
 
 
-def check_existing_components(document_id: str, vector_db_path: str = "vector_db") -> Dict:
+def check_existing_components(document_id: str, connection_string: str = None) -> Dict:
     """
-    Check what components already exist in vector_db for this document.
+    Check what components already exist in PostgreSQL for this document.
 
     Args:
         document_id: Document ID to check
-        vector_db_path: Path to vector database directory
+        connection_string: PostgreSQL connection string (from DATABASE_URL env var if not provided)
 
     Returns:
         Dict with:
             - exists: bool - Whether document exists in any component
-            - has_dense: bool - Has FAISS embeddings
-            - has_bm25: bool - Has BM25 index
+            - has_dense: bool - Has vector embeddings in PostgreSQL
             - has_kg: bool - Has Knowledge Graph
             - existing_doc_id: str - Actual doc_id found (may differ slightly)
     """
-    import pickle
+    import asyncio
 
     result = {
         "exists": False,
         "has_dense": False,
-        "has_bm25": False,
         "has_kg": False,
         "existing_doc_id": None,
     }
 
-    vector_db_path = Path(vector_db_path)
+    # Get connection string from environment if not provided
+    if connection_string is None:
+        connection_string = os.getenv("DATABASE_URL")
 
-    # Check if vector_db exists
-    if not vector_db_path.exists():
+    if not connection_string:
+        logger.warning("DATABASE_URL not set, cannot check existing components")
         return result
 
-    # Check FAISS metadata
-    metadata_file = vector_db_path / "metadata.pkl"
-    if metadata_file.exists():
-        try:
-            with open(metadata_file, "rb") as f:
-                metadata = pickle.load(f)
+    # Check PostgreSQL for existing document
+    try:
+        import asyncpg
 
-            # Check all layers for document_id match
-            for layer in ["metadata_layer1", "metadata_layer2", "metadata_layer3"]:
-                if layer in metadata:
-                    for chunk_meta in metadata[layer]:
-                        chunk_doc_id = chunk_meta.get("document_id", "")
-                        # Match exact or prefix (e.g., "BZ_VR1" matches "BZ_VR1_sample")
-                        if chunk_doc_id == document_id or chunk_doc_id.startswith(document_id):
-                            result["exists"] = True
-                            result["has_dense"] = True
-                            result["existing_doc_id"] = chunk_doc_id
-                            break
+        async def check_postgres():
+            conn = await asyncpg.connect(connection_string)
+            try:
+                # Check if document exists in chunks table (layer 3)
+                query = """
+                    SELECT DISTINCT document_id
+                    FROM chunks
+                    WHERE document_id = $1 OR document_id LIKE $2
+                    LIMIT 1
+                """
+                row = await conn.fetchrow(query, document_id, f"{document_id}%")
+                if row:
+                    result["exists"] = True
+                    result["has_dense"] = True
+                    result["existing_doc_id"] = row["document_id"]
+            finally:
+                await conn.close()
 
-                if result["exists"]:
-                    break
+        # Run async check
+        asyncio.run(check_postgres())
 
-        except Exception as e:
-            logger.warning(f"Failed to read metadata.pkl: {e}")
-
-    # Check BM25 indexes
-    bm25_files = [
-        vector_db_path / "bm25_layer1.pkl",
-        vector_db_path / "bm25_layer2.pkl",
-        vector_db_path / "bm25_layer3.pkl",
-    ]
-
-    if all(f.exists() for f in bm25_files):
-        try:
-            # Check if BM25 has documents
-            with open(bm25_files[0], "rb") as f:
-                bm25_data = pickle.load(f)
-                if hasattr(bm25_data, "corpus") and len(bm25_data.corpus) > 0:
-                    result["has_bm25"] = True
-        except Exception as e:
-            logger.warning(f"Failed to read BM25 index: {e}")
+    except ImportError:
+        logger.warning("asyncpg not installed, cannot check PostgreSQL")
+    except Exception as e:
+        logger.warning(f"Failed to check PostgreSQL: {e}")
 
     # Check Knowledge Graph (in output directory)
     if result["existing_doc_id"]:
@@ -204,15 +188,8 @@ class IndexingConfig:
     enable_knowledge_graph: bool = True
     kg_config: Optional[KnowledgeGraphConfig] = None
 
-    # PHASE 5B: Hybrid Search (enabled by default for SOTA 2025)
-    enable_hybrid_search: bool = True  # BM25 + dense with RRF fusion (+23% precision)
-    hybrid_fusion_k: int = 60  # RRF k parameter (research: k=60 optimal)
-
-    # PHASE 5C: Cross-Encoder Reranking (optional)
-    enable_reranking: bool = False  # Two-stage retrieval: hybrid → rerank
-    reranker_model: str = "bge-reranker-large"  # SOTA accuracy (aliases: "accurate", "sota")
-    reranker_candidates: int = 50  # Retrieve 50 via hybrid search
-    reranker_top_k: int = 6  # Rerank to top 6
+    # PHASE 5C: Cross-Encoder Reranking (optional, not used with HyDE+Fusion)
+    enable_reranking: bool = False  # Not used - HyDE+Fusion handles retrieval
 
     # PHASE 5D: Graph-Vector Integration (optional)
     enable_graph_retrieval: bool = False  # Graph-enhanced retrieval
@@ -230,10 +207,9 @@ class IndexingConfig:
     enable_duplicate_detection: bool = True  # Detect semantic duplicates before indexing
     duplicate_similarity_threshold: float = 0.98  # 98% cosine similarity threshold
     duplicate_sample_pages: int = 1  # Pages to sample for detection (1 = first page)
-    vector_store_path: str = "vector_db"  # Path to vector store for duplicate checking
 
-    # Storage Backend Selection (PHASE 4)
-    storage_backend: str = "faiss"  # "faiss" or "postgresql" - where to index vectors
+    # Storage Backend Selection (PHASE 4) - PostgreSQL only
+    storage_backend: str = "postgresql"  # PostgreSQL with pgvector (required)
 
     def __post_init__(self):
         """Configure speed mode and validate settings."""
@@ -280,7 +256,6 @@ class IndexingConfig:
             SPEED_MODE: "fast" or "eco" (default: "fast")
             ENABLE_SEMANTIC_CLUSTERING: Enable semantic clustering (default: "false")
             ENABLE_KNOWLEDGE_GRAPH: Enable KG construction (default: "true")
-            ENABLE_HYBRID_SEARCH: Enable hybrid search (default: "true")
 
         Args:
             **overrides: Override specific fields
@@ -292,14 +267,8 @@ class IndexingConfig:
         from src.config import get_config
         root_config = get_config()
 
-        # Get storage backend from config (RootConfig has extra="allow")
-        storage_backend = "faiss"  # Default to FAISS
-        if hasattr(root_config, "storage"):
-            storage_config = root_config.storage
-            if isinstance(storage_config, dict):
-                storage_backend = storage_config.get("backend", "faiss")
-            else:
-                storage_backend = getattr(storage_config, "backend", "faiss")
+        # PostgreSQL is the only supported backend
+        storage_backend = "postgresql"
 
         # Create config with sub-configs loaded from config.json
         config = cls(
@@ -310,11 +279,9 @@ class IndexingConfig:
             embedding_config=EmbeddingConfig.from_config(root_config.embedding),
             enable_semantic_clustering=root_config.clustering.enable_labels,
             enable_knowledge_graph=root_config.knowledge_graph.enable,
-            enable_hybrid_search=root_config.hybrid_search.enable,
             enable_duplicate_detection=True,  # Always enabled
             duplicate_similarity_threshold=0.98,  # Default value
             duplicate_sample_pages=1,  # Default value
-            vector_store_path=root_config.agent.vector_store_path,
             storage_backend=storage_backend,
             **overrides,
         )
@@ -328,21 +295,23 @@ class IndexingPipeline:
 
     Phases:
     1. Smart hierarchy extraction (font-size based)
-    2. Generic summary generation (gpt-4o-mini)
-    3. Multi-layer chunking + SAC (RCTS 500 chars)
-    4. Embedding + FAISS indexing (3 separate indexes)
+    2. Generic summary generation (LLM)
+    3. Multi-layer chunking + SAC (RCTS 512 tokens)
+    4. Embedding + PostgreSQL pgvector indexing (3 separate indexes)
     5A. Knowledge Graph construction (optional)
-    5B. Hybrid search with BM25 + RRF (optional)
-    5C. Cross-encoder reranking (optional)
     5D. Graph-vector integration (optional)
     6. Context assembly for LLM (optional)
+
+    Retrieval (at query time):
+    - HyDE: Hypothetical Document Embeddings
+    - Query Expansion: 2 paraphrases for vocabulary coverage
+    - Weighted Fusion: w_hyde=0.6, w_exp=0.4
 
     Based on:
     - LegalBench-RAG (Pipitone & Alami, 2024)
     - Summary-Augmented Chunking (Reuter et al., 2024)
     - Multi-Layer Embeddings (Lima, 2024)
-    - Contextual Retrieval (Anthropic, 2024)
-    - HybridRAG (2024): Graph + Vector integration
+    - HyDE (Gao et al., 2022)
     - Context Assembly: SAC stripping + citations
     """
 
@@ -384,9 +353,7 @@ class IndexingPipeline:
             f"model={self.config.embedding_config.model} "
             f"({self.embedder.dimensions}D), "
             f"KG={self.config.enable_knowledge_graph}, "
-            f"Hybrid={self.config.enable_hybrid_search}, "
-            f"Rerank={self.config.enable_reranking}, "
-            f"GraphRetrieval={self.config.enable_graph_retrieval}"
+            f"Storage=PostgreSQL"
         )
 
     def _initialize_kg_pipeline(self):
@@ -614,14 +581,13 @@ class IndexingPipeline:
         existing = check_existing_components(result.document_id)
 
         if existing["exists"]:
-            logger.info(f"Document '{existing['existing_doc_id']}' found in vector_db:")
-            logger.info(f"  - Dense embeddings (FAISS): {'EXISTS' if existing['has_dense'] else 'MISSING'}")
-            logger.info(f"  - BM25 index: {'EXISTS' if existing['has_bm25'] else 'MISSING'}")
+            logger.info(f"Document '{existing['existing_doc_id']}' found in PostgreSQL:")
+            logger.info(f"  - Vector embeddings: {'EXISTS' if existing['has_dense'] else 'MISSING'}")
             logger.info(f"  - Knowledge Graph: {'EXISTS' if existing['has_kg'] else 'MISSING'}")
             logger.info("")
             logger.info("Will skip existing components and add only missing ones...")
         else:
-            logger.info(f"Document '{result.document_id}' NOT found in vector_db")
+            logger.info(f"Document '{result.document_id}' NOT found in PostgreSQL")
             logger.info("Will create all components...")
 
         logger.info("=" * 80)
@@ -629,7 +595,6 @@ class IndexingPipeline:
 
         # Determine what to skip
         skip_dense = existing["has_dense"]
-        skip_bm25 = existing["has_bm25"]
         skip_kg = existing["has_kg"]
 
         # PHASE 3: Multi-layer chunking + SAC (skip if cached)
@@ -652,21 +617,33 @@ class IndexingPipeline:
                 f"L3={chunking_stats['layer3_count']} (PRIMARY)"
             )
 
-        # PHASE 4: Embedding & FAISS (skip if exists)
+        # PHASE 4: Embedding & PostgreSQL pgvector (skip if exists)
         vector_store = None
 
         if skip_dense:
-            logger.info("PHASE 4: [SKIPPED] - Dense embeddings already exist")
-            # Load existing vector store
+            logger.info("PHASE 4: [SKIPPED] - Vector embeddings already exist in PostgreSQL")
+            # Load existing vector store adapter
             try:
-                vector_store = FAISSVectorStore.load("vector_db")
+                import asyncio
+                connection_string = os.getenv("DATABASE_URL")
+                if not connection_string:
+                    raise ValueError("DATABASE_URL environment variable required")
+
+                async def load_existing():
+                    return await load_vector_store_adapter(
+                        backend="postgresql",
+                        connection_string=connection_string,
+                        dimensions=self.embedder.dimensions,
+                    )
+
+                vector_store = asyncio.run(load_existing())
                 store_stats = vector_store.get_stats()
                 logger.info(
                     f"Loaded existing: {store_stats['total_vectors']} vectors "
                     f"({store_stats['documents']} documents)"
                 )
-            except (FileNotFoundError, ValueError, RuntimeError, PermissionError) as e:
-                logger.error(f"[ERROR] Failed to load existing vector_db: {e}")
+            except (ValueError, RuntimeError, PermissionError) as e:
+                logger.error(f"[ERROR] Failed to load existing PostgreSQL store: {e}")
                 logger.info("Falling back to creating new embeddings...")
                 skip_dense = False
 
@@ -753,102 +730,40 @@ class IndexingPipeline:
                     logger.warning(f"Clustering module not available: {e}")
                     logger.warning("Skipping semantic clustering")
 
-            # PHASE 4: Vector Store Indexing (backend-agnostic)
-            backend = self.config.storage_backend
-            logger.info(f"PHASE 4: Vector Store Indexing (backend={backend})")
+            # PHASE 4: Vector Store Indexing (PostgreSQL pgvector)
+            logger.info("PHASE 4: Vector Store Indexing (PostgreSQL pgvector)")
 
-            if backend == "postgresql":
-                # PostgreSQL backend - use async adapter
-                import asyncio
-                import nest_asyncio
+            import asyncio
+            import nest_asyncio
 
-                # Enable nested event loops (for running async in sync context)
-                nest_asyncio.apply()
+            # Enable nested event loops (for running async in sync context)
+            nest_asyncio.apply()
 
-                # Get connection string from environment
-                connection_string = os.getenv("DATABASE_URL")
-                if not connection_string:
-                    raise ValueError(
-                        "DATABASE_URL environment variable is required for PostgreSQL backend.\n"
-                        "Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/dbname'"
-                    )
-
-                # Create PostgreSQL adapter
-                async def create_postgres_adapter():
-                    adapter = await create_vector_store_adapter(
-                        backend="postgresql",
-                        connection_string=connection_string,
-                        dimensions=self.embedder.dimensions
-                    )
-                    await adapter.initialize()
-                    return adapter
-
-                vector_store = asyncio.run(create_postgres_adapter())
-                vector_store.add_chunks(chunks, embeddings)  # Sync wrapper
-                store_stats = vector_store.get_stats()
-                logger.info(
-                    f"PostgreSQL indexed: {store_stats['total_vectors']} vectors "
-                    f"({store_stats['documents']} documents)"
-                )
-
-            elif backend == "faiss":
-                # FAISS backend - traditional file-based storage
-                vector_store = FAISSVectorStore(dimensions=self.embedder.dimensions)
-                vector_store.add_chunks(chunks, embeddings)
-                store_stats = vector_store.get_stats()
-                logger.info(
-                    f"FAISS indexed: {store_stats['total_vectors']} vectors "
-                    f"({store_stats['documents']} documents)"
-                )
-
-            else:
+            # Get connection string from environment
+            connection_string = os.getenv("DATABASE_URL")
+            if not connection_string:
                 raise ValueError(
-                    f"Unknown storage backend: {backend}\n"
-                    f"Supported backends: 'faiss', 'postgresql'\n"
-                    f"Set storage.backend in config.json"
+                    "DATABASE_URL environment variable is required.\n"
+                    "Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/dbname'"
                 )
 
-        # PHASE 5B: Hybrid Search (optional, skip if exists)
-        if self.config.enable_hybrid_search:
-            if skip_bm25 and existing["has_dense"]:
-                logger.info("PHASE 5B: [SKIPPED] - BM25 index already exists")
-                # vector_store should already be HybridVectorStore from loading
-            else:
-                logger.info("PHASE 5B: Hybrid Search (BM25 + Dense + RRF)")
+            # Create PostgreSQL adapter
+            async def create_postgres_adapter():
+                adapter = create_vector_store_adapter(
+                    backend="postgresql",
+                    connection_string=connection_string,
+                    dimensions=self.embedder.dimensions
+                )
+                await adapter.initialize()
+                return adapter
 
-                try:
-                    from src.hybrid_search import BM25Store, HybridVectorStore
-
-                    # Build BM25 indexes for all 3 layers
-                    bm25_store = BM25Store()
-                    bm25_store.build_from_chunks(chunks)
-
-                    logger.info(
-                        f"BM25 Indexed: "
-                        f"L1={len(bm25_store.index_layer1.corpus)}, "
-                        f"L2={len(bm25_store.index_layer2.corpus)}, "
-                        f"L3={len(bm25_store.index_layer3.corpus)}"
-                    )
-
-                    # Wrap vector store (FAISS or PostgreSQL) + BM25 into HybridVectorStore
-                    hybrid_store = HybridVectorStore(
-                        vector_store=vector_store,
-                        bm25_store=bm25_store,
-                        fusion_k=self.config.hybrid_fusion_k,
-                    )
-
-                    # Replace vector_store with hybrid_store for return
-                    vector_store = hybrid_store
-                    store_stats = vector_store.get_stats()
-
-                    logger.info(f"Hybrid Search enabled: RRF k={self.config.hybrid_fusion_k}")
-
-                except (ImportError, RuntimeError, ValueError, MemoryError) as e:
-                    logger.error(f"[ERROR] Hybrid Search failed: {e}")
-                    logger.warning("Continuing with dense-only retrieval...")
-                    import traceback
-
-                    logger.debug(traceback.format_exc())
+            vector_store = asyncio.run(create_postgres_adapter())
+            vector_store.add_chunks(chunks, embeddings)  # Sync wrapper
+            store_stats = vector_store.get_stats()
+            logger.info(
+                f"PostgreSQL indexed: {store_stats['total_vectors']} vectors "
+                f"({store_stats['documents']} documents)"
+            )
 
         # PHASE 5A: Knowledge Graph (optional, skip if exists)
         knowledge_graph = None
@@ -938,28 +853,18 @@ class IndexingPipeline:
         logger.info(f"Indexing complete: {document_path.name}")
         logger.info("=" * 80)
 
-        # Wrap vector store in adapter (for unified interface)
-        from src.hybrid_search import HybridVectorStore
-        if isinstance(vector_store, HybridVectorStore):
-            # HybridVectorStore contains a FAISSVectorStore, wrap the FAISS component
-            vector_store_adapter = create_vector_store_adapter(
-                faiss_store=vector_store.faiss_store,
-                bm25_store=vector_store.bm25_store
-            )
-        else:
-            # Plain FAISSVectorStore
-            vector_store_adapter = create_vector_store_adapter(faiss_store=vector_store)
+        # vector_store is already a PostgresVectorStoreAdapter
 
         # Prepare result
         result_dict = {
-            "vector_store": vector_store_adapter,
+            "vector_store": vector_store,
             "knowledge_graph": knowledge_graph,
             "stats": {
                 "document_id": result.document_id,
                 "source_path": _make_relative_path(document_path),
                 "vector_store": store_stats,
                 "chunking": chunking_stats,
-                "hybrid_enabled": self.config.enable_hybrid_search,
+                "storage_backend": "postgresql",
                 "kg_enabled": self.config.enable_knowledge_graph,
                 "kg_entities": len(knowledge_graph.entities) if knowledge_graph else 0,
                 "kg_relationships": len(knowledge_graph.relationships) if knowledge_graph else 0,
@@ -979,51 +884,43 @@ class IndexingPipeline:
         self, document_paths: list, output_dir: Path, save_per_document: bool = False
     ) -> Dict:
         """
-        Index multiple documents into a single vector store.
+        Index multiple documents into PostgreSQL.
+
+        With PostgreSQL, all documents are indexed into the same database,
+        so no merging is required. Each document is indexed independently.
 
         Supported formats: PDF, DOCX, PPTX, XLSX, HTML
 
         Args:
             document_paths: List of document file paths
-            output_dir: Directory to save vector store
-            save_per_document: Save individual document vector stores
+            output_dir: Directory for intermediate results
+            save_per_document: Save individual document intermediate results
 
         Returns:
             Dict with:
-                - vector_store: Combined VectorStoreAdapter (FAISS)
+                - vector_store: PostgresVectorStoreAdapter
                 - knowledge_graphs: List of KnowledgeGraphs (if enabled)
                 - stats: Batch statistics
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Batch indexing {len(document_paths)} documents...")
+        logger.info(f"Batch indexing {len(document_paths)} documents to PostgreSQL...")
 
-        # Create combined vector store (HybridVectorStore or FAISSVectorStore)
-        if self.config.enable_hybrid_search:
-            from src.hybrid_search import HybridVectorStore, BM25Store
-
-            # Create empty FAISS and BM25 stores
-            faiss_store = FAISSVectorStore(dimensions=self.embedder.dimensions)
-            bm25_store = BM25Store()
-            vector_store = HybridVectorStore(faiss_store, bm25_store)
-            logger.info("Created HybridVectorStore for batch indexing")
-        else:
-            vector_store = FAISSVectorStore(dimensions=self.embedder.dimensions)
-            logger.info("Created FAISSVectorStore for batch indexing")
-
-        # Collect knowledge graphs
+        # Collect knowledge graphs and track successful documents
         knowledge_graphs = []
+        successful_docs = 0
+        vector_store = None
 
         for i, document_path in enumerate(document_paths, 1):
             logger.info(f"\n[{i}/{len(document_paths)}] Processing: {Path(document_path).name}")
 
             try:
-                # Index document
+                # Index document (goes directly to PostgreSQL)
                 result = self.index_document(
                     document_path=document_path,
-                    save_intermediate=False,
-                    output_dir=output_dir if save_per_document else None,
+                    save_intermediate=save_per_document,
+                    output_dir=output_dir / Path(document_path).stem if save_per_document else None,
                 )
 
                 # Handle None return (duplicate document skipped)
@@ -1031,58 +928,18 @@ class IndexingPipeline:
                     logger.info(f"[SKIPPED] Duplicate document: {document_path}")
                     continue
 
-                # Extract components
-                doc_store = result["vector_store"]
-                doc_kg = result.get("knowledge_graph")
-
-                # Merge into combined store using proper merge() methods
-                from src.hybrid_search import HybridVectorStore
-
-                if isinstance(vector_store, HybridVectorStore):
-                    # HybridVectorStore: Merge both FAISS and BM25 stores
-                    if isinstance(doc_store, HybridVectorStore):
-                        # Both hybrid: merge faiss_store and bm25_store
-                        vector_store.faiss_store.merge(doc_store.faiss_store)
-                        vector_store.bm25_store.merge(doc_store.bm25_store)
-                        logger.debug("Merged HybridVectorStore into combined store")
-                    else:
-                        # doc_store is FAISSVectorStore (shouldn't happen, but handle gracefully)
-                        vector_store.faiss_store.merge(doc_store)
-                        logger.warning(
-                            "Document store is FAISSVectorStore but combined is Hybrid - "
-                            "BM25 index will be incomplete"
-                        )
-                else:
-                    # FAISSVectorStore: Simple merge
-                    if isinstance(doc_store, FAISSVectorStore):
-                        vector_store.merge(doc_store)
-                        logger.debug("Merged FAISSVectorStore into combined store")
-                    else:
-                        # doc_store is HybridVectorStore (shouldn't happen, but handle gracefully)
-                        vector_store.merge(doc_store.faiss_store)
-                        logger.warning(
-                            "Document store is HybridVectorStore but combined is FAISS - "
-                            "Hybrid features will be lost"
-                        )
+                # Track the vector store (all docs go to same PostgreSQL)
+                vector_store = result["vector_store"]
+                successful_docs += 1
 
                 # Collect knowledge graph
+                doc_kg = result.get("knowledge_graph")
                 if doc_kg:
                     knowledge_graphs.append(doc_kg)
-
-                # Save per-document store
-                if save_per_document:
-                    doc_name = Path(document_path).stem
-                    doc_output = output_dir / f"{doc_name}_store"
-                    doc_store.save(doc_output)
-                    logger.info(f"Saved individual store: {doc_output}")
 
             except Exception as e:
                 logger.error(f"[ERROR] Failed to index {document_path}: {e}")
                 continue
-
-        # Save combined store
-        combined_output = output_dir / "combined_store"
-        vector_store.save(combined_output)
 
         # Save combined knowledge graph (if any)
         if knowledge_graphs and self.kg_pipeline:
@@ -1106,28 +963,18 @@ class IndexingPipeline:
             except Exception as e:
                 logger.error(f"[ERROR] Failed to save combined KG: {e}")
 
-        logger.info(f"\nBatch indexing complete: {vector_store.get_stats()}")
-        logger.info(f"Saved to: {combined_output}")
-
-        # Wrap vector store in adapter (for unified interface)
-        from src.hybrid_search import HybridVectorStore
-        if isinstance(vector_store, HybridVectorStore):
-            # HybridVectorStore contains a FAISSVectorStore, wrap the FAISS component
-            vector_store_adapter = create_vector_store_adapter(
-                faiss_store=vector_store.faiss_store,
-                bm25_store=vector_store.bm25_store
-            )
-        else:
-            # Plain FAISSVectorStore
-            vector_store_adapter = create_vector_store_adapter(faiss_store=vector_store)
+        # Get final stats from PostgreSQL
+        store_stats = vector_store.get_stats() if vector_store else {}
+        logger.info(f"\nBatch indexing complete: {store_stats}")
 
         return {
-            "vector_store": vector_store_adapter,
+            "vector_store": vector_store,
             "knowledge_graphs": knowledge_graphs,
             "stats": {
                 "total_documents": len(document_paths),
-                "successful": len(knowledge_graphs) if self.kg_pipeline else len(document_paths),
-                "vector_store": vector_store.get_stats(),
+                "successful": successful_docs,
+                "vector_store": store_stats,
+                "storage_backend": "postgresql",
                 "kg_enabled": self.config.enable_knowledge_graph,
                 "total_entities": sum(len(kg.entities) for kg in knowledge_graphs),
                 "total_relationships": sum(len(kg.relationships) for kg in knowledge_graphs),
@@ -1200,12 +1047,13 @@ class IndexingPipeline:
 # Example usage
 if __name__ == "__main__":
     # Initialize pipeline with research-optimal settings
-    # Knowledge Graph is now enabled by default (PHASE 5A)
+    # Requires: DATABASE_URL environment variable for PostgreSQL
+    # Requires: DEEPINFRA_API_KEY environment variable for embeddings
     config = IndexingConfig.from_env()
 
     pipeline = IndexingPipeline(config)
 
-    # Index single document
+    # Index single document (stored in PostgreSQL)
     result = pipeline.index_document(
         document_path=Path("data/document.pdf"),
         save_intermediate=True,
@@ -1213,23 +1061,20 @@ if __name__ == "__main__":
     )
 
     # Extract components
-    vector_store = result["vector_store"]
+    vector_store = result["vector_store"]  # PostgresVectorStoreAdapter
     knowledge_graph = result["knowledge_graph"]
 
-    # Save vector store
-    vector_store.save(Path("output/vector_store"))
-
-    # Save knowledge graph
+    # Save knowledge graph (vector store is already in PostgreSQL)
     if knowledge_graph:
         knowledge_graph.save_json("output/knowledge_graph.json")
         print(f"\nKnowledge Graph:")
         print(f"  Entities: {len(knowledge_graph.entities)}")
         print(f"  Relationships: {len(knowledge_graph.relationships)}")
 
-    # Search example
+    # Search example (using Layer 3 search)
     query_embedding = pipeline.embedder.embed_texts(["safety specification"])
-    results = vector_store.hierarchical_search(query_embedding, k_layer3=6)
+    results = vector_store.search_layer3(query_embedding[0], k=6)
 
     print(f"\nTop results:")
-    for i, result in enumerate(results["layer3"][:3], 1):
-        print(f"{i}. {result['section_title']} (score: {result['score']:.4f})")
+    for i, r in enumerate(results[:3], 1):
+        print(f"{i}. {r['section_title']} (score: {r['score']:.4f})")
