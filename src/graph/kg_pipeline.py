@@ -54,6 +54,12 @@ class KnowledgeGraphPipeline:
         # Validate configuration
         self.config.validate()
 
+        # Propagate regex prefill toggle to entity extraction config
+        self.config.entity_extraction.enable_regex_prefill = self.config.enable_regex_prefill
+        self.config.entity_extraction.enable_semantic_dedup = (
+            self.config.enable_semantic_entity_dedup
+        )
+
         # Initialize components
         self.entity_extractor: Optional[EntityExtractor] = None
         self.relationship_extractor: Optional[RelationshipExtractor] = None

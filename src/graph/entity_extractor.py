@@ -14,7 +14,9 @@ from typing import List, Dict, Any, Optional, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .models import Entity, EntityType
-from .config import EntityExtractionConfig
+from .config import EntityExtractionConfig, EntityDeduplicationConfig
+from .similarity_detector import EntitySimilarityDetector
+from ..embedding_generator import EmbeddingGenerator, EmbeddingConfig
 
 try:
     from ..cost_tracker import get_global_tracker
@@ -60,6 +62,8 @@ class EntityExtractor:
 
         # Cache for extracted entities (chunk_id -> entities)
         self.cache: Dict[str, List[Entity]] = {}
+        self.semantic_detector: Optional[EntitySimilarityDetector] = None
+        self._initialize_semantic_detector()
 
     def _initialize_llm_client(self):
         """Initialize LLM client based on provider."""
@@ -83,6 +87,29 @@ class EntityExtractor:
 
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config.llm_provider}")
+
+    def _initialize_semantic_detector(self):
+        """Initialize embedding-based similarity detector for deduplication."""
+        if not self.config.enable_semantic_dedup:
+            return
+
+        try:
+            dedup_config = EntityDeduplicationConfig(
+                similarity_threshold=self.config.semantic_similarity_threshold,
+                cache_embeddings=self.config.semantic_cache_embeddings,
+            )
+            embedder = EmbeddingGenerator(EmbeddingConfig())
+            self.semantic_detector = EntitySimilarityDetector(embedder, dedup_config)
+            logger.info(
+                "Semantic deduplication enabled "
+                f"(threshold={self.config.semantic_similarity_threshold})"
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to initialize semantic deduplication. Falling back to exact-match only. "
+                f"Error: {exc}"
+            )
+            self.semantic_detector = None
 
     def extract_from_chunks(self, chunks: List[Dict[str, Any]]) -> List[Entity]:
         """
@@ -574,7 +601,11 @@ class EntityExtractor:
                 merged = self._merge_entities(group)
                 deduplicated.append(merged)
 
-        logger.info(f"Deduplicated {len(entities)} entities to {len(deduplicated)}")
+        logger.info(f"Deduplicated {len(entities)} entities to {len(deduplicated)} (exact match)")
+
+        if self.config.enable_semantic_dedup and self.semantic_detector:
+            deduplicated = self._semantic_deduplicate_entities(deduplicated)
+
         return deduplicated
 
     def _merge_entities(self, entities: List[Entity]) -> Entity:
@@ -601,6 +632,48 @@ class EntityExtractor:
         merged.metadata["all_confidences"] = [e.confidence for e in entities]
 
         return merged
+
+    def _semantic_deduplicate_entities(self, entities: List[Entity]) -> List[Entity]:
+        """Merge near-duplicate entities using embeddings."""
+        if not entities or not self.semantic_detector:
+            return entities
+
+        merged_entities: List[Entity] = []
+
+        for entity in entities:
+            duplicate_idx = self._find_semantic_duplicate_index(entity, merged_entities)
+            if duplicate_idx is None:
+                merged_entities.append(entity)
+                continue
+
+            existing = merged_entities[duplicate_idx]
+            merged = self._merge_entities([existing, entity])
+            merged_entities[duplicate_idx] = merged
+
+        if len(merged_entities) != len(entities):
+            logger.info(
+                "Semantic deduplication merged entities: "
+                f"{len(entities)} -> {len(merged_entities)}"
+            )
+
+        return merged_entities
+
+    def _find_semantic_duplicate_index(
+        self, entity: Entity, existing_entities: List[Entity]
+    ) -> Optional[int]:
+        """Return index of semantic duplicate in existing_entities if found."""
+        if not existing_entities or not self.semantic_detector:
+            return None
+
+        match_id = self.semantic_detector.find_similar(entity, existing_entities, entity.type)
+        if not match_id:
+            return None
+
+        for idx, candidate in enumerate(existing_entities):
+            if candidate.id == match_id:
+                return idx
+
+        return None
 
     def extract_from_text(self, text: str, chunk_id: Optional[str] = None) -> List[Entity]:
         """

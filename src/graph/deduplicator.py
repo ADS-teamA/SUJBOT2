@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from .acronym_expander import AcronymExpander
     from .config import EntityDeduplicationConfig
     from .graph_builder import SimpleGraphBuilder
-    from .models import Entity
+    from .models import Entity, EntityType
     from .similarity_detector import EntitySimilarityDetector
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,9 @@ class EntityDeduplicator:
                 "Layer 2 will be skipped."
             )
 
+        # Alias map for hard-coded canonical IDs
+        self.alias_map = self.config.alias_map or {}
+
         # Layer 3: Acronym expansion (optional)
         self.acronym_expander = acronym_expander
         if self.config.use_acronym_expansion and not acronym_expander:
@@ -80,6 +83,7 @@ class EntityDeduplicator:
         # Statistics
         self.stats = {
             "layer1_matches": 0,  # Exact match
+            "alias_matches": 0,  # Alias/ontology match
             "layer2_matches": 0,  # Semantic similarity
             "layer3_matches": 0,  # Acronym expansion
             "total_checks": 0,
@@ -123,6 +127,13 @@ class EntityDeduplicator:
                 logger.debug(f"Layer 1 match: {entity.normalized_value} -> {dup_id}")
                 return dup_id
 
+        # Alias resolution (ontology-based)
+        alias_id = self._find_alias_duplicate(entity, graph)
+        if alias_id:
+            self.stats["alias_matches"] += 1
+            logger.debug(f"Alias match: {entity.normalized_value} -> {alias_id}")
+            return alias_id
+
         # Layer 2: Semantic similarity (if enabled and detector available)
         if self.config.use_embeddings and self.similarity_detector:
             # Convert graph to list of entities for similarity check
@@ -157,6 +168,79 @@ class EntityDeduplicator:
         # Lookup in index (O(1) operation)
         key = (entity.type, entity.normalized_value)
         return graph.entity_by_normalized_value.get(key)
+
+    def _find_alias_duplicate(
+        self,
+        entity: "Entity",
+        graph: "SimpleGraphBuilder",
+    ) -> Optional[str]:
+        """Find duplicate using alias/ontology map."""
+        if not self.alias_map:
+            return None
+
+        type_key = entity.type.value.lower()
+        type_aliases = self.alias_map.get(type_key)
+        if not type_aliases:
+            return None
+
+        alias_key = entity.normalized_value.lower()
+        canonical_list = type_aliases.get(alias_key)
+        if not canonical_list:
+            return None
+
+        candidate_ids: List[str] = []
+        for canonical_value in canonical_list:
+            duplicate_id = self._lookup_entity_id(graph, entity.type, canonical_value)
+            if duplicate_id:
+                candidate_ids.append(duplicate_id)
+
+        if not candidate_ids:
+            return None
+
+        if len(candidate_ids) == 1 or not (
+            self.config.enable_entity_linker and self.similarity_detector
+        ):
+            return candidate_ids[0]
+
+        # Use similarity detector to pick best canonical candidate
+        candidate_entities = [graph.entities[cid] for cid in candidate_ids]
+        best_match_id = self.similarity_detector.find_similar(
+            entity,
+            candidate_entities,
+            entity.type,
+        )
+        return best_match_id or candidate_ids[0]
+
+    def _lookup_entity_id(
+        self,
+        graph: "SimpleGraphBuilder",
+        entity_type: "EntityType",
+        normalized_value: str,
+    ) -> Optional[str]:
+        """Lookup entity ID using flexible casing for normalized_value."""
+        candidates = []
+        normalized_value = normalized_value.strip()
+        candidates.append(normalized_value)
+        lower = normalized_value.lower()
+        upper = normalized_value.upper()
+        if lower not in candidates:
+            candidates.append(lower)
+        if upper not in candidates:
+            candidates.append(upper)
+
+        for value in candidates:
+            key = (entity_type, value)
+            dup_id = graph.entity_by_normalized_value.get(key)
+            if dup_id:
+                return dup_id
+
+        # Fallback: case-insensitive scan
+        target_lower = normalized_value.lower()
+        for (etype, value), dup_id in graph.entity_by_normalized_value.items():
+            if etype == entity_type and value.lower() == target_lower:
+                return dup_id
+
+        return None
 
     def merge_entity_properties(
         self,

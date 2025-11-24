@@ -5,10 +5,12 @@ Defines settings for entity extraction, relationship extraction,
 graph storage backends, and integration with the RAG pipeline.
 """
 
+import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Set
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 from .models import EntityType, RelationshipType
 
@@ -90,6 +92,11 @@ class EntityExtractionConfig:
     # Lightweight pre-processing
     enable_regex_prefill: bool = True  # Run regex/pattern detectors before LLM
     regex_prefill_confidence: float = 0.85  # Confidence assigned to regex hits
+
+    # Semantic deduplication
+    enable_semantic_dedup: bool = False  # Use embeddings to merge near-duplicates
+    semantic_similarity_threshold: float = 0.92  # Cosine similarity threshold
+    semantic_cache_embeddings: bool = True  # Cache embeddings for performance
 
 
 @dataclass
@@ -233,6 +240,9 @@ class EntityDeduplicationConfig:
     use_acronym_expansion: bool = False
     acronym_fuzzy_threshold: float = 0.85  # Fuzzy match threshold
     custom_acronyms: dict = field(default_factory=dict)  # Custom acronym mappings
+    alias_map_path: Optional[str] = "./config/entity_aliases.json"
+    alias_map: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
+    enable_entity_linker: bool = True
 
     # Neo4j-specific
     apoc_enabled: bool = True  # Try APOC, fallback to Cypher
@@ -254,6 +264,36 @@ class EntityDeduplicationConfig:
             raise ValueError(
                 f"embedding_batch_size must be positive, got {self.embedding_batch_size}"
             )
+
+        if isinstance(self.alias_map, dict) and not self.alias_map:
+            self.alias_map = self._load_alias_map()
+
+    def _load_alias_map(self) -> Dict[str, Dict[str, List[str]]]:
+        """Load alias map from JSON file (if provided)."""
+        if not self.alias_map_path:
+            return {}
+
+        path = Path(self.alias_map_path)
+        if not path.exists():
+            return {}
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise ValueError(f"Failed to load alias map from {path}: {exc}") from exc
+
+        normalized: Dict[str, Dict[str, List[str]]] = {}
+        for entity_type, aliases in data.items():
+            type_map: Dict[str, List[str]] = {}
+            for alias, canonical in aliases.items():
+                if isinstance(canonical, list):
+                    canonical_list = [str(c).strip() for c in canonical]
+                else:
+                    canonical_list = [str(canonical).strip()]
+                type_map[alias.lower()] = canonical_list
+            normalized[entity_type.lower()] = type_map
+
+        return normalized
 
     @classmethod
     def from_env(cls) -> "EntityDeduplicationConfig":
@@ -278,6 +318,8 @@ class EntityDeduplicationConfig:
             acronym_fuzzy_threshold=float(os.getenv("KG_DEDUP_ACRONYM_FUZZY_THRESHOLD", "0.85")),
             custom_acronyms=custom_acronyms,
             apoc_enabled=os.getenv("KG_DEDUP_APOC_ENABLED", "true").lower() == "true",
+            alias_map_path=os.getenv("KG_DEDUP_ALIAS_PATH", "./config/entity_aliases.json"),
+            enable_entity_linker=os.getenv("KG_DEDUP_ENTITY_LINKER", "true").lower() == "true",
         )
 
 
@@ -347,6 +389,8 @@ class KnowledgeGraphConfig:
     enable_entity_extraction: bool = True
     enable_relationship_extraction: bool = True
     enable_cross_document_relationships: bool = False  # Expensive, for multi-doc graphs
+    enable_regex_prefill: bool = True  # Run regex-based entity prefill before LLM
+    enable_semantic_entity_dedup: bool = False  # Merge near-duplicates using embeddings
 
     # Performance settings
     max_retries: int = 3  # Retry failed extractions
@@ -400,6 +444,9 @@ class KnowledgeGraphConfig:
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             verbose=os.getenv("KG_VERBOSE", "true").lower() == "true",
+            enable_regex_prefill=os.getenv("KG_REGEX_PREFILL", "true").lower() == "true",
+            enable_semantic_entity_dedup=os.getenv("KG_SEMANTIC_DEDUP", "false").lower()
+            == "true",
         )
 
     def validate(self) -> None:
