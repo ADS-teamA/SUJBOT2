@@ -17,7 +17,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +28,12 @@ class HyDEExpansionResult:
 
     original_query: str
     hyde_document: str
-    expansions: List[str]  # Exactly 2 expansions
+    expansions: Tuple[str, str]  # Exactly 2 expansions (type-enforced)
 
     @property
     def all_queries(self) -> List[str]:
         """Return all query variants (hyde + expansions)."""
-        return [self.hyde_document] + self.expansions
+        return [self.hyde_document] + list(self.expansions)
 
 
 class HyDEExpansionGenerator:
@@ -54,7 +54,7 @@ class HyDEExpansionGenerator:
 
     def __init__(
         self,
-        client,  # DeepInfraClient
+        client: "DeepInfraClient",  # Forward reference to avoid circular import
         prompt_path: Optional[str] = None,
     ):
         """
@@ -64,7 +64,8 @@ class HyDEExpansionGenerator:
             client: DeepInfraClient instance
             prompt_path: Path to prompt template (defaults to prompts/hyde_expansion.txt)
         """
-        self.client = client
+        from .deepinfra_client import DeepInfraClient  # Import for runtime type checking
+        self.client: DeepInfraClient = client
 
         # Load prompt template
         if prompt_path is None:
@@ -128,12 +129,13 @@ Write in the SAME LANGUAGE as the query."""
             return result
 
         except Exception as e:
-            logger.error(f"HyDE generation failed: {e}")
+            logger.error(f"HyDE generation failed: {e}", exc_info=True)
+            logger.warning(f"HyDE fallback activated for query '{query[:50]}...' - search quality may be degraded")
             # Fallback: return original query as all variants
             return HyDEExpansionResult(
                 original_query=query,
                 hyde_document=query,  # Fallback to original
-                expansions=[query, query],  # Fallback to original
+                expansions=(query, query),  # Fallback to original (tuple)
             )
 
     def _parse_response(self, query: str, response: str) -> HyDEExpansionResult:
@@ -148,21 +150,34 @@ Write in the SAME LANGUAGE as the query."""
         hyde_doc = query  # Default fallback
         exp1 = query
         exp2 = query
+        fallback_used = False
 
         # Parse HYDE
         hyde_match = re.search(r"HYDE:\s*(.+?)(?=\nEXP1:|$)", response, re.DOTALL)
         if hyde_match:
             hyde_doc = hyde_match.group(1).strip()
+        else:
+            logger.warning(f"Failed to parse HYDE from LLM response. Using original query.")
+            fallback_used = True
 
         # Parse EXP1
         exp1_match = re.search(r"EXP1:\s*(.+?)(?=\nEXP2:|$)", response, re.DOTALL)
         if exp1_match:
             exp1 = exp1_match.group(1).strip()
+        else:
+            logger.warning(f"Failed to parse EXP1 from LLM response. Using original query.")
+            fallback_used = True
 
         # Parse EXP2
         exp2_match = re.search(r"EXP2:\s*(.+?)$", response, re.DOTALL)
         if exp2_match:
             exp2 = exp2_match.group(1).strip()
+        else:
+            logger.warning(f"Failed to parse EXP2 from LLM response. Using original query.")
+            fallback_used = True
+
+        if fallback_used:
+            logger.debug(f"LLM response that caused fallback: {response[:200]}...")
 
         # Log parsed result
         logger.debug(
@@ -175,5 +190,5 @@ Write in the SAME LANGUAGE as the query."""
         return HyDEExpansionResult(
             original_query=query,
             hyde_document=hyde_doc,
-            expansions=[exp1, exp2],
+            expansions=(exp1, exp2),  # Tuple for type safety
         )

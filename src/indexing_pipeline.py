@@ -511,9 +511,10 @@ class IndexingPipeline:
                 )
 
                 # Initialize detector (lazy-loads embedder and vector store)
+                # Uses DATABASE_URL from environment by default
                 detector = DuplicateDetector(
                     config=dup_config,
-                    vector_store_path=self.config.vector_store_path,
+                    connection_string=None,  # Uses DATABASE_URL env var
                 )
 
                 # Check for duplicate

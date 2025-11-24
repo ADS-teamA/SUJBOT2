@@ -98,44 +98,10 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         return self._bm25_store
 
     async def initialize(self):
-        """Initialize connection pool and BM25 store."""
+        """Initialize connection pool."""
         if not self._initialized:
             await self._initialize_pool()
-
-            # Load BM25 store from PostgreSQL
-            try:
-                from src.storage.postgres_bm25 import PostgresBM25Store
-
-                self._bm25_store = PostgresBM25Store(self.pool)
-                await self._bm25_store.load()
-                logger.info("PostgreSQL BM25 store loaded successfully")
-            except ImportError as e:
-                logger.error(
-                    f"Failed to import PostgresBM25Store: {e}. "
-                    "BM25 search unavailable. Check that postgres_bm25.py exists."
-                )
-                self._bm25_store = None
-            except asyncpg.UndefinedTableError as e:
-                logger.error(
-                    f"BM25 tables missing: {e}. "
-                    "Run 'scripts/migrate_bm25_to_postgres.py' to populate BM25 data."
-                )
-                self._bm25_store = None
-            except asyncpg.PostgresError as e:
-                logger.error(
-                    f"Database error loading BM25 store: {e}. "
-                    "BM25 search unavailable. Check database schema and permissions.",
-                    exc_info=True
-                )
-                self._bm25_store = None
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error loading BM25 store: {type(e).__name__}: {e}. "
-                    "This may indicate a bug - please report with logs.",
-                    exc_info=True
-                )
-                self._bm25_store = None
-
+            # Note: BM25 removed in favor of HyDE + Expansion Fusion pipeline
             self._initialized = True
 
     async def _initialize_pool(self):
@@ -644,6 +610,18 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 results = [r for r in results if r["score"] >= similarity_threshold]
 
             return results
+
+    def get_document_list(self) -> List[str]:
+        """Get list of unique document IDs."""
+        return _run_async_safe(self._async_get_document_list())
+
+    async def _async_get_document_list(self) -> List[str]:
+        """Async get document list."""
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT document_id FROM vectors.layer1 ORDER BY document_id"
+            )
+            return [row["document_id"] for row in rows]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get vector store statistics."""

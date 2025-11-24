@@ -36,6 +36,22 @@ class FusionConfig:
     default_k: int = 10  # Default number of results
     candidates_multiplier: int = 3  # Retrieve k * multiplier candidates per query
 
+    def __post_init__(self):
+        """Validate configuration after initialization."""
+        if not 0 <= self.hyde_weight <= 1:
+            raise ValueError(f"hyde_weight must be in [0, 1], got {self.hyde_weight}")
+        if not 0 <= self.expansion_weight <= 1:
+            raise ValueError(f"expansion_weight must be in [0, 1], got {self.expansion_weight}")
+        if abs(self.hyde_weight + self.expansion_weight - 1.0) > 1e-6:
+            raise ValueError(
+                f"hyde_weight + expansion_weight must equal 1.0, "
+                f"got {self.hyde_weight} + {self.expansion_weight} = {self.hyde_weight + self.expansion_weight}"
+            )
+        if self.default_k <= 0:
+            raise ValueError(f"default_k must be positive, got {self.default_k}")
+        if self.candidates_multiplier < 1:
+            raise ValueError(f"candidates_multiplier must be >= 1, got {self.candidates_multiplier}")
+
 
 class FusionRetriever:
     """
@@ -111,39 +127,51 @@ class FusionRetriever:
         logger.info(f"Fusion search: '{query[:50]}...' (k={k})")
 
         # Step 1: Generate HyDE + expansions
-        hyde_result = self.generator.generate(query)
-        logger.debug(f"Generated HyDE: {hyde_result.hyde_document[:100]}...")
+        try:
+            hyde_result = self.generator.generate(query)
+            logger.debug(f"Generated HyDE: {hyde_result.hyde_document[:100]}...")
+        except Exception as e:
+            logger.error(f"HyDE generation failed for query '{query[:50]}...': {e}", exc_info=True)
+            raise RuntimeError(f"HyDE generation failed: {e}") from e
 
         # Step 2: Embed all variants
-        texts_to_embed = [
-            hyde_result.hyde_document,
-            hyde_result.expansions[0],
-            hyde_result.expansions[1],
-        ]
-        embeddings = self.client.embed_texts(texts_to_embed)
+        try:
+            texts_to_embed = [
+                hyde_result.hyde_document,
+                hyde_result.expansions[0],
+                hyde_result.expansions[1],
+            ]
+            embeddings = self.client.embed_texts(texts_to_embed)
+        except Exception as e:
+            logger.error(f"Embedding failed for fusion search: {e}", exc_info=True)
+            raise RuntimeError(f"Embedding failed: {e}") from e
 
         hyde_emb = embeddings[0]
         exp_0_emb = embeddings[1]
         exp_1_emb = embeddings[2]
 
         # Step 3: Search with each embedding
-        hyde_results = self.vector_store.search_layer3(
-            query_embedding=hyde_emb,
-            k=candidates_k,
-            document_filter=document_filter,
-        )
+        try:
+            hyde_results = self.vector_store.search_layer3(
+                query_embedding=hyde_emb,
+                k=candidates_k,
+                document_filter=document_filter,
+            )
 
-        exp_0_results = self.vector_store.search_layer3(
-            query_embedding=exp_0_emb,
-            k=candidates_k,
-            document_filter=document_filter,
-        )
+            exp_0_results = self.vector_store.search_layer3(
+                query_embedding=exp_0_emb,
+                k=candidates_k,
+                document_filter=document_filter,
+            )
 
-        exp_1_results = self.vector_store.search_layer3(
-            query_embedding=exp_1_emb,
-            k=candidates_k,
-            document_filter=document_filter,
-        )
+            exp_1_results = self.vector_store.search_layer3(
+                query_embedding=exp_1_emb,
+                k=candidates_k,
+                document_filter=document_filter,
+            )
+        except Exception as e:
+            logger.error(f"Vector store search failed: {e}", exc_info=True)
+            raise RuntimeError(f"Vector store search failed: {e}") from e
 
         logger.debug(
             f"Retrieved candidates: hyde={len(hyde_results)}, "

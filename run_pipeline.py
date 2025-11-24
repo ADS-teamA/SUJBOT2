@@ -219,7 +219,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
     print_info(f"Embedding Model: {config.embedding_config.model}")
     print_info(f"Max Tokens: {config.chunking_config.max_tokens} tokens (HybridChunker)")
     print_info(f"SAC (Contextual Retrieval): {'ON' if config.chunking_config.enable_contextual else 'OFF'}")
-    print_info(f"Hybrid Search (BM25+Dense): {'ON ✅' if config.enable_hybrid_search else 'OFF'}")
+    print_info(f"HyDE + Expansion Fusion: ON ✅ (w_hyde=0.6, w_exp=0.4)")
     print_info(f"Knowledge Graph: {'ON ✅' if config.enable_knowledge_graph else 'OFF'}")
     print_info(f"Storage Backend: {config.storage_backend.upper()}")
     print_info(f"Output: {output_dir}")
@@ -248,11 +248,8 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
         knowledge_graph = result["knowledge_graph"]
         stats = result["stats"]
 
-        # Save PHASE 4: Vector store (FAISS + BM25 if hybrid)
-        print_info("Saving vector store...")
-        vs_path = output_dir / "phase4_vector_store"
-        vector_store.save(vs_path)
-        print_success(f"Vector store saved: {vs_path}")
+        # PHASE 4: Vector store is stored in PostgreSQL (no file save needed)
+        print_success(f"Vector store persisted in PostgreSQL database")
 
         # Save PHASE 5A: Knowledge Graph (if enabled)
         kg_path = None
