@@ -294,18 +294,18 @@ class VectorStoreLoader:
         Load vector store with automatic format detection and migration.
 
         Args:
-            path: Path to vector store directory
-            loader_class: Class with load() classmethod (e.g., FAISSVectorStore)
+            path: Path to vector store directory or connection string
+            loader_class: Class with load() classmethod
             prefer_format: Optional format preference ("new" or "old")
 
         Returns:
             Loaded vector store instance
 
         Example:
-            >>> from src.faiss_vector_store import FAISSVectorStore
-            >>> store = VectorStoreLoader.load_with_backward_compatibility(
-            >>>     Path("output/vector_store"),
-            >>>     FAISSVectorStore
+            >>> from src.storage import load_vector_store_adapter
+            >>> store = await load_vector_store_adapter(
+            >>>     backend="postgresql",
+            >>>     connection_string="postgresql://..."
             >>> )
         """
         format_type = VectorStoreLoader.detect_format(path)

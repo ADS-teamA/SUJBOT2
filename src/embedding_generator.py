@@ -83,7 +83,9 @@ class EmbeddingGenerator:
             logger.info(f"Embedding cache enabled: max_size={self._cache_max_size}")
 
         # Initialize model based on type
-        if "voyage" in self.model_name.lower() or "kanon" in self.model_name.lower():
+        if "deepinfra" in self.model_name.lower() or "qwen" in self.model_name.lower():
+            self._init_deepinfra_model()
+        elif "voyage" in self.model_name.lower() or "kanon" in self.model_name.lower():
             self._init_voyage_model()
         elif self.model_name.startswith("text-embedding"):
             self._init_openai_model()
@@ -118,6 +120,38 @@ class EmbeddingGenerator:
         self.dimensions = 1024
 
         logger.info(f"Voyage AI model initialized: {self.model_name} ({self.dimensions}D)")
+
+    def _init_deepinfra_model(self):
+        """Initialize DeepInfra embedding model (Qwen3-Embedding-8B)."""
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "openai package required for DeepInfra. "
+                "Install with: uv pip install openai"
+            )
+
+        api_key = os.environ.get("DEEPINFRA_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "DEEPINFRA_API_KEY environment variable required for DeepInfra models. "
+                "Get your key at: https://deepinfra.com/"
+            )
+
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepinfra.com/v1/openai",
+            timeout=60,
+            max_retries=3,
+        )
+        self.model_type = "deepinfra"
+
+        # Qwen3-Embedding-8B uses 4096 dimensions
+        self.dimensions = 4096
+
+        # Mask API key for logging
+        masked_key = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "***"
+        logger.info(f"DeepInfra model initialized: {self.model_name} ({self.dimensions}D, key={masked_key})")
 
     def _init_openai_model(self):
         """Initialize OpenAI embedding model."""
@@ -270,7 +304,9 @@ class EmbeddingGenerator:
 
         logger.info(f"Embedding {len(texts)} texts...")
 
-        if self.model_type == "voyage":
+        if self.model_type == "deepinfra":
+            embeddings = self._embed_deepinfra(texts)
+        elif self.model_type == "voyage":
             embeddings = self._embed_voyage(texts)
         elif self.model_type == "openai":
             embeddings = self._embed_openai(texts)
@@ -383,6 +419,35 @@ class EmbeddingGenerator:
                 )
 
             batch_embeddings = result.embeddings
+            all_embeddings.extend(batch_embeddings)
+
+        return np.array(all_embeddings, dtype=np.float32)
+
+    def _embed_deepinfra(self, texts: List[str]) -> np.ndarray:
+        """Embed texts using DeepInfra API (OpenAI-compatible)."""
+        all_embeddings = []
+
+        # Process in batches
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i : i + self.batch_size]
+
+            logger.debug(
+                f"Processing batch {i//self.batch_size + 1}/{(len(texts)-1)//self.batch_size + 1}"
+            )
+
+            response = self.client.embeddings.create(
+                model=self.model_name, input=batch, encoding_format="float"
+            )
+
+            # Track cost (DeepInfra uses same format as OpenAI)
+            self.tracker.track_embedding(
+                provider="deepinfra",
+                model=self.model_name,
+                tokens=response.usage.total_tokens,
+                operation="embedding",
+            )
+
+            batch_embeddings = [data.embedding for data in response.data]
             all_embeddings.extend(batch_embeddings)
 
         return np.array(all_embeddings, dtype=np.float32)

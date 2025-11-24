@@ -62,7 +62,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pypdf2 pymupdf \
     "unstructured[all-docs]>=0.10.0" \
     "docling>=2.57.0" "docling-core>=2.48.0" "docling-parse>=4.4.0" "docling-ibm-models>=3.9.0" \
-    anthropic openai "google-genai>=0.5.0" "google-api-core>=2.0.0" \
+    anthropic openai "google-generativeai>=0.8.0" "google-genai>=0.5.0" "google-api-core>=2.0.0" \
     langchain-text-splitters langgraph "langgraph-checkpoint-postgres>=2.0.0" langsmith \
     tiktoken "sentence-transformers>=5.1.2" "faiss-cpu>=1.7.4" "rank-bm25>=0.2.2" \
     numpy scikit-learn hdbscan "umap-learn>=0.5.5" matplotlib \
