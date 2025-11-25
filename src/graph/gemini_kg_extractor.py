@@ -18,8 +18,8 @@ from .models import Entity, EntityType, Relationship, RelationshipType, Knowledg
 
 logger = logging.getLogger(__name__)
 
-# Gemini 2.5 Pro for KG extraction (strong reasoning)
-KG_MODEL = "gemini-2.5-pro"
+# Gemini 2.5 Flash for KG extraction (fast, high quota)
+KG_MODEL = "gemini-2.5-flash"
 
 KG_EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů pro extrakci znalostního grafu. Analyzuj dokument a extrahuj entity a vztahy.
 

@@ -7,7 +7,7 @@
  * - Backend manages session (stateless JWT validation)
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { apiService, type UserProfile } from '../services/api';
 
 interface AuthContextType {

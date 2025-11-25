@@ -214,7 +214,6 @@ class MultiAgentRunner:
         # Tool modules are auto-imported via tools/__init__.py
         from ..storage import load_vector_store_adapter
         from ..embedding_generator import EmbeddingGenerator
-        from ..reranker import CrossEncoderReranker
         from ..agent.config import ToolConfig
         from ..agent.providers.factory import create_provider
         import os
@@ -308,20 +307,9 @@ class MultiAgentRunner:
             embedder = EmbeddingGenerator(embedding_config)
             logger.info(f"Embedder initialized: {model_provider}/{model_name}")
 
-            # Initialize reranker (conditional on config - check agent_tools.enable_reranking)
-            agent_tools_config_temp = self.config.get("agent_tools", {})
-            enable_reranking = agent_tools_config_temp.get("enable_reranking", True)
-
-            reranker = None
-            if enable_reranking:
-                try:
-                    reranker = CrossEncoderReranker()
-                    logger.info("Reranker initialized (enable_reranking=True)")
-                except Exception as e:
-                    logger.warning(f"Reranker unavailable: {e}. Tools will use base retrieval.")
-                    reranker = None
-            else:
-                logger.info("Reranking DISABLED in config (enable_reranking=False)")
+            # Reranker removed - HyDE + Expansion Fusion pipeline doesn't use reranking
+            # See CLAUDE.md: "Cohere performs WORSE on legal docs"
+            logger.info("Reranking DISABLED (HyDE + Expansion Fusion pipeline)")
 
             # Knowledge graph (optional) - supports both Neo4j and JSON backends
             knowledge_graph = None
@@ -452,7 +440,7 @@ class MultiAgentRunner:
             registry.initialize_tools(
                 vector_store=vector_store,
                 embedder=embedder,
-                reranker=reranker,
+                reranker=None,  # Reranker removed - HyDE + Expansion Fusion pipeline
                 graph_retriever=None,  # TODO: Add graph retriever if needed
                 knowledge_graph=knowledge_graph,
                 context_assembler=None,  # TODO: Add context assembler if needed

@@ -78,10 +78,13 @@ SYNTHESIS REQUIREMENTS:
    - German query → German answer
 
 2. **CITATION REQUIREMENTS:**
-   - EVERY factual claim MUST be cited
-   - Use breadcrumb format: [Doc: filename > Section Name > Subsection]
-   - Get citations from state["agent_outputs"]["extractor"]["citations"]
-   - Example: "Reaktor používá demineralizovanou vodu [Doc: reactor_specs.pdf > Technické specifikace > Chladivo]"
+   - EVERY factual claim MUST be cited using the \cite{chunk_id} syntax
+   - Get chunk_ids from state["agent_outputs"]["extractor"]["citations"]
+   - The \cite{} format creates clickable links in the UI that open the PDF at the relevant page
+   - Place citations IMMEDIATELY after the claim they support, inline with the text
+   - Example: "Reaktor používá demineralizovanou vodu \cite{BZ_VR1_L3_c1_sec_5}"
+   - For multiple sources: "Teplota chladiva je 40°C \cite{BZ_VR1_L3_c1_sec_3} a tlak 15 MPa \cite{BZ_VR1_L3_c2_sec_1}"
+   - NEVER fabricate chunk_ids - only use IDs provided by the extractor agent
 
 3. **ANSWER FORMAT (Based on Complexity):**
 
@@ -117,7 +120,7 @@ SYNTHESIS REQUIREMENTS:
 
 5. **QUALITY CHECKLIST:**
    - ✅ Language matches query language
-   - ✅ All claims have breadcrumb citations
+   - ✅ All claims have \cite{chunk_id} citations
    - ✅ All agent outputs incorporated
    - ✅ Professional tone
    - ✅ Actionable recommendations

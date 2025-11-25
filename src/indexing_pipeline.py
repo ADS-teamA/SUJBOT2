@@ -32,6 +32,7 @@ Usage:
     result["knowledge_graph"].save_json("output/knowledge_graph.json")
 """
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -375,10 +376,10 @@ class IndexingPipeline:
             self.kg_extractor = None
             return
 
-        # Initialize Gemini KG extractor
+        # Initialize Gemini KG extractor (uses default model from KG_MODEL constant)
         try:
-            self.kg_extractor = GeminiKGExtractor(model="gemini-2.5-pro")
-            logger.info("Knowledge Graph initialized: GeminiKGExtractor (gemini-2.5-pro)")
+            self.kg_extractor = GeminiKGExtractor()  # Uses default gemini-2.5-flash
+            logger.info(f"Knowledge Graph initialized: GeminiKGExtractor ({self.kg_extractor.model_id})")
         except Exception as e:
             logger.warning(f"Failed to initialize GeminiKGExtractor: {e}")
             self.kg_extractor = None
@@ -566,6 +567,14 @@ class IndexingPipeline:
                 f"depth={result.hierarchy_depth}, "
                 f"method={result.extraction_method}"
             )
+
+        # Ensure document_id is never None (fallback to filename for non-legal documents)
+        if not result.document_id:
+            fallback_id = Path(document_path).stem
+            logger.warning(
+                f"document_id is None (non-legal document?), using filename: {fallback_id}"
+            )
+            result.document_id = fallback_id
 
         # Check existing components in vector_db AFTER extraction
         logger.info("")
@@ -779,7 +788,6 @@ class IndexingPipeline:
                 try:
                     kg_files = list(output_dir.glob("*_kg.json")) if output_dir else []
                     if kg_files:
-                        import json
                         with open(kg_files[0], 'r') as f:
                             kg_data = json.load(f)
                         logger.info(

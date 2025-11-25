@@ -602,7 +602,7 @@ export class ApiService {
                 call_count: typeof agent.call_count === 'number' ? agent.call_count : 0,
                 response_time_ms: typeof agent.response_time_ms === 'number' ? agent.response_time_ms : 0,
               };
-            }).filter((agent): agent is AgentCostBreakdown => agent !== null);
+            }).filter((agent: AgentCostBreakdown | null): agent is AgentCostBreakdown => agent !== null);
           }
         }
 
