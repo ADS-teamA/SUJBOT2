@@ -132,6 +132,36 @@ Flow: Sections → Section Summaries → Document Summary
 - **3 separate indexes** (document/section/chunk) - NOT merged
 - **Result:** 2.3x essential chunks vs single-layer (Lima, 2024)
 
+### 6.1 Chunk JSON Format (phase3_chunks.json)
+
+**IMPORTANT:** Chunks serialized to JSON use this format. Do NOT use `content` field!
+
+```json
+{
+  "chunk_id": "doc_L3_c1_sec_1",
+  "context": "SAC context summary (what chunk is about)",
+  "raw_content": "Actual text content from the document",
+  "embedding_text": "[breadcrumb]\n\ncontext\n\nraw_content",
+  "metadata": { "chunk_id": "...", "layer": 3, "document_id": "..." }
+}
+```
+
+| Field | Purpose |
+|-------|---------|
+| `context` | SAC context summary - LLM-generated description of what the chunk contains |
+| `raw_content` | Actual document text (used for LLM generation, NOT just titles) |
+| `embedding_text` | `[breadcrumb]\n\ncontext\n\nraw_content` - full text for embedding |
+
+**PhaseLoaders**: When loading chunks from JSON, use `embedding_text` as the Chunk's `content` field.
+
+### 6.2 Chunked PDF Extraction Deduplication
+
+When Gemini extracts large PDFs in chunks (TOC pages first, content pages later), duplicate sections appear:
+- **TOC sections** (`c1_sec_*`): contain only section titles as content
+- **Content sections** (`c2_sec_*`): contain actual text
+
+**Solution**: `GeminiKGExtractor._deduplicate_sections_by_path()` merges sections with the same hierarchical path, keeping the one with the longest content. This happens automatically during chunked extraction.
+
 ### 7. No Cohere Reranking
 
 Cohere performs WORSE on legal docs. Use `ms-marco` or `bge-reranker` instead.

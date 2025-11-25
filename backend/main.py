@@ -40,6 +40,8 @@ from backend.middleware.rate_limit import RateLimitMiddleware
 from backend.middleware.security_headers import SecurityHeadersMiddleware
 from backend.routes.auth import router as auth_router, set_dependencies
 from backend.routes.conversations import router as conversations_router, set_postgres_adapter, get_postgres_adapter
+from backend.routes.citations import router as citations_router
+from backend.routes.documents import router as documents_router
 
 # Import PostgreSQL adapter for user/conversation storage
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
@@ -246,6 +248,12 @@ app.include_router(auth_router)
 
 # Register conversation routes (/conversations, /conversations/{id}/messages, etc.)
 app.include_router(conversations_router)
+
+# Register citation routes (/citations/{chunk_id}, /citations/batch)
+app.include_router(citations_router)
+
+# Register document routes (/documents/{document_id}/pdf)
+app.include_router(documents_router)
 
 
 @app.get("/health", response_model=HealthResponse)

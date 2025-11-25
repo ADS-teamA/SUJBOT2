@@ -795,7 +795,7 @@ class GeminiExtractor:
         return chunk_paths
 
     def _process_single_chunk(
-        self, chunk_path: Path, chunk_index: int
+        self, chunk_path: Path, chunk_index: int, page_offset: int = 0
     ) -> Tuple[int, Dict, List[Dict]]:
         """
         Process a single PDF chunk and return extracted sections.
@@ -803,11 +803,13 @@ class GeminiExtractor:
         Args:
             chunk_path: Path to the temporary chunk PDF
             chunk_index: Index of the chunk (for logging and section_id prefixing)
+            page_offset: Page number offset to add to all page_number values
+                        (e.g., if chunk contains pages 11-20, offset should be 10)
 
         Returns:
             Tuple of (chunk_index, document_meta, sections_list)
         """
-        logger.info(f"Processing chunk {chunk_index + 1}: {chunk_path.name}")
+        logger.info(f"Processing chunk {chunk_index + 1}: {chunk_path.name} (page_offset={page_offset})")
 
         try:
             # Upload chunk
@@ -830,13 +832,19 @@ class GeminiExtractor:
                 # Normalize sections - Gemini may return nested lists
                 chunk_sections = self._normalize_sections_list(chunk_sections)
 
-                # Add chunk prefix to section_id to avoid collisions
+                # Add chunk prefix to section_id and fix page_number offset
                 for sec in chunk_sections:
                     original_id = sec.get("section_id", "")
                     sec["section_id"] = f"c{chunk_index + 1}_{original_id}"
                     # Update parent_id references
                     if sec.get("parent_id"):
                         sec["parent_id"] = f"c{chunk_index + 1}_{sec['parent_id']}"
+
+                    # Fix page_number by adding offset
+                    # Gemini returns page_number relative to the chunk (1-based)
+                    # We need to convert to absolute page number in original document
+                    if "page_number" in sec and sec["page_number"] is not None:
+                        sec["page_number"] = sec["page_number"] + page_offset
 
                 logger.info(f"Chunk {chunk_index + 1}: {len(chunk_sections)} sections extracted")
                 return (chunk_index, document_meta, chunk_sections)
@@ -898,11 +906,17 @@ class GeminiExtractor:
                 # Process batch in parallel using ThreadPoolExecutor
                 with ThreadPoolExecutor(max_workers=batch_size) as executor:
                     # Submit all chunks in this batch
+                    # Calculate page_offset for each chunk:
+                    # chunk 0: pages 1-10, offset=0
+                    # chunk 1: pages 11-20, offset=10
+                    # chunk N: pages (N*max_pages+1)-(N+1)*max_pages, offset=N*max_pages
+                    max_pages = self.gemini_config.max_pages_per_chunk
                     futures = {
                         executor.submit(
                             self._process_single_chunk,
                             chunk_path,
-                            batch_start + i
+                            batch_start + i,
+                            (batch_start + i) * max_pages  # page_offset
                         ): batch_start + i
                         for i, chunk_path in enumerate(batch_chunks)
                     }
@@ -970,20 +984,103 @@ class GeminiExtractor:
                 _, sections = results[i]
                 all_sections.extend(sections)
 
+        # Deduplicate sections with same path (TOC vs content pages)
+        # When chunked extraction processes TOC pages and content pages separately,
+        # we get duplicate sections - TOC has only titles, content has full text.
+        # Keep the section with the longest content for each path.
+        deduplicated_sections = self._deduplicate_sections_by_path(all_sections)
+
         merged_raw = {
             "document": document_meta,
-            "sections": all_sections
+            "sections": deduplicated_sections
         }
 
         extraction_time = time.time() - start_time
         success_rate = (total_chunks - len(failed_chunks)) / total_chunks if total_chunks > 0 else 0
         logger.info(
-            f"Chunked extraction complete: {len(all_sections)} sections "
-            f"from {total_chunks} chunks in {extraction_time:.1f}s "
+            f"Chunked extraction complete: {len(deduplicated_sections)} sections "
+            f"(deduped from {len(all_sections)}) from {total_chunks} chunks in {extraction_time:.1f}s "
             f"(success rate: {success_rate:.0%}, parallel batches of {batch_size})"
         )
 
         return self._convert_to_extracted_document(merged_raw, file_path, extraction_time)
+
+    def _deduplicate_sections_by_path(self, sections: List[Dict]) -> List[Dict]:
+        """
+        Deduplicate sections with the same hierarchical path.
+
+        When processing large PDFs in chunks, TOC pages (early chunks) produce sections
+        with only titles as content, while content pages (later chunks) produce sections
+        with the actual text. Both have the same hierarchical path.
+
+        This method keeps the section with the longest content for each unique path,
+        effectively merging TOC-only sections with their content counterparts.
+
+        Args:
+            sections: List of section dicts from all chunks
+
+        Returns:
+            Deduplicated list of sections, keeping longest content for each path
+        """
+        # Group sections by path
+        by_path: Dict[str, List[Dict]] = {}
+        for sec in sections:
+            path = sec.get("path", "")
+            if not path:
+                # Keep sections without path as-is
+                if "" not in by_path:
+                    by_path[""] = []
+                by_path[""].append(sec)
+                continue
+
+            if path not in by_path:
+                by_path[path] = []
+            by_path[path].append(sec)
+
+        # Select best section for each path (longest content, but preserve highest page_number)
+        deduplicated = []
+        for path, secs in by_path.items():
+            if len(secs) == 1:
+                deduplicated.append(secs[0])
+            else:
+                # Multiple sections with same path - keep the one with longest content
+                best = max(secs, key=lambda s: len(s.get("content", "")))
+
+                # But use page_number from the section with highest page_number
+                # (TOC sections have low page numbers, content sections have correct ones)
+                max_page = max(s.get("page_number", 0) or 0 for s in secs)
+                if max_page > 0:
+                    best["page_number"] = max_page
+
+                deduplicated.append(best)
+                if len(secs) > 1:
+                    logger.debug(
+                        f"Deduplicated path '{path}': kept {len(best.get('content', ''))} chars, "
+                        f"page={max_page}, removed {len(secs) - 1} duplicate(s)"
+                    )
+
+        # Sort by section_id to maintain order (c1_sec_1, c1_sec_2, c2_sec_1, etc.)
+        def sort_key(sec: Dict) -> Tuple[int, int]:
+            sid = sec.get("section_id", "")
+            # Parse c{chunk}_sec_{num} format
+            try:
+                parts = sid.replace("c", "").replace("sec", "").split("_")
+                parts = [p for p in parts if p]
+                if len(parts) >= 2:
+                    return (int(parts[0]), int(parts[1]))
+                elif len(parts) == 1:
+                    return (0, int(parts[0]))
+            except (ValueError, IndexError):
+                pass
+            return (999, 0)
+
+        deduplicated.sort(key=sort_key)
+
+        # Renumber section_ids to be sequential
+        for i, sec in enumerate(deduplicated, 1):
+            sec["section_id"] = f"sec_{i}"
+
+        return deduplicated
 
     def _convert_to_extracted_document(
         self, raw: dict, file_path: Path, extraction_time: float

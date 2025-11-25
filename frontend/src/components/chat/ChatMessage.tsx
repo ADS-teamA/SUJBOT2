@@ -8,15 +8,51 @@
  * - Markdown rendering with syntax highlighting
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeRaw from 'rehype-raw';
 import { Clock, DollarSign, Edit2, RotateCw, Check, X } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 import type { Message } from '../../types';
 import { ToolCallDisplay } from './ToolCallDisplay';
 import { ProgressPhaseDisplay } from './ProgressPhaseDisplay';
+import { CitationLink } from '../citation/CitationLink';
+import { preprocessCitations } from '../../utils/citations';
+
+/**
+ * Custom markdown components including citation support.
+ * The cite component renders CitationLink for <cite data-chunk-id="..."> elements.
+ */
+const createMarkdownComponents = () => ({
+  code({ node, inline, className, children, ...props }: any) {
+    return inline ? (
+      <code
+        className={cn(
+          'px-1 py-0.5 rounded text-sm',
+          'bg-accent-100 dark:bg-accent-800'
+        )}
+        {...props}
+      >
+        {children}
+      </code>
+    ) : (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  },
+  // Citation handler: renders CitationLink for <cite> elements
+  cite({ node, ...props }: any) {
+    const chunkId = props['data-chunk-id'];
+    if (chunkId) {
+      return <CitationLink chunkId={chunkId} />;
+    }
+    // Fallback for cite without data-chunk-id
+    return <cite {...props} />;
+  },
+});
 
 interface ChatMessageProps {
   message: Message;
@@ -59,6 +95,16 @@ export function ChatMessage({
   const handleRegenerate = () => {
     onRegenerate(message.id);
   };
+
+  // Preprocess content to convert \cite{chunk_id} to HTML <cite> tags
+  // Only for assistant messages (user messages don't have citations)
+  const processedContent = useMemo(() => {
+    if (isUser) return message.content;
+    return preprocessCitations(message.content);
+  }, [message.content, isUser]);
+
+  // Memoize markdown components to avoid recreation on each render
+  const markdownComponents = useMemo(() => createMarkdownComponents(), []);
 
   return (
     <div
@@ -198,31 +244,13 @@ export function ChatMessage({
                             <ToolCallDisplay key={toolCall.id} toolCall={toolCall} />
                           ))}
                         </div>
-                        {/* Regular markdown content */}
+                        {/* Regular markdown content with citation support */}
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeHighlight]}
-                          components={{
-                            code({ node, inline, className, children, ...props }: any) {
-                              return inline ? (
-                                <code
-                                  className={cn(
-                                    'px-1 py-0.5 rounded text-sm',
-                                    'bg-accent-100 dark:bg-accent-800'
-                                  )}
-                                  {...props}
-                                >
-                                  {children}
-                                </code>
-                              ) : (
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
-                              );
-                            },
-                          }}
+                          rehypePlugins={[rehypeRaw, rehypeHighlight]}
+                          components={markdownComponents}
                         >
-                          {message.content}
+                          {processedContent}
                         </ReactMarkdown>
                       </>
                     );
@@ -287,34 +315,16 @@ export function ChatMessage({
                   // Track matched tool calls to handle duplicate tool names (e.g., search called twice)
                   const usedToolCallIndices = new Set<number>();
 
-                  while ((match = toolMarkerRegex.exec(message.content)) !== null) {
+                  while ((match = toolMarkerRegex.exec(processedContent)) !== null) {
                     // Add text before the marker
                     if (match.index > lastIndex) {
-                      const textBefore = message.content.substring(lastIndex, match.index);
+                      const textBefore = processedContent.substring(lastIndex, match.index);
                       parts.push(
                         <ReactMarkdown
                           key={`text-${lastIndex}`}
                           remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeHighlight]}
-                          components={{
-                            code({ node, inline, className, children, ...props }: any) {
-                              return inline ? (
-                                <code
-                                  className={cn(
-                                    'px-1 py-0.5 rounded text-sm',
-                                    'bg-accent-100 dark:bg-accent-800'
-                                  )}
-                                  {...props}
-                                >
-                                  {children}
-                                </code>
-                              ) : (
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
-                              );
-                            },
-                          }}
+                          rehypePlugins={[rehypeRaw, rehypeHighlight]}
+                          components={markdownComponents}
                         >
                           {textBefore}
                         </ReactMarkdown>
@@ -342,65 +352,29 @@ export function ChatMessage({
                   }
 
                   // Add remaining text after last marker
-                  if (lastIndex < message.content.length) {
-                    const textAfter = message.content.substring(lastIndex);
+                  if (lastIndex < processedContent.length) {
+                    const textAfter = processedContent.substring(lastIndex);
                     parts.push(
                       <ReactMarkdown
                         key={`text-${lastIndex}`}
                         remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeHighlight]}
-                        components={{
-                          code({ node, inline, className, children, ...props }: any) {
-                            return inline ? (
-                              <code
-                                className={cn(
-                                  'px-1 py-0.5 rounded text-sm',
-                                  'bg-accent-100 dark:bg-accent-800'
-                                )}
-                                {...props}
-                              >
-                                {children}
-                              </code>
-                            ) : (
-                              <code className={className} {...props}>
-                                {children}
-                              </code>
-                            );
-                          },
-                        }}
+                        rehypePlugins={[rehypeRaw, rehypeHighlight]}
+                        components={markdownComponents}
                       >
                         {textAfter}
                       </ReactMarkdown>
                     );
                   }
 
-                  // If no markers found, render as before
+                  // If no markers found, render with citation support
                   if (parts.length === 0) {
                     return (
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeHighlight]}
-                        components={{
-                          code({ node, inline, className, children, ...props }: any) {
-                            return inline ? (
-                              <code
-                                className={cn(
-                                  'px-1 py-0.5 rounded text-sm',
-                                  'bg-accent-100 dark:bg-accent-800'
-                                )}
-                                {...props}
-                              >
-                                {children}
-                              </code>
-                            ) : (
-                              <code className={className} {...props}>
-                                {children}
-                              </code>
-                            );
-                          },
-                        }}
+                        rehypePlugins={[rehypeRaw, rehypeHighlight]}
+                        components={markdownComponents}
                       >
-                        {message.content}
+                        {processedContent}
                       </ReactMarkdown>
                     );
                   }

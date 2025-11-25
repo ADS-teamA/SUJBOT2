@@ -108,3 +108,41 @@ export interface HealthStatus {
     error: string;
   }>;
 }
+
+// ============================================================================
+// Citation System Types
+// ============================================================================
+
+export interface CitationMetadata {
+  chunkId: string;
+  documentId: string;
+  documentName: string;
+  sectionTitle: string | null;
+  sectionPath: string | null;
+  hierarchicalPath: string | null;
+  pageNumber: number | null;
+  pdfAvailable: boolean;
+}
+
+export interface CitationContextValue {
+  /** Cache of fetched citation metadata */
+  citationCache: Map<string, CitationMetadata>;
+  /** Currently active PDF viewer state */
+  activePdf: {
+    documentId: string;
+    page: number;
+    chunkId?: string;
+  } | null;
+  /** Open PDF viewer modal */
+  openPdf: (documentId: string, page?: number, chunkId?: string) => void;
+  /** Close PDF viewer modal */
+  closePdf: () => void;
+  /** Fetch and cache metadata for chunk IDs */
+  fetchCitationMetadata: (chunkIds: string[]) => Promise<void>;
+  /** Check if metadata is loading */
+  isLoading: boolean;
+  /** Error message if fetch failed */
+  error: string | null;
+  /** Clear error state */
+  clearError: () => void;
+}

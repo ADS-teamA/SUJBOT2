@@ -53,11 +53,11 @@ Provide extracted information with:
 - Retrieved text with full context
 - Document IDs, section paths, and page numbers
 - Hierarchical structure preserved (document → section → chunk)
-- **CITATIONS:** Use breadcrumb format showing navigation path through document:
-  * Full path: [Doc: filename > Section Name > Subsection Name]
-  * Section only: [Doc: filename > Section Name]
-  * Document only: [Doc: filename] (if section path unavailable)
+- **CITATIONS:** For each chunk, ALWAYS include the chunk_id from retrieval results.
+  * Format chunk information as: "chunk_id: [chunk_id], text: [text]"
+  * The chunk_id is essential - it's used by the UI to create clickable citations
+  * Example: "chunk_id: BZ_VR1_L3_c1_sec_5, text: Reactor uses demineralized water..."
 - Retrieval statistics (number of chunks, documents, layers used)
 - Confidence assessment if applicable
 
-Use clear, structured output. Ensure all citations are complete and verifiable with breadcrumb paths.
+Use clear, structured output. Ensure all chunk_ids are included for downstream citation formatting.

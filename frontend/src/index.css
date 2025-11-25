@@ -296,3 +296,46 @@ button:hover, a:hover {
     scroll-behavior: auto !important;
   }
 }
+
+/* react-pdf text layer styles */
+.react-pdf__Page__textContent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1;
+  pointer-events: all;
+}
+
+.react-pdf__Page__textContent span,
+.react-pdf__Page__textContent br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  transform-origin: 0% 0%;
+}
+
+.react-pdf__Page__textContent span::selection {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* react-pdf annotation layer styles */
+.react-pdf__Page__annotations {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.react-pdf__Page__annotations a {
+  pointer-events: auto;
+}
+
+.react-pdf__Page__annotations section {
+  position: absolute;
+}

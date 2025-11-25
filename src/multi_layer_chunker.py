@@ -92,18 +92,32 @@ class Chunk:
         ):
             breadcrumb_parts.append(self.metadata.section_title)
 
-        # Construct embedding text: [breadcrumb]\n\ncontext
+        # Construct embedding text: [breadcrumb]\n\ncontext\n\nraw_content
+        # - breadcrumb: hierarchical path for structure awareness
+        # - context: SAC summary for semantic context (self.content minus raw_content)
+        # - raw_content: actual text for retrieval
         if breadcrumb_parts:
             breadcrumb = " > ".join(breadcrumb_parts)
-            embedding_text = f"[{breadcrumb}]\n\n{self.content}"
+            # Check if content contains context prefix (SAC augmentation)
+            if self.content != self.raw_content and "\n\n" in self.content:
+                # Content has SAC prefix - extract it
+                context_part = self.content.rsplit("\n\n", 1)[0]
+                embedding_text = f"[{breadcrumb}]\n\n{context_part}\n\n{self.raw_content}"
+            else:
+                # No SAC prefix - use raw_content directly
+                embedding_text = f"[{breadcrumb}]\n\n{self.raw_content}"
         else:
-            embedding_text = self.content
+            if self.content != self.raw_content and "\n\n" in self.content:
+                context_part = self.content.rsplit("\n\n", 1)[0]
+                embedding_text = f"{context_part}\n\n{self.raw_content}"
+            else:
+                embedding_text = self.raw_content
 
         return {
             "chunk_id": self.chunk_id,
-            "context": self.content,  # Renamed from "content" to "context"
+            "context": self.content,  # SAC-augmented content
             "raw_content": self.raw_content,
-            "embedding_text": embedding_text,  # New field: breadcrumb + context
+            "embedding_text": embedding_text,  # [breadcrumb]\n\ncontext\n\nraw_content
             "metadata": {
                 "chunk_id": self.metadata.chunk_id,
                 "layer": self.metadata.layer,
