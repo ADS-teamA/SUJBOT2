@@ -8,35 +8,56 @@ from typing import List, Optional, Dict, Any, Tuple
 
 # Import from your existing modules
 from src.unstructured_extractor import (
-    UnstructuredExtractor, 
-    ExtractionConfig, 
-    ExtractedDocument, 
+    UnstructuredExtractor,
+    ExtractionConfig,
+    ExtractedDocument,
     DocumentSection,
-    TableData, 
+    TableData,
     _normalize_text_diacritics
 )
 from src.ToC_retrieval import PDFParser, HierarchyNode
 from unstructured.documents.elements import Element
 
+# Import Gemini extractor (lazy import to avoid dependency if not used)
+try:
+    from src.gemini_extractor import GeminiExtractor, get_extractor
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 class UnifiedDocumentPipeline:
     """
-    Orchestrator pipeline that combines LLM-based ToC retrieval with 
-    Unstructured.io text processing.
-    
+    Orchestrator pipeline that combines LLM-based ToC retrieval with
+    Unstructured.io or Gemini text processing.
+
     Logic Flow:
-    1. Try to retrieve structure via Metadata (Tier 1) or LLM Agent (Tier 2) using PDFParser.
-    2. IF structure found:
-       - Extract raw content elements using Unstructured.
-       - Map raw elements to the retrieved structure using linear scanning and fuzzy matching.
-    3. IF structure NOT found:
-       - Fallback to standard Unstructured extraction (visual hierarchy inference).
+    1. IF backend="gemini" and PDF:
+       - Use Gemini 2.5 Flash for direct hierarchy extraction (bypasses ToC retrieval)
+    2. ELIF backend="unstructured" or non-PDF:
+       - Try to retrieve structure via Metadata (Tier 1) or LLM Agent (Tier 2) using PDFParser.
+       - IF structure found: Map raw elements to retrieved structure.
+       - IF structure NOT found: Fallback to Unstructured native hierarchy.
+    3. IF backend="auto":
+       - PDF with GOOGLE_API_KEY → Gemini
+       - Otherwise → Unstructured
     """
 
     def __init__(self, config: Optional[ExtractionConfig] = None):
         self.config = config or ExtractionConfig.from_env()
-        # We instantiate the extractors
+
+        # Determine extraction backend
+        self.backend = getattr(self.config, 'extraction_backend', 'auto')
+
+        # Initialize appropriate extractor
+        if self.backend == "gemini" and GEMINI_AVAILABLE:
+            self.gemini_extractor = GeminiExtractor(self.config)
+            logger.info("UnifiedDocumentPipeline: Using Gemini 2.5 Flash extractor")
+        else:
+            self.gemini_extractor = None
+
+        # Always keep Unstructured as fallback
         self.unstructured_extractor = UnstructuredExtractor(self.config)
 
     def process_document(self, file_path: Path) -> ExtractedDocument:
@@ -45,25 +66,45 @@ class UnifiedDocumentPipeline:
         """
         logger.info(f"--- START PIPELINE: Processing {file_path.name} ---")
         start_time = time.time()
-        
+
+        # Check if we should use Gemini for PDF extraction
+        is_pdf = file_path.suffix.lower() == ".pdf"
+        use_gemini = (
+            self.gemini_extractor is not None
+            and is_pdf
+            and self.backend in ("gemini", "auto")
+        )
+
+        if use_gemini:
+            # PATH G: Direct Gemini extraction (bypasses ToC retrieval)
+            logger.info("🚀 PATH G: Using Gemini 2.5 Flash for direct hierarchy extraction")
+            try:
+                return self.gemini_extractor.extract(file_path)
+            except Exception as e:
+                logger.error(f"Gemini extraction failed: {e}")
+                if getattr(self.config, 'gemini_fallback_to_unstructured', True):
+                    logger.warning("Falling back to Unstructured extraction")
+                else:
+                    raise
+
         # 1. Attempt Structure Retrieval (Metadata or LLM)
         # Only applicable for PDFs currently
         structure_root: Optional[HierarchyNode] = None
-        
-        if file_path.suffix.lower() == ".pdf":
+
+        if is_pdf:
             try:
                 logger.info("Attempting Tier 1/2 Structure Retrieval...")
                 # We don't instantiate PDFParser in __init__ because it requires file_path
                 toc_parser = PDFParser(str(file_path))
-                
+
                 # We get the tree, raw OCR text (unused here), and cost
                 # Note: Ensure PDFParser.process_document returns 3 values as per previous updates
                 structure_root, _, cost = self._try_retrieve_structure(toc_parser)
-                
+
                 if structure_root:
-                    logger.info(f"✅ Structure retrieved successfully. Cost: ${cost:.6f}")
+                    logger.info(f"Structure retrieved successfully. Cost: ${cost:.6f}")
                 else:
-                    logger.warning("⚠️ Structure retrieval returned None (No outline, heuristic failed).")
+                    logger.warning("Structure retrieval returned None (No outline, heuristic failed).")
 
             except Exception as e:
                 logger.error(f"Structure retrieval failed with error: {e}")
@@ -75,8 +116,8 @@ class UnifiedDocumentPipeline:
             # We need to fetch content using Unstructured and map it to this structure
             logger.info("🚀 PATH A: Using Retrieved ToC Structure + Unstructured Content")
             return self._process_with_external_structure(
-                file_path, 
-                structure_root, 
+                file_path,
+                structure_root,
                 start_time
             )
         else:
