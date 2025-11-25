@@ -86,6 +86,30 @@ services:
           cpus: '1'
           memory: 1G
 
+  # pgAdmin - PostgreSQL web administration
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sujbot_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - sujbot_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
   # Backend - FastAPI with multi-agent RAG system
   backend:
     build:
@@ -253,6 +277,10 @@ volumes:
 
   # Model cache - Speeds up startup (sentence-transformers models)
   model_cache:
+    driver: local
+
+  # pgAdmin configuration and sessions
+  pgadmin_data:
     driver: local
 
   # SSL certificates (Let's Encrypt via Certbot)
