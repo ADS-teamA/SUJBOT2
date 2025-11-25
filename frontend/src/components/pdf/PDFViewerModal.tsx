@@ -26,8 +26,10 @@ import {
 } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Configure PDF.js worker using Vite's URL import (avoids CDN dependency)
+// The ?url suffix tells Vite to return the URL to the asset after bundling
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 // API base URL from environment
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';

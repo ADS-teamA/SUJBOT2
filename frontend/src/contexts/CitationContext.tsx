@@ -5,7 +5,7 @@
  * Provides batch fetching with debouncing for efficiency.
  */
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import type { CitationMetadata, CitationContextValue } from '../types';
 import { PDFViewerModal } from '../components/pdf/PDFViewerModal';
 
@@ -32,9 +32,21 @@ export function CitationProvider({ children }: CitationProviderProps) {
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
 
+  // Error state for user feedback
+  const [error, setError] = useState<string | null>(null);
+
   // Batch fetch optimization
   const pendingFetches = useRef<Set<string>>(new Set());
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   /**
    * Fetch citation metadata for chunk IDs.
@@ -61,6 +73,7 @@ export function CitationProvider({ children }: CitationProviderProps) {
       if (idsToFetch.length === 0) return;
 
       setIsLoading(true);
+      setError(null); // Clear previous errors
 
       try {
         const response = await fetch(`${API_BASE_URL}/api/citations/batch`, {
@@ -73,7 +86,9 @@ export function CitationProvider({ children }: CitationProviderProps) {
         });
 
         if (!response.ok) {
+          const errorMsg = `Failed to fetch citations (${response.status})`;
           console.error('Failed to fetch citation metadata:', response.status);
+          setError(errorMsg);
           return;
         }
 
@@ -105,13 +120,22 @@ export function CitationProvider({ children }: CitationProviderProps) {
           });
           return next;
         });
-      } catch (error) {
-        console.error('Error fetching citation metadata:', error);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Network error';
+        console.error('Error fetching citation metadata:', err);
+        setError(`Citation fetch failed: ${errorMsg}`);
       } finally {
         setIsLoading(false);
       }
     }, 50);
   }, [citationCache]);
+
+  /**
+   * Clear error state (for user dismissal).
+   */
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
 
   /**
    * Open PDF viewer modal.
@@ -134,6 +158,8 @@ export function CitationProvider({ children }: CitationProviderProps) {
     closePdf,
     fetchCitationMetadata,
     isLoading,
+    error,
+    clearError,
   };
 
   return (

@@ -7,21 +7,16 @@ All endpoints require JWT authentication.
 
 import logging
 import re
-from pathlib import Path
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
+from backend.config import PDF_BASE_DIR
 from backend.middleware.auth import get_current_user
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 logger = logging.getLogger(__name__)
-
-# Allowed PDF directory (relative to project root)
-# Resolved at module load to absolute path
-PDF_BASE_DIR = Path(__file__).parent.parent.parent / "data"
-PDF_BASE_DIR = PDF_BASE_DIR.resolve()
 
 # Valid document_id pattern: alphanumeric, underscore, hyphen only
 DOCUMENT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")

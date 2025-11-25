@@ -40,9 +40,14 @@ export function extractCitationIds(content: string): string[] {
  *
  * @param content - Message content to check
  * @returns true if content has \cite{} markers
+ *
+ * Note: Creates a new RegExp to avoid global regex lastIndex state bug.
+ * With /g flag, test() advances lastIndex, causing alternating results.
  */
 export function hasCitations(content: string): boolean {
-  return CITATION_REGEX.test(content);
+  // Use fresh regex to avoid stateful lastIndex issues with global regex
+  const regex = new RegExp(CITATION_REGEX.source);
+  return regex.test(content);
 }
 
 /**

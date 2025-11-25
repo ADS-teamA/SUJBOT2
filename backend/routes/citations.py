@@ -6,14 +6,13 @@ All endpoints require JWT authentication.
 """
 
 import logging
-import os
 import re
-from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from backend.config import PDF_BASE_DIR
 from backend.middleware.auth import get_current_user
 from backend.routes.conversations import get_postgres_adapter
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
@@ -24,10 +23,6 @@ logger = logging.getLogger(__name__)
 # Valid chunk_id pattern: alphanumeric, underscore, hyphen only
 CHUNK_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
-# PDF base directory for checking availability
-PDF_BASE_DIR = Path(__file__).parent.parent.parent / "data"
-PDF_BASE_DIR = PDF_BASE_DIR.resolve()
-
 
 # ============================================================================
 # Pydantic Models
@@ -35,13 +30,13 @@ PDF_BASE_DIR = PDF_BASE_DIR.resolve()
 
 class CitationMetadata(BaseModel):
     """Response model for citation metadata."""
-    chunk_id: str = Field(..., description="Unique chunk identifier")
-    document_id: str = Field(..., description="Document identifier (matches PDF filename)")
-    document_name: str = Field(..., description="Human-readable document name")
-    section_title: Optional[str] = Field(None, description="Section title")
-    section_path: Optional[str] = Field(None, description="Full section path/breadcrumb")
-    hierarchical_path: Optional[str] = Field(None, description="Full hierarchical path including document")
-    page_number: Optional[int] = Field(None, description="Page number in PDF (1-indexed)")
+    chunk_id: str = Field(..., min_length=1, description="Unique chunk identifier")
+    document_id: str = Field(..., min_length=1, description="Document identifier (matches PDF filename)")
+    document_name: str = Field(..., min_length=1, description="Human-readable document name")
+    section_title: Optional[str] = Field(None, min_length=1, description="Section title")
+    section_path: Optional[str] = Field(None, min_length=1, description="Full section path/breadcrumb")
+    hierarchical_path: Optional[str] = Field(None, min_length=1, description="Full hierarchical path including document")
+    page_number: Optional[int] = Field(None, ge=1, description="Page number in PDF (1-indexed)")
     pdf_available: bool = Field(..., description="Whether PDF file exists on server")
 
 
@@ -75,28 +70,38 @@ async def _fetch_chunk_metadata(
     Fetch chunk metadata from database.
 
     Searches all vector layers (3, 2, 1) to find the chunk.
+
+    Raises:
+        HTTPException: If database query fails
     """
-    async with adapter.pool.acquire() as conn:
-        # Try each layer (chunks are primarily in layer3)
-        for layer in [3, 2, 1]:
-            row = await conn.fetchrow(
-                f"""
-                SELECT
-                    chunk_id,
-                    document_id,
-                    section_title,
-                    section_path,
-                    hierarchical_path,
-                    page_number
-                FROM vectors.layer{layer}
-                WHERE chunk_id = $1
-                LIMIT 1
-                """,
-                chunk_id
-            )
-            if row:
-                return dict(row)
-    return None
+    try:
+        async with adapter.pool.acquire() as conn:
+            # Try each layer (chunks are primarily in layer3)
+            for layer in [3, 2, 1]:
+                row = await conn.fetchrow(
+                    f"""
+                    SELECT
+                        chunk_id,
+                        document_id,
+                        section_title,
+                        section_path,
+                        hierarchical_path,
+                        page_number
+                    FROM vectors.layer{layer}
+                    WHERE chunk_id = $1
+                    LIMIT 1
+                    """,
+                    chunk_id
+                )
+                if row:
+                    return dict(row)
+        return None
+    except Exception as e:
+        logger.error(f"Database query failed for chunk_id={chunk_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable. Please try again."
+        )
 
 
 # ============================================================================

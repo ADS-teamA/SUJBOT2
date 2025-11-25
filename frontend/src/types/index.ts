@@ -141,4 +141,8 @@ export interface CitationContextValue {
   fetchCitationMetadata: (chunkIds: string[]) => Promise<void>;
   /** Check if metadata is loading */
   isLoading: boolean;
+  /** Error message if fetch failed */
+  error: string | null;
+  /** Clear error state */
+  clearError: () => void;
 }
