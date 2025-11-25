@@ -1,0 +1,47 @@
+{
+  "timestamp": "2025-11-23T19:20:35.507174",
+  "dataset_size": 109,
+  "k": 100,
+  "configurations": [
+    {
+      "name": "hybrid_hyde_exp0",
+      "use_hyde": true,
+      "num_expands": 0,
+      "search_method": "hybrid",
+      "success_rate": 1.0,
+      "metrics": {
+        "ndcg@100": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "reciprocal_rank": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "precision@100": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "recall@100": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "f1@100": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": 0.0
+      }
+    }
+  ]
+}

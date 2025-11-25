@@ -1,0 +1,1924 @@
+{
+  "metadata": {
+    "timestamp": "2025-11-23T19:29:29.903146",
+    "dataset_size": 109,
+    "successful_queries": 109,
+    "failed_queries": 0,
+    "config": {
+      "k": 100,
+      "use_hyde": true,
+      "num_expands": 0,
+      "enable_graph_boost": false,
+      "search_method": "hybrid",
+      "experiment_name": "hybrid_hyde_exp0"
+    }
+  },
+  "aggregate_metrics": {
+    "ndcg@100": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "reciprocal_rank": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "precision@100": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "recall@100": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "f1@100": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "mrr": 0.0
+  },
+  "results": [
+    {
+      "query": "Jak\u00fd je \u00fa\u010del bezpe\u010dnostn\u00ed zpr\u00e1vy reaktoru VR-1?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_8_chunk_0",
+        "BZ_VR1_L3_sec_8_chunk_1",
+        "BZ_VR1_L3_sec_58_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Kdo je statut\u00e1rn\u00edm z\u00e1stupcem provozovatele reaktoru VR-1?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_64_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Kde se p\u0159esn\u011b nach\u00e1z\u00ed pracovi\u0161t\u011b reaktoru VR-1?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_65_chunk_0",
+        "BZ_VR1_L3_sec_66_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 byly hlavn\u00ed miln\u00edky p\u0159i v\u00fdstavb\u011b a spou\u0161t\u011bn\u00ed reaktoru VR-1?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_70_chunk_0",
+        "BZ_VR1_L3_sec_70_chunk_1",
+        "BZ_VR1_L3_sec_71_chunk_0",
+        "BZ_VR1_L3_sec_71_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00fd je rozd\u00edl mezi n\u00e1dobami H01 a H02?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_73_chunk_0",
+        "BZ_VR1_L3_sec_73_chunk_1",
+        "BZ_VR1_L3_sec_263_chunk_0",
+        "BZ_VR1_L3_sec_264_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 funkce zaji\u0161\u0165uje ovl\u00e1dac\u00ed za\u0159\u00edzen\u00ed reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_76_chunk_0",
+        "BZ_VR1_L3_sec_77_chunk_0",
+        "BZ_VR1_L3_sec_79_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou z\u00e1kladn\u00ed komponenty ovl\u00e1dac\u00edho za\u0159\u00edzen\u00ed reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_79_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 typy experiment\u00e1ln\u00edch kan\u00e1l\u016f jsou na reaktoru k dispozici?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_80_chunk_0",
+        "BZ_VR1_L3_sec_80_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 experiment\u00e1ln\u00ed za\u0159\u00edzen\u00ed slou\u017e\u00ed ke studiu dynamiky reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_83_chunk_0",
+        "BZ_VR1_L3_sec_84_chunk_0",
+        "BZ_VR1_L3_sec_530_chunk_0",
+        "BZ_VR1_L3_sec_531_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00fd je maxim\u00e1ln\u00ed povolen\u00fd tepeln\u00fd v\u00fdkon reaktoru (kr\u00e1tkodob\u011b)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_84_chunk_1",
+        "BZ_VR1_L3_sec_87_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou z\u00e1kladn\u00ed neutronov\u011b-fyzik\u00e1ln\u00ed charakteristiky reaktoru (hustota toku, doba \u017eivota neutron\u016f)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_92_chunk_0",
+        "BZ_VR1_L3_sec_92_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou definovan\u00e9 provozn\u00ed stavy reaktoru VR-1?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_90_chunk_0",
+        "BZ_VR1_L3_sec_91_chunk_0",
+        "BZ_VR1_L3_sec_93_chunk_0",
+        "BZ_VR1_L3_sec_93_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Co se rozum\u00ed abnorm\u00e1ln\u00edm provozem reaktoru VR-1?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_93_chunk_2",
+        "BZ_VR1_L3_sec_94_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 nov\u00e9 technologie byly zavedeny na reaktoru v letech 2008-2018?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_97_chunk_0",
+        "BZ_VR1_L3_sec_98_chunk_0",
+        "BZ_VR1_L3_sec_99_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou z\u00e1kladn\u00ed principy bezpe\u010dn\u00e9ho vyu\u017e\u00edv\u00e1n\u00ed jadern\u00e9 energie dle \u00a7 45 atomov\u00e9ho z\u00e1kona?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_106_chunk_0",
+        "BZ_VR1_L3_sec_107_chunk_0",
+        "BZ_VR1_L3_sec_144_chunk_0",
+        "BZ_VR1_L3_sec_145_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je zaji\u0161t\u011bna jadern\u00e1 bezpe\u010dnost z hlediska schopnosti a stavu za\u0159\u00edzen\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_110_chunk_0",
+        "BZ_VR1_L3_sec_111_chunk_0",
+        "BZ_VR1_L3_sec_113_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 technick\u00e1 opat\u0159en\u00ed jsou zavedena pro radia\u010dn\u00ed ochranu?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_115_chunk_0",
+        "BZ_VR1_L3_sec_116_chunk_0",
+        "BZ_VR1_L3_sec_116_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je zaji\u0161t\u011bna fyzick\u00e1 ochrana (zabezpe\u010den\u00ed) reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_118_chunk_0",
+        "BZ_VR1_L3_sec_118_chunk_1",
+        "BZ_VR1_L3_sec_118_chunk_2",
+        "BZ_VR1_L3_sec_730_chunk_1",
+        "BZ_VR1_L3_sec_731_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 radia\u010dn\u00ed mimo\u0159\u00e1dn\u00e9 ud\u00e1losti jsou uva\u017eov\u00e1ny ve vnit\u0159n\u00edm havarijn\u00edm pl\u00e1nu?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_123_chunk_1",
+        "BZ_VR1_L3_sec_123_chunk_2",
+        "BZ_VR1_L3_sec_124_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 vybran\u00e1 za\u0159\u00edzen\u00ed reaktoru pat\u0159\u00ed do bezpe\u010dnostn\u00ed t\u0159\u00eddy 2?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_150_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 vybran\u00e1 za\u0159\u00edzen\u00ed reaktoru pat\u0159\u00ed do bezpe\u010dnostn\u00ed t\u0159\u00eddy 3?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_150_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 je seismick\u00e9 ohro\u017een\u00ed lokality reaktoru (hodnoty SL-1 a SL-2)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_171_chunk_0",
+        "BZ_VR1_L3_sec_171_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Hroz\u00ed reaktoru nebezpe\u010d\u00ed z hlediska povodn\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_172_chunk_0",
+        "BZ_VR1_L3_sec_173_chunk_0",
+        "BZ_VR1_L3_sec_174_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou hydrogeologick\u00e9 pom\u011bry v lokalit\u011b reaktoru (hladina podzemn\u00ed vody)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_176_chunk_0",
+        "BZ_VR1_L3_sec_178_chunk_0",
+        "BZ_VR1_L3_sec_180_chunk_0",
+        "BZ_VR1_L3_sec_180_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou klimatick\u00e9 podm\u00ednky v lokalit\u011b (teploty, sr\u00e1\u017eky, v\u00edtr)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_194_chunk_0",
+        "BZ_VR1_L3_sec_195_chunk_0",
+        "BZ_VR1_L3_sec_196_chunk_0",
+        "BZ_VR1_L3_sec_198_chunk_1",
+        "BZ_VR1_L3_sec_199_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Je reaktor ohro\u017een p\u00e1dem letadla?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_207_chunk_3",
+        "BZ_VR1_L3_sec_208_chunk_0",
+        "BZ_VR1_L3_sec_210_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou rozm\u011bry a konstrukce haly t\u011b\u017ek\u00fdch laborato\u0159\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_223_chunk_0",
+        "BZ_VR1_L3_sec_225_chunk_0",
+        "BZ_VR1_L3_sec_225_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 dal\u0161\u00ed m\u00edstnosti krom\u011b haly pat\u0159\u00ed k provozu reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_233_chunk_2",
+        "BZ_VR1_L3_sec_234_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Kde je um\u00edst\u011bna rozvodna ovl\u00e1dac\u00edho za\u0159\u00edzen\u00ed a co obsahuje?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_236_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "K \u010demu slou\u017e\u00ed havarijn\u00ed j\u00edmka a kde se nach\u00e1z\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_238_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou parametry reaktorov\u00fdch n\u00e1dob H01 a H02 (rozm\u011bry, materi\u00e1l)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_264_chunk_0",
+        "BZ_VR1_L3_sec_264_chunk_1",
+        "BZ_VR1_L3_sec_87_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "K \u010demu slou\u017e\u00ed hrad\u00edtko koridoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_264_chunk_2",
+        "BZ_VR1_L3_sec_264_chunk_3"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Popi\u0161 vnit\u0159n\u00ed \u010d\u00e1sti reaktorov\u00e9 n\u00e1doby H01.",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_265_chunk_0",
+        "BZ_VR1_L3_sec_266_chunk_0",
+        "BZ_VR1_L3_sec_266_chunk_1",
+        "BZ_VR1_L3_sec_268_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou parametry tangenci\u00e1ln\u00edho kan\u00e1lu?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_269_chunk_0",
+        "BZ_VR1_L3_sec_269_chunk_1",
+        "BZ_VR1_L3_sec_271_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 vertik\u00e1ln\u00ed kan\u00e1ly se pou\u017e\u00edvaj\u00ed v reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_274_chunk_0",
+        "BZ_VR1_L3_sec_274_chunk_1",
+        "BZ_VR1_L3_sec_275_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Kde je um\u00edst\u011bno chr\u00e1nili\u0161t\u011b paliva a jakou m\u00e1 kapacitu?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_279_chunk_1",
+        "BZ_VR1_L3_sec_279_chunk_2",
+        "BZ_VR1_L3_sec_448_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159e\u0161eno st\u00edn\u011bn\u00ed reaktoru (horizont\u00e1ln\u00ed i vertik\u00e1ln\u00ed)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_284_chunk_0",
+        "BZ_VR1_L3_sec_284_chunk_1",
+        "BZ_VR1_L3_sec_285_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 materi\u00e1ly jsou pou\u017eity pro konstruk\u010dn\u00ed \u010d\u00e1sti reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_289_chunk_0",
+        "BZ_VR1_L3_sec_292_chunk_0",
+        "BZ_VR1_L3_sec_293_chunk_0",
+        "BZ_VR1_L3_sec_294_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Popi\u0161 konstrukci palivov\u00e9ho \u010dl\u00e1nku IRT-4M.",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_294_chunk_1",
+        "BZ_VR1_L3_sec_294_chunk_2",
+        "BZ_VR1_L3_sec_294_chunk_3"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 je mno\u017estv\u00ed uranu 235U v palivov\u00fdch \u010dl\u00e1nc\u00edch IRT-4M?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_295_chunk_0",
+        "BZ_VR1_L3_sec_306_chunk_1",
+        "BZ_VR1_L3_sec_306_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou podm\u00ednky pro manipulaci s jadern\u00fdm palivem?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_297_chunk_1",
+        "BZ_VR1_L3_sec_456_chunk_1",
+        "BZ_VR1_L3_sec_457_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou doporu\u010den\u00e9 parametry chladiva pro palivo IRT-4M?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_298_chunk_0",
+        "BZ_VR1_L3_sec_315_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 v\u00fdpo\u010detn\u00ed k\u00f3dy se pou\u017e\u00edvaj\u00ed pro neutronov\u011b-fyzik\u00e1ln\u00ed v\u00fdpo\u010dty?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_308_chunk_0",
+        "BZ_VR1_L3_sec_309_chunk_0",
+        "BZ_VR1_L3_sec_314_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou charakteristiky aktivn\u00ed z\u00f3ny C12?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_329_chunk_0",
+        "BZ_VR1_L3_sec_334_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Popi\u0161 konstrukci a funkci absorp\u010dn\u00edch ty\u010d\u00ed UR-70.",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_354_chunk_0",
+        "BZ_VR1_L3_sec_355_chunk_0",
+        "BZ_VR1_L3_sec_357_chunk_0",
+        "BZ_VR1_L3_sec_357_chunk_1",
+        "BZ_VR1_L3_sec_357_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou typy absorp\u010dn\u00edch ty\u010d\u00ed podle funkce v SO\u0158?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_359_chunk_0",
+        "BZ_VR1_L3_sec_359_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou tepeln\u00e9 a hydraulick\u00e9 charakteristiky reaktoru (chlazen\u00ed)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_363_chunk_0",
+        "BZ_VR1_L3_sec_363_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou mezn\u00ed teploty pro palivo IRT-4M?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_367_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 funkce zaji\u0161\u0165uje vodn\u00ed hospod\u00e1\u0159stv\u00ed reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_371_chunk_0",
+        "BZ_VR1_L3_sec_372_chunk_0",
+        "BZ_VR1_L3_sec_462_chunk_0",
+        "BZ_VR1_L3_sec_462_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou hlavn\u00ed \u010d\u00e1sti vodn\u00edho hospod\u00e1\u0159stv\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_372_chunk_1",
+        "BZ_VR1_L3_sec_372_chunk_2",
+        "BZ_VR1_L3_sec_373_chunk_0",
+        "BZ_VR1_L3_sec_373_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak funguje syst\u00e9m ochran a \u0159\u00edzen\u00ed (SO\u0158) reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_383_chunk_0",
+        "BZ_VR1_L3_sec_385_chunk_0",
+        "BZ_VR1_L3_sec_385_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak funguj\u00ed kan\u00e1ly provozn\u00edho m\u011b\u0159en\u00ed v\u00fdkonu (PMV)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_386_chunk_0",
+        "BZ_VR1_L3_sec_386_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak funguj\u00ed kan\u00e1ly nez\u00e1visl\u00e9 v\u00fdkonov\u00e9 ochrany (NVO)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_388_chunk_0",
+        "BZ_VR1_L3_sec_388_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 je funkce bezpe\u010dnostn\u00edho \u0159et\u011bzce?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_389_chunk_0",
+        "BZ_VR1_L3_sec_389_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou bezpe\u010dnostn\u00ed \u00farovn\u011b pro v\u00fdkon a rychlost zm\u011bny v\u00fdkonu?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_390_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou varovn\u00e9 \u00farovn\u011b syst\u00e9mu \u0159\u00edzen\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_395_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Co tvo\u0159\u00ed rozhran\u00ed \u010dlov\u011bk-stroj (HMI) reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_402_chunk_0",
+        "BZ_VR1_L3_sec_402_chunk_1",
+        "BZ_VR1_L3_sec_404_chunk_0",
+        "BZ_VR1_L3_sec_405_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159e\u0161eno z\u00e1lohovan\u00e9 nap\u00e1jen\u00ed reaktoru (UPS)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_408_chunk_0",
+        "BZ_VR1_L3_sec_408_chunk_1",
+        "BZ_VR1_L3_sec_409_chunk_0",
+        "BZ_VR1_L3_sec_434_chunk_0",
+        "BZ_VR1_L3_sec_434_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je zaji\u0161t\u011bna diverzita mezi kan\u00e1ly PMV a NVO?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_424_chunk_0",
+        "BZ_VR1_L3_sec_425_chunk_0",
+        "BZ_VR1_L3_sec_425_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 syst\u00e9my p\u0159enosu dat se pou\u017e\u00edvaj\u00ed v SO\u0158?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_427_chunk_0",
+        "BZ_VR1_L3_sec_428_chunk_0",
+        "BZ_VR1_L3_sec_429_chunk_0",
+        "BZ_VR1_L3_sec_430_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159e\u0161eno skladov\u00e1n\u00ed jadern\u00e9ho paliva (such\u00fd sklad)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_448_chunk_0",
+        "BZ_VR1_L3_sec_448_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 je podkriti\u010dnost trezor\u016f a chr\u00e1nili\u0161t\u011b paliva?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_450_chunk_0",
+        "BZ_VR1_L3_sec_450_chunk_1",
+        "BZ_VR1_L3_sec_453_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak funguje demineraliza\u010dn\u00ed stanice?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_459_chunk_0",
+        "BZ_VR1_L3_sec_460_chunk_0",
+        "BZ_VR1_L3_sec_461_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "K \u010demu se pou\u017e\u00edv\u00e1 stla\u010den\u00fd vzduch na reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_467_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159e\u0161ena vzduchotechnika a aktivn\u00ed odtah?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_472_chunk_1",
+        "BZ_VR1_L3_sec_472_chunk_2",
+        "BZ_VR1_L3_sec_473_chunk_0",
+        "BZ_VR1_L3_sec_474_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 jsou protipo\u017e\u00e1rn\u00ed opat\u0159en\u00ed na reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_476_chunk_2",
+        "BZ_VR1_L3_sec_476_chunk_3",
+        "BZ_VR1_L3_sec_476_chunk_4",
+        "BZ_VR1_L3_sec_477_chunk_0",
+        "BZ_VR1_L3_sec_478_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 komunika\u010dn\u00ed prost\u0159edky jsou na reaktoru k dispozici?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_481_chunk_0",
+        "BZ_VR1_L3_sec_482_chunk_0",
+        "BZ_VR1_L3_sec_483_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je vyu\u017e\u00edv\u00e1n reaktor pro v\u00fduku student\u016f?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_504_chunk_0",
+        "BZ_VR1_L3_sec_504_chunk_1",
+        "BZ_VR1_L3_sec_506_chunk_1",
+        "BZ_VR1_L3_sec_507_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 experiment\u00e1ln\u00ed \u00falohy se na reaktoru prov\u00e1d\u011bj\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_509_chunk_0",
+        "BZ_VR1_L3_sec_510_chunk_0",
+        "BZ_VR1_L3_sec_510_chunk_1",
+        "BZ_VR1_L3_sec_511_chunk_0",
+        "BZ_VR1_L3_sec_512_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 experiment\u00e1ln\u00ed vybaven\u00ed je na reaktoru k dispozici?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_519_chunk_2",
+        "BZ_VR1_L3_sec_520_chunk_0",
+        "BZ_VR1_L3_sec_521_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Popi\u0161 za\u0159\u00edzen\u00ed 'Doji\u010dka' pro studium zpo\u017ed\u011bn\u00fdch neutron\u016f.",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_529_chunk_0",
+        "BZ_VR1_L3_sec_529_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Popi\u0161 za\u0159\u00edzen\u00ed 'Bublinky' pro studium vlivu varu.",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_529_chunk_1",
+        "BZ_VR1_L3_sec_529_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Popi\u0161 za\u0159\u00edzen\u00ed 'Hop\u00edk' pro studium dynamiky.",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_530_chunk_0",
+        "BZ_VR1_L3_sec_530_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou c\u00edle radia\u010dn\u00ed ochrany na pracovi\u0161ti?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_541_chunk_0",
+        "BZ_VR1_L3_sec_542_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou principy optimalizace radia\u010dn\u00ed ochrany na VR-1?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_545_chunk_2",
+        "BZ_VR1_L3_sec_546_chunk_0",
+        "BZ_VR1_L3_sec_547_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Kdo zodpov\u00edd\u00e1 za radia\u010dn\u00ed ochranu na pracovi\u0161ti?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_549_chunk_0",
+        "BZ_VR1_L3_sec_549_chunk_1",
+        "BZ_VR1_L3_sec_549_chunk_2",
+        "BZ_VR1_L3_sec_550_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je vymezeno kontrolovan\u00e9 a sledovan\u00e9 p\u00e1smo?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_581_chunk_1",
+        "BZ_VR1_L3_sec_585_chunk_0",
+        "BZ_VR1_L3_sec_588_chunk_1",
+        "BZ_VR1_L3_sec_588_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 zdroje ionizuj\u00edc\u00edho z\u00e1\u0159en\u00ed se na pracovi\u0161ti vyskytuj\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_567_chunk_0",
+        "BZ_VR1_L3_sec_569_chunk_0",
+        "BZ_VR1_L3_sec_569_chunk_1",
+        "BZ_VR1_L3_sec_570_chunk_0",
+        "BZ_VR1_L3_sec_571_chunk_0",
+        "BZ_VR1_L3_sec_573_chunk_0",
+        "BZ_VR1_L3_sec_575_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak prob\u00edh\u00e1 monitorov\u00e1n\u00ed pracovi\u0161t\u011b a osob?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_599_chunk_0",
+        "BZ_VR1_L3_sec_603_chunk_0",
+        "BZ_VR1_L3_sec_604_chunk_0",
+        "BZ_VR1_L3_sec_604_chunk_1",
+        "BZ_VR1_L3_sec_604_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou referen\u010dn\u00ed \u00farovn\u011b RMS?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_608_chunk_1",
+        "BZ_VR1_L3_sec_608_chunk_2",
+        "BZ_VR1_L3_sec_608_chunk_3"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak se nakl\u00e1d\u00e1 s radioaktivn\u00edmi odpady?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_610_chunk_0",
+        "BZ_VR1_L3_sec_611_chunk_0",
+        "BZ_VR1_L3_sec_611_chunk_1",
+        "BZ_VR1_L3_sec_611_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 je organiza\u010dn\u00ed struktura provozovatele reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_624_chunk_0",
+        "BZ_VR1_L3_sec_624_chunk_1",
+        "BZ_VR1_L3_sec_625_chunk_0",
+        "BZ_VR1_L3_sec_626_chunk_0",
+        "BZ_VR1_L3_sec_627_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou povinnosti vedouc\u00edho KJR?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_633_chunk_1",
+        "BZ_VR1_L3_sec_633_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou povinnosti vedouc\u00edho provozu reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_634_chunk_0",
+        "BZ_VR1_L3_sec_634_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou povinnosti vedouc\u00edho sm\u011bny?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_645_chunk_0",
+        "BZ_VR1_L3_sec_645_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou povinnosti oper\u00e1tora reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_647_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak prob\u00edh\u00e1 sm\u011bnov\u00fd provoz reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_652_chunk_0",
+        "BZ_VR1_L3_sec_652_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Co obsahuje sm\u011bnov\u00fd p\u0159\u00edkaz?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_652_chunk_3",
+        "BZ_VR1_L3_sec_653_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak prob\u00edh\u00e1 odborn\u00e1 p\u0159\u00edprava pracovn\u00edk\u016f?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_660_chunk_0",
+        "BZ_VR1_L3_sec_661_chunk_0",
+        "BZ_VR1_L3_sec_661_chunk_1",
+        "BZ_VR1_L3_sec_669_chunk_0",
+        "BZ_VR1_L3_sec_669_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159\u00edzena \u00fadr\u017eba a provozn\u00ed kontroly?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_676_chunk_0",
+        "BZ_VR1_L3_sec_677_chunk_0",
+        "BZ_VR1_L3_sec_677_chunk_1",
+        "BZ_VR1_L3_sec_677_chunk_2",
+        "BZ_VR1_L3_sec_681_chunk_0",
+        "BZ_VR1_L3_sec_683_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak jsou \u0159\u00edzeny zm\u011bny na reaktoru a experimenty?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_689_chunk_0",
+        "BZ_VR1_L3_sec_689_chunk_1",
+        "BZ_VR1_L3_sec_692_chunk_0",
+        "BZ_VR1_L3_sec_692_chunk_1",
+        "BZ_VR1_L3_sec_692_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159\u00edzena dokumentace reaktoru (\u00farovn\u011b dokumentace)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_697_chunk_1",
+        "BZ_VR1_L3_sec_697_chunk_2",
+        "BZ_VR1_L3_sec_698_chunk_0",
+        "BZ_VR1_L3_sec_699_chunk_0",
+        "BZ_VR1_L3_sec_704_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 vnit\u0159n\u00ed p\u0159edpisy (d\u00edl\u010d\u00ed provozn\u00ed p\u0159edpisy) jsou na reaktoru zavedeny?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_707_chunk_1",
+        "BZ_VR1_L3_sec_707_chunk_2",
+        "BZ_VR1_L3_sec_708_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159\u00edzeno st\u00e1rnut\u00ed za\u0159\u00edzen\u00ed (program \u0159\u00edzen\u00e9ho st\u00e1rnut\u00ed)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_711_chunk_0",
+        "BZ_VR1_L3_sec_711_chunk_1",
+        "BZ_VR1_L3_sec_712_chunk_0",
+        "BZ_VR1_L3_sec_715_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak funguje syst\u00e9m zp\u011btn\u00e9 vazby?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_718_chunk_1",
+        "BZ_VR1_L3_sec_718_chunk_2",
+        "BZ_VR1_L3_sec_719_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 je role komise pro bezpe\u010dn\u00fd provoz reaktoru?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_726_chunk_0",
+        "BZ_VR1_L3_sec_727_chunk_0",
+        "BZ_VR1_L3_sec_727_chunk_1",
+        "BZ_VR1_L3_sec_728_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je zaji\u0161t\u011bna evidence a kontrola jadern\u00fdch materi\u00e1l\u016f?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_734_chunk_0",
+        "BZ_VR1_L3_sec_734_chunk_1",
+        "BZ_VR1_L3_sec_734_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00fd je vliv provozu reaktoru na \u017eivotn\u00ed prost\u0159ed\u00ed a okol\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_739_chunk_0",
+        "BZ_VR1_L3_sec_740_chunk_0",
+        "BZ_VR1_L3_sec_741_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou z\u00e1kladn\u00ed projektov\u00e9 ud\u00e1losti v bezpe\u010dnostn\u00edch anal\u00fdz\u00e1ch?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_761_chunk_0",
+        "BZ_VR1_L3_sec_766_chunk_0",
+        "BZ_VR1_L3_sec_768_chunk_0",
+        "BZ_VR1_L3_sec_770_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou krit\u00e9ria p\u0159ijatelnosti pro palivo p\u0159i nehod\u00e1ch?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_763_chunk_0",
+        "BZ_VR1_L3_sec_764_chunk_0",
+        "BZ_VR1_L3_sec_765_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Co se stane p\u0159i zaveden\u00ed kladn\u00e9 reaktivity (ud\u00e1lost \u010d. 1 a 2)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_771_chunk_0",
+        "BZ_VR1_L3_sec_771_chunk_1",
+        "BZ_VR1_L3_sec_771_chunk_3",
+        "BZ_VR1_L3_sec_776_chunk_0",
+        "BZ_VR1_L3_sec_777_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 jsou roz\u0161\u00ed\u0159en\u00e9 projektov\u00e9 podm\u00ednky a jejich zvl\u00e1d\u00e1n\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_761_chunk_1",
+        "BZ_VR1_L3_sec_784_chunk_0",
+        "BZ_VR1_L3_sec_790_chunk_2",
+        "BZ_VR1_L3_sec_790_chunk_3",
+        "BZ_VR1_L3_sec_791_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 je struktura a obsah Limit\u016f a podm\u00ednek?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_798_chunk_0",
+        "BZ_VR1_L3_sec_798_chunk_1",
+        "BZ_VR1_L3_sec_799_chunk_0",
+        "BZ_VR1_L3_sec_800_chunk_0",
+        "BZ_VR1_L3_sec_801_chunk_0",
+        "BZ_VR1_L3_sec_803_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je nastaven syst\u00e9m \u0159\u00edzen\u00ed reaktoru (odpov\u011bdnosti, procesy)?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_807_chunk_0",
+        "BZ_VR1_L3_sec_808_chunk_0",
+        "BZ_VR1_L3_sec_817_chunk_0",
+        "BZ_VR1_L3_sec_818_chunk_0",
+        "BZ_VR1_L3_sec_820_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je uplat\u0148ov\u00e1n odstup\u0148ovan\u00fd p\u0159\u00edstup v syst\u00e9mu \u0159\u00edzen\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_828_chunk_0",
+        "BZ_VR1_L3_sec_832_chunk_0",
+        "BZ_VR1_L3_sec_833_chunk_0"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak je \u0159\u00edzena a rozv\u00edjena kultura bezpe\u010dnosti?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_835_chunk_0",
+        "BZ_VR1_L3_sec_837_chunk_0",
+        "BZ_VR1_L3_sec_838_chunk_0",
+        "BZ_VR1_L3_sec_840_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak prob\u00edh\u00e1 hodnocen\u00ed \u00fa\u010dinnosti syst\u00e9mu \u0159\u00edzen\u00ed?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_846_chunk_3",
+        "BZ_VR1_L3_sec_848_chunk_0",
+        "BZ_VR1_L3_sec_849_chunk_0",
+        "BZ_VR1_L3_sec_849_chunk_1",
+        "BZ_VR1_L3_sec_850_chunk_0",
+        "BZ_VR1_L3_sec_850_chunk_1",
+        "BZ_VR1_L3_sec_850_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e1 je koncepce a pl\u00e1n vy\u0159azov\u00e1n\u00ed reaktoru z provozu?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_863_chunk_0",
+        "BZ_VR1_L3_sec_872_chunk_0",
+        "BZ_VR1_L3_sec_873_chunk_0",
+        "BZ_VR1_L3_sec_873_chunk_1",
+        "BZ_VR1_L3_sec_873_chunk_2"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    },
+    {
+      "query": "Jak\u00e9 technick\u00e9 prost\u0159edky slou\u017e\u00ed ke zvl\u00e1d\u00e1n\u00ed radia\u010dn\u00ed mimo\u0159\u00e1dn\u00e9 ud\u00e1losti?",
+      "success": true,
+      "relevant_chunk_ids": [
+        "BZ_VR1_L3_sec_889_chunk_0",
+        "BZ_VR1_L3_sec_889_chunk_1",
+        "BZ_VR1_L3_sec_891_chunk_0",
+        "BZ_VR1_L3_sec_893_chunk_0",
+        "BZ_VR1_L3_sec_894_chunk_1"
+      ],
+      "retrieved_chunk_ids": [],
+      "metrics": {
+        "ndcg@100": 0.0,
+        "reciprocal_rank": 0.0,
+        "precision@100": 0.0,
+        "recall@100": 0.0,
+        "f1@100": 0.0
+      }
+    }
+  ]
+}
