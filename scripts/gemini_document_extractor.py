@@ -2,24 +2,25 @@
 """
 Universal Document Hierarchy Extractor using Gemini 2.5 Flash.
 
-Best Practices Applied:
-1. Direct PDF upload via File API (not Base64)
-2. Strict JSON schema with response_mime_type
-3. Auto-detection of document type (legal, technical, report, etc.)
-4. Full 1M token context window utilization
-5. Czech diacritics preservation
+This is a standalone CLI script for document extraction.
+For programmatic use, import from src.gemini_extractor instead.
 
-Compatible with phase1_extraction.json format.
+Usage:
+    python gemini_document_extractor.py <pdf_path> [output_path]
 """
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Optional
 
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 load_dotenv()
 
@@ -28,126 +29,14 @@ MODEL_ID = "gemini-2.5-flash"
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
-
-# Universal JSON Schema for document extraction
-DOCUMENT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "document": {
-            "type": "object",
-            "properties": {
-                "type": {"type": "string", "description": "Document type: zakon, vyhlaska, narizeni, zprava, manual, smlouva, report, other"},
-                "identifier": {"type": "string", "description": "Document number/identifier (e.g., '18/1997 Sb.', 'BZ-VR1-2017')"},
-                "title": {"type": "string"},
-                "date": {"type": "string"},
-                "author": {"type": "string"},
-                "language": {"type": "string", "description": "cs, en, de, etc."}
-            },
-            "required": ["type", "title"]
-        },
-        "sections": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "section_id": {"type": "string", "description": "Unique ID: sec_1, sec_2, ..."},
-                    "element_type": {"type": "string", "description": "cast, hlava, dil, clanek, paragraf, odstavec, pismeno, bod, kapitola, sekce, podsekce, priloha, poznamka"},
-                    "number": {"type": "string", "description": "Clean number without symbols"},
-                    "title": {"type": "string"},
-                    "content": {"type": "string", "description": "Full text content with footnote references preserved"},
-                    "level": {"type": "integer", "description": "Hierarchy level 1-6"},
-                    "depth": {"type": "integer"},
-                    "path": {"type": "string", "description": "Hierarchical path: 'ČÁST I > HLAVA 1 > § 32'"},
-                    "parent_number": {"type": "string"},
-                    "page_number": {"type": "integer"}
-                },
-                "required": ["section_id", "element_type", "level"]
-            }
-        }
-    },
-    "required": ["document", "sections"]
-}
-
-
-EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný dokument a extrahuj jeho kompletní hierarchickou strukturu.
-
-## TVŮJ ÚKOL:
-1. Automaticky rozpoznej typ dokumentu (zákon, vyhláška, technická zpráva, manuál, smlouva, report...)
-2. Extrahuj metadata dokumentu (číslo, název, datum, autor)
-3. Extrahuj KOMPLETNÍ hierarchickou strukturu do JSON
-
-## TYPY ELEMENTŮ (podle typu dokumentu):
-
-### Pro PRÁVNÍ dokumenty (zákon, vyhláška, nařízení):
-- cast (ČÁST I, II, III...) - level 1
-- hlava (HLAVA PRVNÍ, DRUHÁ...) - level 2
-- dil (Díl 1, 2...) - level 3
-- oddil (Oddíl 1, 2...) - level 3
-- paragraf (§ 1, § 32...) - level 4
-- clanek (Článek 1, 2...) - level 4
-- odstavec ((1), (2), (3)...) - level 5
-- pismeno (a), b), c)...) - level 6
-- bod (1., 2., 3....) - level 6
-- poznamka (poznámky pod čarou) - level 6
-
-### Pro TECHNICKÉ dokumenty (zpráva, manuál, report):
-- kapitola (1, 2, 3... nebo I, II, III...) - level 1
-- sekce (1.1, 1.2...) - level 2
-- podsekce (1.1.1, 1.1.2...) - level 3
-- odstavec - level 4
-- bod - level 5
-- priloha (Příloha A, B...) - level 2
-
-## PRAVIDLA:
-
-1. **number** = čisté číslo BEZ symbolů
-   - Správně: "32", "1", "a", "I", "PÁTÁ", "1.2.3"
-   - Špatně: "§ 32", "(1)", "a)", "Kapitola 1"
-
-2. **content** = úplný text elementu VČETNĚ:
-   - Odkazů na poznámky: "smlouvy,26) kterou..."
-   - Interních odkazů: "podle § 33 odst. 1"
-   - České diakritiky: ěščřžýáíéůúďťňĚŠČŘŽÝÁÍÉŮÚĎŤŇ
-
-3. **path** = hierarchická cesta od kořene oddělená " > "
-   - Právní: "ČÁST I > HLAVA PÁTÁ > § 32 > (1)"
-   - Technická: "1 Úvod > 1.1 Účel > 1.1.1 Rozsah"
-
-4. **Separace elementů**:
-   - Každý odstavec (1), (2), (3) = samostatná sekce
-   - Každé písmeno a), b), c) = samostatná sekce
-   - NESLUČUJ více odstavců do jednoho
-
-5. **parent_number** = číslo nadřazeného elementu
-   - Odstavec (1) pod § 32 → parent_number: "32"
-   - Písmeno a) pod (1) → parent_number: "1"
-
-6. **Úplnost**:
-   - Extrahuj VŠECHNY elementy z CELÉHO dokumentu
-   - Ignoruj záhlaví a zápatí stránek
-   - Zachovej obsah i prázdných nadpisů (title bez content je OK)
-
-## PŘÍKLAD VÝSTUPU pro právní dokument:
-
-```json
-{
-  "document": {
-    "type": "zakon",
-    "identifier": "18/1997 Sb.",
-    "title": "o mírovém využívání jaderné energie a ionizujícího záření",
-    "date": "24. ledna 1997",
-    "language": "cs"
-  },
-  "sections": [
-    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": null, "content": null, "level": 1, "path": "ČÁST I"},
-    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I"},
-    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": null, "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ"},
-    {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 1}
-  ]
-}
-```
-
-Vrať POUZE validní JSON odpovídající schématu. Žádný markdown, žádné komentáře."""
+# Import the canonical EXTRACTION_PROMPT from main module (SSOT)
+try:
+    from src.gemini_extractor import EXTRACTION_PROMPT
+except ImportError:
+    # Fallback for standalone use - minimal prompt
+    EXTRACTION_PROMPT = """Analyzuj nahraný dokument a extrahuj hierarchickou strukturu do JSON.
+Vrať JSON s "document" (metadata) a "sections" (hierarchie).
+Každá sekce: section_id, element_type, number, title, content, level, path, parent_number."""
 
 
 def upload_document(file_path: str) -> genai.types.File:

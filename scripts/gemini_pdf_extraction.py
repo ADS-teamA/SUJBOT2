@@ -86,12 +86,24 @@ def extract_with_pdf_upload(pdf_path: str) -> dict:
         try:
             genai.delete_file(uploaded_file.name)
             print("  File deleted from API")
-        except:
-            pass
+        except Exception:
+            pass  # Cleanup failure is not critical
 
 
 def main():
-    pdf_path = "data/Sb_1997_18_2017-01-01_IZ.pdf"
+    import sys
+
+    # Accept command line argument or use default
+    if len(sys.argv) > 1:
+        pdf_path = sys.argv[1]
+    else:
+        pdf_path = "data/Sb_1997_18_2017-01-01_IZ.pdf"
+        print("Usage: python gemini_pdf_extraction.py <pdf_path>")
+        print(f"Using default: {pdf_path}\n")
+
+    if not Path(pdf_path).exists():
+        print(f"Error: File not found: {pdf_path}")
+        sys.exit(1)
 
     print("=" * 60)
     print("Gemini PDF Hierarchy Extraction (Full Document)")
@@ -110,7 +122,7 @@ def main():
     sections = result.get("sections", [])
     by_type = {}
     for sec in sections:
-        t = sec.get("element_type", "unknown")
+        t = sec.get("type", "unknown")  # JSON schema uses "type", not "element_type"
         by_type[t] = by_type.get(t, 0) + 1
 
     print("\n" + "=" * 60)

@@ -61,18 +61,30 @@ Storage (PostgreSQL: vectors + graph + checkpoints)
 
 ## Critical Constraints (DO NOT CHANGE)
 
-These are research-backed decisions from published papers.
+These are research-backed decisions from published papers. **DO NOT modify** without explicit approval.
 
-### 1. Autonomous Agents (NOT Hardcoded)
+### 1. SINGLE SOURCE OF TRUTH (SSOT)
+
+**Principles:**
+- **One canonical implementation** - Each feature has EXACTLY ONE authoritative version
+- **No duplicate code** - Delete obsolete implementations immediately
+- **No legacy code** - Remove unused/deprecated code
+- **API keys in `.env` ONLY** - NEVER in config.json, NEVER in code
+
+**Why:** Prevents confusion, reduces maintenance burden, protects secrets.
+
+### 2. Autonomous Agents (NOT Hardcoded)
+
+**CRITICAL: Agents MUST be LLM-driven, NOT hardcoded workflows!**
 
 ```python
-# ❌ WRONG
+# ❌ WRONG (Hardcoded)
 def execute():
     step1 = call_tool_a()  # Predefined sequence
     step2 = call_tool_b()
     return synthesize(step1, step2)
 
-# ✅ CORRECT
+# ✅ CORRECT (Autonomous)
 def execute():
     return llm.run(
         system_prompt="You are an expert...",
@@ -81,9 +93,15 @@ def execute():
     )
 ```
 
+**Principles:**
+- LLM decides tool calling sequence autonomously
+- No "step 1, step 2, step 3" logic in code
+- System prompts guide behavior (NOT code)
+- Exception: Orchestrator has routing logic
+
 Agents inherit from `BaseAgent.run_autonomous_tool_loop()`. LLM decides tool calling order.
 
-### 2. Hierarchical Document Summaries
+### 3. Hierarchical Document Summaries
 
 **NEVER pass full document text to LLM for summarization!**
 
@@ -91,33 +109,50 @@ Agents inherit from `BaseAgent.run_autonomous_tool_loop()`. LLM decides tool cal
 Flow: Sections → Section Summaries → Document Summary
 ```
 
-PHASE 2 generates section summaries first, then aggregates. Prevents context overflow on 100+ page docs.
+- **Why:** Prevents context overflow, handles 100+ page documents
+- **Implementation:** PHASE 2 generates section summaries, then aggregates
+- **Length:** 100-1000 chars (adaptive based on document complexity)
+- **Fallback:** `"(Document summary unavailable)"` if section summaries fail
 
-### 3. Token-Aware Chunking
+### 4. Token-Aware Chunking
 
 - **Max tokens:** 512 (tiktoken, text-embedding-3-large tokenizer)
 - **Research:** LegalBench-RAG optimal for legal documents
+- **Why tokens not chars:** Guarantees embedding model compatibility, handles Czech diacritics
 - **Warning:** Changing this invalidates ALL vector stores!
 
-### 4. Summary-Augmented Chunking (SAC)
+### 5. Summary-Augmented Chunking (SAC)
 
 - Prepend document summary during embedding
 - Strip summaries during retrieval
 - **Result:** -58% context drift (Anthropic, 2024)
 
-### 5. Multi-Layer Embeddings
+### 6. Multi-Layer Embeddings
 
 - **3 separate indexes** (document/section/chunk) - NOT merged
 - **Result:** 2.3x essential chunks vs single-layer (Lima, 2024)
 
-### 6. No Cohere Reranking
+### 7. No Cohere Reranking
 
 Cohere performs WORSE on legal docs. Use `ms-marco` or `bge-reranker` instead.
 
-### 7. Generic Summaries (Counterintuitive!)
+### 8. Generic Summaries (Counterintuitive!)
 
 - **Style:** GENERIC (NOT expert terminology)
 - **Research:** Reuter et al. (2024) - generic summaries improve retrieval
+
+### 9. Autonomous Agent Responses
+
+**NEVER use hardcoded template responses!**
+
+```python
+# ❌ WRONG
+if is_greeting(query):
+    return "Hello! How can I help?"
+
+# ✅ CORRECT
+orchestrator.run(query)  # LLM generates contextual response
+```
 
 ## Configuration
 
@@ -136,17 +171,25 @@ Cohere performs WORSE on legal docs. Use `ms-marco` or `bge-reranker` instead.
 ```json
 {
   "retrieval": {
-    "method": "hyde_expansion_fusion",  // Current default
+    "method": "hyde_expansion_fusion",
     "hyde_weight": 0.6,
     "expansion_weight": 0.4
   },
   "storage": {
-    "backend": "postgresql"  // or "faiss" for dev
+    "backend": "postgresql"
   },
   "agent": {
     "model": "claude-haiku-4-5"
   }
 }
+```
+
+**Extraction Backend Selection:**
+```bash
+# Environment variable (default: "auto")
+EXTRACTION_BACKEND=auto     # Use Gemini if GOOGLE_API_KEY available, else Unstructured
+EXTRACTION_BACKEND=gemini   # Force Gemini (requires GOOGLE_API_KEY)
+EXTRACTION_BACKEND=unstructured  # Force Unstructured
 ```
 
 ## Best Practices
@@ -163,6 +206,14 @@ Cohere performs WORSE on legal docs. Use `ms-marco` or `bge-reranker` instead.
 - Google-style docstrings
 - Graceful degradation (e.g., reranker unavailable → fall back)
 - TDD: Write tests BEFORE implementing features
+- Narrow exception catches - catch specific exceptions, not bare `Exception`
+
+### Error Handling
+
+- Catch specific exceptions (e.g., `ValueError`, `RuntimeError`, `json.JSONDecodeError`)
+- Log errors with context (file name, operation, exception type)
+- Use `exc_info=True` for unexpected errors to capture traceback
+- Provide actionable error messages for user-fixable issues
 
 ### Git Workflow
 
@@ -193,5 +244,5 @@ Cohere performs WORSE on legal docs. Use `ms-marco` or `bge-reranker` instead.
 
 ---
 
-**Last Updated:** 2025-11-24
-**Version:** PHASE 1-7 + HyDE Expansion Fusion + Multi-Agent + Docker
+**Last Updated:** 2025-11-25
+**Version:** PHASE 1-7 + HyDE Expansion Fusion + Multi-Agent + Gemini Extractor + Docker

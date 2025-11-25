@@ -3,14 +3,20 @@ PHASE 1: Document Extraction using Gemini 2.5 Flash.
 
 Extracts hierarchical document structure using Gemini's native PDF understanding.
 
-Best Practices Applied:
+Features:
 1. Direct PDF upload via File API (not Base64)
-2. Strict JSON schema with response_mime_type
+2. JSON response format with response_mime_type="application/json"
 3. Auto-detection of document type (legal, technical, report, etc.)
 4. Full 1M token context window utilization
 5. Czech diacritics preservation
+6. Section and document summary generation
+7. Automatic fallback to Unstructured on failure
 
 Compatible with ExtractedDocument/DocumentSection interface.
+
+Note:
+    Requires GOOGLE_API_KEY environment variable.
+    Use get_extractor() factory for automatic backend selection.
 """
 
 import json
@@ -19,7 +25,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -99,6 +105,15 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
    - Ignoruj záhlaví a zápatí stránek
    - Zachovej obsah i prázdných nadpisů (title bez content je OK)
 
+7. **summary** = stručné shrnutí (max 200 znaků) pro sekce s obsahem
+   - Piš GENERICKY srozumitelně (ne právnický žargon)
+   - Pro nadpisy bez textu = null
+   - Příklad: "Definuje odpovědnost provozovatele za škody způsobené jadernou havárií"
+
+8. **document_summary** = shrnutí celého dokumentu (max 500 znaků)
+   - Hlavní téma a účel dokumentu
+   - Genericky srozumitelné pro laiky
+
 ## PŘÍKLAD VÝSTUPU pro právní dokument:
 
 ```json
@@ -108,13 +123,14 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
     "identifier": "18/1997 Sb.",
     "title": "o mírovém využívání jaderné energie a ionizujícího záření",
     "date": "24. ledna 1997",
-    "language": "cs"
+    "language": "cs",
+    "summary": "Zákon upravuje podmínky využívání jaderné energie, ionizujícího záření a nakládání s radioaktivními odpady. Stanoví požadavky na bezpečnost, odpovědnost provozovatelů a ochranu před zářením."
   },
   "sections": [
-    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": null, "content": null, "level": 1, "path": "ČÁST I"},
-    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I"},
-    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": null, "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ"},
-    {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 1}
+    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": null, "content": null, "level": 1, "path": "ČÁST I", "summary": null},
+    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I", "summary": null},
+    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": null, "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ", "summary": null},
+    {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 1, "summary": "Odkazuje na mezinárodní smlouvu pro řešení odpovědnosti za jaderné škody."}
   ]
 }
 ```
@@ -124,7 +140,15 @@ Vrať POUZE validní JSON odpovídající schématu. Žádný markdown, žádné
 
 @dataclass
 class GeminiExtractionConfig:
-    """Configuration for Gemini extraction."""
+    """
+    Configuration for Gemini extraction.
+
+    Attributes:
+        model: Gemini model ID (default: gemini-2.5-flash)
+        temperature: Generation temperature 0.0-1.0 (default: 0.1 for deterministic output)
+        max_output_tokens: Maximum output tokens (default: 65536 for large documents)
+        fallback_to_unstructured: Fall back to Unstructured on Gemini failure (default: True)
+    """
 
     model: str = DEFAULT_MODEL
     temperature: float = 0.1
@@ -171,6 +195,21 @@ class GeminiExtractor:
 
         logger.info(f"GeminiExtractor initialized with model={self.model_id}")
 
+    def _fallback_to_unstructured(self, file_path: Path, reason: str) -> ExtractedDocument:
+        """
+        Fall back to Unstructured extraction with logging.
+
+        Args:
+            file_path: Path to document
+            reason: Reason for fallback (for logging)
+
+        Returns:
+            ExtractedDocument from Unstructured extractor
+        """
+        logger.warning(f"{reason}. Falling back to Unstructured extraction.")
+        from src.unstructured_extractor import UnstructuredExtractor
+        return UnstructuredExtractor(self.config).extract(file_path)
+
     def extract(self, file_path: Path) -> ExtractedDocument:
         """
         Extract document structure from PDF using Gemini.
@@ -190,12 +229,9 @@ class GeminiExtractor:
         # Only PDF supported
         if file_path.suffix.lower() != ".pdf":
             if self.gemini_config.fallback_to_unstructured:
-                logger.warning(
-                    f"Gemini only supports PDF, falling back to Unstructured for {file_path.suffix}"
+                return self._fallback_to_unstructured(
+                    file_path, f"Gemini only supports PDF, got {file_path.suffix}"
                 )
-                from src.unstructured_extractor import UnstructuredExtractor
-
-                return UnstructuredExtractor(self.config).extract(file_path)
             raise ValueError(f"Gemini extractor only supports PDF files, got: {file_path.suffix}")
 
         try:
@@ -216,15 +252,32 @@ class GeminiExtractor:
                 # 4. Cleanup uploaded file
                 self._cleanup_file(uploaded_file)
 
-        except Exception as e:
-            logger.error(f"Gemini extraction failed: {e}")
-
+        except json.JSONDecodeError as e:
+            # JSON parse failure - Gemini returned invalid JSON
+            logger.error(
+                f"Gemini returned invalid JSON for {file_path.name}: {e}. "
+                "This may happen with very large documents or truncated responses."
+            )
             if self.gemini_config.fallback_to_unstructured:
-                logger.warning("Falling back to Unstructured extraction")
-                from src.unstructured_extractor import UnstructuredExtractor
+                return self._fallback_to_unstructured(file_path, f"Gemini returned invalid JSON: {e}")
+            raise RuntimeError(f"Gemini returned invalid JSON: {e}") from e
 
-                return UnstructuredExtractor(self.config).extract(file_path)
+        except (RuntimeError, ValueError) as e:
+            # Expected extraction errors
+            logger.error(f"Gemini extraction failed for {file_path.name}: {e}")
+            if self.gemini_config.fallback_to_unstructured:
+                return self._fallback_to_unstructured(file_path, str(e))
+            raise
 
+        except Exception as e:
+            # Unexpected error - log with traceback
+            logger.error(
+                f"Unexpected error in Gemini extraction for {file_path.name}: "
+                f"{type(e).__name__}: {e}",
+                exc_info=True
+            )
+            if self.gemini_config.fallback_to_unstructured:
+                return self._fallback_to_unstructured(file_path, f"Unexpected error: {type(e).__name__}: {e}")
             raise RuntimeError(f"Gemini extraction failed: {e}") from e
 
     def _upload_document(self, file_path: Path) -> genai.types.File:
@@ -278,17 +331,38 @@ class GeminiExtractor:
         return result
 
     def _cleanup_file(self, uploaded_file: genai.types.File) -> None:
-        """Delete uploaded file from Gemini API."""
+        """Delete uploaded file from Gemini API to prevent storage accumulation."""
         try:
             genai.delete_file(uploaded_file.name)
             logger.debug("File deleted from Gemini API")
         except Exception as e:
-            logger.warning(f"Failed to delete file from Gemini API: {e}")
+            logger.warning(
+                f"Failed to delete uploaded file '{uploaded_file.name}' from Gemini API: {e}. "
+                "File may remain in your Gemini storage quota."
+            )
 
     def _convert_to_extracted_document(
         self, raw: dict, file_path: Path, extraction_time: float
     ) -> ExtractedDocument:
-        """Convert Gemini output to ExtractedDocument format."""
+        """
+        Convert Gemini JSON output to ExtractedDocument format.
+
+        Performs the following transformations:
+        1. Extracts document metadata (type, title, date, etc.)
+        2. Converts raw sections to DocumentSection objects
+        3. Resolves parent_id from parent_number using section lookup
+        4. Calculates char_start/char_end offsets for each section
+        5. Populates children_ids based on parent relationships
+        6. Generates markdown representation
+
+        Args:
+            raw: Raw JSON dict from Gemini extraction
+            file_path: Path to source document
+            extraction_time: Time taken for extraction in seconds
+
+        Returns:
+            ExtractedDocument with all sections and metadata
+        """
         doc_meta = raw.get("document", {})
         raw_sections = raw.get("sections", [])
 
@@ -317,6 +391,7 @@ class GeminiExtractor:
             page_number = sec.get("page_number") or 0
             element_type = sec.get("element_type", "unknown")
             parent_number = sec.get("parent_number")
+            summary = sec.get("summary")  # Section summary from Gemini
 
             # Compute parent_id from parent_number
             parent_id = None
@@ -350,6 +425,7 @@ class GeminiExtractor:
                 content_length=content_length,
                 element_type=element_type,
                 element_category=element_type,  # Use element_type as category
+                summary=summary,  # Section summary from Gemini
             )
 
             sections.append(section)
@@ -393,7 +469,7 @@ class GeminiExtractor:
             num_tables=0,
             total_chars=len(full_text),
             title=doc_meta.get("title"),
-            document_summary=None,  # Will be generated in PHASE 2
+            document_summary=doc_meta.get("summary"),  # Document summary from Gemini
             extraction_method=f"gemini_{self.model_id}",
             config={
                 "model": self.model_id,
@@ -424,31 +500,48 @@ class GeminiExtractor:
 
 def get_extractor(
     config: Optional[ExtractionConfig] = None, backend: str = "auto"
-) -> "GeminiExtractor":
+) -> Union["GeminiExtractor", "UnstructuredExtractor"]:
     """
-    Factory function to get appropriate extractor.
+    Factory function to get appropriate extractor based on backend setting.
 
     Args:
         config: ExtractionConfig for compatibility
-        backend: "gemini", "unstructured", or "auto"
+        backend: Backend selection:
+            - "gemini": Force Gemini extractor (requires GOOGLE_API_KEY)
+            - "unstructured": Force Unstructured extractor
+            - "auto": Use Gemini if GOOGLE_API_KEY available, else Unstructured
 
     Returns:
-        Extractor instance
+        GeminiExtractor or UnstructuredExtractor instance
+
+    Raises:
+        ValueError: If backend="gemini" but GOOGLE_API_KEY is not set
+
+    Example:
+        >>> extractor = get_extractor(backend="auto")
+        >>> doc = extractor.extract(Path("document.pdf"))
     """
+    from src.unstructured_extractor import UnstructuredExtractor
+
     if backend == "gemini":
         return GeminiExtractor(config)
-    elif backend == "unstructured":
-        from src.unstructured_extractor import UnstructuredExtractor
 
+    elif backend == "unstructured":
         return UnstructuredExtractor(config)
+
     else:  # "auto"
         # Check if GOOGLE_API_KEY is available
         if os.getenv("GOOGLE_API_KEY"):
             try:
                 return GeminiExtractor(config)
+            except (ValueError, RuntimeError) as e:
+                # Expected errors (API key issues, initialization failures)
+                logger.warning(f"Gemini extractor unavailable: {e}. Using Unstructured.")
             except Exception as e:
-                logger.warning(f"Gemini extractor unavailable: {e}, using Unstructured")
-
-        from src.unstructured_extractor import UnstructuredExtractor
+                # Unexpected error - log with more detail
+                logger.warning(
+                    f"Gemini extractor failed unexpectedly: {type(e).__name__}: {e}. "
+                    "Using Unstructured."
+                )
 
         return UnstructuredExtractor(config)

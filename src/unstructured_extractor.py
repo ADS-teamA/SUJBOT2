@@ -245,8 +245,8 @@ class ExtractedDocument:
 class ExtractionConfig:
     """Configuration for document extraction (Unstructured or Gemini)."""
 
-    # Backend selection
-    extraction_backend: str = "gemini"  # "gemini", "unstructured", "auto"
+    # Backend selection: "auto" checks GOOGLE_API_KEY, falls back to unstructured
+    extraction_backend: str = "auto"  # "gemini", "unstructured", "auto"
     gemini_model: str = "gemini-2.5-flash"  # Gemini model to use
     gemini_fallback_to_unstructured: bool = True  # Fall back to Unstructured on Gemini failure
 

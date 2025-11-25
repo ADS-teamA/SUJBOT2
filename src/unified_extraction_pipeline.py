@@ -18,14 +18,18 @@ from src.unstructured_extractor import (
 from src.ToC_retrieval import PDFParser, HierarchyNode
 from unstructured.documents.elements import Element
 
-# Import Gemini extractor (lazy import to avoid dependency if not used)
+logger = logging.getLogger(__name__)
+
+# Conditional import: Gemini extractor (requires google-generativeai package)
 try:
     from src.gemini_extractor import GeminiExtractor, get_extractor
     GEMINI_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     GEMINI_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
+    logger.warning(
+        f"Gemini extractor unavailable: {e}. "
+        "Using Unstructured backend. To enable Gemini: pip install google-generativeai"
+    )
 
 class UnifiedDocumentPipeline:
     """
@@ -77,14 +81,18 @@ class UnifiedDocumentPipeline:
 
         if use_gemini:
             # PATH G: Direct Gemini extraction (bypasses ToC retrieval)
-            logger.info("🚀 PATH G: Using Gemini 2.5 Flash for direct hierarchy extraction")
+            logger.info("PATH G: Using Gemini for direct hierarchy extraction")
             try:
                 return self.gemini_extractor.extract(file_path)
+            except (RuntimeError, ValueError, json.JSONDecodeError) as e:
+                # Expected errors from Gemini extraction - fallback available
+                if not getattr(self.config, 'gemini_fallback_to_unstructured', True):
+                    raise
+                logger.warning(f"Gemini extraction failed for {file_path.name}: {e}. Falling back to Unstructured.")
             except Exception as e:
-                logger.error(f"Gemini extraction failed: {e}")
-                if getattr(self.config, 'gemini_fallback_to_unstructured', True):
-                    logger.warning("Falling back to Unstructured extraction")
-                else:
+                # Unexpected error - log with traceback but allow fallback
+                logger.error(f"Unexpected error in Gemini extraction: {type(e).__name__}: {e}", exc_info=True)
+                if not getattr(self.config, 'gemini_fallback_to_unstructured', True):
                     raise
 
         # 1. Attempt Structure Retrieval (Metadata or LLM)
@@ -98,7 +106,6 @@ class UnifiedDocumentPipeline:
                 toc_parser = PDFParser(str(file_path))
 
                 # We get the tree, raw OCR text (unused here), and cost
-                # Note: Ensure PDFParser.process_document returns 3 values as per previous updates
                 structure_root, _, cost = self._try_retrieve_structure(toc_parser)
 
                 if structure_root:
@@ -106,8 +113,16 @@ class UnifiedDocumentPipeline:
                 else:
                     logger.warning("Structure retrieval returned None (No outline, heuristic failed).")
 
+            except (RuntimeError, ValueError) as e:
+                # Expected errors from ToC parsing - continue with fallback
+                logger.warning(f"Structure retrieval unavailable: {e}. Using fallback.")
+                structure_root = None
+            except FileNotFoundError as e:
+                # User-fixable error - fail fast with clear message
+                raise RuntimeError(f"PDF file not found during structure retrieval: {e}") from e
             except Exception as e:
-                logger.error(f"Structure retrieval failed with error: {e}")
+                # Unexpected error - log with traceback for debugging
+                logger.error(f"Unexpected error during structure retrieval: {type(e).__name__}: {e}", exc_info=True)
                 structure_root = None
 
         # 2. Decision Fork
