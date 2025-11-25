@@ -148,12 +148,18 @@ class GeminiExtractionConfig:
         temperature: Generation temperature 0.0-1.0 (default: 0.1 for deterministic output)
         max_output_tokens: Maximum output tokens (default: 65536 for large documents)
         fallback_to_unstructured: Fall back to Unstructured on Gemini failure (default: True)
+        chunk_large_pdfs: Enable chunked extraction for large PDFs (default: True)
+        max_pages_per_chunk: Maximum pages per chunk when splitting (default: 50)
+        file_size_threshold_mb: File size threshold for chunked extraction (default: 10.0 MB)
     """
 
     model: str = DEFAULT_MODEL
     temperature: float = 0.1
     max_output_tokens: int = 65536
     fallback_to_unstructured: bool = True
+    chunk_large_pdfs: bool = True
+    max_pages_per_chunk: int = 100
+    file_size_threshold_mb: float = 10.0
 
 
 class GeminiExtractor:
@@ -233,6 +239,21 @@ class GeminiExtractor:
                     file_path, f"Gemini only supports PDF, got {file_path.suffix}"
                 )
             raise ValueError(f"Gemini extractor only supports PDF files, got: {file_path.suffix}")
+
+        # Check if chunked extraction is needed for large PDFs
+        if self._needs_chunking(file_path):
+            file_size_mb = file_path.stat().st_size / (1024 * 1024)
+            logger.info(
+                f"Large PDF detected ({file_size_mb:.1f} MB > {self.gemini_config.file_size_threshold_mb} MB). "
+                f"Using chunked extraction with max {self.gemini_config.max_pages_per_chunk} pages per chunk."
+            )
+            try:
+                return self._extract_chunked(file_path)
+            except Exception as e:
+                logger.error(f"Chunked extraction failed: {e}")
+                if self.gemini_config.fallback_to_unstructured:
+                    return self._fallback_to_unstructured(file_path, f"Chunked extraction failed: {e}")
+                raise
 
         try:
             # 1. Upload PDF via File API
@@ -340,6 +361,143 @@ class GeminiExtractor:
                 f"Failed to delete uploaded file '{uploaded_file.name}' from Gemini API: {e}. "
                 "File may remain in your Gemini storage quota."
             )
+
+    def _needs_chunking(self, file_path: Path) -> bool:
+        """Check if a PDF needs chunked extraction based on file size."""
+        file_size_mb = file_path.stat().st_size / (1024 * 1024)
+        return (
+            self.gemini_config.chunk_large_pdfs
+            and file_size_mb > self.gemini_config.file_size_threshold_mb
+        )
+
+    def _get_page_count(self, file_path: Path) -> int:
+        """Get the number of pages in a PDF."""
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(str(file_path))
+            return len(reader.pages)
+        except ImportError:
+            logger.warning("pypdf not installed, cannot get page count")
+            return 0
+
+    def _split_pdf(self, file_path: Path) -> List[Path]:
+        """
+        Split a large PDF into smaller chunks.
+
+        Args:
+            file_path: Path to the original PDF
+
+        Returns:
+            List of paths to chunk PDF files (temporary files)
+        """
+        try:
+            from pypdf import PdfReader, PdfWriter
+        except ImportError:
+            raise ImportError("pypdf required for chunked extraction. Install with: pip install pypdf")
+
+        import tempfile
+
+        reader = PdfReader(str(file_path))
+        total_pages = len(reader.pages)
+        chunk_size = self.gemini_config.max_pages_per_chunk
+
+        chunk_paths = []
+        for start_page in range(0, total_pages, chunk_size):
+            end_page = min(start_page + chunk_size, total_pages)
+
+            # Create writer for this chunk
+            writer = PdfWriter()
+            for page_num in range(start_page, end_page):
+                writer.add_page(reader.pages[page_num])
+
+            # Save to temporary file
+            chunk_path = Path(tempfile.mktemp(suffix=f"_chunk_{start_page+1}-{end_page}.pdf"))
+            with open(chunk_path, "wb") as f:
+                writer.write(f)
+
+            chunk_paths.append(chunk_path)
+            logger.info(f"Created chunk: pages {start_page+1}-{end_page} → {chunk_path.name}")
+
+        logger.info(f"Split {file_path.name} into {len(chunk_paths)} chunks ({total_pages} pages total)")
+        return chunk_paths
+
+    def _extract_chunked(self, file_path: Path) -> ExtractedDocument:
+        """
+        Extract a large PDF by splitting into chunks, processing each, and merging results.
+
+        Args:
+            file_path: Path to large PDF
+
+        Returns:
+            ExtractedDocument with merged sections from all chunks
+        """
+        start_time = time.time()
+        total_pages = self._get_page_count(file_path)
+        logger.info(f"Starting chunked extraction of {file_path.name} ({total_pages} pages)")
+
+        # Split PDF into chunks
+        chunk_paths = self._split_pdf(file_path)
+
+        all_sections: List[Dict] = []
+        document_meta: Dict = {}
+
+        try:
+            for i, chunk_path in enumerate(chunk_paths):
+                logger.info(f"Processing chunk {i+1}/{len(chunk_paths)}: {chunk_path.name}")
+
+                try:
+                    # Upload chunk
+                    uploaded_file = self._upload_document(chunk_path)
+
+                    try:
+                        # Extract from chunk
+                        raw_extraction = self._extract_with_gemini(uploaded_file)
+
+                        # Store document metadata from first chunk
+                        if not document_meta and raw_extraction.get("document"):
+                            document_meta = raw_extraction["document"]
+
+                        # Collect sections with chunk offset for section_id uniqueness
+                        chunk_sections = raw_extraction.get("sections", [])
+                        for sec in chunk_sections:
+                            # Add chunk prefix to section_id to avoid collisions
+                            original_id = sec.get("section_id", "")
+                            sec["section_id"] = f"c{i+1}_{original_id}"
+                            # Update parent_id references
+                            if sec.get("parent_id"):
+                                sec["parent_id"] = f"c{i+1}_{sec['parent_id']}"
+                            all_sections.append(sec)
+
+                        logger.info(f"Chunk {i+1}: {len(chunk_sections)} sections extracted")
+
+                    finally:
+                        self._cleanup_file(uploaded_file)
+
+                except Exception as e:
+                    logger.error(f"Failed to process chunk {i+1}: {e}")
+                    # Continue with other chunks
+
+        finally:
+            # Cleanup temporary chunk files
+            for chunk_path in chunk_paths:
+                try:
+                    chunk_path.unlink()
+                except Exception:
+                    pass
+
+        # Merge all sections into a single extraction
+        merged_raw = {
+            "document": document_meta,
+            "sections": all_sections
+        }
+
+        extraction_time = time.time() - start_time
+        logger.info(
+            f"Chunked extraction complete: {len(all_sections)} sections "
+            f"from {len(chunk_paths)} chunks in {extraction_time:.1f}s"
+        )
+
+        return self._convert_to_extracted_document(merged_raw, file_path, extraction_time)
 
     def _convert_to_extracted_document(
         self, raw: dict, file_path: Path, extraction_time: float
