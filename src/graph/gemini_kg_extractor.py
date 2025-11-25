@@ -126,10 +126,31 @@ class GeminiKGExtractor:
 
         Returns:
             KnowledgeGraph with entities and relationships (with source_chunk_ids if phase3 available)
+
+        Raises:
+            FileNotFoundError: If phase1_path does not exist
+            ValueError: If phase1_path is not a valid JSON file
         """
-        # Load phase1 extraction
-        with open(phase1_path, "r", encoding="utf-8") as f:
-            phase1_data = json.load(f)
+        # Validate file exists
+        if not phase1_path.exists():
+            raise FileNotFoundError(
+                f"Phase 1 extraction file not found: {phase1_path}. "
+                f"Ensure document extraction (Phase 1) completed successfully."
+            )
+
+        # Load phase1 extraction with proper error handling
+        try:
+            with open(phase1_path, "r", encoding="utf-8") as f:
+                phase1_data = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Phase 1 extraction file is corrupted or invalid JSON: {phase1_path}. "
+                f"Error at position {e.pos}: {e.msg}"
+            )
+        except PermissionError:
+            raise PermissionError(
+                f"Cannot read Phase 1 extraction file (permission denied): {phase1_path}"
+            )
 
         document_id = phase1_data.get("document_id", phase1_path.stem)
 
@@ -141,9 +162,15 @@ class GeminiKGExtractor:
                 with open(phase3_path, "r", encoding="utf-8") as f:
                     phase3_data = json.load(f)
                     phase3_chunks = phase3_data.get("chunks", [])
-                    logger.info(f"Loaded {len(phase3_chunks)} chunks for entity mapping")
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.warning(f"Could not load phase3_chunks for mapping: {e}")
+                    if not phase3_chunks:
+                        logger.warning("phase3_chunks.json exists but 'chunks' array is empty")
+                    else:
+                        logger.info(f"Loaded {len(phase3_chunks)} chunks for entity mapping")
+            except (json.JSONDecodeError, IOError, OSError) as e:
+                logger.warning(
+                    f"Could not load phase3_chunks for entity-to-chunk mapping: "
+                    f"{type(e).__name__}: {e}. Entities will not have chunk provenance."
+                )
 
         # Convert to compact markdown
         compact_text = self._to_compact_markdown(phase1_data)
@@ -198,7 +225,18 @@ class GeminiKGExtractor:
         return "\n".join(lines)
 
     def _extract_with_gemini(self, document_text: str) -> Dict[str, Any]:
-        """Run KG extraction with Gemini 2.5 Pro."""
+        """
+        Run KG extraction with Gemini 2.5 Pro.
+
+        Args:
+            document_text: Compact markdown representation of document
+
+        Returns:
+            Dict with 'entities' and 'relationships' lists
+
+        Raises:
+            ValueError: If Gemini returns invalid JSON that cannot be repaired
+        """
         model = genai.GenerativeModel(
             self.model_id,
             generation_config={
@@ -220,7 +258,28 @@ class GeminiKGExtractor:
                 f"output={response.usage_metadata.candidates_token_count}"
             )
 
-        return json.loads(response.text)
+        # Parse JSON with error handling and repair
+        try:
+            return json.loads(response.text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Gemini KG response not valid JSON at position {e.pos}: {e.msg}")
+            # Try json_repair library (same approach as gemini_extractor.py)
+            try:
+                from json_repair import repair_json
+                repaired = repair_json(response.text, return_objects=True)
+                logger.info("KG JSON repaired successfully using json_repair library")
+                if isinstance(repaired, dict):
+                    return repaired
+                else:
+                    raise ValueError(f"Repaired JSON is not a dict: {type(repaired).__name__}")
+            except ImportError:
+                logger.error("json_repair library not available for KG JSON repair")
+                raise ValueError(f"Gemini returned invalid JSON for KG extraction: {e}") from e
+            except Exception as repair_err:
+                logger.error(
+                    f"Failed to repair KG JSON response: {type(repair_err).__name__}: {repair_err}"
+                )
+                raise ValueError(f"Gemini returned invalid JSON for KG extraction: {e}") from e
 
     def _find_chunks_for_entity(
         self, entity_name: str, phase3_chunks: List[Dict[str, Any]]
@@ -339,9 +398,16 @@ class GeminiKGExtractor:
             entities.append(entity)
 
         # Convert relationships with evidence text
-        for raw_rel in raw_kg.get("relationships", []):
+        skipped_relationships: List[Tuple[str, str]] = []
+        raw_relationships = raw_kg.get("relationships", [])
+
+        for raw_rel in raw_relationships:
             rel_type_str = raw_rel.get("type", "references")
             rel_type = rel_type_map.get(rel_type_str, RelationshipType.REFERENCES)
+
+            # Log unknown relationship types
+            if rel_type_str not in rel_type_map:
+                logger.debug(f"Unknown relationship type '{rel_type_str}', defaulting to REFERENCES")
 
             # Map Gemini IDs to UUIDs
             source_gemini_id = raw_rel.get("source_id", "")
@@ -350,9 +416,9 @@ class GeminiKGExtractor:
             source_uuid = id_mapping.get(source_gemini_id, "")
             target_uuid = id_mapping.get(target_gemini_id, "")
 
-            # Skip relationships with missing entities
+            # Track and skip relationships with missing entities
             if not source_uuid or not target_uuid:
-                logger.warning(f"Skipping relationship with missing entity: {source_gemini_id} -> {target_gemini_id}")
+                skipped_relationships.append((source_gemini_id, target_gemini_id))
                 continue
 
             # Use 'evidence' field from prompt, fall back to 'description'
@@ -370,6 +436,13 @@ class GeminiKGExtractor:
                 extracted_at=extraction_time,
             )
             relationships.append(relationship)
+
+        # Log aggregate stats for skipped relationships
+        if skipped_relationships:
+            logger.warning(
+                f"Skipped {len(skipped_relationships)}/{len(raw_relationships)} relationships "
+                f"due to missing entity references. First 3: {skipped_relationships[:3]}"
+            )
 
         kg = KnowledgeGraph(
             entities=entities,

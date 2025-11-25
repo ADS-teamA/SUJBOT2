@@ -523,7 +523,7 @@ class EmbeddingGenerator:
         logger.info(f"Embedding Layer {layer}: {len(chunks)} chunks")
 
         # Extract texts with breadcrumb path prefix
-        # Format: [section_path > section_title]\n\n{context}\n\n{raw_content}
+        # Format: [section_path > section_title]\n\n{chunk.content}
         # This improves retrieval by adding hierarchical location context
         texts = []
         for chunk in chunks:

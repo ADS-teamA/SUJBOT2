@@ -824,12 +824,17 @@ class IndexingPipeline:
 
                 except (ValueError, RuntimeError, KeyError) as e:
                     # Expected KG construction errors (LLM API, data issues)
-                    logger.error(f"[ERROR] Knowledge Graph extraction failed: {e}", exc_info=True)
+                    logger.error(f"[ERROR] Knowledge Graph extraction failed ({type(e).__name__}): {e}")
+                    knowledge_graph = None
+                    kg_error = str(e)
+                except (FileNotFoundError, json.JSONDecodeError) as e:
+                    # File system or parsing errors
+                    logger.error(f"[ERROR] Knowledge Graph data error ({type(e).__name__}): {e}")
                     knowledge_graph = None
                     kg_error = str(e)
                 except Exception as e:
-                    # Other errors
-                    logger.error(f"[ERROR] Knowledge Graph extraction failed: {e}", exc_info=True)
+                    # Unexpected errors - log with full traceback for debugging
+                    logger.error(f"[ERROR] Knowledge Graph extraction failed unexpectedly: {e}", exc_info=True)
                     knowledge_graph = None
                     kg_error = str(e)
 

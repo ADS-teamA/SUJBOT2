@@ -160,15 +160,23 @@ def _extract_complete_json_objects(json_str: str, start_pos: int) -> List[dict]:
                     # Try to parse this object
                     obj = json.loads(obj_str)
                     complete_sections.append(obj)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as parse_err:
                     # Try json_repair on individual object
                     try:
                         from json_repair import repair_json
                         repaired = repair_json(obj_str, return_objects=True)
                         if isinstance(repaired, dict):
                             complete_sections.append(repaired)
-                    except Exception:
-                        pass
+                        else:
+                            logger.debug(
+                                f"JSON repair returned non-dict for section at pos {obj_start}: "
+                                f"got {type(repaired).__name__}"
+                            )
+                    except (ImportError, ValueError, TypeError) as repair_err:
+                        logger.debug(
+                            f"Failed to repair section object at pos {obj_start}: "
+                            f"{type(repair_err).__name__}: {repair_err}. Skipping section."
+                        )
                 obj_start = None
         elif char == ']' and brace_depth == 0:
             break
@@ -216,11 +224,16 @@ def _extract_document_metadata(json_str: str) -> dict:
                 doc_str = json_str[start_pos:i+1]
                 try:
                     return json.loads(doc_str)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    logger.debug(f"Direct JSON parse of document metadata failed: {e}")
                     try:
                         return repair_json(doc_str, return_objects=True)
-                    except Exception:
-                        pass
+                    except (ImportError, ValueError, TypeError) as repair_err:
+                        logger.warning(
+                            f"Failed to extract document metadata: "
+                            f"{type(repair_err).__name__}: {repair_err}. "
+                            "Document will use default metadata."
+                        )
                 break
 
     return {}
@@ -447,14 +460,15 @@ class GeminiExtractionConfig:
 
     Attributes:
         model: Gemini model ID (default: gemini-2.5-flash)
-        temperature: Generation temperature 0.0-1.0 (default: 0.1 for deterministic output)
+        temperature: Generation temperature 0.0-2.0 (default: 0.1 for deterministic output)
         max_output_tokens: Maximum output tokens (default: 65536 for large documents)
         fallback_to_unstructured: Fall back to Unstructured on Gemini failure (default: True)
         chunk_large_pdfs: Enable chunked extraction for large PDFs (default: True)
-        max_pages_per_chunk: Maximum pages per chunk when splitting (default: 15)
+        max_pages_per_chunk: Maximum pages per chunk when splitting (default: 10)
         file_size_threshold_mb: File size threshold for chunked extraction (default: 10.0 MB)
-        parallel_chunks: Number of chunks to process in parallel (default: 3)
-        rpm_limit: Requests per minute limit for rate limiting (default: 10)
+        parallel_chunks: Number of chunks to process in parallel (default: 6)
+        rpm_limit: Requests per minute limit for rate limiting (default: 6)
+        batch_wait_seconds: Seconds to wait between batches for rate limiting (default: 60)
     """
 
     model: str = DEFAULT_MODEL
@@ -464,8 +478,26 @@ class GeminiExtractionConfig:
     chunk_large_pdfs: bool = True
     max_pages_per_chunk: int = 10
     file_size_threshold_mb: float = 10.0
-    parallel_chunks: int = 6  # Process 6 chunks in parallel (1 batch per minute)
-    rpm_limit: int = 6  # RPM limit per batch (6 chunks/min to stay under Gemini limits)
+    parallel_chunks: int = 6
+    rpm_limit: int = 6
+    batch_wait_seconds: int = 60
+
+    def __post_init__(self):
+        """Validate configuration parameters."""
+        if not 0.0 <= self.temperature <= 2.0:
+            raise ValueError(f"temperature must be in [0.0, 2.0], got {self.temperature}")
+        if self.max_output_tokens <= 0:
+            raise ValueError(f"max_output_tokens must be positive, got {self.max_output_tokens}")
+        if self.max_pages_per_chunk <= 0:
+            raise ValueError(f"max_pages_per_chunk must be positive, got {self.max_pages_per_chunk}")
+        if self.file_size_threshold_mb <= 0:
+            raise ValueError(f"file_size_threshold_mb must be positive, got {self.file_size_threshold_mb}")
+        if self.parallel_chunks <= 0:
+            raise ValueError(f"parallel_chunks must be positive, got {self.parallel_chunks}")
+        if self.rpm_limit <= 0:
+            raise ValueError(f"rpm_limit must be positive, got {self.rpm_limit}")
+        if self.batch_wait_seconds < 0:
+            raise ValueError(f"batch_wait_seconds must be non-negative, got {self.batch_wait_seconds}")
 
 
 class GeminiExtractor:
@@ -748,10 +780,13 @@ class GeminiExtractor:
             for page_num in range(start_page, end_page):
                 writer.add_page(reader.pages[page_num])
 
-            # Save to temporary file
-            chunk_path = Path(tempfile.mktemp(suffix=f"_chunk_{start_page+1}-{end_page}.pdf"))
-            with open(chunk_path, "wb") as f:
-                writer.write(f)
+            # Save to temporary file (use NamedTemporaryFile to avoid race conditions)
+            with tempfile.NamedTemporaryFile(
+                suffix=f"_chunk_{start_page+1}-{end_page}.pdf",
+                delete=False
+            ) as tmp:
+                chunk_path = Path(tmp.name)
+                writer.write(tmp)
 
             chunk_paths.append(chunk_path)
             logger.info(f"Created chunk: pages {start_page+1}-{end_page} → {chunk_path.name}")
@@ -818,7 +853,7 @@ class GeminiExtractor:
         Extract a large PDF by splitting into chunks, processing in parallel batches.
 
         Uses batch-based parallelism: processes `parallel_chunks` chunks at once,
-        waits for all to complete, then waits 60 seconds before next batch
+        waits for all to complete, then waits `batch_wait_seconds` before next batch
         to respect Gemini API rate limits.
 
         Args:
@@ -826,6 +861,9 @@ class GeminiExtractor:
 
         Returns:
             ExtractedDocument with merged sections from all chunks
+
+        Raises:
+            RuntimeError: If more than 50% of chunks fail to extract
         """
         start_time = time.time()
         total_pages = self._get_page_count(file_path)
@@ -839,6 +877,10 @@ class GeminiExtractor:
         # Results storage: index -> (document_meta, sections)
         results: Dict[int, Tuple[Dict, List[Dict]]] = {}
         document_meta: Dict = {}
+        failed_chunks: List[int] = []  # Track failed chunk indices
+
+        # Thread lock for document_meta access
+        meta_lock = threading.Lock()
 
         try:
             # Process chunks in batches
@@ -872,27 +914,54 @@ class GeminiExtractor:
                             idx, meta, sections = future.result()
                             results[idx] = (meta, sections)
 
-                            # Store document metadata from first chunk
-                            if not document_meta and meta:
-                                document_meta = meta
+                            # Thread-safe document metadata update
+                            with meta_lock:
+                                if not document_meta and meta:
+                                    document_meta = meta
+
+                            # Track chunks that returned empty results
+                            if not sections:
+                                failed_chunks.append(chunk_idx)
+                                logger.warning(f"Chunk {chunk_idx + 1} returned no sections")
 
                         except Exception as e:
                             logger.error(f"Chunk {chunk_idx + 1} future failed: {e}")
                             results[chunk_idx] = ({}, [])
+                            failed_chunks.append(chunk_idx)
 
-                # Wait 60 seconds before next batch (unless this is the last batch)
+                # Wait before next batch (unless this is the last batch)
                 if batch_end < total_chunks:
-                    wait_time = 60
+                    wait_time = self.gemini_config.batch_wait_seconds
                     logger.info(f"Batch {batch_num} complete. Waiting {wait_time}s for rate limit...")
                     time.sleep(wait_time)
 
         finally:
-            # Cleanup temporary chunk files
+            # Cleanup temporary chunk files with logging for failures
+            cleanup_failures = []
             for chunk_path in chunk_paths:
                 try:
                     chunk_path.unlink()
-                except Exception:
-                    pass
+                except OSError as e:
+                    cleanup_failures.append((chunk_path, e))
+
+            if cleanup_failures:
+                logger.warning(
+                    f"Failed to cleanup {len(cleanup_failures)} temporary chunk files. "
+                    f"Manual cleanup may be needed: {[str(p) for p, _ in cleanup_failures[:3]]}"
+                )
+
+        # Check for excessive failures
+        if failed_chunks:
+            failure_rate = len(failed_chunks) / total_chunks
+            logger.error(
+                f"CHUNK EXTRACTION ISSUES: {len(failed_chunks)}/{total_chunks} chunks "
+                f"failed or returned empty results. Failed chunks: {failed_chunks}"
+            )
+            if failure_rate > 0.5:
+                raise RuntimeError(
+                    f"Chunked extraction failed: {len(failed_chunks)}/{total_chunks} chunks "
+                    f"({failure_rate:.0%}) failed. Document extraction is incomplete."
+                )
 
         # Merge all sections in order (by chunk index)
         all_sections: List[Dict] = []
@@ -907,9 +976,11 @@ class GeminiExtractor:
         }
 
         extraction_time = time.time() - start_time
+        success_rate = (total_chunks - len(failed_chunks)) / total_chunks if total_chunks > 0 else 0
         logger.info(
             f"Chunked extraction complete: {len(all_sections)} sections "
-            f"from {total_chunks} chunks in {extraction_time:.1f}s (parallel batches of {batch_size})"
+            f"from {total_chunks} chunks in {extraction_time:.1f}s "
+            f"(success rate: {success_rate:.0%}, parallel batches of {batch_size})"
         )
 
         return self._convert_to_extracted_document(merged_raw, file_path, extraction_time)
@@ -1120,14 +1191,25 @@ def get_extractor(
         if os.getenv("GOOGLE_API_KEY"):
             try:
                 return GeminiExtractor(config)
+            except (ImportError, ModuleNotFoundError) as e:
+                # Missing dependencies
+                logger.warning(f"Gemini SDK not available: {e}. Using Unstructured.")
             except (ValueError, RuntimeError) as e:
                 # Expected errors (API key issues, initialization failures)
                 logger.warning(f"Gemini extractor unavailable: {e}. Using Unstructured.")
+            except (AttributeError, TypeError) as e:
+                # Code bugs - log as error with traceback
+                logger.error(
+                    f"Code error in Gemini extractor initialization: "
+                    f"{type(e).__name__}: {e}. Using Unstructured.",
+                    exc_info=True
+                )
             except Exception as e:
-                # Unexpected error - log with more detail
-                logger.warning(
-                    f"Gemini extractor failed unexpectedly: {type(e).__name__}: {e}. "
-                    "Using Unstructured."
+                # Unexpected error - log with traceback for investigation
+                logger.error(
+                    f"Unexpected error initializing Gemini extractor: "
+                    f"{type(e).__name__}: {e}. This may indicate a bug. Using Unstructured.",
+                    exc_info=True
                 )
 
         return UnstructuredExtractor(config)
