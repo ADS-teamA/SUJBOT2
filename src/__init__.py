@@ -12,13 +12,25 @@ from .config import ExtractionConfig, RAGConfig
 from .unstructured_extractor import UnstructuredExtractor
 from .summary_generator import SummaryGenerator
 
+# Gemini extractor (optional - requires GOOGLE_API_KEY)
+try:
+    from .gemini_extractor import GeminiExtractor, get_extractor
+except ImportError:
+    GeminiExtractor = None  # type: ignore
+    get_extractor = None  # type: ignore
+
 # PHASE 3: Multi-layer chunking with SAC
 from .multi_layer_chunker import MultiLayerChunker, Chunk, ChunkMetadata
 
-# PHASE 4: Embedding & FAISS indexing
+# PHASE 4: Embedding & indexing
 from .embedding_generator import EmbeddingGenerator, EmbeddingConfig
-from .faiss_vector_store import FAISSVectorStore
 from .indexing_pipeline import IndexingPipeline, IndexingConfig
+
+# Optional: FAISS vector store (not required for PostgreSQL backend)
+try:
+    from .faiss_vector_store import FAISSVectorStore
+except ImportError:
+    FAISSVectorStore = None  # type: ignore
 
 __all__ = [
     # Configuration
@@ -27,6 +39,8 @@ __all__ = [
     # Extraction
     "UnstructuredExtractor",
     "SummaryGenerator",
+    "GeminiExtractor",
+    "get_extractor",
     # Chunking
     "MultiLayerChunker",
     "Chunk",

@@ -1049,8 +1049,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     chunk.metadata.page_number,
                     metadata_json,
                 )
-            else:
-                # Layer 2/3: Sections/Chunks (have section columns)
+            elif layer == 2:
+                # Layer 2: Sections (no char_start/char_end)
                 record = (
                     chunk.chunk_id,
                     chunk.metadata.document_id,
@@ -1061,8 +1061,27 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     getattr(chunk.metadata, 'section_depth', None),
                     hierarchical_path,
                     chunk.metadata.page_number,
-                    getattr(chunk.metadata, 'char_start', None) if layer == 3 else None,
-                    getattr(chunk.metadata, 'char_end', None) if layer == 3 else None,
+                    embedding_str,
+                    chunk.raw_content,
+                    chunk.metadata.cluster_id,
+                    chunk.metadata.cluster_label,
+                    chunk.metadata.cluster_confidence,
+                    metadata_json,
+                )
+            else:
+                # Layer 3: Chunks (with char_start/char_end)
+                record = (
+                    chunk.chunk_id,
+                    chunk.metadata.document_id,
+                    chunk.metadata.section_id,
+                    chunk.metadata.section_title,
+                    chunk.metadata.section_path,
+                    getattr(chunk.metadata, 'section_level', None),
+                    getattr(chunk.metadata, 'section_depth', None),
+                    hierarchical_path,
+                    chunk.metadata.page_number,
+                    getattr(chunk.metadata, 'char_start', None),
+                    getattr(chunk.metadata, 'char_end', None),
                     embedding_str,
                     chunk.raw_content,
                     chunk.metadata.cluster_id,

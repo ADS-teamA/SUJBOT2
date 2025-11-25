@@ -522,23 +522,57 @@ class EmbeddingGenerator:
 
         logger.info(f"Embedding Layer {layer}: {len(chunks)} chunks")
 
-        # Extract texts - always use 'content' field
-        # For Layer 3, this includes SAC summary (58% DRM reduction!)
-        texts = [chunk.content for chunk in chunks]
+        # Extract texts with breadcrumb path prefix
+        # Format: [section_path > section_title]\n\n{chunk.content}
+        # This improves retrieval by adding hierarchical location context
+        texts = []
+        for chunk in chunks:
+            # Build breadcrumb from metadata
+            breadcrumb_parts = []
+            if hasattr(chunk, "metadata") and chunk.metadata:
+                if chunk.metadata.section_path:
+                    breadcrumb_parts.append(chunk.metadata.section_path)
+                if (
+                    chunk.metadata.section_title
+                    and chunk.metadata.section_title != chunk.metadata.section_path
+                ):
+                    breadcrumb_parts.append(chunk.metadata.section_title)
 
-        # Filter empty texts
+            # Construct embedding text: [breadcrumb]\n\ncontent
+            if breadcrumb_parts:
+                breadcrumb = " > ".join(breadcrumb_parts)
+                text = f"[{breadcrumb}]\n\n{chunk.content}"
+            else:
+                text = chunk.content
+
+            texts.append(text)
+
+        # Find valid (non-empty) texts
         valid_indices = [i for i, text in enumerate(texts) if text.strip()]
         valid_texts = [texts[i] for i in valid_indices]
 
         if not valid_texts:
             logger.warning(f"Layer {layer}: No valid texts to embed")
-            return np.array([])
+            # Return zero vectors for all chunks to maintain 1:1 mapping
+            return np.zeros((len(chunks), self.dimensions), dtype=np.float32)
 
-        # Generate embeddings
-        embeddings = self.embed_texts(valid_texts)
+        # Generate embeddings only for valid texts
+        valid_embeddings = self.embed_texts(valid_texts)
+
+        # Create full embedding array with zeros for empty chunks
+        # This maintains 1:1 mapping between chunks and embeddings
+        embeddings = np.zeros((len(chunks), self.dimensions), dtype=np.float32)
+        for idx, valid_idx in enumerate(valid_indices):
+            embeddings[valid_idx] = valid_embeddings[idx]
+
+        if len(valid_indices) < len(chunks):
+            logger.warning(
+                f"Layer {layer}: {len(chunks) - len(valid_indices)} empty chunks "
+                f"(filled with zero vectors)"
+            )
 
         logger.info(
-            f"Layer {layer} embeddings generated: " f"{len(embeddings)} vectors, {self.dimensions}D"
+            f"Layer {layer} embeddings generated: {len(embeddings)} vectors, {self.dimensions}D"
         )
 
         return embeddings

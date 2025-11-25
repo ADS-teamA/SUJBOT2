@@ -489,12 +489,17 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
     print(f"  • phase1_extraction.json    - Document structure")
     print(f"  • phase2_summaries.json      - Section summaries")
     print(f"  • phase3_chunks.json         - Multi-layer chunks")
-    print(f"  • phase4_vector_store/       - FAISS + BM25 indexes")
+    if storage_backend != "postgresql":
+        print(f"  • phase4_vector_store/       - FAISS + BM25 indexes")
     if knowledge_graph:
         print(f"  • {doc_name}_kg.json         - Knowledge graph")
     print()
     print("🚀 To use with agent:")
-    print(f"  uv run python -m src.agent.cli --vector-store {vs_path}")
+    if storage_backend == "postgresql":
+        print("  uv run python -m src.agent.cli  # (uses PostgreSQL backend)")
+    else:
+        vs_path = output_dir / "phase4_vector_store"
+        print(f"  uv run python -m src.agent.cli --vector-store {vs_path}")
     print()
 
 

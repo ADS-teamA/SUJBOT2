@@ -35,7 +35,7 @@ Usage:
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -54,13 +54,13 @@ from src.cost_tracker import get_global_tracker, reset_global_tracker
 # Knowledge Graph imports (optional)
 try:
     from src.graph import (
-        KnowledgeGraphPipeline,
         KnowledgeGraphConfig,
         EntityExtractionConfig as KGEntityConfig,
         RelationshipExtractionConfig as KGRelationshipConfig,
         GraphStorageConfig,
         GraphBackend,
     )
+    from src.graph.gemini_kg_extractor import GeminiKGExtractor
 
     KG_AVAILABLE = True
 except ImportError:
@@ -210,6 +210,7 @@ class IndexingConfig:
 
     # Storage Backend Selection (PHASE 4) - PostgreSQL only
     storage_backend: str = "postgresql"  # PostgreSQL with pgvector (required)
+    storage_layers: List[int] = field(default_factory=lambda: [1, 3])  # Which layers to embed/store
 
     def __post_init__(self):
         """Configure speed mode and validate settings."""
@@ -270,6 +271,9 @@ class IndexingConfig:
         # PostgreSQL is the only supported backend
         storage_backend = "postgresql"
 
+        # Load storage_layers from config.json (default: [1, 3] - skip sections)
+        storage_layers = getattr(root_config.storage, 'storage_layers', [1, 3])
+
         # Create config with sub-configs loaded from config.json
         config = cls(
             speed_mode=root_config.summarization.speed_mode,
@@ -283,6 +287,7 @@ class IndexingConfig:
             duplicate_similarity_threshold=0.98,  # Default value
             duplicate_sample_pages=1,  # Default value
             storage_backend=storage_backend,
+            storage_layers=storage_layers,
             **overrides,
         )
 
@@ -336,13 +341,13 @@ class IndexingPipeline:
         # Initialize PHASE 4: Embedding (uses nested config)
         self.embedder = EmbeddingGenerator(self.config.embedding_config)
 
-        # Initialize PHASE 5A: Knowledge Graph (optional)
-        self.kg_pipeline = None
+        # Initialize PHASE 5A: Knowledge Graph (optional, using Gemini)
+        self.kg_extractor = None
         if self.config.enable_knowledge_graph:
             if not KG_AVAILABLE:
                 logger.warning(
                     "Knowledge Graph requested but not available. "
-                    "Install with: pip install openai anthropic"
+                    "Install with: pip install google-generativeai"
                 )
             else:
                 self._initialize_kg_pipeline()
@@ -357,37 +362,26 @@ class IndexingPipeline:
         )
 
     def _initialize_kg_pipeline(self):
-        """Initialize Knowledge Graph pipeline using nested kg_config."""
+        """Initialize Knowledge Graph extractor using Gemini 2.5 Pro."""
         if self.config.kg_config is None:
             logger.warning("Knowledge Graph enabled but no kg_config provided")
-            self.kg_pipeline = None
+            self.kg_extractor = None
             return
 
-        # Use the kg_config directly (already initialized in IndexingConfig.__post_init__)
-        kg_config = self.config.kg_config
-
-        # Validate API key
-        if kg_config.entity_extraction.llm_provider == "openai" and not kg_config.openai_api_key:
-            logger.warning("OpenAI API key not found. Set OPENAI_API_KEY environment variable.")
-            self.kg_pipeline = None
-            return
-        elif (
-            kg_config.entity_extraction.llm_provider == "anthropic"
-            and not kg_config.anthropic_api_key
-        ):
-            logger.warning(
-                "Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable."
-            )
-            self.kg_pipeline = None
+        # Validate Google API key for Gemini
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            logger.warning("GOOGLE_API_KEY not found. Set GOOGLE_API_KEY environment variable for KG extraction.")
+            self.kg_extractor = None
             return
 
-        # Initialize pipeline with config
-        self.kg_pipeline = KnowledgeGraphPipeline(kg_config)
-        logger.info(
-            f"Knowledge Graph initialized: "
-            f"model={kg_config.entity_extraction.llm_model}, "
-            f"backend={kg_config.graph_storage.backend.value}"
-        )
+        # Initialize Gemini KG extractor
+        try:
+            self.kg_extractor = GeminiKGExtractor(model="gemini-2.5-pro")
+            logger.info("Knowledge Graph initialized: GeminiKGExtractor (gemini-2.5-pro)")
+        except Exception as e:
+            logger.warning(f"Failed to initialize GeminiKGExtractor: {e}")
+            self.kg_extractor = None
 
     def index_document(
         self,
@@ -651,25 +645,33 @@ class IndexingPipeline:
         if not skip_dense:
             logger.info("PHASE 4: Embedding Generation")
 
-            # Embed only non-empty layers (optimization for flat documents)
+            # Embed only layers configured in storage_layers (default: [1, 3])
+            storage_layers = self.config.storage_layers
+            logger.info(f"Embedding layers: {storage_layers}")
+
             embeddings = {}
-            if chunks["layer1"]:
+            if 1 in storage_layers and chunks["layer1"]:
                 embeddings["layer1"] = self.embedder.embed_chunks(chunks["layer1"], layer=1)
             else:
                 embeddings["layer1"] = None
 
-            if chunks["layer2"]:
+            if 2 in storage_layers and chunks["layer2"]:
                 embeddings["layer2"] = self.embedder.embed_chunks(chunks["layer2"], layer=2)
             else:
                 embeddings["layer2"] = None
 
-            # Layer 3 always exists
-            embeddings["layer3"] = self.embedder.embed_chunks(chunks["layer3"], layer=3)
+            # Layer 3 if configured
+            if 3 in storage_layers:
+                embeddings["layer3"] = self.embedder.embed_chunks(chunks["layer3"], layer=3)
+            else:
+                embeddings["layer3"] = None
 
-            logger.info(
-                f"Embedded: {self.embedder.dimensions}D vectors, "
-                f"{embeddings['layer3'].shape[0]} Layer 3 chunks"
-            )
+            # Log embedding stats
+            embedded_counts = []
+            for layer in [1, 2, 3]:
+                if embeddings.get(f"layer{layer}") is not None:
+                    embedded_counts.append(f"L{layer}:{embeddings[f'layer{layer}'].shape[0]}")
+            logger.info(f"Embedded: {self.embedder.dimensions}D vectors ({', '.join(embedded_counts)})")
 
             # PHASE 4.5: Semantic Clustering (optional)
             if self.config.enable_semantic_clustering:
@@ -770,13 +772,12 @@ class IndexingPipeline:
         knowledge_graph = None
         kg_error = None
 
-        if self.kg_pipeline:
+        if self.kg_extractor:
             if skip_kg:
                 logger.info("PHASE 5A: [SKIPPED] - Knowledge Graph already exists")
                 # Try to load existing KG for stats
                 try:
-                    output_dir = Path("output")
-                    kg_files = list(output_dir.glob(f"{existing['existing_doc_id']}*/*/knowledge_graph.json"))
+                    kg_files = list(output_dir.glob("*_kg.json")) if output_dir else []
                     if kg_files:
                         import json
                         with open(kg_files[0], 'r') as f:
@@ -788,56 +789,54 @@ class IndexingPipeline:
                 except Exception as e:
                     logger.warning(f"Could not load existing KG stats: {e}")
             else:
-                logger.info("PHASE 5A: Knowledge Graph Construction")
+                logger.info("PHASE 5A: Knowledge Graph Extraction (Gemini 2.5 Pro)")
 
                 try:
-                    # Prepare chunks for KG (use Layer 3 primary chunks)
-                    kg_chunks = [
-                        {
-                            "id": chunk.chunk_id,  # Fixed: Use chunk_id instead of id
-                            "content": chunk.content,
-                            "raw_content": chunk.raw_content,
-                            "metadata": {
-                                "document_id": chunk.metadata.document_id,
-                                "section_path": chunk.metadata.section_path,
-                                "section_title": chunk.metadata.section_title,
-                            },
-                        }
-                        for chunk in chunks["layer3"]
-                    ]
+                    # Use phase1_extraction.json for KG extraction
+                    phase1_path = output_dir / "phase1_extraction.json" if output_dir else None
 
-                    # Build knowledge graph
-                    knowledge_graph = self.kg_pipeline.build_from_chunks(
-                        chunks=kg_chunks, document_id=result.document_id
-                    )
+                    # Save phase1 before KG extraction if not already saved
+                    if phase1_path and not phase1_path.exists() and result:
+                        self._save_phase1(output_dir, result)
 
-                    logger.info(
-                        f"Knowledge Graph: {len(knowledge_graph.entities)} entities, "
-                        f"{len(knowledge_graph.relationships)} relationships"
-                    )
+                    # Save phase3_chunks.json EARLY for entity-to-chunk mapping
+                    phase3_path = output_dir / "phase3_chunks.json" if output_dir else None
+                    if phase3_path and not phase3_path.exists() and chunks:
+                        self._save_phase3(output_dir, result, chunks, chunking_stats)
+
+                    if phase1_path and phase1_path.exists():
+                        # Extract KG from phase1 using Gemini (with chunk mapping from phase3)
+                        knowledge_graph = self.kg_extractor.extract_from_phase1(phase1_path)
+
+                        logger.info(
+                            f"Knowledge Graph: {len(knowledge_graph.entities)} entities, "
+                            f"{len(knowledge_graph.relationships)} relationships"
+                        )
+
+                        # Save KG to output directory
+                        if output_dir:
+                            kg_output_path = output_dir / f"{result.document_id.replace('/', '_').replace(' ', '_')}_kg.json"
+                            knowledge_graph.save_json(str(kg_output_path))
+                            logger.info(f"Knowledge Graph saved to: {kg_output_path}")
+                    else:
+                        logger.warning(f"phase1_extraction.json not found at {phase1_path}, skipping KG extraction")
+                        knowledge_graph = None
 
                 except (ValueError, RuntimeError, KeyError) as e:
                     # Expected KG construction errors (LLM API, data issues)
-                    logger.error(f"[ERROR] Knowledge Graph construction failed: {e}", exc_info=True)
-                    if self.config.enable_knowledge_graph:
-                        logger.error(
-                            f"ERROR: Knowledge Graph was enabled in config but construction failed.\n"
-                            f"Error: {e}\n"
-                            f"To disable KG: Set ENABLE_KNOWLEDGE_GRAPH=false in .env"
-                        )
+                    logger.error(f"[ERROR] Knowledge Graph extraction failed ({type(e).__name__}): {e}")
                     knowledge_graph = None
                     kg_error = str(e)
-                except (AttributeError, TypeError) as e:
-                    # Code bugs - should fail fast with diagnostics
-                    logger.error(f"[CRITICAL] Knowledge Graph code bug detected: {e}", exc_info=True)
-                    logger.error(f"Enabled entity types: {self.kg_config.entity_extraction.enabled_entity_types}")
-                    logger.error(f"Enabled relationship types: {self.kg_config.relationship_extraction.enabled_relationship_types}")
-                    raise  # Re-raise to stop execution
-                except MemoryError as e:
-                    # Resource exhaustion - specific guidance
-                    logger.error(f"[CRITICAL] Out of memory during KG construction: {e}", exc_info=True)
-                    logger.error("Try reducing batch_size in config or disabling KG for large documents")
-                    raise
+                except (FileNotFoundError, json.JSONDecodeError) as e:
+                    # File system or parsing errors
+                    logger.error(f"[ERROR] Knowledge Graph data error ({type(e).__name__}): {e}")
+                    knowledge_graph = None
+                    kg_error = str(e)
+                except Exception as e:
+                    # Unexpected errors - log with full traceback for debugging
+                    logger.error(f"[ERROR] Knowledge Graph extraction failed unexpectedly: {e}", exc_info=True)
+                    knowledge_graph = None
+                    kg_error = str(e)
 
         # Save intermediate results
         if save_intermediate and output_dir:
@@ -943,7 +942,7 @@ class IndexingPipeline:
                 continue
 
         # Save combined knowledge graph (if any)
-        if knowledge_graphs and self.kg_pipeline:
+        if knowledge_graphs and self.kg_extractor:
             try:
                 # Merge all KGs
                 from src.graph import KnowledgeGraph
@@ -981,6 +980,74 @@ class IndexingPipeline:
                 "total_relationships": sum(len(kg.relationships) for kg in knowledge_graphs),
             },
         }
+
+    def _save_phase1(self, output_dir: Path, result) -> Path:
+        """Save phase1 extraction results (for KG extraction)."""
+        import json
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        phase1_path = output_dir / "phase1_extraction.json"
+        phase1_export = {
+            "document_id": result.document_id,
+            "source_path": _make_relative_path(Path(result.source_path)),
+            "num_sections": result.num_sections,
+            "hierarchy_depth": result.hierarchy_depth,
+            "num_roots": result.num_roots,
+            "num_tables": result.num_tables,
+            "sections": [
+                {
+                    "section_id": s.section_id,
+                    "title": s.title,
+                    "content": s.content,
+                    "level": s.level,
+                    "depth": s.depth,
+                    "path": s.path,
+                    "page_number": s.page_number,
+                    "content_length": len(s.content),
+                }
+                for s in result.sections
+            ],
+        }
+        with open(phase1_path, "w", encoding="utf-8") as f:
+            json.dump(phase1_export, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved PHASE 1: {phase1_path}")
+        return phase1_path
+
+    def _save_phase3(self, output_dir: Path, result, chunks: Dict, chunking_stats: Dict) -> Path:
+        """Save phase3 chunks early (for KG entity-to-chunk mapping)."""
+        import json
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        phase3_path = output_dir / "phase3_chunks.json"
+
+        # Build L3 chunks list for KG mapping (simplified format with chunk_id, raw_content, context)
+        l3_chunks = []
+        for c in chunks.get("layer3", []):
+            chunk_dict = c.to_dict()
+            l3_chunks.append({
+                "chunk_id": chunk_dict.get("chunk_id", ""),
+                "raw_content": chunk_dict.get("raw_content", ""),
+                "context": chunk_dict.get("context", ""),
+            })
+
+        phase3_export = {
+            "document_id": result.document_id,
+            "source_path": _make_relative_path(Path(result.source_path)),
+            "chunking_stats": chunking_stats,
+            "layer1": [c.to_dict() for c in chunks.get("layer1", [])],
+            "layer2": [c.to_dict() for c in chunks.get("layer2", [])],
+            "layer3": [c.to_dict() for c in chunks.get("layer3", [])],
+            # Add simplified chunks list for KG mapping
+            "chunks": l3_chunks,
+        }
+        with open(phase3_path, "w", encoding="utf-8") as f:
+            json.dump(phase3_export, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved PHASE 3 (early, for KG mapping): {phase3_path}")
+        return phase3_path
 
     def _save_intermediate(self, output_dir: Path, result, chunks: Dict, chunking_stats: Dict):
         """Save intermediate results from all phases (PHASE 1, 2, 3)."""

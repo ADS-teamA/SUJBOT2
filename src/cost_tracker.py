@@ -111,6 +111,16 @@ PRICING = {
         "gemini-flash": {"input": 0.30, "output": 2.50},
         "gemini-pro": {"input": 1.25, "output": 10.00},
     },
+    # DeepInfra embeddings (per 1M tokens)
+    # Source: https://deepinfra.com/pricing
+    "deepinfra": {
+        "Qwen/Qwen3-Embedding-8B": {"input": 0.03, "output": 0.0},
+        "qwen3-embedding-8b": {"input": 0.03, "output": 0.0},
+        "BAAI/bge-m3": {"input": 0.01, "output": 0.0},
+        "bge-m3": {"input": 0.01, "output": 0.0},
+        "BAAI/bge-large-en-v1.5": {"input": 0.01, "output": 0.0},
+        "intfloat/e5-large-v2": {"input": 0.01, "output": 0.0},
+    },
     # Local models (free)
     "huggingface": {
         "bge-m3": {"input": 0.0, "output": 0.0},

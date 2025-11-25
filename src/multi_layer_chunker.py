@@ -82,10 +82,28 @@ class Chunk:
     metadata: ChunkMetadata
 
     def to_dict(self) -> Dict:
+        # Build breadcrumb for embedding text
+        breadcrumb_parts = []
+        if self.metadata.section_path:
+            breadcrumb_parts.append(self.metadata.section_path)
+        if (
+            self.metadata.section_title
+            and self.metadata.section_title != self.metadata.section_path
+        ):
+            breadcrumb_parts.append(self.metadata.section_title)
+
+        # Construct embedding text: [breadcrumb]\n\ncontext
+        if breadcrumb_parts:
+            breadcrumb = " > ".join(breadcrumb_parts)
+            embedding_text = f"[{breadcrumb}]\n\n{self.content}"
+        else:
+            embedding_text = self.content
+
         return {
             "chunk_id": self.chunk_id,
-            "content": self.content,
+            "context": self.content,  # Renamed from "content" to "context"
             "raw_content": self.raw_content,
+            "embedding_text": embedding_text,  # New field: breadcrumb + context
             "metadata": {
                 "chunk_id": self.metadata.chunk_id,
                 "layer": self.metadata.layer,
@@ -295,11 +313,21 @@ class MultiLayerChunker:
         for section in extracted_doc.sections:
             # Use section summary if available, else section content
             content = section.summary or section.content
+            raw_content = section.content
+
+            # Skip completely empty sections (no content AND no summary)
+            if not raw_content.strip() and not content.strip():
+                continue
+
+            # If section has no direct content but has summary, use fallback text
+            # This happens for structural headers that only contain child sections
+            if not raw_content.strip() and content.strip():
+                raw_content = f"[Sekce: {section.title or section.path}]"
 
             chunk = Chunk(
                 chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
                 content=content,
-                raw_content=section.content,  # Always use raw content
+                raw_content=raw_content,
                 metadata=ChunkMetadata(
                     chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
                     layer=2,

@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS vectors.layer1 (
     document_id TEXT NOT NULL,
     title TEXT,
 
-    -- Embedding (3072 dimensions for text-embedding-3-large)
-    embedding vector(3072) NOT NULL,
+    -- Embedding (4096 dimensions for Qwen3-Embedding-8B)
+    embedding vector(4096) NOT NULL,
 
     -- Content (for retrieval and generation)
     content TEXT NOT NULL,
@@ -93,8 +93,8 @@ CREATE TABLE IF NOT EXISTS vectors.layer2 (
     hierarchical_path TEXT,  -- "doc_id > section > subsection"
     page_number INTEGER,
 
-    -- Embedding
-    embedding vector(3072) NOT NULL,
+    -- Embedding (4096 dimensions for Qwen3-Embedding-8B)
+    embedding vector(4096) NOT NULL,
 
     -- Content
     content TEXT NOT NULL,
@@ -132,8 +132,8 @@ CREATE TABLE IF NOT EXISTS vectors.layer3 (
     char_start INTEGER,
     char_end INTEGER,
 
-    -- Embedding
-    embedding vector(3072) NOT NULL,
+    -- Embedding (4096 dimensions for Qwen3-Embedding-8B)
+    embedding vector(4096) NOT NULL,
 
     -- Content (WITHOUT summary-augmentation for generation)
     content TEXT NOT NULL,
@@ -260,7 +260,7 @@ CREATE TABLE IF NOT EXISTS metadata.documents (
 -- Vector store statistics (for get_stats() API)
 CREATE TABLE IF NOT EXISTS metadata.vector_store_stats (
     id SERIAL PRIMARY KEY,
-    dimensions INTEGER NOT NULL DEFAULT 3072,
+    dimensions INTEGER NOT NULL DEFAULT 4096,
     layer1_count INTEGER NOT NULL DEFAULT 0,
     layer2_count INTEGER NOT NULL DEFAULT 0,
     layer3_count INTEGER NOT NULL DEFAULT 0,
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS metadata.vector_store_stats (
 
 -- Insert initial stats row
 INSERT INTO metadata.vector_store_stats (dimensions, layer1_count, layer2_count, layer3_count, total_vectors, document_count)
-VALUES (3072, 0, 0, 0, 0, 0)
+VALUES (4096, 0, 0, 0, 0, 0)
 ON CONFLICT DO NOTHING;
 
 -- ============================================================================

@@ -243,9 +243,14 @@ class ExtractedDocument:
 
 @dataclass
 class ExtractionConfig:
-    """Configuration for Unstructured extraction."""
+    """Configuration for document extraction (Unstructured or Gemini)."""
 
-    # Model configuration
+    # Backend selection: "auto" checks GOOGLE_API_KEY, falls back to unstructured
+    extraction_backend: str = "auto"  # "gemini", "unstructured", "auto"
+    gemini_model: str = "gemini-2.5-flash"  # Gemini model to use
+    gemini_fallback_to_unstructured: bool = True  # Fall back to Unstructured on Gemini failure
+
+    # Unstructured model configuration
     strategy: str = "hi_res"  # "hi_res", "fast", "ocr_only"
     model: str = "detectron2_mask_rcnn"  # "detectron2_mask_rcnn" (most accurate), "yolox" (faster)
 
@@ -334,6 +339,11 @@ class ExtractionConfig:
             )
 
         return cls(
+            # Backend selection
+            extraction_backend=os.getenv("EXTRACTION_BACKEND", "gemini"),
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            gemini_fallback_to_unstructured=get_bool_env("GEMINI_FALLBACK_TO_UNSTRUCTURED", True),
+            # Unstructured settings
             strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
             model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),
             languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),

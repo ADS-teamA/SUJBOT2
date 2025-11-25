@@ -2426,6 +2426,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json-repair"
+version = "0.54.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/00/46/d3a4d9a3dad39bb4a2ad16b8adb9fe2e8611b20b71197fe33daa6768e85d/json_repair-0.54.1.tar.gz", hash = "sha256:d010bc31f1fc66e7c36dc33bff5f8902674498ae5cb8e801ad455a53b455ad1d", size = 38555, upload-time = "2025-11-19T14:55:24.265Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/96/c9aad7ee949cc1bf15df91f347fbc2d3bd10b30b80c7df689ce6fe9332b5/json_repair-0.54.1-py3-none-any.whl", hash = "sha256:016160c5db5d5fe443164927bb58d2dfbba5f43ad85719fa9bc51c713a443ab1", size = 29311, upload-time = "2025-11-19T14:55:22.886Z" },
+]
+
+[[package]]
 name = "jsonlines"
 version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3445,6 +3454,7 @@ dependencies = [
     { name = "google-api-core", version = "2.28.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
     { name = "google-generativeai" },
     { name = "hdbscan" },
+    { name = "json-repair" },
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
@@ -3462,6 +3472,7 @@ dependencies = [
     { name = "opencv-python" },
     { name = "openpyxl" },
     { name = "pandas" },
+    { name = "pdf2image" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pyjwt" },
@@ -3559,6 +3570,7 @@ requires-dist = [
     { name = "google-generativeai", specifier = ">=0.8.0" },
     { name = "hdbscan", specifier = ">=0.8.33" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
+    { name = "json-repair", specifier = ">=0.54.1" },
     { name = "langchain-text-splitters", specifier = ">=0.0.1" },
     { name = "langdetect", marker = "extra == 'all'", specifier = ">=1.0.9" },
     { name = "langdetect", marker = "extra == 'language-support'", specifier = ">=1.0.9" },
@@ -3583,6 +3595,7 @@ requires-dist = [
     { name = "opencv-python", specifier = ">=4.5.1" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.1.4" },
+    { name = "pdf2image", specifier = ">=1.17.0" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pyjwt", specifier = ">=2.8.0" },

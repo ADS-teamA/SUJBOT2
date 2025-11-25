@@ -252,6 +252,11 @@ class ExtractionConfig:
     Configuration for Docling extraction (PHASE 1).
     """
 
+    # Extraction backend selection
+    extraction_backend: str  # "gemini", "unstructured", "auto"
+    gemini_model: str  # e.g., "gemini-2.5-flash"
+    fallback_to_unstructured: bool
+
     # OCR settings
     enable_ocr: bool
     ocr_engine: str  # "tesseract" or "rapidocr"
@@ -298,6 +303,9 @@ class ExtractionConfig:
             ExtractionConfig instance
         """
         return cls(
+            extraction_backend=extraction_config.backend,
+            gemini_model=extraction_config.gemini_model,
+            fallback_to_unstructured=extraction_config.fallback_to_unstructured,
             enable_ocr=extraction_config.enable_ocr,
             ocr_engine=extraction_config.ocr_engine,
             ocr_language=extraction_config.ocr_language,
