@@ -221,7 +221,8 @@ class DuplicateDetector:
             from .embedding_generator import EmbeddingGenerator
             from .config import EmbeddingConfig
 
-            config = EmbeddingConfig.from_env()
+            # EmbeddingConfig auto-loads from config.json via __post_init__
+            config = EmbeddingConfig()
             self._embedder = EmbeddingGenerator(config)
 
             logger.info("Loaded EmbeddingGenerator for duplicate detection")

@@ -308,7 +308,11 @@ class ContextualRetrieval:
                     + "\n\n".join(surrounding_parts)
                 )
 
-        # Build prompt (Anthropic format)
+        # Build prompt (Anthropic format) with optional language instruction
+        language_instruction = ""
+        if hasattr(self.config, 'language') and self.config.language == "ces":
+            language_instruction = " Odpovídej pouze v češtině."
+
         prompt = f"""<document>
 {context_block}{surrounding_chunks_block}
 </document>
@@ -318,7 +322,7 @@ Here is the chunk we want to situate within the whole document:
 {chunk_escaped}
 </chunk>
 
-Please give a short succinct context (50-100 words) to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else."""
+Please give a short succinct context (50-100 words) to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk.{language_instruction} Answer only with the succinct context and nothing else."""
 
         return prompt
 
@@ -512,9 +516,16 @@ Please give a short succinct context (50-100 words) to situate this chunk within
                 prompt_parts.append(f"Section: {section_path or section_title}")
 
             prompt_parts.append(f"Chunk content:\n{chunk_preview}")
-            prompt_parts.append(
-                "Provide a brief context (50-100 words) explaining what this chunk discusses within the document."
-            )
+
+            # Add language instruction for Czech
+            if hasattr(self.config, 'language') and self.config.language == "ces":
+                prompt_parts.append(
+                    "Provide a brief context (50-100 words) explaining what this chunk discusses within the document. Odpovídej pouze v češtině."
+                )
+            else:
+                prompt_parts.append(
+                    "Provide a brief context (50-100 words) explaining what this chunk discusses within the document."
+                )
 
             prompt = "\n\n".join(prompt_parts)
 

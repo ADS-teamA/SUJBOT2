@@ -76,6 +76,7 @@ dependencies = [
     "argon2-cffi>=23.1.0",  # Argon2 password hashing
     "PyJWT>=2.8.0",  # JWT token generation/validation
     "pdf2image>=1.17.0",
+    "json-repair>=0.54.1",
 ]
 
 [project.optional-dependencies]

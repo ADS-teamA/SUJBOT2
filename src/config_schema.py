@@ -83,6 +83,20 @@ class ModelsConfig(BaseModel):
 class ExtractionConfig(BaseModel):
     """Document extraction configuration (PHASE 1)."""
 
+    # Extraction backend selection
+    backend: Literal["gemini", "unstructured", "auto"] = Field(
+        ...,
+        description="Extraction backend: 'gemini' (native PDF), 'unstructured' (with ToC), 'auto'"
+    )
+    gemini_model: str = Field(
+        ...,
+        description="Gemini model for extraction (e.g., 'gemini-2.5-flash')"
+    )
+    fallback_to_unstructured: bool = Field(
+        ...,
+        description="Fallback to Unstructured if Gemini fails"
+    )
+
     # OCR settings
     enable_ocr: bool = Field(..., description="Enable OCR processing")
     ocr_engine: Literal["tesseract", "rapidocr"] = Field(
@@ -300,6 +314,10 @@ class ContextGenerationConfig(BaseModel):
         ...,
         description="Batch API timeout in seconds",
         ge=60
+    )
+    language: str = Field(
+        default="ces",
+        description="Language code for context generation ('ces' for Czech, 'eng' for English)"
     )
 
 

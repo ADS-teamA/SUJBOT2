@@ -23,9 +23,11 @@ import json
 import logging
 import os
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -40,6 +42,304 @@ from src.unstructured_extractor import (
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+def _repair_truncated_json(json_str: str) -> dict:
+    """
+    SOTA JSON repair for truncated/malformed Gemini API responses.
+
+    Uses multi-strategy approach with json_repair library as primary method:
+    1. Standard JSON parsing (fast path)
+    2. json_repair library - SOTA streaming-aware repair with 30+ heuristics
+    3. State machine extraction of complete section objects
+    4. Progressive truncation recovery with content-aware reconstruction
+    5. Bracket balancing with string-context awareness
+
+    Returns parsed dict with recovered data, or raises if all strategies fail.
+    """
+    import re
+    from json_repair import repair_json
+
+    # Strategy 0: Standard parse (fast path)
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        error_pos = e.pos
+        error_msg = str(e)
+        logger.warning(f"JSON parse failed at char {error_pos}: {error_msg[:100]}")
+
+    # Strategy 1: json_repair library (SOTA - handles LLM output patterns)
+    # Handles: unterminated strings, missing commas, trailing commas,
+    # unquoted keys, single quotes, control chars, incomplete structures
+    try:
+        repaired_str = repair_json(json_str, return_objects=False)
+        result = json.loads(repaired_str)
+        logger.info("JSON repair: json_repair library succeeded")
+        return result
+    except Exception as e:
+        logger.debug(f"json_repair library failed: {e}")
+
+    # Strategy 2: Extract complete section objects via state machine
+    # For document extraction JSON: {"document": {...}, "sections": [...]}
+    sections_match = re.search(r'"sections"\s*:\s*\[', json_str)
+    if sections_match:
+        complete_sections = _extract_complete_json_objects(
+            json_str, sections_match.end()
+        )
+        if complete_sections:
+            logger.info(f"JSON repair: recovered {len(complete_sections)} complete sections")
+            # Reconstruct with document metadata
+            doc_obj = _extract_document_metadata(json_str)
+            reconstructed = {
+                "document": doc_obj,
+                "sections": complete_sections
+            }
+            return reconstructed
+
+    # Strategy 3: Progressive truncation point detection
+    # Find the last valid JSON structure before truncation
+    last_valid = _find_last_valid_json_point(json_str)
+    if last_valid:
+        try:
+            result = json.loads(last_valid)
+            logger.info("JSON repair: truncation point recovery succeeded")
+            return result
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 4: Bracket balancing with string-context awareness
+    try:
+        repaired = _balance_json_structure(json_str)
+        result = json.loads(repaired)
+        logger.info("JSON repair: bracket balancing succeeded")
+        return result
+    except json.JSONDecodeError as e:
+        logger.error(f"All JSON repair strategies failed. Last error: {e}")
+        # Log a snippet around the error for debugging
+        start = max(0, error_pos - 50)
+        end = min(len(json_str), error_pos + 50)
+        logger.error(f"Context around error: ...{json_str[start:end]}...")
+        raise ValueError(f"JSON repair failed after all strategies: {error_msg}")
+
+
+def _extract_complete_json_objects(json_str: str, start_pos: int) -> List[dict]:
+    """
+    Extract complete JSON objects from an array using a proper state machine.
+
+    Handles nested objects, arrays, and properly escaped strings.
+    Returns list of parsed section dicts.
+    """
+    complete_sections = []
+    obj_start = None
+    brace_depth = 0
+    in_string = False
+    escape_next = False
+
+    for i, char in enumerate(json_str[start_pos:], start=start_pos):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == '\\' and in_string:
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+
+        if char == '{':
+            if brace_depth == 0:
+                obj_start = i
+            brace_depth += 1
+        elif char == '}':
+            brace_depth -= 1
+            if brace_depth == 0 and obj_start is not None:
+                obj_str = json_str[obj_start:i+1]
+                try:
+                    # Try to parse this object
+                    obj = json.loads(obj_str)
+                    complete_sections.append(obj)
+                except json.JSONDecodeError:
+                    # Try json_repair on individual object
+                    try:
+                        from json_repair import repair_json
+                        repaired = repair_json(obj_str, return_objects=True)
+                        if isinstance(repaired, dict):
+                            complete_sections.append(repaired)
+                    except Exception:
+                        pass
+                obj_start = None
+        elif char == ']' and brace_depth == 0:
+            break
+
+    return complete_sections
+
+
+def _extract_document_metadata(json_str: str) -> dict:
+    """
+    Extract document metadata object from JSON string.
+
+    Handles nested objects within document metadata.
+    """
+    import re
+    from json_repair import repair_json
+
+    # Try to find and extract the document object
+    doc_match = re.search(r'"document"\s*:\s*\{', json_str)
+    if not doc_match:
+        return {}
+
+    start_pos = doc_match.end() - 1  # Include the opening brace
+    brace_depth = 0
+    in_string = False
+    escape_next = False
+
+    for i, char in enumerate(json_str[start_pos:], start=start_pos):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == '\\' and in_string:
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+
+        if char == '{':
+            brace_depth += 1
+        elif char == '}':
+            brace_depth -= 1
+            if brace_depth == 0:
+                doc_str = json_str[start_pos:i+1]
+                try:
+                    return json.loads(doc_str)
+                except json.JSONDecodeError:
+                    try:
+                        return repair_json(doc_str, return_objects=True)
+                    except Exception:
+                        pass
+                break
+
+    return {}
+
+
+def _find_last_valid_json_point(json_str: str) -> Optional[str]:
+    """
+    Find the last point where the JSON was valid by searching for
+    complete object/array boundaries before truncation.
+    """
+    # Try progressively shorter substrings ending at potential valid points
+    potential_ends = []
+
+    # Find all closing braces/brackets not inside strings
+    in_string = False
+    escape_next = False
+    for i, char in enumerate(json_str):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == '\\' and in_string:
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char in '}]':
+            potential_ends.append(i)
+
+    # Try from the end, looking for valid JSON
+    for end_pos in reversed(potential_ends[-20:]):  # Check last 20 potential points
+        candidate = json_str[:end_pos + 1]
+        # Quick bracket check
+        if candidate.count('{') == candidate.count('}') and \
+           candidate.count('[') == candidate.count(']'):
+            try:
+                json.loads(candidate)
+                return candidate
+            except json.JSONDecodeError:
+                continue
+
+    return None
+
+
+def _balance_json_structure(json_str: str) -> str:
+    """
+    Balance JSON structure with string-context awareness.
+
+    More sophisticated than simple bracket counting - tracks actual
+    nesting context to produce valid JSON.
+    """
+    repaired = json_str.rstrip()
+
+    # Track string context to find unterminated strings
+    in_string = False
+    escape_next = False
+    last_string_start = -1
+    string_depth_stack = []  # Track nested structure when string started
+
+    brace_depth = 0
+    bracket_depth = 0
+
+    for i, char in enumerate(repaired):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == '\\' and in_string:
+            escape_next = True
+            continue
+        if char == '"':
+            if in_string:
+                in_string = False
+            else:
+                in_string = True
+                last_string_start = i
+                string_depth_stack = [brace_depth, bracket_depth]
+            continue
+        if in_string:
+            continue
+
+        if char == '{':
+            brace_depth += 1
+        elif char == '}':
+            brace_depth -= 1
+        elif char == '[':
+            bracket_depth += 1
+        elif char == ']':
+            bracket_depth -= 1
+
+    # Handle unterminated string
+    if in_string:
+        # Try to close the string at a sensible point
+        # Look for newline or obvious truncation
+        if last_string_start > 0:
+            # Truncate at the string and close it
+            repaired = repaired[:last_string_start] + '""'
+            # Restore depths to when string started
+            brace_depth, bracket_depth = string_depth_stack if string_depth_stack else (0, 0)
+            # Recalculate needed closures
+            remaining = repaired[last_string_start + 2:]
+            for char in remaining:
+                if char == '{':
+                    brace_depth += 1
+                elif char == '}':
+                    brace_depth -= 1
+                elif char == '[':
+                    bracket_depth += 1
+                elif char == ']':
+                    bracket_depth -= 1
+
+    # Close any open structures
+    if bracket_depth > 0:
+        repaired += ']' * bracket_depth
+    if brace_depth > 0:
+        repaired += '}' * brace_depth
+
+    return repaired
 
 
 # Default model - Gemini 2.5 Flash
@@ -103,11 +403,13 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
 6. **Úplnost**:
    - Extrahuj VŠECHNY elementy z CELÉHO dokumentu
    - Ignoruj záhlaví a zápatí stránek
-   - Zachovej obsah i prázdných nadpisů (title bez content je OK)
+   - **POVINNĚ extrahuj content** - každá sekce MUSÍ mít neprázdný content (text pod nadpisem)
+   - Pokud nadpis nemá vlastní text, použij první odstavec pod ním jako content
+   - content je KRITICKÝ pro další zpracování - prázdný content = neúplná extrakce
 
-7. **summary** = stručné shrnutí (max 200 znaků) pro sekce s obsahem
+7. **summary** = stručné shrnutí (max 200 znaků) pro KAŽDOU sekci
    - Piš GENERICKY srozumitelně (ne právnický žargon)
-   - Pro nadpisy bez textu = null
+   - Summary je POVINNÉ - pomáhá při vyhledávání
    - Příklad: "Definuje odpovědnost provozovatele za škody způsobené jadernou havárií"
 
 8. **document_summary** = shrnutí celého dokumentu (max 500 znaků)
@@ -127,9 +429,9 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
     "summary": "Zákon upravuje podmínky využívání jaderné energie, ionizujícího záření a nakládání s radioaktivními odpady. Stanoví požadavky na bezpečnost, odpovědnost provozovatelů a ochranu před zářením."
   },
   "sections": [
-    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": null, "content": null, "level": 1, "path": "ČÁST I", "summary": null},
-    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I", "summary": null},
-    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": null, "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ", "summary": null},
+    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": "OBECNÁ USTANOVENÍ", "content": "Tato část stanoví základní pojmy a principy pro využívání jaderné energie.", "level": 1, "path": "ČÁST I", "summary": "Definuje základní pojmy a principy atomového zákona."},
+    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "content": "Tato hlava upravuje odpovědnost za škody způsobené jadernou havárií.", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I", "summary": "Definuje pravidla odpovědnosti za jaderné škody."},
+    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": "Odpovědnost provozovatele", "content": "Provozovatel jaderného zařízení odpovídá za škody způsobené jadernou havárií.", "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ", "summary": "Stanoví odpovědnost provozovatele."},
     {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 1, "summary": "Odkazuje na mezinárodní smlouvu pro řešení odpovědnosti za jaderné škody."}
   ]
 }
@@ -149,8 +451,10 @@ class GeminiExtractionConfig:
         max_output_tokens: Maximum output tokens (default: 65536 for large documents)
         fallback_to_unstructured: Fall back to Unstructured on Gemini failure (default: True)
         chunk_large_pdfs: Enable chunked extraction for large PDFs (default: True)
-        max_pages_per_chunk: Maximum pages per chunk when splitting (default: 50)
+        max_pages_per_chunk: Maximum pages per chunk when splitting (default: 15)
         file_size_threshold_mb: File size threshold for chunked extraction (default: 10.0 MB)
+        parallel_chunks: Number of chunks to process in parallel (default: 3)
+        rpm_limit: Requests per minute limit for rate limiting (default: 10)
     """
 
     model: str = DEFAULT_MODEL
@@ -158,8 +462,10 @@ class GeminiExtractionConfig:
     max_output_tokens: int = 65536
     fallback_to_unstructured: bool = True
     chunk_large_pdfs: bool = True
-    max_pages_per_chunk: int = 100
+    max_pages_per_chunk: int = 10
     file_size_threshold_mb: float = 10.0
+    parallel_chunks: int = 6  # Process 6 chunks in parallel (1 batch per minute)
+    rpm_limit: int = 6  # RPM limit per batch (6 chunks/min to stay under Gemini limits)
 
 
 class GeminiExtractor:
@@ -215,6 +521,38 @@ class GeminiExtractor:
         logger.warning(f"{reason}. Falling back to Unstructured extraction.")
         from src.unstructured_extractor import UnstructuredExtractor
         return UnstructuredExtractor(self.config).extract(file_path)
+
+    def _normalize_sections_list(self, sections: list) -> List[Dict[str, Any]]:
+        """
+        Flatten and filter sections to ensure all items are dicts.
+
+        Gemini sometimes returns nested lists instead of flat dicts:
+        - Expected: [{"section_id": "1"}, {"section_id": "2"}]
+        - Received: [[{"section_id": "1"}], [{"section_id": "2"}]]
+
+        This method handles up to 3 levels of nesting.
+
+        Args:
+            sections: Raw sections list from Gemini output
+
+        Returns:
+            Flat list of section dicts
+        """
+        normalized = []
+        for item in sections:
+            if isinstance(item, dict):
+                normalized.append(item)
+            elif isinstance(item, list):
+                for subitem in item:
+                    if isinstance(subitem, dict):
+                        normalized.append(subitem)
+                    elif isinstance(subitem, list):
+                        # Double-nested - rare but handle it
+                        for subsubitem in subitem:
+                            if isinstance(subsubitem, dict):
+                                normalized.append(subsubitem)
+            # Skip non-dict, non-list items (strings, numbers, etc.)
+        return normalized
 
     def extract(self, file_path: Path) -> ExtractedDocument:
         """
@@ -339,8 +677,8 @@ class GeminiExtractor:
         logger.info(f"Generating extraction with {self.model_id}...")
         response = model.generate_content([uploaded_file, EXTRACTION_PROMPT])
 
-        # Parse JSON response
-        result = json.loads(response.text)
+        # Parse JSON response with SOTA repair for truncated/malformed output
+        result = _repair_truncated_json(response.text)
 
         # Log token usage
         if hasattr(response, "usage_metadata"):
@@ -421,9 +759,67 @@ class GeminiExtractor:
         logger.info(f"Split {file_path.name} into {len(chunk_paths)} chunks ({total_pages} pages total)")
         return chunk_paths
 
+    def _process_single_chunk(
+        self, chunk_path: Path, chunk_index: int
+    ) -> Tuple[int, Dict, List[Dict]]:
+        """
+        Process a single PDF chunk and return extracted sections.
+
+        Args:
+            chunk_path: Path to the temporary chunk PDF
+            chunk_index: Index of the chunk (for logging and section_id prefixing)
+
+        Returns:
+            Tuple of (chunk_index, document_meta, sections_list)
+        """
+        logger.info(f"Processing chunk {chunk_index + 1}: {chunk_path.name}")
+
+        try:
+            # Upload chunk
+            uploaded_file = self._upload_document(chunk_path)
+
+            try:
+                # Extract from chunk
+                raw_extraction = self._extract_with_gemini(uploaded_file)
+
+                # Handle case where Gemini returns a list instead of dict
+                if isinstance(raw_extraction, list):
+                    # Wrap list in standard structure - assume it's sections
+                    raw_extraction = {"document": {}, "sections": raw_extraction}
+
+                document_meta = raw_extraction.get("document", {})
+
+                # Collect sections with chunk offset for section_id uniqueness
+                chunk_sections = raw_extraction.get("sections", [])
+
+                # Normalize sections - Gemini may return nested lists
+                chunk_sections = self._normalize_sections_list(chunk_sections)
+
+                # Add chunk prefix to section_id to avoid collisions
+                for sec in chunk_sections:
+                    original_id = sec.get("section_id", "")
+                    sec["section_id"] = f"c{chunk_index + 1}_{original_id}"
+                    # Update parent_id references
+                    if sec.get("parent_id"):
+                        sec["parent_id"] = f"c{chunk_index + 1}_{sec['parent_id']}"
+
+                logger.info(f"Chunk {chunk_index + 1}: {len(chunk_sections)} sections extracted")
+                return (chunk_index, document_meta, chunk_sections)
+
+            finally:
+                self._cleanup_file(uploaded_file)
+
+        except Exception as e:
+            logger.error(f"Failed to process chunk {chunk_index + 1}: {e}")
+            return (chunk_index, {}, [])
+
     def _extract_chunked(self, file_path: Path) -> ExtractedDocument:
         """
-        Extract a large PDF by splitting into chunks, processing each, and merging results.
+        Extract a large PDF by splitting into chunks, processing in parallel batches.
+
+        Uses batch-based parallelism: processes `parallel_chunks` chunks at once,
+        waits for all to complete, then waits 60 seconds before next batch
+        to respect Gemini API rate limits.
 
         Args:
             file_path: Path to large PDF
@@ -437,45 +833,58 @@ class GeminiExtractor:
 
         # Split PDF into chunks
         chunk_paths = self._split_pdf(file_path)
+        total_chunks = len(chunk_paths)
+        batch_size = self.gemini_config.parallel_chunks
 
-        all_sections: List[Dict] = []
+        # Results storage: index -> (document_meta, sections)
+        results: Dict[int, Tuple[Dict, List[Dict]]] = {}
         document_meta: Dict = {}
 
         try:
-            for i, chunk_path in enumerate(chunk_paths):
-                logger.info(f"Processing chunk {i+1}/{len(chunk_paths)}: {chunk_path.name}")
+            # Process chunks in batches
+            for batch_start in range(0, total_chunks, batch_size):
+                batch_end = min(batch_start + batch_size, total_chunks)
+                batch_chunks = chunk_paths[batch_start:batch_end]
+                batch_num = (batch_start // batch_size) + 1
+                total_batches = (total_chunks + batch_size - 1) // batch_size
 
-                try:
-                    # Upload chunk
-                    uploaded_file = self._upload_document(chunk_path)
+                logger.info(
+                    f"Processing batch {batch_num}/{total_batches}: "
+                    f"chunks {batch_start + 1}-{batch_end} of {total_chunks}"
+                )
 
-                    try:
-                        # Extract from chunk
-                        raw_extraction = self._extract_with_gemini(uploaded_file)
+                # Process batch in parallel using ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=batch_size) as executor:
+                    # Submit all chunks in this batch
+                    futures = {
+                        executor.submit(
+                            self._process_single_chunk,
+                            chunk_path,
+                            batch_start + i
+                        ): batch_start + i
+                        for i, chunk_path in enumerate(batch_chunks)
+                    }
 
-                        # Store document metadata from first chunk
-                        if not document_meta and raw_extraction.get("document"):
-                            document_meta = raw_extraction["document"]
+                    # Collect results as they complete
+                    for future in as_completed(futures):
+                        chunk_idx = futures[future]
+                        try:
+                            idx, meta, sections = future.result()
+                            results[idx] = (meta, sections)
 
-                        # Collect sections with chunk offset for section_id uniqueness
-                        chunk_sections = raw_extraction.get("sections", [])
-                        for sec in chunk_sections:
-                            # Add chunk prefix to section_id to avoid collisions
-                            original_id = sec.get("section_id", "")
-                            sec["section_id"] = f"c{i+1}_{original_id}"
-                            # Update parent_id references
-                            if sec.get("parent_id"):
-                                sec["parent_id"] = f"c{i+1}_{sec['parent_id']}"
-                            all_sections.append(sec)
+                            # Store document metadata from first chunk
+                            if not document_meta and meta:
+                                document_meta = meta
 
-                        logger.info(f"Chunk {i+1}: {len(chunk_sections)} sections extracted")
+                        except Exception as e:
+                            logger.error(f"Chunk {chunk_idx + 1} future failed: {e}")
+                            results[chunk_idx] = ({}, [])
 
-                    finally:
-                        self._cleanup_file(uploaded_file)
-
-                except Exception as e:
-                    logger.error(f"Failed to process chunk {i+1}: {e}")
-                    # Continue with other chunks
+                # Wait 60 seconds before next batch (unless this is the last batch)
+                if batch_end < total_chunks:
+                    wait_time = 60
+                    logger.info(f"Batch {batch_num} complete. Waiting {wait_time}s for rate limit...")
+                    time.sleep(wait_time)
 
         finally:
             # Cleanup temporary chunk files
@@ -485,7 +894,13 @@ class GeminiExtractor:
                 except Exception:
                     pass
 
-        # Merge all sections into a single extraction
+        # Merge all sections in order (by chunk index)
+        all_sections: List[Dict] = []
+        for i in range(total_chunks):
+            if i in results:
+                _, sections = results[i]
+                all_sections.extend(sections)
+
         merged_raw = {
             "document": document_meta,
             "sections": all_sections
@@ -494,7 +909,7 @@ class GeminiExtractor:
         extraction_time = time.time() - start_time
         logger.info(
             f"Chunked extraction complete: {len(all_sections)} sections "
-            f"from {len(chunk_paths)} chunks in {extraction_time:.1f}s"
+            f"from {total_chunks} chunks in {extraction_time:.1f}s (parallel batches of {batch_size})"
         )
 
         return self._convert_to_extracted_document(merged_raw, file_path, extraction_time)
@@ -524,6 +939,9 @@ class GeminiExtractor:
         doc_meta = raw.get("document", {})
         raw_sections = raw.get("sections", [])
 
+        # Normalize sections - Gemini may return nested lists instead of dicts
+        raw_sections = self._normalize_sections_list(raw_sections)
+
         # Build section ID to index mapping for parent lookup
         section_id_to_idx: Dict[str, int] = {}
         for i, sec in enumerate(raw_sections):
@@ -542,14 +960,24 @@ class GeminiExtractor:
 
         for i, sec in enumerate(raw_sections):
             section_id = sec.get("section_id", f"sec_{i+1}")
-            title = sec.get("title") or ""
-            content = sec.get("content") or ""
+
+            # Robust type coercion - Gemini may return lists instead of strings
+            def _to_str(val) -> str:
+                """Convert value to string, joining lists with newlines."""
+                if val is None:
+                    return ""
+                if isinstance(val, list):
+                    return "\n".join(str(item) for item in val)
+                return str(val)
+
+            title = _to_str(sec.get("title"))
+            content = _to_str(sec.get("content"))
             level = sec.get("level", 1)
-            path = sec.get("path", "")
+            path = _to_str(sec.get("path"))
             page_number = sec.get("page_number") or 0
             element_type = sec.get("element_type", "unknown")
             parent_number = sec.get("parent_number")
-            summary = sec.get("summary")  # Section summary from Gemini
+            summary = _to_str(sec.get("summary")) or None  # Section summary from Gemini
 
             # Compute parent_id from parent_number
             parent_id = None
