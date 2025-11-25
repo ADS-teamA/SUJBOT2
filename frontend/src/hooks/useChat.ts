@@ -8,22 +8,11 @@ import type { Message, Conversation, ToolCall, ClarificationData } from '../type
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  // Initialize currentConversationId from localStorage to persist across page refreshes
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
-    () => localStorage.getItem('currentConversationId')
-  );
+  // Current conversation state (NO localStorage - purely session state)
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
-
-  // Persist currentConversationId to localStorage when it changes
-  useEffect(() => {
-    if (currentConversationId) {
-      localStorage.setItem('currentConversationId', currentConversationId);
-    } else {
-      localStorage.removeItem('currentConversationId');
-    }
-  }, [currentConversationId]);
 
   // Load conversations from server on mount
   useEffect(() => {
@@ -40,13 +29,13 @@ export function useChat() {
     loadConversations();
   }, []); // Run once on mount
 
-  // Validate that saved conversation ID still exists after loading conversations
+  // Validate that current conversation still exists after loading conversations
   useEffect(() => {
     if (currentConversationId && conversations.length > 0) {
       const conversationExists = conversations.some(c => c.id === currentConversationId);
       if (!conversationExists) {
-        // Saved conversation was deleted, clear it
-        console.log('Saved conversation no longer exists, clearing currentConversationId');
+        // Current conversation was deleted, clear it
+        console.log('Current conversation no longer exists, clearing currentConversationId');
         setCurrentConversationId(null);
       }
     }
@@ -76,7 +65,7 @@ export function useChat() {
 
   /**
    * Clean invalid/incomplete messages from conversation
-   * Prevents corrupted data in localStorage
+   * Prevents corrupted data in database
    */
   const cleanMessages = useCallback((messages: Message[]): Message[] => {
     return messages.filter(msg =>
