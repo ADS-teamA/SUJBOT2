@@ -111,9 +111,19 @@ PRICING = {
         "gemini-flash": {"input": 0.30, "output": 2.50},
         "gemini-pro": {"input": 1.25, "output": 10.00},
     },
-    # DeepInfra embeddings (per 1M tokens)
+    # DeepInfra models (per 1M tokens)
     # Source: https://deepinfra.com/pricing
     "deepinfra": {
+        # LLM models
+        "Qwen/Qwen2.5-72B-Instruct": {"input": 0.35, "output": 0.40},
+        "Qwen/Qwen2.5-7B-Instruct": {"input": 0.06, "output": 0.06},
+        "qwen-72b": {"input": 0.35, "output": 0.40},
+        "qwen-7b": {"input": 0.06, "output": 0.06},
+        # Llama models
+        "meta-llama/Meta-Llama-3.1-70B-Instruct": {"input": 0.35, "output": 0.40},
+        "meta-llama/Meta-Llama-3.1-8B-Instruct": {"input": 0.06, "output": 0.06},
+        "llama-70b": {"input": 0.35, "output": 0.40},
+        # Embedding models
         "Qwen/Qwen3-Embedding-8B": {"input": 0.03, "output": 0.0},
         "qwen3-embedding-8b": {"input": 0.03, "output": 0.0},
         "BAAI/bge-m3": {"input": 0.01, "output": 0.0},

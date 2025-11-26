@@ -2,32 +2,33 @@
  * PDFViewerModal Component
  *
  * Fullscreen modal overlay for viewing PDF documents.
- * Uses react-pdf to render PDF pages with navigation controls.
+ * Uses react-pdf for rendering with page navigation.
  *
  * Features:
- * - Page navigation (prev/next, direct input)
+ * - Single page view with navigation arrows
  * - Zoom controls
- * - Keyboard navigation (arrow keys, escape to close)
- * - Initial page navigation from citation context
+ * - Keyboard navigation (arrows, +/-, Escape)
+ * - Page number input
+ * - Auto-scroll to initial page from citation context
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import {
   X,
-  ChevronLeft,
-  ChevronRight,
   ZoomIn,
   ZoomOut,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   AlertCircle,
+  FileText,
 } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 
-// Configure PDF.js worker using Vite's URL import (avoids CDN dependency)
-// The ?url suffix tells Vite to return the URL to the asset after bundling
+// Configure PDF.js worker
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -52,49 +53,81 @@ export function PDFViewerModal({
   const [scale, setScale] = useState(1.2);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pdfData, setPdfData] = useState<{ data: ArrayBuffer } | null>(null);
   const [pageInputValue, setPageInputValue] = useState(String(initialPage));
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // PDF URL with authentication (needs /api/ prefix for nginx routing)
-  const pdfUrl = `${API_BASE_URL}/api/documents/${documentId}/pdf`;
+  // PDF URL
+  const pdfUrl = documentId
+    ? `${API_BASE_URL}/api/documents/${encodeURIComponent(documentId)}/pdf`
+    : '';
 
-  // Memoize options to prevent unnecessary Document reloads
-  const documentOptions = useMemo(() => ({
-    withCredentials: true,
-  }), []);
+  // Fetch PDF with credentials
+  useEffect(() => {
+    if (!documentId || !isOpen) return;
+
+    const fetchPdf = async () => {
+      setIsLoading(true);
+      setError(null);
+      setPdfData(null);
+
+      try {
+        console.log('[PDFViewerModal] Fetching PDF:', pdfUrl);
+        const response = await fetch(pdfUrl, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        console.log('[PDFViewerModal] PDF fetched, size:', arrayBuffer.byteLength);
+        setPdfData({ data: arrayBuffer });
+      } catch (err) {
+        console.error('[PDFViewerModal] PDF fetch error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load PDF');
+        setIsLoading(false);
+      }
+    };
+
+    fetchPdf();
+  }, [documentId, pdfUrl, isOpen]);
 
   // Reset state when document changes
   useEffect(() => {
-    setCurrentPage(initialPage);
-    setPageInputValue(String(initialPage));
     setError(null);
     setIsLoading(true);
+    setNumPages(null);
+    setPdfData(null);
+    setCurrentPage(initialPage);
+    setPageInputValue(String(initialPage));
   }, [documentId, initialPage]);
 
   // Handle document load success
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-    setIsLoading(false);
-    setError(null);
-  }, []);
+  const onDocumentLoadSuccess = useCallback(
+    ({ numPages }: { numPages: number }) => {
+      setNumPages(numPages);
+      setIsLoading(false);
+      setError(null);
+      // Ensure current page is within bounds
+      if (initialPage > numPages) {
+        setCurrentPage(numPages);
+        setPageInputValue(String(numPages));
+      }
+    },
+    [initialPage]
+  );
 
   // Handle document load error
   const onDocumentLoadError = useCallback((error: Error) => {
-    console.error('PDF load error:', error);
-    setError('Failed to load PDF document');
+    console.error('[PDFViewerModal] PDF load error:', error.message, error);
+    setError(`Failed to load PDF: ${error.message}`);
     setIsLoading(false);
   }, []);
 
-  // Navigation handlers
-  const goToPrevPage = useCallback(() => {
-    setCurrentPage((prev) => Math.max(1, prev - 1));
-  }, []);
-
-  const goToNextPage = useCallback(() => {
-    setCurrentPage((prev) => Math.min(numPages ?? prev, prev + 1));
-  }, [numPages]);
-
+  // Navigation
   const goToPage = useCallback(
     (page: number) => {
       if (numPages && page >= 1 && page <= numPages) {
@@ -105,33 +138,42 @@ export function PDFViewerModal({
     [numPages]
   );
 
-  // Update page input when currentPage changes
-  useEffect(() => {
-    setPageInputValue(String(currentPage));
-  }, [currentPage]);
+  const prevPage = useCallback(() => {
+    goToPage(currentPage - 1);
+  }, [currentPage, goToPage]);
 
-  // Handle page input change
+  const nextPage = useCallback(() => {
+    goToPage(currentPage + 1);
+  }, [currentPage, goToPage]);
+
+  // Zoom handlers
+  const zoomIn = useCallback(() => {
+    setScale((s) => Math.min(3, s + 0.2));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setScale((s) => Math.max(0.5, s - 0.2));
+  }, []);
+
+  // Page input handler
   const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPageInputValue(e.target.value);
   };
 
-  // Handle page input submit
-  const handlePageInputSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePageInputBlur = () => {
     const page = parseInt(pageInputValue, 10);
-    if (!isNaN(page)) {
-      goToPage(page);
+    if (!isNaN(page) && numPages) {
+      goToPage(Math.max(1, Math.min(numPages, page)));
+    } else {
+      setPageInputValue(String(currentPage));
     }
   };
 
-  // Zoom handlers
-  const zoomIn = useCallback(() => {
-    setScale((prev) => Math.min(3, prev + 0.2));
-  }, []);
-
-  const zoomOut = useCallback(() => {
-    setScale((prev) => Math.max(0.5, prev - 0.2));
-  }, []);
+  const handlePageInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handlePageInputBlur();
+    }
+  };
 
   // Keyboard navigation
   useEffect(() => {
@@ -143,10 +185,16 @@ export function PDFViewerModal({
           onClose();
           break;
         case 'ArrowLeft':
-          goToPrevPage();
+          prevPage();
           break;
         case 'ArrowRight':
-          goToNextPage();
+          nextPage();
+          break;
+        case 'Home':
+          goToPage(1);
+          break;
+        case 'End':
+          if (numPages) goToPage(numPages);
           break;
         case '+':
         case '=':
@@ -160,7 +208,7 @@ export function PDFViewerModal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, goToPrevPage, goToNextPage, zoomIn, zoomOut]);
+  }, [isOpen, onClose, prevPage, nextPage, goToPage, numPages, zoomIn, zoomOut]);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -191,11 +239,7 @@ export function PDFViewerModal({
 
       {/* Modal */}
       <div
-        className={cn(
-          'fixed inset-0 z-50',
-          'flex flex-col',
-          'pointer-events-none'
-        )}
+        className={cn('fixed inset-0 z-50', 'flex flex-col', 'pointer-events-none')}
       >
         {/* Header */}
         <div
@@ -209,167 +253,148 @@ export function PDFViewerModal({
         >
           {/* Document info */}
           <div className="flex items-center gap-3">
+            <FileText size={20} className="text-accent-500 dark:text-accent-400" />
             <h2 className="text-lg font-semibold text-accent-900 dark:text-accent-100">
               {documentId.replace(/_/g, ' ')}
             </h2>
-            {numPages && (
-              <span className="text-sm text-accent-500 dark:text-accent-400">
-                ({numPages} pages)
-              </span>
-            )}
           </div>
 
-          {/* Controls */}
+          {/* Page navigation */}
           <div className="flex items-center gap-2">
-            {/* Zoom controls */}
-            <div className="flex items-center gap-1 mr-4">
-              <button
-                onClick={zoomOut}
-                disabled={scale <= 0.5}
-                className={cn(
-                  'p-2 rounded-lg',
-                  'text-accent-600 hover:text-accent-900',
-                  'dark:text-accent-400 dark:hover:text-accent-100',
-                  'hover:bg-accent-100 dark:hover:bg-accent-800',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-colors'
-                )}
-                title="Zoom out (-)"
-              >
-                <ZoomOut size={18} />
-              </button>
-              <span className="text-sm font-mono text-accent-600 dark:text-accent-400 min-w-[3rem] text-center">
-                {Math.round(scale * 100)}%
-              </span>
-              <button
-                onClick={zoomIn}
-                disabled={scale >= 3}
-                className={cn(
-                  'p-2 rounded-lg',
-                  'text-accent-600 hover:text-accent-900',
-                  'dark:text-accent-400 dark:hover:text-accent-100',
-                  'hover:bg-accent-100 dark:hover:bg-accent-800',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-colors'
-                )}
-                title="Zoom in (+)"
-              >
-                <ZoomIn size={18} />
-              </button>
-            </div>
-
-            {/* Page navigation */}
-            <div className="flex items-center gap-2 mr-4">
-              <button
-                onClick={goToPrevPage}
-                disabled={currentPage <= 1}
-                className={cn(
-                  'p-2 rounded-lg',
-                  'text-accent-600 hover:text-accent-900',
-                  'dark:text-accent-400 dark:hover:text-accent-100',
-                  'hover:bg-accent-100 dark:hover:bg-accent-800',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-colors'
-                )}
-                title="Previous page (←)"
-              >
-                <ChevronLeft size={18} />
-              </button>
-
-              <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
-                <input
-                  type="text"
-                  value={pageInputValue}
-                  onChange={handlePageInputChange}
-                  className={cn(
-                    'w-12 px-2 py-1 rounded',
-                    'text-center text-sm font-mono',
-                    'bg-accent-100 dark:bg-accent-800',
-                    'text-accent-900 dark:text-accent-100',
-                    'border border-accent-300 dark:border-accent-600',
-                    'focus:outline-none focus:ring-2 focus:ring-blue-500'
-                  )}
-                />
-                <span className="text-sm text-accent-500 dark:text-accent-400">
-                  / {numPages ?? '?'}
-                </span>
-              </form>
-
-              <button
-                onClick={goToNextPage}
-                disabled={!numPages || currentPage >= numPages}
-                className={cn(
-                  'p-2 rounded-lg',
-                  'text-accent-600 hover:text-accent-900',
-                  'dark:text-accent-400 dark:hover:text-accent-100',
-                  'hover:bg-accent-100 dark:hover:bg-accent-800',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-colors'
-                )}
-                title="Next page (→)"
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-
-            {/* Close button */}
             <button
-              onClick={onClose}
+              onClick={prevPage}
+              disabled={currentPage <= 1}
               className={cn(
-                'p-2 rounded-lg',
-                'text-accent-500 hover:text-accent-700',
-                'dark:text-accent-400 dark:hover:text-accent-200',
+                'p-2 rounded-lg transition-colors',
                 'hover:bg-accent-100 dark:hover:bg-accent-800',
-                'transition-colors'
+                'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
-              title="Close (Esc)"
+              title="Previous page (←)"
             >
-              <X size={20} />
+              <ChevronLeft size={20} />
+            </button>
+
+            <div className="flex items-center gap-1 text-sm">
+              <input
+                type="text"
+                value={pageInputValue}
+                onChange={handlePageInputChange}
+                onBlur={handlePageInputBlur}
+                onKeyDown={handlePageInputKeyDown}
+                className={cn(
+                  'w-12 px-2 py-1 text-center rounded',
+                  'bg-accent-100 dark:bg-accent-800',
+                  'border border-accent-300 dark:border-accent-600',
+                  'text-accent-900 dark:text-accent-100',
+                  'focus:outline-none focus:ring-2 focus:ring-blue-500'
+                )}
+              />
+              <span className="text-accent-500 dark:text-accent-400">
+                / {numPages || '...'}
+              </span>
+            </div>
+
+            <button
+              onClick={nextPage}
+              disabled={!numPages || currentPage >= numPages}
+              className={cn(
+                'p-2 rounded-lg transition-colors',
+                'hover:bg-accent-100 dark:hover:bg-accent-800',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              title="Next page (→)"
+            >
+              <ChevronRight size={20} />
             </button>
           </div>
+
+          {/* Zoom controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={zoomOut}
+              disabled={scale <= 0.5}
+              className={cn(
+                'p-2 rounded-lg transition-colors',
+                'hover:bg-accent-100 dark:hover:bg-accent-800',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              title="Zoom out (-)"
+            >
+              <ZoomOut size={20} />
+            </button>
+
+            <span className="text-sm text-accent-600 dark:text-accent-400 min-w-[4rem] text-center">
+              {Math.round(scale * 100)}%
+            </span>
+
+            <button
+              onClick={zoomIn}
+              disabled={scale >= 3}
+              className={cn(
+                'p-2 rounded-lg transition-colors',
+                'hover:bg-accent-100 dark:hover:bg-accent-800',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              title="Zoom in (+)"
+            >
+              <ZoomIn size={20} />
+            </button>
+          </div>
+
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className={cn(
+              'p-2 rounded-lg transition-colors',
+              'hover:bg-accent-100 dark:hover:bg-accent-800',
+              'text-accent-500 dark:text-accent-400'
+            )}
+            title="Close (Esc)"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        {/* PDF Content */}
+        {/* PDF content */}
         <div
           ref={containerRef}
           className={cn(
             'flex-1 overflow-auto',
-            'flex items-start justify-center',
-            'p-4',
-            'pointer-events-auto',
-            'bg-accent-800 dark:bg-accent-950'
+            'bg-accent-800 dark:bg-accent-950',
+            'pointer-events-auto'
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          {error ? (
-            <div
-              className={cn(
-                'flex flex-col items-center gap-4',
-                'p-8 rounded-lg',
-                'bg-red-50 dark:bg-red-900/20',
-                'text-red-600 dark:text-red-400'
-              )}
-            >
-              <AlertCircle size={48} />
-              <p className="text-lg font-medium">{error}</p>
-              <p className="text-sm text-accent-500 dark:text-accent-400">
-                Document: {documentId}
-              </p>
-            </div>
-          ) : (
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={
-                <div className="flex items-center gap-3 text-white">
-                  <Loader2 size={24} className="animate-spin" />
-                  <span>Loading PDF...</span>
-                </div>
-              }
-              options={documentOptions}
-            >
-              {isLoading ? null : (
+          <div className="flex justify-center py-4 min-h-full">
+            {error ? (
+              <div
+                className={cn(
+                  'flex flex-col items-center justify-center gap-4',
+                  'p-8',
+                  'text-red-400'
+                )}
+              >
+                <AlertCircle size={48} />
+                <p className="text-lg font-medium">{error}</p>
+                <p className="text-sm text-accent-400">Document: {documentId}</p>
+              </div>
+            ) : !pdfData ? (
+              <div className="flex items-center justify-center gap-3 text-white">
+                <Loader2 size={24} className="animate-spin" />
+                <span>Loading PDF...</span>
+              </div>
+            ) : (
+              <Document
+                file={pdfData}
+                onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={onDocumentLoadError}
+                loading={
+                  <div className="flex items-center justify-center gap-3 text-white">
+                    <Loader2 size={24} className="animate-spin" />
+                    <span>Rendering...</span>
+                  </div>
+                }
+              >
                 <Page
                   pageNumber={currentPage}
                   scale={scale}
@@ -377,15 +402,14 @@ export function PDFViewerModal({
                   renderAnnotationLayer={true}
                   className="shadow-2xl"
                   loading={
-                    <div className="flex items-center gap-3 text-white p-8">
+                    <div className="flex items-center justify-center w-full h-96 text-white">
                       <Loader2 size={24} className="animate-spin" />
-                      <span>Loading page {currentPage}...</span>
                     </div>
                   }
                 />
-              )}
-            </Document>
-          )}
+              </Document>
+            )}
+          </div>
         </div>
       </div>
     </>

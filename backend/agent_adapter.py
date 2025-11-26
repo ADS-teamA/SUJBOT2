@@ -11,6 +11,7 @@ This adapter:
 import asyncio
 import json
 import logging
+import os
 import re
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Any, Optional
@@ -102,6 +103,7 @@ class AgentAdapter:
                 "anthropic_api_key": self.config.anthropic_api_key,
                 "openai_api_key": self.config.openai_api_key,
                 "google_api_key": self.config.google_api_key,
+                "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
             },
             "vector_store_path": str(self.config.vector_store_path),
             "models": full_config.get("models", {}),  # Add models section for embedding config
@@ -130,6 +132,47 @@ class AgentAdapter:
             f"AgentAdapter initialized with multi-agent system: "
             f"model={self.current_model}, vector_store={self.config.vector_store_path}"
         )
+
+    def _apply_variant_overrides(self, variant: str, multi_agent_config: dict) -> dict:
+        """
+        Apply variant-specific model overrides to multi-agent configuration.
+
+        Args:
+            variant: Agent variant ('premium' or 'local')
+            multi_agent_config: Original multi_agent config from config.json
+
+        Returns:
+            Modified config with variant models applied
+        """
+        import copy
+
+        # Map variants to models
+        variant_models = {
+            "premium": "claude-haiku-4-5",
+            "local": "meta-llama/Meta-Llama-3.1-70B-Instruct"
+        }
+
+        model = variant_models.get(variant)
+        if not model:
+            logger.warning(f"Unknown variant '{variant}', using config defaults")
+            return multi_agent_config
+
+        # Deep copy to avoid modifying original
+        config = copy.deepcopy(multi_agent_config)
+
+        # Override orchestrator model
+        if "orchestrator" in config:
+            config["orchestrator"]["model"] = model
+            logger.debug(f"Orchestrator model: {model}")
+
+        # Override all agent models
+        if "agents" in config:
+            for agent_name in config["agents"]:
+                config["agents"][agent_name]["model"] = model
+                logger.debug(f"Agent {agent_name} model: {model}")
+
+        logger.info(f"Applied variant '{variant}' - all agents using {model}")
+        return config
 
     async def initialize(self) -> bool:
         """
@@ -166,7 +209,8 @@ class AgentAdapter:
     async def stream_response(
         self,
         query: str,
-        conversation_id: Optional[str] = None
+        conversation_id: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream agent response as SSE-compatible events.
@@ -193,6 +237,7 @@ class AgentAdapter:
         Args:
             query: User query
             conversation_id: Optional conversation ID for context (not used in multi-agent)
+            user_id: User ID for loading agent variant preference
 
         Yields:
             Dict containing event type and data
@@ -200,6 +245,58 @@ class AgentAdapter:
         # Reset cost tracker for this request
         reset_global_tracker()
         tracker = get_global_tracker()
+
+        # Load user's variant and create runner with variant-specific config
+        variant = "premium"  # default
+        runner_to_use = self.runner  # default to existing runner
+
+        if user_id:
+            try:
+                from backend.routes.auth import get_auth_queries
+                queries = get_auth_queries()
+                variant = await queries.get_agent_variant(user_id)
+                logger.info(f"User {user_id} variant: {variant}")
+
+                # Only create new runner if variant is not premium (to avoid overhead)
+                if variant != "premium":
+                    # Load config and apply variant overrides
+                    project_root = Path(__file__).parent.parent
+                    config_path = project_root / "config.json"
+
+                    with open(config_path) as f:
+                        full_config = json.load(f)
+                        multi_agent_config = full_config.get("multi_agent", {})
+
+                    # Apply variant overrides
+                    multi_agent_config = self._apply_variant_overrides(variant, multi_agent_config)
+
+                    # Build runner config with variant models
+                    runner_config = {
+                        "api_keys": {
+                            "anthropic_api_key": self.config.anthropic_api_key,
+                            "openai_api_key": self.config.openai_api_key,
+                            "google_api_key": self.config.google_api_key,
+                            "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
+                        },
+                        "vector_store_path": str(self.config.vector_store_path),
+                        "models": full_config.get("models", {}),
+                        "storage": full_config.get("storage", {}),
+                        "agent_tools": full_config.get("agent_tools", {}),
+                        "knowledge_graph": full_config.get("knowledge_graph", {}),
+                        "neo4j": full_config.get("neo4j", {}),
+                        "multi_agent": multi_agent_config,
+                    }
+
+                    # Create fresh runner with variant config
+                    new_runner = MultiAgentRunner(runner_config)
+                    await new_runner.initialize()
+                    runner_to_use = new_runner  # Only assign after successful init
+                    logger.info(f"Created fresh runner with variant '{variant}'")
+
+            except Exception as e:
+                logger.warning(f"Failed to load/apply variant for user {user_id}: {e}")
+                # Continue with default runner (runner_to_use unchanged)
+                runner_to_use = self.runner
 
         try:
             # Emit start event
@@ -215,9 +312,9 @@ class AgentAdapter:
             # Execute multi-agent workflow with progress streaming
             logger.info("Starting multi-agent query execution with streaming...")
 
-            # Stream progress events from runner
+            # Stream progress events from runner (use variant-specific runner if applicable)
             result = None
-            async for event in self.runner.run_query(query, stream_progress=True):
+            async for event in runner_to_use.run_query(query, stream_progress=True):
                 if event.get("type") == "agent_start":
                     # Agent start event (new format from runner.py)
                     agent_name = event.get("agent", "unknown")

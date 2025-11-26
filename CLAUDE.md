@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SUJBOT2**: Production RAG system for legal/technical documents with multi-agent orchestration.
 
+## Debugging with LangSmith
+
+**IMPORTANT:** When debugging conversations/traces, ALWAYS use **LangSmith MCP tools** (`mcp__langsmith__*`), NOT Python scripts.
+
+```
+# Available MCP tools for debugging:
+mcp__langsmith__list_projects      # List projects
+mcp__langsmith__fetch_runs         # Fetch runs with filters
+mcp__langsmith__list_experiments   # List experiments
+```
+
 ## Common Commands
 
 ```bash
@@ -255,6 +266,46 @@ EXTRACTION_BACKEND=unstructured  # Force Unstructured
 - **Production:** `claude-sonnet-4-5`
 - **Development:** `gpt-4o-mini` (best cost/performance)
 - **Budget:** `claude-haiku-4-5` (fastest)
+
+### LangSmith Observability
+
+**Configuration:**
+```bash
+# .env (EU endpoint for EU workspaces)
+LANGSMITH_API_KEY=lsv2_pt_xxx
+LANGSMITH_PROJECT_NAME=sujbot2-multi-agent
+LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com  # US: https://api.smith.langchain.com
+```
+
+**Accessing Traces:**
+```bash
+# List projects
+curl -s "https://eu.api.smith.langchain.com/api/v1/sessions" \
+  -H "X-API-Key: $LANGSMITH_API_KEY"
+
+# Query runs (requires session ID as list)
+curl -s "https://eu.api.smith.langchain.com/api/v1/runs/query" \
+  -H "X-API-Key: $LANGSMITH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session": ["SESSION_ID"], "limit": 10}'
+
+# Query specific trace
+curl -s "https://eu.api.smith.langchain.com/api/v1/runs/query" \
+  -H "X-API-Key: $LANGSMITH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"trace": "TRACE_ID", "limit": 100}'
+```
+
+**Key Metrics to Monitor:**
+- **Latency per agent**: extractor, orchestrator_synthesis, compliance
+- **Token usage**: prompt_tokens, completion_tokens (track overflow)
+- **Tool calls**: which tools called, how many iterations
+- **Error rate**: failed runs, timeout patterns
+
+**Common Issues:**
+- `403 Forbidden`: Wrong endpoint (EU vs US) or invalid API key
+- `0 tokens`: Token counting may not propagate in LangGraph chains
+- Double agent execution: Check workflow routing logic
 
 ## Research Papers (DO NOT CONTRADICT)
 

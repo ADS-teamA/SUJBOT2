@@ -35,8 +35,11 @@ class LangSmithIntegration:
 
         # Extract configuration
         self.enabled = config.get("enabled", False)
-        self.api_key = config.get("api_key")
-        self.project_name = config.get("project_name", "sujbot2-multi-agent")
+        # Priority: env var > config (for security - don't store API key in config.json)
+        self.api_key = os.getenv("LANGSMITH_API_KEY") or config.get("api_key")
+        self.project_name = os.getenv("LANGSMITH_PROJECT_NAME") or config.get("project_name", "sujbot2-multi-agent")
+        # EU endpoint support - use eu.api.smith.langchain.com for EU workspaces
+        self.endpoint = os.getenv("LANGSMITH_ENDPOINT") or config.get("endpoint", "https://api.smith.langchain.com")
         self.trace_logging_level = config.get("trace_logging_level", "INFO")
         self.sample_rate = config.get("sample_rate", 1.0)
 
@@ -71,6 +74,7 @@ class LangSmithIntegration:
             os.environ["LANGCHAIN_TRACING_V2"] = "true"
             os.environ["LANGCHAIN_API_KEY"] = self.api_key
             os.environ["LANGCHAIN_PROJECT"] = self.project_name
+            os.environ["LANGCHAIN_ENDPOINT"] = self.endpoint
 
             # Set sampling rate (if < 1.0)
             if self.sample_rate < 1.0:
@@ -80,7 +84,7 @@ class LangSmithIntegration:
 
             logger.info(
                 f"LangSmith tracing enabled: project={self.project_name}, "
-                f"sample_rate={self.sample_rate}"
+                f"endpoint={self.endpoint}, sample_rate={self.sample_rate}"
             )
 
             return True

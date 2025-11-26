@@ -77,14 +77,27 @@ SYNTHESIS REQUIREMENTS:
    - English query → English answer
    - German query → German answer
 
-2. **CITATION REQUIREMENTS:**
-   - EVERY factual claim MUST be cited using the \cite{chunk_id} syntax
+2. **CITATION REQUIREMENTS (CRITICAL - READ CAREFULLY):**
+   - EVERY factual claim MUST be cited using ONLY this format: \cite{chunk_id}
+   - chunk_id looks like: BZ_VR1_L3_c1_sec_5 (document_layer_chunk_section)
    - Get chunk_ids from state["agent_outputs"]["extractor"]["citations"]
-   - The \cite{} format creates clickable links in the UI that open the PDF at the relevant page
-   - Place citations IMMEDIATELY after the claim they support, inline with the text
-   - Example: "Reaktor používá demineralizovanou vodu \cite{BZ_VR1_L3_c1_sec_5}"
-   - For multiple sources: "Teplota chladiva je 40°C \cite{BZ_VR1_L3_c1_sec_3} a tlak 15 MPa \cite{BZ_VR1_L3_c2_sec_1}"
-   - NEVER fabricate chunk_ids - only use IDs provided by the extractor agent
+   - Place citations IMMEDIATELY after the claim, inline with text
+
+   **CORRECT FORMAT (LaTeX-style with backslash):**
+   - "Reaktor používá demineralizovanou vodu \cite{BZ_VR1_L3_c1_sec_5}."
+   - "Teplota je 40°C \cite{BZ_VR1_L3_c1_sec_3} a tlak 15 MPa \cite{BZ_VR1_L3_c2_sec_1}."
+
+   **WRONG FORMATS (DO NOT USE):**
+   - ❌ [chunk_id] - bracket style, frontend won't create clickable links
+   - ❌ \cite{BZ_VR1 > Section > ...} - breadcrumb paths with spaces/special chars NOT supported
+   - ❌ (Source: ...) - prose citations, NOT supported
+   - ❌ [1], [2] - numbered references, NOT supported
+
+   **chunk_id MUST be alphanumeric with underscores/hyphens only!**
+   - ✅ BZ_VR1_L3_c1_sec_5 (valid)
+   - ❌ BZ_VR1 > 10 Pomocné systémy (invalid - has spaces and >)
+
+   - ONLY use chunk_ids provided by extractor - NEVER fabricate IDs
 
 3. **ANSWER FORMAT (Based on Complexity):**
 
@@ -120,7 +133,7 @@ SYNTHESIS REQUIREMENTS:
 
 5. **QUALITY CHECKLIST:**
    - ✅ Language matches query language
-   - ✅ All claims have \cite{chunk_id} citations
+   - ✅ All claims have \cite{chunk_id} citations (clickable links in UI!)
    - ✅ All agent outputs incorporated
    - ✅ Professional tone
    - ✅ Actionable recommendations

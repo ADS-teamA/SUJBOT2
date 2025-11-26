@@ -87,6 +87,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         self.dimensions = dimensions
         self.pool: Optional[asyncpg.Pool] = None
         self._initialized = False
+        self._init_lock = asyncio.Lock()  # Prevents race condition in parallel init
         self._bm25_store = None  # Will be loaded during initialization (private attribute)
 
         # Metadata cache (materialized on-demand)
@@ -585,10 +586,34 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         document_filter: Optional[str] = None,
         similarity_threshold: Optional[float] = None,
     ) -> List[Dict]:
-        """Direct Layer 3 search."""
+        """Direct Layer 3 search (sync wrapper)."""
         return _run_async_safe(
             self._async_search_layer3(query_embedding, k, document_filter, similarity_threshold)
         )
+
+    async def search_layer3_async(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 6,
+        document_filter: Optional[str] = None,
+        similarity_threshold: Optional[float] = None,
+    ) -> List[Dict]:
+        """
+        Direct Layer 3 search (async version for parallel execution).
+
+        Use this with asyncio.gather() for parallel searches.
+        """
+        return await self._async_search_layer3(
+            query_embedding, k, document_filter, similarity_threshold
+        )
+
+    async def _ensure_pool(self):
+        """Ensure connection pool is initialized (thread-safe)."""
+        if self.pool is None:
+            async with self._init_lock:
+                # Double-check after acquiring lock
+                if self.pool is None:
+                    await self.initialize()
 
     async def _async_search_layer3(
         self,
@@ -598,6 +623,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         similarity_threshold: Optional[float],
     ) -> List[Dict]:
         """Async Layer 3 search."""
+        await self._ensure_pool()
         query_vec = self._normalize_vector(query_embedding)
 
         async with self.pool.acquire() as conn:
@@ -772,15 +798,17 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             limit: Maximum conversations to return
 
         Returns:
-            List of conversation dicts with id, title, created_at, updated_at
+            List of conversation dicts with id, title, created_at, updated_at, message_count
         """
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, title, created_at, updated_at
-                FROM auth.conversations
-                WHERE user_id = $1
-                ORDER BY updated_at DESC
+                SELECT c.id, c.title, c.created_at, c.updated_at,
+                       COALESCE((SELECT COUNT(*) FROM auth.messages m
+                                 WHERE m.conversation_id = c.id), 0)::int as message_count
+                FROM auth.conversations c
+                WHERE c.user_id = $1
+                ORDER BY c.updated_at DESC
                 LIMIT $2
                 """,
                 user_id, limit
@@ -1236,15 +1264,17 @@ class PostgreSQLStorageAdapter:
             limit: Maximum conversations to return
 
         Returns:
-            List of conversation dicts with id, title, created_at, updated_at
+            List of conversation dicts with id, title, created_at, updated_at, message_count
         """
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, title, created_at, updated_at
-                FROM auth.conversations
-                WHERE user_id = $1
-                ORDER BY updated_at DESC
+                SELECT c.id, c.title, c.created_at, c.updated_at,
+                       COALESCE((SELECT COUNT(*) FROM auth.messages m
+                                 WHERE m.conversation_id = c.id), 0)::int as message_count
+                FROM auth.conversations c
+                WHERE c.user_id = $1
+                ORDER BY c.updated_at DESC
                 LIMIT $2
                 """,
                 user_id, limit

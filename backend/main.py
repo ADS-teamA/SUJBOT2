@@ -42,9 +42,13 @@ from backend.routes.auth import router as auth_router, set_dependencies
 from backend.routes.conversations import router as conversations_router, set_postgres_adapter, get_postgres_adapter
 from backend.routes.citations import router as citations_router
 from backend.routes.documents import router as documents_router
+from backend.routes.settings import router as settings_router
 
 # Import PostgreSQL adapter for user/conversation storage
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
+
+# Import title generator service
+from backend.services.title_generator import title_generator
 
 # Configure logging
 logging.basicConfig(
@@ -255,6 +259,9 @@ app.include_router(citations_router)
 # Register document routes (/documents/{document_id}/pdf)
 app.include_router(documents_router)
 
+# Register settings routes (/api/settings/agent-variant)
+app.include_router(settings_router)
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -321,6 +328,77 @@ async def get_models(user: Dict = Depends(get_current_user)):
     )
 
 
+async def _maybe_generate_title(
+    conversation_id: str,
+    user_message: str,
+    adapter: PostgreSQLStorageAdapter
+) -> Optional[str]:
+    """
+    Generate title for new conversation with DB lock (multi-worker safe).
+
+    Returns generated title if successful, None otherwise.
+    Only generates if this is the first message and no other worker is generating.
+    """
+    try:
+        async with adapter.pool.acquire() as conn:
+            # Atomically check conditions and set lock
+            # Only proceed if: is_title_generating=false AND message_count <= 1
+            # (message_count=1 because user message was just saved)
+            result = await conn.fetchrow(
+                """
+                UPDATE auth.conversations
+                SET is_title_generating = true
+                WHERE id = $1
+                  AND is_title_generating = false
+                  AND (SELECT COUNT(*) FROM auth.messages WHERE conversation_id = $1) <= 1
+                RETURNING id
+                """,
+                conversation_id
+            )
+
+            if not result:
+                # Either already generating, or not first message
+                return None
+
+        # Generate title (outside the DB connection to avoid blocking)
+        title = await title_generator.generate_title(user_message)
+
+        if title:
+            # Update title and release lock
+            async with adapter.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE auth.conversations
+                    SET title = $1, is_title_generating = false, updated_at = NOW()
+                    WHERE id = $2
+                    """,
+                    title, conversation_id
+                )
+            logger.info(f"Generated title for {conversation_id}: {title}")
+            return title
+        else:
+            # Release lock even if generation failed
+            async with adapter.pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE auth.conversations SET is_title_generating = false WHERE id = $1",
+                    conversation_id
+                )
+            return None
+
+    except Exception as e:
+        logger.warning(f"Title generation failed for {conversation_id}: {e}")
+        # Attempt to release lock on error
+        try:
+            async with adapter.pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE auth.conversations SET is_title_generating = false WHERE id = $1",
+                    conversation_id
+                )
+        except Exception:
+            pass
+        return None
+
+
 @app.post("/chat/stream")
 async def chat_stream(
     request: ChatRequest,
@@ -372,6 +450,7 @@ async def chat_stream(
 
     # Save user message to database immediately (before streaming)
     # Skip if regenerating (message already exists in database)
+    generated_title = None
     if request.conversation_id and not request.skip_save_user_message:
         try:
             await adapter.append_message(
@@ -381,6 +460,14 @@ async def chat_stream(
                 metadata=None
             )
             logger.debug(f"Saved user message to conversation {request.conversation_id}")
+
+            # Generate title for new conversations (first message)
+            # This is done before streaming starts so title_update is the first event
+            generated_title = await _maybe_generate_title(
+                conversation_id=request.conversation_id,
+                user_message=request.message,
+                adapter=adapter
+            )
         except Exception as e:
             logger.error(f"Failed to save user message: {e}", exc_info=True)
             # Don't block streaming if database save fails - continue gracefully
@@ -388,6 +475,13 @@ async def chat_stream(
 
     async def event_generator():
         """Generate SSE events from agent stream and collect response for database storage."""
+        # Emit title_update as first event if title was generated
+        if generated_title:
+            yield {
+                "event": "title_update",
+                "data": json.dumps({"title": generated_title}, ensure_ascii=False)
+            }
+
         # Collect assistant response for database storage
         collected_response = ""
         collected_metadata = {}
@@ -395,7 +489,8 @@ async def chat_stream(
         try:
             async for event in agent_adapter.stream_response(
                 query=request.message,
-                conversation_id=request.conversation_id
+                conversation_id=request.conversation_id,
+                user_id=user["id"]
             ):
                 # Format as SSE event
                 event_type = event["event"]

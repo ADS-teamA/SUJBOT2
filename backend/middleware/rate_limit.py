@@ -110,6 +110,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         "/auth/login": 10,      # Brute force protection
         "/auth/register": 5,    # Slow account creation abuse
         "/chat/stream": 30,     # Moderate chat usage
+        "/citations": 300,      # High limit for citation lookups (UI triggers many)
     }
 
     DEFAULT_LIMIT = 60  # requests/minute for other routes
@@ -275,6 +276,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Static files and assets
         if path.startswith(("/static/", "/favicon.ico", "/assets/")):
+            return True
+
+        # Citations endpoint - read-only metadata, safe to exclude from rate limiting
+        # Frontend renders many citation links that trigger individual fetches
+        if path.startswith("/citations"):
             return True
 
         return False
