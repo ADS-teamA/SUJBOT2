@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUJBOT2 - Přehled architektury</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #0ea5e9;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --bg-card-hover: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg) 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Navigation */
+        nav {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-card);
+            color: var(--text);
+            text-decoration: none;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+
+        nav a:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        /* Section Titles */
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 3rem 0 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 2rem;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        /* Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .card-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .card-content {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .card-content ul {
+            list-style: none;
+            margin-top: 0.75rem;
+        }
+
+        .card-content li {
+            padding: 0.25rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .card-content li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+        }
+
+        /* Phase colors */
+        .phase-1 .card-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .phase-2 .card-icon { background: linear-gradient(135deg, #10b981, #059669); }
+        .phase-3 .card-icon { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+        .phase-4 .card-icon { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+        .phase-5 .card-icon { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        .phase-6 .card-icon { background: linear-gradient(135deg, #ec4899, #db2777); }
+        .phase-7 .card-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+        /* Pipeline Diagram */
+        .pipeline {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin: 2rem 0;
+            overflow-x: auto;
+        }
+
+        .pipeline-flow {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 1000px;
+            justify-content: center;
+        }
+
+        .pipeline-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pipeline-box {
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-align: center;
+            min-width: 120px;
+            position: relative;
+        }
+
+        .pipeline-arrow {
+            color: var(--text-muted);
+            font-size: 1.5rem;
+        }
+
+        .pipeline-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Agent Grid */
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .agent-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            transition: all 0.3s;
+        }
+
+        .agent-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+        }
+
+        .agent-name {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .agent-badge {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            background: var(--primary);
+            color: white;
+        }
+
+        .agent-desc {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Architecture Diagram */
+        .architecture {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+
+        .arch-layer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+
+        .arch-box {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .arch-connector {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+        }
+
+        .arch-user { background: var(--success); color: white; }
+        .arch-orchestrator { background: var(--primary); color: white; }
+        .arch-agent { background: var(--secondary); color: white; }
+        .arch-tool { background: var(--warning); color: black; }
+        .arch-storage { background: var(--danger); color: white; }
+
+        /* Tech Stack */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .tech-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .tech-emoji {
+            font-size: 1.5rem;
+        }
+
+        .tech-name {
+            font-weight: 600;
+        }
+
+        .tech-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .code-block code {
+            color: #c9d1d9;
+        }
+
+        .code-comment { color: #8b949e; }
+        .code-keyword { color: #ff7b72; }
+        .code-string { color: #a5d6ff; }
+        .code-function { color: #d2a8ff; }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .stat-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            border-top: 1px solid var(--border);
+            margin-top: 4rem;
+            color: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 { font-size: 2rem; }
+            .container { padding: 1rem; }
+            .pipeline-flow { min-width: auto; flex-direction: column; }
+            .pipeline-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>SUJBOT2</h1>
+        <p class="subtitle">
+            Produkční RAG systém pro právní a technické dokumenty s multi-agent orchestrací
+        </p>
+        <nav>
+            <a href="#indexace">Indexace</a>
+            <a href="#chat">Chat</a>
+            <a href="#retrieval">Retrieval</a>
+            <a href="#technologie">Technologie</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value">7</div>
+                <div class="stat-label">Fází indexace</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">8</div>
+                <div class="stat-label">Specializovaných agentů</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">16+</div>
+                <div class="stat-label">RAG nástrojů</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">90%</div>
+                <div class="stat-label">Úspora nákladů</div>
+            </div>
+        </div>
+
+        <!-- Architecture Overview -->
+        <h2 class="section-title" id="architektura">Architektura systému</h2>
+        <div class="architecture">
+            <div class="arch-layer">
+                <div class="arch-box arch-user">Uživatel</div>
+            </div>
+            <div class="arch-connector">↓</div>
+            <div class="arch-layer">
+                <div class="arch-box arch-orchestrator">Orchestrátor</div>
+            </div>
+            <div class="arch-connector">↓</div>
+            <div class="arch-layer">
+                <div class="arch-box arch-agent">Extractor</div>
+                <div class="arch-box arch-agent">Compliance</div>
+                <div class="arch-box arch-agent">Classifier</div>
+                <div class="arch-box arch-agent">Risk Verifier</div>
+            </div>
+            <div class="arch-connector">↓</div>
+            <div class="arch-layer">
+                <div class="arch-box arch-tool">RAG Nástroje</div>
+            </div>
+            <div class="arch-connector">↓</div>
+            <div class="arch-layer">
+                <div class="arch-box arch-storage">PostgreSQL + pgvector</div>
+                <div class="arch-box arch-storage">Knowledge Graph</div>
+            </div>
+        </div>
+
+        <!-- Indexing Pipeline -->
+        <h2 class="section-title" id="indexace">Indexační pipeline</h2>
+
+        <div class="pipeline">
+            <div class="pipeline-flow">
+                <div class="pipeline-step">
+                    <div class="pipeline-box" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">PDF/DOCX</div>
+                    <div class="pipeline-label">Vstup</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="pipeline-box" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">Extrakce</div>
+                    <div class="pipeline-label">Fáze 1</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="pipeline-box" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white;">Sumarizace</div>
+                    <div class="pipeline-label">Fáze 2</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="pipeline-box" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white;">Chunking</div>
+                    <div class="pipeline-label">Fáze 3</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="pipeline-box" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">Embedding</div>
+                    <div class="pipeline-label">Fáze 4</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="pipeline-box" style="background: linear-gradient(135deg, #ec4899, #db2777); color: white;">Graf</div>
+                    <div class="pipeline-label">Fáze 5</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="pipeline-box" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white;">pgvector</div>
+                    <div class="pipeline-label">Úložiště</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-grid">
+            <div class="card phase-1">
+                <div class="card-header">
+                    <div class="card-icon">1</div>
+                    <div>
+                        <div class="card-title">Extrakce dokumentů</div>
+                        <div class="card-subtitle">Gemini 2.5 Flash</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    Inteligentní extrakce struktury dokumentu s detekcí hierarchie.
+                    <ul>
+                        <li>Podpora PDF, DOCX, PPTX, XLSX</li>
+                        <li>Automatická detekce typu dokumentu</li>
+                        <li>Zachování české diakritiky</li>
+                        <li>Přímé nahrání PDF přes File API</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card phase-2">
+                <div class="card-header">
+                    <div class="card-icon">2</div>
+                    <div>
+                        <div class="card-title">Generické souhrny</div>
+                        <div class="card-subtitle">Claude Sonnet 4.5</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    Výzkumem podložené generické souhrny pro lepší retrieval.
+                    <ul>
+                        <li>Souhrny sekcí: ~150 znaků</li>
+                        <li>Souhrny dokumentů: 100-1000 znaků</li>
+                        <li>Hierarchická agregace</li>
+                        <li>Reuter et al. (2024)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card phase-3">
+                <div class="card-header">
+                    <div class="card-icon">3</div>
+                    <div>
+                        <div class="card-title">Multi-Layer Chunking</div>
+                        <div class="card-subtitle">SAC + Docling</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    Třívrstvé dělení s kontextovým obohacením (SAC).
+                    <ul>
+                        <li>L1: Celý dokument</li>
+                        <li>L2: Sekce dokumentu</li>
+                        <li>L3: Odstavce (512 tokenů)</li>
+                        <li>-58% context drift (Anthropic)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card phase-4">
+                <div class="card-header">
+                    <div class="card-icon">4</div>
+                    <div>
+                        <div class="card-title">Embeddingy</div>
+                        <div class="card-subtitle">Qwen3-Embedding-8B</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    Vektorové reprezentace s 4096 dimenzemi.
+                    <ul>
+                        <li>3 separátní indexy (vrstvy)</li>
+                        <li>HNSW indexy pro rychlé hledání</li>
+                        <li>Full-text search integrace</li>
+                        <li>2.3x lepší výsledky (Lima, 2024)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card phase-5">
+                <div class="card-header">
+                    <div class="card-icon">5</div>
+                    <div>
+                        <div class="card-title">Knowledge Graph</div>
+                        <div class="card-subtitle">Gemini 2.5 Pro</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    Extrakce entit a vztahů pro grafové dotazy.
+                    <ul>
+                        <li>Entity: osoby, organizace, regulace</li>
+                        <li>Bidirekcní vztahy</li>
+                        <li>Cross-document deduplikace</li>
+                        <li>Neo4j jako backend (volitelně)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card phase-6">
+                <div class="card-header">
+                    <div class="card-icon">6</div>
+                    <div>
+                        <div class="card-title">PostgreSQL + pgvector</div>
+                        <div class="card-subtitle">Perzistentní úložiště</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    ACID transakce s vektorovým vyhledáváním.
+                    <ul>
+                        <li>asyncpg connection pooling</li>
+                        <li>Hybridní BM25 + Dense search</li>
+                        <li>10-50ms latence vyhledávání</li>
+                        <li>Checkpointing pro agenty</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat / Multi-Agent -->
+        <h2 class="section-title" id="chat">Multi-Agent Chat systém</h2>
+
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">
+            Systém využívá <strong>8 specializovaných agentů</strong> orchestrovaných pomocí LangGraph.
+            Každý agent je <strong>autonomní</strong> - sám rozhoduje o sekvenci volání nástrojů na základě
+            systémového promptu, nikoliv pevně zakódované logiky.
+        </p>
+
+        <div class="agent-grid">
+            <div class="agent-card">
+                <div class="agent-name">
+                    Orchestrátor
+                    <span class="agent-badge">Hlavní</span>
+                </div>
+                <div class="agent-desc">
+                    Dvou-fázový agent: (1) Routing - analýza složitosti, výběr agentů;
+                    (2) Syntéza - finální odpověď s citacemi.
+                </div>
+            </div>
+            <div class="agent-card">
+                <div class="agent-name">Requirement Extractor</div>
+                <div class="agent-desc">
+                    Extrahuje požadavky z dotazu uživatele. Generuje checklist pro další agenty.
+                </div>
+            </div>
+            <div class="agent-card">
+                <div class="agent-name">Extractor</div>
+                <div class="agent-desc">
+                    Hybridní vyhledávání (BM25 + Dense + RRF). Rozšiřování kontextu, citace.
+                </div>
+            </div>
+            <div class="agent-card">
+                <div class="agent-name">Classifier</div>
+                <div class="agent-desc">
+                    Klasifikace dotazů a dokumentů. Sémantický routing.
+                </div>
+            </div>
+            <div class="agent-card">
+                <div class="agent-name">Compliance</div>
+                <div class="agent-desc">
+                    Ověření souladu s GDPR, CCPA, HIPAA, SOX. Identifikace porušení a mezer.
+                </div>
+            </div>
+            <div class="agent-card">
+                <div class="agent-name">Risk Verifier</div>
+                <div class="agent-desc">
+                    Identifikace a hodnocení rizik. Analýza smluvních rizik.
+                </div>
+            </div>
+            <div class="agent-card">
+                <div class="agent-name">Citation Auditor</div>
+                <div class="agent-desc">
+                    Validace citací a ověření zdrojů. Sledování provenience.
+                </div>
+            </div>
+            <div class="agent-card">
+                <div class="agent-name">Gap Synthesizer</div>
+                <div class="agent-desc">
+                    Syntéza mezer a chybějících požadavků. Cross-document analýza.
+                </div>
+            </div>
+        </div>
+
+        <!-- Retrieval -->
+        <h2 class="section-title" id="retrieval">HyDE + Expansion Fusion Retrieval</h2>
+
+        <div class="card" style="margin: 2rem 0;">
+            <div class="card-content">
+                <p style="margin-bottom: 1rem; color: var(--text);">
+                    Pokročilý retrieval pipeline kombinující <strong>Hypothetical Document Embeddings (HyDE)</strong>
+                    s <strong>Query Expansion</strong> pro maximální recall a přesnost.
+                </p>
+
+                <div class="code-block">
+                    <code>
+<span class="code-comment"># Algoritmus HyDE + Expansion Fusion</span>
+<span class="code-keyword">def</span> <span class="code-function">retrieve</span>(query):
+    <span class="code-comment"># 1. Generuj syntetický dokument (HyDE)</span>
+    hyde_doc = llm.generate(<span class="code-string">"Napiš dokument odpovídající na: {query}"</span>)
+
+    <span class="code-comment"># 2. Generuj 2 alternativní formulace dotazu</span>
+    expansions = llm.generate(<span class="code-string">"Přeformuluj: {query}"</span>)
+
+    <span class="code-comment"># 3. Embeduj všechny varianty</span>
+    embeddings = [embed(hyde_doc), embed(exp1), embed(exp2)]
+
+    <span class="code-comment"># 4. Paralelní vyhledávání v PostgreSQL</span>
+    results = await asyncio.gather(*[search(e) for e in embeddings])
+
+    <span class="code-comment"># 5. Vážená fúze (60% HyDE, 40% expansions)</span>
+    final = 0.6 * hyde_results + 0.4 * avg(expansion_results)
+
+    <span class="code-keyword">return</span> top_k(final)
+                    </code>
+                </div>
+
+                <ul style="margin-top: 1rem;">
+                    <li>+15-30% recall pro zero-shot retrieval (Gao et al., 2022)</li>
+                    <li>Vážená fúze: 60% HyDE + 40% Query Expansion</li>
+                    <li>LRU cache (500 dotazů) pro opakované dotazy</li>
+                    <li>Async-safe s <code>nest_asyncio</code></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Technologies -->
+        <h2 class="section-title" id="technologie">Použité technologie</h2>
+
+        <div class="tech-grid">
+            <div class="tech-item">
+                <div class="tech-emoji">🧠</div>
+                <div>
+                    <div class="tech-name">Claude Sonnet 4.5</div>
+                    <div class="tech-desc">Produkční LLM pro agenty</div>
+                </div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-emoji">✨</div>
+                <div>
+                    <div class="tech-name">Gemini 2.5 Flash/Pro</div>
+                    <div class="tech-desc">Extrakce dokumentů + KG</div>
+                </div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-emoji">🐘</div>
+                <div>
+                    <div class="tech-name">PostgreSQL + pgvector</div>
+                    <div class="tech-desc">Vektorové úložiště</div>
+                </div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-emoji">🔗</div>
+                <div>
+                    <div class="tech-name">LangGraph</div>
+                    <div class="tech-desc">Multi-agent orchestrace</div>
+                </div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-emoji">📊</div>
+                <div>
+                    <div class="tech-name">LangSmith</div>
+                    <div class="tech-desc">Observabilita a tracing</div>
+                </div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-emoji">📄</div>
+                <div>
+                    <div class="tech-name">Docling</div>
+                    <div class="tech-desc">Extrakce struktury dokumentů</div>
+                </div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-emoji">🚀</div>
+                <div>
+                    <div class="tech-name">FastAPI</div>
+                    <div class="tech-desc">Backend API</div>
+                </div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-emoji">⚛️</div>
+                <div>
+                    <div class="tech-name">React + Vite</div>
+                    <div class="tech-desc">Frontend web UI</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Commands -->
+        <h2 class="section-title">Rychlý start</h2>
+
+        <div class="code-block">
+            <code>
+<span class="code-comment"># Instalace závislostí</span>
+uv sync
+
+<span class="code-comment"># Indexace dokumentu</span>
+uv run python run_pipeline.py data/smlouva.pdf
+
+<span class="code-comment"># Indexace celého adresáře</span>
+uv run python run_pipeline.py data/
+
+<span class="code-comment"># Spuštění multi-agent chatu</span>
+uv run python -m src.multi_agent.runner --interactive
+
+<span class="code-comment"># Docker (full stack)</span>
+docker compose up -d
+
+<span class="code-comment"># Testy</span>
+uv run pytest tests/ -v
+            </code>
+        </div>
+
+        <!-- Research -->
+        <h2 class="section-title">Výzkumné základy</h2>
+
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-title" style="margin-bottom: 0.5rem;">LegalBench-RAG</div>
+                <div class="card-content">
+                    Pipitone & Alami (2024) - RCTS, optimální velikost chunků 500 znaků pro právní dokumenty.
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title" style="margin-bottom: 0.5rem;">Summary-Augmented Chunking</div>
+                <div class="card-content">
+                    Reuter et al. (2024) - SAC technika, generické souhrny překonávají expertní.
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title" style="margin-bottom: 0.5rem;">Multi-Layer Embeddings</div>
+                <div class="card-content">
+                    Lima (2024) - Třívrstvé indexování přináší 2.3x více relevantních chunků.
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title" style="margin-bottom: 0.5rem;">HyDE</div>
+                <div class="card-content">
+                    Gao et al. (2022) - Hypothetical Document Embeddings, +15-30% recall.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>SUJBOT2 - Produkční RAG systém pro právní a technické dokumenty</p>
+        <p style="margin-top: 0.5rem; font-size: 0.875rem;">
+            Vytvořeno s Claude Code | Poslední aktualizace: 2025-11-26
+        </p>
+    </footer>
+</body>
+</html>

@@ -414,7 +414,15 @@ class HybridSearchConfig(BaseModel):
 
 
 class KnowledgeGraphConfig(BaseModel):
-    """Knowledge graph configuration (PHASE 5A)."""
+    """
+    Knowledge graph configuration (PHASE 5A) - config.json schema.
+
+    NOTE: This is the CONFIG SCHEMA for validating config.json.
+    For the internal pipeline configuration, see src/graph/config.py::KnowledgeGraphConfig.
+    The two classes serve different purposes:
+    - This class: Validates user-provided config.json (flat structure)
+    - graph/config.py: Rich internal representation with nested sub-configs
+    """
 
     enable: bool = Field(..., description="Enable knowledge graph extraction")
     llm_provider: str = Field(
@@ -451,6 +459,12 @@ class KnowledgeGraphConfig(BaseModel):
     enable_cross_document_relationships: bool = Field(
         ...,
         description="Extract cross-document relationships (expensive)"
+    )
+    batch_size: int = Field(
+        default=10,
+        description="Batch size for Graphiti chunk processing (parallel)",
+        ge=1,
+        le=50
     )
     max_retries: int = Field(..., description="Max retry attempts", ge=0)
     retry_delay: float = Field(..., description="Delay between retries in seconds", ge=0.0)
@@ -757,6 +771,37 @@ class CLIConfig(BaseModel):
     )
 
 
+class IndexingConfig(BaseModel):
+    """
+    Indexing pipeline configuration (optional section).
+
+    Controls LlamaIndex wrapper, Redis caching, and entity labeling.
+    Redis connection uses environment variables (REDIS_HOST, REDIS_PORT).
+    """
+
+    # LlamaIndex wrapper toggle
+    use_llamaindex_wrapper: bool = Field(
+        default=True,
+        description="Use LlamaIndex wrapper for state persistence"
+    )
+
+    # Entity labeling settings
+    enable_entity_labeling: bool = Field(
+        default=True,
+        description="Enable entity labeling phase (3.5) using Gemini"
+    )
+    entity_labeling_model: str = Field(
+        default="gemini-2.5-flash",
+        description="Gemini model for entity labeling"
+    )
+    entity_labeling_batch_size: int = Field(
+        default=10,
+        description="Batch size for entity labeling",
+        ge=1,
+        le=50
+    )
+
+
 class PipelineConfig(BaseModel):
     """General pipeline configuration."""
 
@@ -805,6 +850,7 @@ class RootConfig(BaseModel):
     agent_tools: AgentToolConfig
     cli: CLIConfig
     pipeline: PipelineConfig
+    indexing: IndexingConfig = Field(default_factory=IndexingConfig)
 
     def _is_placeholder(self, value: Optional[str]) -> bool:
         """

@@ -324,21 +324,6 @@ export function LoginPage() {
           </div>
         </div>
 
-        {/* System info */}
-        <div className="mt-6 text-center space-y-1">
-          <p className={cn(
-            'text-xs',
-            'text-accent-400 dark:text-accent-600'
-          )}>
-            Multi-agent RAG system with 7 specialized agents
-          </p>
-          <p className={cn(
-            'text-xs',
-            'text-accent-400 dark:text-accent-600'
-          )}>
-            Hierarchical document analysis • Knowledge graph integration
-          </p>
-        </div>
       </div>
     </div>
   );

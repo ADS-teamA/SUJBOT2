@@ -59,6 +59,7 @@ from src.config_schema import (
     ChunkingConfig as ChunkingSchema,
     EmbeddingConfig as EmbeddingSchema,
     ClusteringConfig as ClusteringSchema,
+    IndexingConfig as IndexingSchema,
 )
 
 logger = logging.getLogger(__name__)

@@ -32,6 +32,7 @@ Usage:
     result["knowledge_graph"].save_json("output/knowledge_graph.json")
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -61,7 +62,7 @@ try:
         GraphStorageConfig,
         GraphBackend,
     )
-    from src.graph.gemini_kg_extractor import GeminiKGExtractor
+    from src.graph.graphiti_extractor import GraphitiExtractor, GraphitiExtractionResult
 
     KG_AVAILABLE = True
 except ImportError:
@@ -369,19 +370,31 @@ class IndexingPipeline:
             self.kg_extractor = None
             return
 
-        # Validate Google API key for Gemini
-        google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not google_api_key:
-            logger.warning("GOOGLE_API_KEY not found. Set GOOGLE_API_KEY environment variable for KG extraction.")
+        # Validate OpenAI API key for Graphiti (uses GPT-4o-mini)
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            logger.warning("OPENAI_API_KEY not found. Set OPENAI_API_KEY for Graphiti KG extraction.")
             self.kg_extractor = None
             return
 
-        # Initialize Gemini KG extractor (uses default model from KG_MODEL constant)
+        # Validate Neo4j password for Graphiti
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
+        if not neo4j_password:
+            logger.warning("NEO4J_PASSWORD not found. Set NEO4J_PASSWORD for Graphiti KG extraction.")
+            self.kg_extractor = None
+            return
+
+        # Initialize Graphiti extractor (uses GPT-4o-mini for extraction)
         try:
-            self.kg_extractor = GeminiKGExtractor()  # Uses default gemini-2.5-flash
-            logger.info(f"Knowledge Graph initialized: GeminiKGExtractor ({self.kg_extractor.model_id})")
+            model_name = os.getenv("GRAPHITI_MODEL", "gpt-4o-mini")
+            batch_size = getattr(self.config.kg_config, 'batch_size', 10) if self.config.kg_config else 10
+            self.kg_extractor = GraphitiExtractor(
+                model_name=model_name,
+                batch_size=batch_size,
+            )
+            logger.info(f"Knowledge Graph initialized: GraphitiExtractor ({model_name})")
         except Exception as e:
-            logger.warning(f"Failed to initialize GeminiKGExtractor: {e}")
+            logger.warning(f"Failed to initialize GraphitiExtractor: {e}")
             self.kg_extractor = None
 
     def index_document(
@@ -648,7 +661,11 @@ class IndexingPipeline:
                 )
             except (ValueError, RuntimeError, PermissionError) as e:
                 logger.error(f"[ERROR] Failed to load existing PostgreSQL store: {e}")
-                logger.info("Falling back to creating new embeddings...")
+                logger.warning(
+                    "EMBEDDING RELOAD FAILED - Creating new embeddings. "
+                    "This may cause duplicate data if document already exists. "
+                    f"Error: {e}. Consider using force_reindex=True or checking DATABASE_URL."
+                )
                 skip_dense = False
 
         if not skip_dense:
@@ -797,37 +814,40 @@ class IndexingPipeline:
                 except Exception as e:
                     logger.warning(f"Could not load existing KG stats: {e}")
             else:
-                logger.info("PHASE 5A: Knowledge Graph Extraction (Gemini 2.5 Pro)")
+                logger.info("PHASE 5A: Knowledge Graph Extraction (Graphiti + GPT-4o-mini)")
 
                 try:
-                    # Use phase1_extraction.json for KG extraction
-                    phase1_path = output_dir / "phase1_extraction.json" if output_dir else None
-
-                    # Save phase1 before KG extraction if not already saved
-                    if phase1_path and not phase1_path.exists() and result:
-                        self._save_phase1(output_dir, result)
+                    # Graphiti uses phase3_chunks.json for episode-based ingestion
+                    phase3_path = output_dir / "phase3_chunks.json" if output_dir else None
 
                     # Save phase3_chunks.json EARLY for entity-to-chunk mapping
-                    phase3_path = output_dir / "phase3_chunks.json" if output_dir else None
                     if phase3_path and not phase3_path.exists() and chunks:
                         self._save_phase3(output_dir, result, chunks, chunking_stats)
 
-                    if phase1_path and phase1_path.exists():
-                        # Extract KG from phase1 using Gemini (with chunk mapping from phase3)
-                        knowledge_graph = self.kg_extractor.extract_from_phase1(phase1_path)
-
-                        logger.info(
-                            f"Knowledge Graph: {len(knowledge_graph.entities)} entities, "
-                            f"{len(knowledge_graph.relationships)} relationships"
+                    if phase3_path and phase3_path.exists():
+                        # Extract KG from phase3 chunks using async Graphiti
+                        # Each chunk becomes a Graphiti episode for entity/relationship extraction
+                        knowledge_graph = asyncio.run(
+                            self.kg_extractor.extract_from_phase3(
+                                phase3_path=phase3_path,
+                                document_id=result.document_id,
+                            )
                         )
 
-                        # Save KG to output directory
+                        logger.info(
+                            f"Knowledge Graph: {knowledge_graph.total_entities} entities, "
+                            f"{knowledge_graph.total_relationships} relationships "
+                            f"({knowledge_graph.successful_chunks}/{knowledge_graph.total_chunks} chunks processed)"
+                        )
+
+                        # Save KG extraction result to output directory
                         if output_dir:
                             kg_output_path = output_dir / f"{result.document_id.replace('/', '_').replace(' ', '_')}_kg.json"
-                            knowledge_graph.save_json(str(kg_output_path))
+                            with open(kg_output_path, "w", encoding="utf-8") as f:
+                                json.dump(knowledge_graph.to_dict(), f, indent=2, ensure_ascii=False)
                             logger.info(f"Knowledge Graph saved to: {kg_output_path}")
                     else:
-                        logger.warning(f"phase1_extraction.json not found at {phase1_path}, skipping KG extraction")
+                        logger.warning(f"phase3_chunks.json not found at {phase3_path}, skipping KG extraction")
                         knowledge_graph = None
 
                 except (ValueError, RuntimeError, KeyError) as e:
@@ -845,6 +865,17 @@ class IndexingPipeline:
                     logger.error(f"[ERROR] Knowledge Graph extraction failed unexpectedly: {e}", exc_info=True)
                     knowledge_graph = None
                     kg_error = str(e)
+
+            # Surface KG failure prominently to user
+            if self.config.enable_knowledge_graph and knowledge_graph is None and kg_error:
+                logger.warning(
+                    "=" * 60 + "\n"
+                    "KNOWLEDGE GRAPH EXTRACTION FAILED\n"
+                    f"Error: {kg_error}\n"
+                    "Document indexed for vector search, but graph search unavailable.\n"
+                    "Check Neo4j connection and API keys in .env file.\n" +
+                    "=" * 60
+                )
 
         # Save intermediate results
         if save_intermediate and output_dir:
@@ -874,8 +905,8 @@ class IndexingPipeline:
                 "chunking": chunking_stats,
                 "storage_backend": "postgresql",
                 "kg_enabled": self.config.enable_knowledge_graph,
-                "kg_entities": len(knowledge_graph.entities) if knowledge_graph else 0,
-                "kg_relationships": len(knowledge_graph.relationships) if knowledge_graph else 0,
+                "kg_entities": knowledge_graph.total_entities if knowledge_graph else 0,
+                "kg_relationships": knowledge_graph.total_relationships if knowledge_graph else 0,
                 "kg_construction_failed": self.config.enable_knowledge_graph
                 and knowledge_graph is None
                 and kg_error is not None,
@@ -945,8 +976,19 @@ class IndexingPipeline:
                 if doc_kg:
                     knowledge_graphs.append(doc_kg)
 
+            except KeyboardInterrupt:
+                logger.warning(f"Batch indexing interrupted at document {i + 1}/{len(document_paths)}")
+                raise
+            except (MemoryError, SystemExit):
+                raise  # Always propagate system-level errors
+            except (FileNotFoundError, PermissionError) as e:
+                logger.error(f"[ERROR] File access error for {document_path}: {e}")
+                continue
+            except (ConnectionError, TimeoutError) as e:
+                logger.error(f"[ERROR] Network/database error for {document_path}: {e}")
+                continue
             except Exception as e:
-                logger.error(f"[ERROR] Failed to index {document_path}: {e}")
+                logger.error(f"[ERROR] Unexpected error indexing {document_path}: {e}", exc_info=True)
                 continue
 
         # Save combined knowledge graph (if any)

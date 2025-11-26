@@ -73,6 +73,13 @@ logger = logging.getLogger(__name__)
 from src.indexing_pipeline import IndexingPipeline, IndexingConfig
 from src.cost_tracker import get_global_tracker, reset_global_tracker
 
+# LlamaIndex wrapper with state persistence and entity labeling (optional)
+try:
+    from src.indexing import SujbotIngestionPipeline
+    LLAMAINDEX_WRAPPER_AVAILABLE = True
+except ImportError:
+    LLAMAINDEX_WRAPPER_AVAILABLE = False
+
 
 def print_header(text: str):
     """Print formatted header."""
@@ -116,7 +123,13 @@ def get_supported_documents(directory: Path) -> list:
     return documents
 
 
-def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_target: Path = None, storage_backend: str = None):
+def run_complete_pipeline(
+    input_path: Path,
+    output_base: Path = None,
+    merge_target: Path = None,
+    storage_backend: str = None,
+    use_wrapper: bool = None,
+):
     """
     Run complete SOTA 2025 RAG pipeline.
 
@@ -127,12 +140,14 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
     - Hybrid search (BM25 + Dense + RRF)
     - Knowledge graph extraction
     - Automatic merge with existing vector store
+    - Entity labeling (when using LlamaIndex wrapper)
 
     Args:
         input_path: Path to document file or directory
         output_base: Base output directory (default: output/)
         merge_target: Path to existing vector store to merge into (e.g., vector_db/)
         storage_backend: Storage backend override ('faiss' or 'postgresql', default: from config.json)
+        use_wrapper: Use LlamaIndex wrapper for state persistence and entity labeling
     """
     input_path = Path(input_path)
 
@@ -161,7 +176,7 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
             print(f"PROCESSING [{i}/{len(documents)}]: {document_path.name}")
             print("=" * 80)
             print()
-            run_single_document(document_path, output_base, merge_target, storage_backend)
+            run_single_document(document_path, output_base, merge_target, storage_backend, use_wrapper)
 
         print_header("BATCH PROCESSING COMPLETE")
         print_success(f"Processed {len(documents)} documents")
@@ -169,10 +184,16 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
         return
 
     # Single document processing
-    run_single_document(input_path, output_base, merge_target, storage_backend)
+    run_single_document(input_path, output_base, merge_target, storage_backend, use_wrapper)
 
 
-def run_single_document(document_path: Path, output_base: Path = None, merge_target: Path = None, storage_backend: str = None):
+def run_single_document(
+    document_path: Path,
+    output_base: Path = None,
+    merge_target: Path = None,
+    storage_backend: str = None,
+    use_wrapper: bool = None,
+):
     """
     Process single document through complete SOTA 2025 pipeline.
 
@@ -181,6 +202,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
         output_base: Base output directory (default: output/)
         merge_target: Path to existing vector store to merge into (e.g., vector_db/)
         storage_backend: Storage backend override ('faiss' or 'postgresql', default: from config.json)
+        use_wrapper: Use LlamaIndex wrapper for state persistence and entity labeling
     """
     document_path = Path(document_path)
 
@@ -214,18 +236,46 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
 
     config = IndexingConfig.from_env(**config_overrides)  # Loads all settings from config.json
 
+    # Determine whether to use LlamaIndex wrapper
+    # Priority: CLI flag > config.json > default (False)
+    if use_wrapper is None:
+        # Check config.json for indexing.use_llamaindex_wrapper
+        root_config = get_config()
+        use_wrapper = getattr(root_config.indexing, 'use_llamaindex_wrapper', False)
+
     # Print active configuration
     print_info(f"LLM Model: {config.summarization_config.model}")
     print_info(f"Embedding Model: {config.embedding_config.model}")
     print_info(f"Max Tokens: {config.chunking_config.max_tokens} tokens (HybridChunker)")
     print_info(f"SAC (Contextual Retrieval): {'ON' if config.chunking_config.enable_contextual else 'OFF'}")
-    print_info(f"HyDE + Expansion Fusion: ON ✅ (w_hyde=0.6, w_exp=0.4)")
-    print_info(f"Knowledge Graph: {'ON ✅' if config.enable_knowledge_graph else 'OFF'}")
+    print_info(f"HyDE + Expansion Fusion: ON (w_hyde=0.6, w_exp=0.4)")
+    print_info(f"Knowledge Graph: {'ON' if config.enable_knowledge_graph else 'OFF'}")
     print_info(f"Storage Backend: {config.storage_backend.upper()}")
+
+    # Show wrapper/entity labeling status
+    if use_wrapper and LLAMAINDEX_WRAPPER_AVAILABLE:
+        print_info(f"LlamaIndex Wrapper: ON (state persistence + entity labeling)")
+        print_info(f"Entity Labeling: ON (Gemini 2.5 Flash)")
+    elif use_wrapper and not LLAMAINDEX_WRAPPER_AVAILABLE:
+        print_info(f"LlamaIndex Wrapper: REQUESTED but dependencies not installed")
+        use_wrapper = False
+    else:
+        print_info(f"LlamaIndex Wrapper: OFF (use --use-wrapper to enable)")
+
     print_info(f"Output: {output_dir}")
     print()
 
-    pipeline = IndexingPipeline(config)
+    # Create pipeline (wrapper or legacy)
+    if use_wrapper and LLAMAINDEX_WRAPPER_AVAILABLE:
+        root_config = get_config()
+        pipeline = SujbotIngestionPipeline(
+            config=config,
+            enable_entity_labeling=root_config.indexing.enable_entity_labeling,
+            entity_labeling_batch_size=root_config.indexing.entity_labeling_batch_size,
+            entity_labeling_model=root_config.indexing.entity_labeling_model,
+        )
+    else:
+        pipeline = IndexingPipeline(config)
 
     # Run pipeline with intermediate saves
     try:
@@ -551,10 +601,35 @@ Examples:
         help="Storage backend for vectors (default: from config.json). Options: faiss, postgresql"
     )
 
+    parser.add_argument(
+        "--use-wrapper",
+        action="store_true",
+        default=None,
+        help="Use LlamaIndex wrapper for state persistence and entity labeling (requires Redis)"
+    )
+
+    parser.add_argument(
+        "--no-wrapper",
+        action="store_true",
+        help="Disable LlamaIndex wrapper (override config.json setting)"
+    )
+
     args = parser.parse_args()
+
+    # Handle wrapper flags
+    use_wrapper = None
+    if args.use_wrapper:
+        use_wrapper = True
+    elif args.no_wrapper:
+        use_wrapper = False
 
     input_path = Path(args.input_path)
     # Use merge target unless --no-merge is specified
     merge_target = None if args.no_merge else Path(args.merge)
 
-    run_complete_pipeline(input_path, merge_target=merge_target, storage_backend=args.backend)
+    run_complete_pipeline(
+        input_path,
+        merge_target=merge_target,
+        storage_backend=args.backend,
+        use_wrapper=use_wrapper,
+    )

@@ -2,13 +2,13 @@
  * Main App Component
  *
  * Wires together:
- * - Header (with model selector, theme toggle, and sidebar toggle)
+ * - Header (with model selector and sidebar toggle)
  * - ResponsiveSidebar (conversation history with collapsible behavior)
  * - ChatContainer (messages and input)
  *
  * Uses custom hooks:
  * - useChat: Manages conversation state and SSE streaming
- * - useTheme: Manages dark/light mode
+ * - useTheme: Applies light theme
  */
 
 import { useState, useEffect } from 'react';
@@ -46,7 +46,7 @@ function App() {
     cancelClarification,
   } = useChat();
 
-  const { theme, toggleTheme } = useTheme();
+  useTheme(); // Apply light theme
 
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -97,8 +97,6 @@ function App() {
     )}>
       {/* Header */}
       <Header
-        theme={theme}
-        onToggleTheme={toggleTheme}
         onToggleSidebar={toggleSidebar}
         sidebarOpen={sidebarOpen}
       />
