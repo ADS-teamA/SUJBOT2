@@ -2,7 +2,7 @@
 User settings API endpoints.
 
 Provides endpoints for managing user-specific settings:
-- Agent variant preference (premium/local)
+- Agent variant preference (premium/cheap/local)
 """
 
 import logging
@@ -17,6 +17,16 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 logger = logging.getLogger(__name__)
 
 
+def _build_variant_response(variant: str) -> AgentVariantResponse:
+    """Build AgentVariantResponse from variant config."""
+    config = VARIANT_CONFIG[variant]
+    return AgentVariantResponse(
+        variant=variant,
+        display_name=config["display_name"],
+        model=config["default_model"],  # Return default tier model for display
+    )
+
+
 @router.get("/agent-variant", response_model=AgentVariantResponse)
 async def get_agent_variant(current_user: dict = Depends(get_current_user)):
     """
@@ -27,9 +37,9 @@ async def get_agent_variant(current_user: dict = Depends(get_current_user)):
 
     Example response:
         {
-            "variant": "premium",
-            "display_name": "Premium (Claude Haiku)",
-            "model": "claude-haiku-4-5"
+            "variant": "cheap",
+            "display_name": "Cheap (Haiku 4.5)",
+            "model": "claude-haiku-4-5-20251001"
         }
     """
     queries = get_auth_queries()
@@ -40,10 +50,7 @@ async def get_agent_variant(current_user: dict = Depends(get_current_user)):
         logger.warning(f"Unknown variant '{variant}' for user {current_user['id']}, using default")
         variant = DEFAULT_VARIANT
 
-    return AgentVariantResponse(
-        variant=variant,
-        **VARIANT_CONFIG[variant]
-    )
+    return _build_variant_response(variant)
 
 
 @router.post("/agent-variant", response_model=AgentVariantResponse)
@@ -64,13 +71,13 @@ async def update_agent_variant(
         HTTPException(400): If variant is invalid
 
     Example request:
-        {"variant": "local"}
+        {"variant": "premium"}
 
     Example response:
         {
-            "variant": "local",
-            "display_name": "Local (Llama 3.1 70B)",
-            "model": "meta-llama/Meta-Llama-3.1-70B-Instruct"
+            "variant": "premium",
+            "display_name": "Premium (Opus + Sonnet)",
+            "model": "claude-sonnet-4-5-20250929"
         }
     """
     queries = get_auth_queries()
@@ -80,7 +87,4 @@ async def update_agent_variant(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    return AgentVariantResponse(
-        variant=request.variant,
-        **VARIANT_CONFIG[request.variant]
-    )
+    return _build_variant_response(request.variant)

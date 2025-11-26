@@ -411,7 +411,7 @@ class AuthQueries:
             user_id: User ID
 
         Returns:
-            Agent variant ('premium' or 'local'), defaults to 'premium'
+            Agent variant ('premium', 'cheap', or 'local'), defaults to 'cheap'
         """
         try:
             async with self.pool.acquire() as conn:
@@ -419,7 +419,7 @@ class AuthQueries:
                     "SELECT agent_variant FROM auth.users WHERE id = $1",
                     user_id
                 )
-                return variant or "premium"
+                return variant or "cheap"
         except Exception as e:
             # _handle_db_error always raises, so this is the error path
             self._handle_db_error("get_agent_variant", {"user_id": user_id}, e)
@@ -432,13 +432,13 @@ class AuthQueries:
 
         Args:
             user_id: User ID
-            variant: Agent variant ('premium' or 'local')
+            variant: Agent variant ('premium', 'cheap', or 'local')
 
         Raises:
-            ValueError: If variant is not 'premium' or 'local'
+            ValueError: If variant is not valid
         """
-        if variant not in ["premium", "local"]:
-            raise ValueError(f"Invalid variant: {variant}. Must be 'premium' or 'local'")
+        if variant not in ["premium", "cheap", "local"]:
+            raise ValueError(f"Invalid variant: {variant}. Must be 'premium', 'cheap', or 'local'")
 
         try:
             async with self.pool.acquire() as conn:

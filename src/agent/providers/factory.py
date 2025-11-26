@@ -63,7 +63,7 @@ def create_provider(
         # Fallback if model_registry not available
         logger.warning("ModelRegistry not available, using direct model name")
         resolved_model = model
-        provider_name = _detect_provider_from_model(model)
+        provider_name = detect_provider_from_model(model)
     else:
         # Resolve model alias
         resolved_model = ModelRegistry.resolve_llm(model)
@@ -131,9 +131,9 @@ def create_provider(
         )
 
 
-def _detect_provider_from_model(model: str) -> str:
+def detect_provider_from_model(model: str) -> str:
     """
-    Fallback provider detection from model name (when ModelRegistry unavailable).
+    Detect provider from model name.
 
     Args:
         model: Model name
@@ -150,20 +150,20 @@ def _detect_provider_from_model(model: str) -> str:
     if any(pattern in model_lower for pattern in ["claude", "haiku", "sonnet", "opus"]):
         return "anthropic"
 
-    # OpenAI patterns
-    if any(pattern in model_lower for pattern in ["gpt-", "o1", "o3"]):
+    # OpenAI patterns (includes o-series reasoning models)
+    if any(pattern in model_lower for pattern in ["gpt-", "o1", "o3", "o4"]):
         return "openai"
 
     # Google Gemini patterns
     if "gemini" in model_lower:
         return "google"
 
-    # DeepInfra patterns (Qwen models)
-    if "qwen" in model_lower or model_lower.startswith("qwen/"):
+    # DeepInfra patterns (Qwen and Llama models)
+    if any(pattern in model_lower for pattern in ["qwen", "llama"]):
         return "deepinfra"
 
     raise ValueError(
         f"Cannot determine provider for model: {model}\n"
         f"Model name should contain: 'claude', 'haiku', 'sonnet', 'opus' (Anthropic), "
-        f"'gpt-', 'o1', 'o3' (OpenAI), 'gemini' (Google), or 'qwen' (DeepInfra)"
+        f"'gpt-', 'o1', 'o3', 'o4' (OpenAI), 'gemini' (Google), or 'qwen'/'llama' (DeepInfra)"
     )

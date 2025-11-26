@@ -10,6 +10,7 @@ import os
 from typing import List, Dict, Any, Optional, Iterator, FrozenSet
 
 from openai import OpenAI
+from langsmith.wrappers import wrap_openai
 
 from .base import BaseProvider, ProviderResponse
 
@@ -63,13 +64,13 @@ class DeepInfraProvider(BaseProvider):
 
         self.model = model
 
-        # Initialize OpenAI client with DeepInfra base URL
-        self.client = OpenAI(
+        # Initialize OpenAI client with DeepInfra base URL (wrapped for LangSmith tracing)
+        self.client = wrap_openai(OpenAI(
             api_key=self.api_key,
             base_url="https://api.deepinfra.com/v1/openai",
             timeout=60.0,
             max_retries=3
-        )
+        ))
 
         logger.info(f"DeepInfraProvider initialized: {model}")
 

@@ -288,6 +288,24 @@ class BaseAgent(ABC):
             f"tools={len(self.config.tools)}>"
         )
 
+    def update_state_output(self, state: Dict[str, Any], output: Any) -> Dict[str, Any]:
+        """
+        Update agent_outputs in state (SSOT for state management).
+
+        This is the canonical way to store agent output in workflow state.
+        All agents should use this method instead of duplicating the pattern.
+
+        Args:
+            state: Current workflow state
+            output: Agent's output data to store
+
+        Returns:
+            Updated state dict with agent output stored
+        """
+        state["agent_outputs"] = state.get("agent_outputs", {})
+        state["agent_outputs"][self.config.name] = output
+        return state
+
     # ========================================================================
     # AUTONOMOUS AGENTIC PATTERN (CLAUDE.md CONSTRAINT #0)
     # ========================================================================

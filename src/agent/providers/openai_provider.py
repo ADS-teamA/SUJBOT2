@@ -19,6 +19,7 @@ import logging
 from typing import Any, Dict, Iterator, List
 
 import openai
+from langsmith.wrappers import wrap_openai
 
 from .base import BaseProvider, ProviderResponse
 from .tool_translator import ToolSchemaTranslator
@@ -50,7 +51,7 @@ class OpenAIProvider(BaseProvider):
         if not api_key or not (api_key.startswith("sk-") or api_key.startswith("sk-proj-")):
             raise ValueError("Invalid OpenAI API key format (should start with sk- or sk-proj-)")
 
-        self._client = openai.OpenAI(api_key=api_key)
+        self._client = wrap_openai(openai.OpenAI(api_key=api_key))
         self.model = model
         self._translator = ToolSchemaTranslator()
 
