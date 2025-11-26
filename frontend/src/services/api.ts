@@ -124,7 +124,7 @@ export class ApiService {
     message: string,
     conversationId?: string,
     skipSaveUserMessage?: boolean,
-    messageHistory?: Array<{ role: string; content: string }>
+    messageHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   ): AsyncGenerator<SSEEvent, void, unknown> {
     let response;
     try {

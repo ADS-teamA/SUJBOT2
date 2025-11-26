@@ -7,18 +7,30 @@ import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { Message, Conversation, ToolCall, ClarificationData } from '../types';
 
+// UUID validation regex for conversation IDs
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate and extract conversation ID from URL parameter
+ */
+function getValidConversationIdFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const urlConversationId = params.get('c');
+  // Only accept valid UUID format to prevent invalid state
+  if (urlConversationId && UUID_REGEX.test(urlConversationId)) {
+    return urlConversationId;
+  }
+  return null;
+}
+
 export function useChat() {
   const { isAuthenticated } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   // Current conversation ID - initialized from URL query param for refresh persistence
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() => {
-    // Read from URL on initial load (SSR-safe)
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('c');
-    }
-    return null;
-  });
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    getValidConversationIdFromUrl
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
@@ -43,9 +55,8 @@ export function useChat() {
     if (typeof window === 'undefined') return;
 
     const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const urlConversationId = params.get('c');
-      setCurrentConversationId(urlConversationId);
+      // Use same validation as initial load
+      setCurrentConversationId(getValidConversationIdFromUrl());
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -176,6 +187,14 @@ export function useChat() {
   useEffect(() => {
     if (!currentConversationId) return;
 
+    // Wait for conversations to load before fetching messages
+    // This prevents unnecessary API calls for invalid/deleted conversation IDs
+    if (conversations.length === 0 && isAuthenticated) return;
+
+    // Verify conversation exists before loading messages
+    const conversationExists = conversations.some(c => c.id === currentConversationId);
+    if (!conversationExists && conversations.length > 0) return;
+
     const loadMessages = async () => {
       try {
         const messages = await apiService.getConversationHistory(currentConversationId);
@@ -193,7 +212,7 @@ export function useChat() {
     };
 
     loadMessages();
-  }, [currentConversationId]);
+  }, [currentConversationId, conversations.length, isAuthenticated]);
 
   /**
    * Delete a conversation
@@ -309,14 +328,16 @@ export function useChat() {
 
       try {
         // Prepare message history for context (last 10 pairs = 20 messages)
-        // Get messages BEFORE adding the current user message to avoid duplication
-        const existingMessages = updatedConversation.messages;
+        // Exclude the current user message if we just added it to avoid duplication
+        const existingMessages = addUserMessage
+          ? updatedConversation.messages.slice(0, -1)  // Exclude just-added user message
+          : updatedConversation.messages;
         const historyLimit = 20; // Last 10 user+assistant pairs
         const messageHistory = existingMessages
           .slice(-historyLimit)
           .filter(msg => msg.role === 'user' || msg.role === 'assistant')
           .map(msg => ({
-            role: msg.role,
+            role: msg.role as 'user' | 'assistant',
             content: msg.content
           }));
 
