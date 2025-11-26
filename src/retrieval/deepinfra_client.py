@@ -9,14 +9,25 @@ Models:
 - LLM: Qwen/Qwen2.5-7B-Instruct
 """
 
+import hashlib
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# Module-level embedding cache (survives across client instances)
+# Key: MD5 hash of text, Value: embedding vector
+_embedding_cache: Dict[str, np.ndarray] = {}
+_EMBEDDING_CACHE_MAX_SIZE = 1000  # ~4GB memory max (1000 * 4096 * 4 bytes)
+
+
+def _get_text_hash(text: str) -> str:
+    """Generate hash key for text (for cache lookup)."""
+    return hashlib.md5(text.encode()).hexdigest()
 
 
 @dataclass
@@ -93,7 +104,9 @@ class DeepInfraClient:
         normalize: bool = True,
     ) -> np.ndarray:
         """
-        Embed texts using DeepInfra embedding model.
+        Embed texts using DeepInfra embedding model with caching.
+
+        Uses in-memory cache to avoid redundant API calls for repeated texts.
 
         Args:
             texts: List of texts to embed
@@ -105,32 +118,74 @@ class DeepInfraClient:
         if not texts:
             return np.array([])
 
-        all_embeddings = []
-        batch_size = self.config.embedding_batch_size
+        # Check cache and identify texts needing embedding
+        text_hashes = [_get_text_hash(t) for t in texts]
+        cached_indices = []
+        uncached_texts = []
+        uncached_indices = []
 
-        # Process in batches
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i : i + batch_size]
+        for i, (text, hash_key) in enumerate(zip(texts, text_hashes)):
+            if hash_key in _embedding_cache:
+                cached_indices.append(i)
+            else:
+                uncached_texts.append(text)
+                uncached_indices.append(i)
 
-            try:
-                response = self.client.embeddings.create(
-                    model=self.config.embedding_model,
-                    input=batch,
-                    encoding_format="float",
-                )
+        cache_hits = len(cached_indices)
+        cache_misses = len(uncached_texts)
 
-                # Extract embeddings from response
-                batch_embeddings = [item.embedding for item in response.data]
-                all_embeddings.extend(batch_embeddings)
+        if cache_hits > 0:
+            logger.info(f"Embedding cache: {cache_hits} hits, {cache_misses} misses")
 
-                logger.debug(
-                    f"Embedded batch {i // batch_size + 1}: "
-                    f"{len(batch)} texts, {response.usage.total_tokens} tokens"
-                )
+        # Embed only uncached texts
+        new_embeddings = []
+        if uncached_texts:
+            batch_size = self.config.embedding_batch_size
 
-            except Exception as e:
-                logger.error(f"Embedding failed for batch {i // batch_size + 1}: {e}")
-                raise
+            for i in range(0, len(uncached_texts), batch_size):
+                batch = uncached_texts[i : i + batch_size]
+
+                try:
+                    response = self.client.embeddings.create(
+                        model=self.config.embedding_model,
+                        input=batch,
+                        encoding_format="float",
+                    )
+
+                    batch_embeddings = [item.embedding for item in response.data]
+                    new_embeddings.extend(batch_embeddings)
+
+                    logger.debug(
+                        f"Embedded batch {i // batch_size + 1}: "
+                        f"{len(batch)} texts, {response.usage.total_tokens} tokens"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Embedding failed for batch {i // batch_size + 1}: {e}")
+                    raise
+
+        # Store new embeddings in cache (before normalization for reuse)
+        for i, emb in enumerate(new_embeddings):
+            text_idx = uncached_indices[i]
+            hash_key = text_hashes[text_idx]
+
+            # Evict oldest if cache full
+            if len(_embedding_cache) >= _EMBEDDING_CACHE_MAX_SIZE:
+                oldest_key = next(iter(_embedding_cache))
+                del _embedding_cache[oldest_key]
+
+            _embedding_cache[hash_key] = np.array(emb, dtype=np.float32)
+
+        # Reconstruct results in original order
+        all_embeddings = [None] * len(texts)
+
+        # Fill cached embeddings
+        for i in cached_indices:
+            all_embeddings[i] = _embedding_cache[text_hashes[i]]
+
+        # Fill new embeddings
+        for i, emb in zip(uncached_indices, new_embeddings):
+            all_embeddings[i] = np.array(emb, dtype=np.float32)
 
         # Convert to numpy array
         embeddings = np.array(all_embeddings, dtype=np.float32)

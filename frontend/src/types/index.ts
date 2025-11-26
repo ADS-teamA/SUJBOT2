@@ -60,6 +60,7 @@ export interface CostInfo {
 export interface Conversation {
   id: string;
   title: string;
+  messageCount: number;  // Real message count from database (not messages.length which is lazy-loaded)
   messages: Message[];
   createdAt: string;  // ISO 8601 format for JSON serialization safety
   updatedAt: string;  // ISO 8601 format for JSON serialization safety
@@ -74,7 +75,7 @@ export interface Model {
 }
 
 export interface SSEEvent {
-  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress';
+  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress' | 'title_update';
   data: any;
 }
 

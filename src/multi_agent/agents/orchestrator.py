@@ -311,6 +311,8 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                         provider = 'openai'
                     elif 'gemini' in self.config.model.lower():
                         provider = 'google'
+                    elif 'qwen' in self.config.model.lower() or 'llama' in self.config.model.lower():
+                        provider = 'deepinfra'
                     else:
                         provider = 'anthropic'  # Default
 
@@ -516,6 +518,8 @@ Ensure language matching and proper citations."""
                     provider = 'openai'
                 elif 'gemini' in self.config.model.lower():
                     provider = 'google'
+                elif 'qwen' in self.config.model.lower() or 'llama' in self.config.model.lower():
+                    provider = 'deepinfra'
                 else:
                     provider = 'anthropic'  # Default
 
@@ -539,24 +543,41 @@ Ensure language matching and proper citations."""
             iteration_reason = ""
             partial_answer = ""
 
+            # Get complexity score to check if iteration is allowed
+            complexity_score = state.get("complexity_score", 50)
+
             try:
                 # Try parsing response as JSON (iteration request)
                 import json
                 iteration_request = json.loads(final_answer.strip())
 
                 if iteration_request.get("needs_iteration"):
-                    needs_iteration = True
-                    next_agents = iteration_request.get("next_agents", [])
-                    iteration_reason = iteration_request.get("iteration_reason", "")
-                    partial_answer = iteration_request.get("partial_answer", "")
+                    # SAFEGUARD: Block iteration for simple queries (complexity < 40)
+                    # This prevents unnecessary double execution of agents
+                    if complexity_score < 40:
+                        logger.warning(
+                            f"Iteration BLOCKED for simple query (complexity={complexity_score}). "
+                            f"Requested agents: {iteration_request.get('next_agents', [])}. "
+                            f"Using partial answer instead."
+                        )
+                        # Use partial answer as final
+                        partial_answer = iteration_request.get("partial_answer", "")
+                        if partial_answer:
+                            final_answer = partial_answer
+                        # Don't set needs_iteration = True
+                    else:
+                        needs_iteration = True
+                        next_agents = iteration_request.get("next_agents", [])
+                        iteration_reason = iteration_request.get("iteration_reason", "")
+                        partial_answer = iteration_request.get("partial_answer", "")
 
-                    logger.info(
-                        f"Orchestrator requested iteration: {len(next_agents)} agents "
-                        f"({', '.join(next_agents)}) - Reason: {iteration_reason}"
-                    )
+                        logger.info(
+                            f"Orchestrator requested iteration: {len(next_agents)} agents "
+                            f"({', '.join(next_agents)}) - Reason: {iteration_reason}"
+                        )
 
-                    # Replace final_answer with partial answer for this iteration
-                    final_answer = partial_answer
+                        # Replace final_answer with partial answer for this iteration
+                        final_answer = partial_answer
             except (json.JSONDecodeError, ValueError):
                 # Not JSON - normal final answer
                 pass

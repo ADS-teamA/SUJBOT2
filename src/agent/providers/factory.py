@@ -12,6 +12,7 @@ from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
 from .gemini_provider import GeminiProvider
 from .openai_provider import OpenAIProvider
+from .deepinfra_provider import DeepInfraProvider
 
 logger = logging.getLogger(__name__)
 
@@ -110,10 +111,23 @@ def create_provider(
 
         return GeminiProvider(api_key=key, model=resolved_model)
 
+    elif provider_name == "deepinfra":
+        # Get API key from env var
+        key = api_key or os.getenv("DEEPINFRA_API_KEY")
+
+        if not key:
+            raise ValueError(
+                "DeepInfra API key required for Qwen models.\n"
+                "Set DEEPINFRA_API_KEY environment variable or pass api_key parameter.\n"
+                "Example: export DEEPINFRA_API_KEY=..."
+            )
+
+        return DeepInfraProvider(api_key=key, model=resolved_model)
+
     else:
         raise ValueError(
             f"Unsupported provider: {provider_name} for model: {model}\n"
-            f"Supported providers: anthropic (Claude), openai (GPT-5), google (Gemini)"
+            f"Supported providers: anthropic (Claude), openai (GPT-5), google (Gemini), deepinfra (Qwen)"
         )
 
 
@@ -144,8 +158,12 @@ def _detect_provider_from_model(model: str) -> str:
     if "gemini" in model_lower:
         return "google"
 
+    # DeepInfra patterns (Qwen models)
+    if "qwen" in model_lower or model_lower.startswith("qwen/"):
+        return "deepinfra"
+
     raise ValueError(
         f"Cannot determine provider for model: {model}\n"
         f"Model name should contain: 'claude', 'haiku', 'sonnet', 'opus' (Anthropic), "
-        f"'gpt-', 'o1', 'o3' (OpenAI), or 'gemini' (Google)"
+        f"'gpt-', 'o1', 'o3' (OpenAI), 'gemini' (Google), or 'qwen' (DeepInfra)"
     )

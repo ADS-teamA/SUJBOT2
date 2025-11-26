@@ -6,6 +6,7 @@ import { Sun, Moon, Menu, LogOut } from 'lucide-react';
 import { cn } from '../../design-system/utils/cn';
 import { useHover } from '../../design-system/animations/hooks/useHover';
 import { useAuth } from '../../contexts/AuthContext';
+import { AgentVariantSelector } from './AgentVariantSelector';
 
 interface HeaderProps {
   theme: 'light' | 'dark';
@@ -116,6 +117,9 @@ export function Header({
 
         {/* Controls */}
         <div className="flex items-center gap-3">
+          {/* Agent variant selector */}
+          <AgentVariantSelector />
+
           {/* Theme toggle */}
           <button
             onClick={onToggleTheme}

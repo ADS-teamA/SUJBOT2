@@ -402,3 +402,55 @@ class AuthQueries:
                 return await conn.fetchval("SELECT COUNT(*) FROM auth.users")
         except Exception as e:
             self._handle_db_error("count_users", {}, e)
+
+    async def get_agent_variant(self, user_id: int) -> str:
+        """
+        Get user's agent variant preference.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Agent variant ('premium' or 'local'), defaults to 'premium'
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                variant = await conn.fetchval(
+                    "SELECT agent_variant FROM auth.users WHERE id = $1",
+                    user_id
+                )
+                return variant or "premium"
+        except Exception as e:
+            # _handle_db_error always raises, so this is the error path
+            self._handle_db_error("get_agent_variant", {"user_id": user_id}, e)
+            # Note: _handle_db_error raises, so code below is unreachable
+            raise  # Make unreachable explicit for type checker
+
+    async def update_agent_variant(self, user_id: int, variant: str) -> None:
+        """
+        Update user's agent variant preference.
+
+        Args:
+            user_id: User ID
+            variant: Agent variant ('premium' or 'local')
+
+        Raises:
+            ValueError: If variant is not 'premium' or 'local'
+        """
+        if variant not in ["premium", "local"]:
+            raise ValueError(f"Invalid variant: {variant}. Must be 'premium' or 'local'")
+
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE auth.users
+                    SET agent_variant = $1, updated_at = NOW()
+                    WHERE id = $2
+                    """,
+                    variant,
+                    user_id
+                )
+                logger.info(f"User {user_id} switched to variant: {variant}")
+        except Exception as e:
+            self._handle_db_error("update_agent_variant", {"user_id": user_id, "variant": variant}, e)

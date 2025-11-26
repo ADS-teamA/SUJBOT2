@@ -48,13 +48,20 @@ export function CitationProvider({ children }: CitationProviderProps) {
     };
   }, []);
 
+  // Use ref to access cache without recreating callback
+  const citationCacheRef = useRef(citationCache);
+  useEffect(() => {
+    citationCacheRef.current = citationCache;
+  }, [citationCache]);
+
   /**
    * Fetch citation metadata for chunk IDs.
-   * Uses batching with 50ms debounce for efficiency.
+   * Uses batching with 100ms debounce for efficiency.
+   * Uses refs to avoid recreating callback on cache updates.
    */
   const fetchCitationMetadata = useCallback(async (chunkIds: string[]) => {
-    // Filter already cached
-    const uncachedIds = chunkIds.filter(id => !citationCache.has(id));
+    // Filter already cached (use ref to avoid dependency)
+    const uncachedIds = chunkIds.filter(id => !citationCacheRef.current.has(id));
     if (uncachedIds.length === 0) return;
 
     // Add to pending set
@@ -65,7 +72,7 @@ export function CitationProvider({ children }: CitationProviderProps) {
       clearTimeout(fetchTimeoutRef.current);
     }
 
-    // Debounce batch fetch (wait 50ms for more IDs)
+    // Debounce batch fetch (wait 100ms for more IDs to accumulate)
     fetchTimeoutRef.current = setTimeout(async () => {
       const idsToFetch = Array.from(pendingFetches.current);
       pendingFetches.current.clear();
@@ -127,8 +134,8 @@ export function CitationProvider({ children }: CitationProviderProps) {
       } finally {
         setIsLoading(false);
       }
-    }, 50);
-  }, [citationCache]);
+    }, 100); // Increased to 100ms for better batching
+  }, []); // No dependencies - uses refs
 
   /**
    * Clear error state (for user dismissal).

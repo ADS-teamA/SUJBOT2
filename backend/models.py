@@ -66,3 +66,20 @@ class ClarificationRequest(BaseModel):
         max_length=10000,
         description="User's free-form clarification response",
     )
+
+
+class AgentVariantRequest(BaseModel):
+    """Request to update agent variant preference."""
+
+    variant: Literal["premium", "local"] = Field(
+        ...,
+        description="Agent variant: 'premium' (Claude Haiku) or 'local' (Llama 3.1 70B)"
+    )
+
+
+class AgentVariantResponse(BaseModel):
+    """Response with agent variant information."""
+
+    variant: Literal["premium", "local"] = Field(..., description="Current variant")
+    display_name: str = Field(..., description="Human-readable variant name")
+    model: str = Field(..., description="Model identifier for this variant")

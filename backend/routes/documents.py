@@ -7,7 +7,8 @@ All endpoints require JWT authentication.
 
 import logging
 import re
-from typing import Dict
+from pathlib import Path
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -18,11 +19,45 @@ from backend.middleware.auth import get_current_user
 router = APIRouter(prefix="/documents", tags=["documents"])
 logger = logging.getLogger(__name__)
 
-# Valid document_id pattern: alphanumeric, underscore, hyphen only
-DOCUMENT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+# Valid document_id patterns
+# Direct format: alphanumeric, underscore, hyphen (e.g., "BZ_VR1")
+DIRECT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+# Legal format: "number/year Sb." (e.g., "157/2025 Sb.")
+LEGAL_ID_PATTERN = re.compile(r"^(\d+)/(\d{4})\s*Sb\.$")
 
 
-@router.get("/{document_id}/pdf")
+def _find_pdf_for_document(document_id: str) -> Optional[Path]:
+    """
+    Find PDF file for a document_id.
+
+    Handles two formats:
+    1. Direct match: "BZ_VR1" → "BZ_VR1.pdf"
+    2. Legal format: "157/2025 Sb." → searches for "Sb_{year}_{number}_*.pdf"
+
+    Returns:
+        Path to PDF file if found, None otherwise
+    """
+    # Try direct match first (e.g., "BZ_VR1" → "BZ_VR1.pdf")
+    if DIRECT_ID_PATTERN.match(document_id):
+        direct_path = PDF_BASE_DIR / f"{document_id}.pdf"
+        if direct_path.is_file():
+            return direct_path
+
+    # Try legal format (e.g., "157/2025 Sb." → "Sb_2025_157_*.pdf")
+    legal_match = LEGAL_ID_PATTERN.match(document_id)
+    if legal_match:
+        number, year = legal_match.groups()
+        # Search for matching PDF with pattern Sb_{year}_{number}_*.pdf
+        pattern = f"Sb_{year}_{number}_*.pdf"
+        matches = list(PDF_BASE_DIR.glob(pattern))
+        if matches:
+            # Return first match (should be unique per document)
+            return matches[0]
+
+    return None
+
+
+@router.get("/{document_id:path}/pdf")
 async def get_pdf(
     document_id: str,
     user: Dict = Depends(get_current_user)
@@ -31,46 +66,45 @@ async def get_pdf(
     Serve PDF file for a document.
 
     Args:
-        document_id: Document identifier (e.g., "BZ_VR1", "Sb_2016_263_2024-01-01_IZ")
+        document_id: Document identifier in one of these formats:
+            - Direct: "BZ_VR1" → "BZ_VR1.pdf"
+            - Legal: "157/2025 Sb." → searches for "Sb_2025_157_*.pdf"
 
     Returns:
         PDF file stream with inline disposition for browser viewing
 
     Security:
         - Authentication required (JWT)
-        - Strict document_id validation (alphanumeric, underscore, hyphen only)
+        - Pattern-based validation (direct or legal format)
         - Path traversal prevention via resolve() + prefix check
         - Only files from data/ directory allowed
     """
-    # Validate document_id format
-    if not DOCUMENT_ID_PATTERN.match(document_id):
-        logger.warning(f"Invalid document_id format: {document_id}")
+    from urllib.parse import unquote
+    document_id = unquote(document_id)
+
+    # Find PDF using pattern matching
+    pdf_path = _find_pdf_for_document(document_id)
+
+    if pdf_path is None:
+        logger.info(f"PDF not found for document_id: {document_id}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid document identifier format. Use only alphanumeric characters, underscores, and hyphens."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"PDF not found for document: {document_id}"
         )
 
-    # Construct and validate path
-    pdf_filename = f"{document_id}.pdf"
-    pdf_path = (PDF_BASE_DIR / pdf_filename).resolve()
+    # Resolve to absolute path
+    pdf_path = pdf_path.resolve()
 
     # Security: Verify path is under allowed directory (prevent path traversal)
-    if not str(pdf_path).startswith(str(PDF_BASE_DIR)):
+    if not str(pdf_path).startswith(str(PDF_BASE_DIR.resolve())):
         logger.warning(f"Path traversal attempt blocked: {document_id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
         )
 
-    # Check file exists
-    if not pdf_path.is_file():
-        logger.info(f"PDF not found: {document_id} (path: {pdf_path})")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"PDF not found for document: {document_id}"
-        )
-
-    logger.info(f"Serving PDF: {document_id} to user {user.get('id', 'unknown')}")
+    pdf_filename = pdf_path.name
+    logger.info(f"Serving PDF: {pdf_filename} (doc: {document_id}) to user {user.get('id', 'unknown')}")
 
     return FileResponse(
         path=pdf_path,

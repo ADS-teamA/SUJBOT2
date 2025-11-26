@@ -128,7 +128,7 @@ function ConversationItem({
           'text-accent-500 dark:text-accent-400',
           'transition-colors duration-700'
         )}>
-          {conversation.messages.length} messages
+          {conversation.messageCount} messages
         </div>
       </div>
       <button

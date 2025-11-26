@@ -221,54 +221,8 @@ export function ClarificationModal({
                 </div>
               </div>
 
-              {/* Quality Metrics */}
-              <div>
-                <h3 className="text-sm font-semibold text-accent-700 dark:text-accent-300 mb-2">
-                  Detection Metrics:
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {quality_metrics.retrieval_score !== undefined && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-accent-600 dark:text-accent-400">
-                        Retrieval Score:
-                      </span>
-                      <span className={cn('font-semibold', getQualityColor(quality_metrics.retrieval_score))}>
-                        {(quality_metrics.retrieval_score * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  )}
-                  {quality_metrics.semantic_coherence !== undefined && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-accent-600 dark:text-accent-400">
-                        Semantic Coherence:
-                      </span>
-                      <span className={cn('font-semibold', getQualityColor(quality_metrics.semantic_coherence))}>
-                        {(quality_metrics.semantic_coherence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  )}
-                  {quality_metrics.query_pattern_score !== undefined && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-accent-600 dark:text-accent-400">
-                        Query Pattern:
-                      </span>
-                      <span className={cn('font-semibold', getQualityColor(quality_metrics.query_pattern_score))}>
-                        {(quality_metrics.query_pattern_score * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  )}
-                  {quality_metrics.document_diversity !== undefined && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-accent-600 dark:text-accent-400">
-                        Document Diversity:
-                      </span>
-                      <span className={cn('font-semibold', getQualityColor(quality_metrics.document_diversity / 10))}>
-                        {quality_metrics.document_diversity.toFixed(1)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* Quality Metrics - Hidden for cleaner UX */}
+              {/* Detection metrics are still collected but not shown to user */}
 
               {/* Clarification Questions */}
               <div>

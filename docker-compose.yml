@@ -132,6 +132,11 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       DEEPINFRA_API_KEY: ${DEEPINFRA_API_KEY}
 
+      # LangSmith observability
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT_NAME: ${LANGSMITH_PROJECT_NAME:-sujbot2-multi-agent}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+
       # Storage backend
       STORAGE_BACKEND: ${STORAGE_BACKEND:-postgresql}
 
@@ -156,6 +161,8 @@ services:
       - ./scripts:/app/scripts:ro
       # Source code (read-only, for hot-reload of Python modules)
       - ./src:/app/src:ro
+      # Backend code (read-only, for hot-reload)
+      - ./backend:/app/backend:ro
       # Results directory (read-write, for evaluation outputs)
       - ./results:/app/results
       # Logs (optional, for debugging)

@@ -505,6 +505,7 @@ export class ApiService {
     return conversations.map((conv: any) => ({
       id: conv.id,
       title: conv.title,
+      messageCount: conv.message_count ?? 0,  // Real count from database
       messages: conv.messages || [],  // Backend now includes empty messages array
       createdAt: conv.created_at,
       updatedAt: conv.updated_at,
@@ -533,6 +534,7 @@ export class ApiService {
     return {
       id: data.id,
       title: data.title,
+      messageCount: data.message_count ?? 0,  // New conversation starts with 0 messages
       messages: data.messages || [],  // Backend now includes empty messages array
       createdAt: data.created_at,
       updatedAt: data.updated_at,

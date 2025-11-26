@@ -16,6 +16,7 @@
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",
     "react-pdf": "^10.2.0",
+    "react-virtuoso": "^4.15.0",
     "rehype-highlight": "^7.0.2",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",

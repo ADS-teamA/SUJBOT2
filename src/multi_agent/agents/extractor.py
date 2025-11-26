@@ -84,10 +84,12 @@ class ExtractorAgent(BaseAgent):
         try:
             # Run autonomous tool calling loop
             # LLM decides: search parameters, which documents to fetch, whether to expand context
+            # Note: max_iterations=8 for complex queries (e.g. ambiguous terms like "bezpečnostní koeficient")
+            # Simple queries typically complete in 2-3 iterations
             result = await self._run_autonomous_tool_loop(
                 system_prompt=self.system_prompt,
                 state=state,
-                max_iterations=10
+                max_iterations=8
             )
 
             # Parse result from autonomous loop

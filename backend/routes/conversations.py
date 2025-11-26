@@ -40,6 +40,7 @@ class ConversationResponse(BaseModel):
     id: str
     user_id: int
     title: str
+    message_count: int = 0  # Real message count from database
     messages: List[MessageResponse] = Field(default_factory=list)
     created_at: str
     updated_at: str
@@ -101,6 +102,7 @@ async def list_conversations(
                 id=conv["id"],
                 user_id=user["id"],
                 title=conv["title"] or "New Conversation",
+                message_count=conv.get("message_count", 0),  # Real count from SQL query
                 messages=[],  # Messages loaded separately via GET /{id}/messages
                 created_at=conv["created_at"].isoformat() if hasattr(conv["created_at"], "isoformat") else str(conv["created_at"]),
                 updated_at=conv["updated_at"].isoformat() if hasattr(conv["updated_at"], "isoformat") else str(conv["updated_at"])
@@ -148,6 +150,7 @@ async def create_conversation(
             id=conversation_id,
             user_id=user["id"],
             title=data.title or "New Conversation",
+            message_count=0,  # New conversations start with 0 messages
             messages=[],  # New conversations start with no messages
             created_at=now,
             updated_at=now

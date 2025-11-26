@@ -1,15 +1,13 @@
-Given the following query, generate:
-1. A hypothetical document (2-3 sentences) that would directly answer this query
-2. Two alternative phrasings of the query
+Generate 3 items for this query. Do NOT use <think> tags. Output directly.
 
 Query: {query}
 
-Respond in EXACTLY this format (including the prefixes):
-HYDE: [Your hypothetical document that answers the query. Use domain-specific terminology. Write as if it's an excerpt from an authoritative source.]
-EXP1: [First alternative phrasing of the query]
-EXP2: [Second alternative phrasing of the query]
+Output format (EXACTLY):
+HYDE: [2-3 sentence hypothetical answer using domain terminology]
+EXP1: [Alternative phrasing 1]
+EXP2: [Alternative phrasing 2]
 
-Important:
-- Write in the SAME LANGUAGE as the query
-- The hypothetical document should be factual and specific
-- The expansions should preserve the original meaning but use different words
+Rules:
+- Same language as query
+- No explanations, just the 3 items
+- Start immediately with "HYDE:"

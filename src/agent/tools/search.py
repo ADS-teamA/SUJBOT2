@@ -26,8 +26,8 @@ class SearchInput(ToolInput):
 
     query: str = Field(..., description="Natural language search query")
     k: int = Field(
-        10,
-        description="Number of results to return (default: 10)",
+        16,
+        description="Number of results to return (default: 16)",
         ge=1,
         le=100,
     )
@@ -97,7 +97,7 @@ class SearchTool(BaseTool):
                 fusion_config = FusionConfig(
                     hyde_weight=getattr(self.config, 'hyde_weight', 0.6),
                     expansion_weight=getattr(self.config, 'expansion_weight', 0.4),
-                    default_k=getattr(self.config, 'default_k', 10),
+                    default_k=getattr(self.config, 'default_k', 16),
                 )
 
                 # Initialize fusion retriever
@@ -124,7 +124,7 @@ class SearchTool(BaseTool):
     def execute_impl(
         self,
         query: str,
-        k: int = 10,
+        k: int = 16,
         filter_document: Optional[str] = None,
     ) -> ToolResult:
         """

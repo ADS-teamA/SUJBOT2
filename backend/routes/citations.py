@@ -15,13 +15,15 @@ from pydantic import BaseModel, Field
 from backend.config import PDF_BASE_DIR
 from backend.middleware.auth import get_current_user
 from backend.routes.conversations import get_postgres_adapter
+from backend.routes.documents import _find_pdf_for_document
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
 
 router = APIRouter(prefix="/citations", tags=["citations"])
 logger = logging.getLogger(__name__)
 
-# Valid chunk_id pattern: alphanumeric, underscore, hyphen only
-CHUNK_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+# Valid chunk_id pattern: alphanumeric, underscore, hyphen, space, slash, dot
+# Examples: "157/2025 Sb._L3_1", "BZ_VR1_L3_c5_sec_3"
+CHUNK_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\s/.]+$")
 
 
 # ============================================================================
@@ -33,9 +35,9 @@ class CitationMetadata(BaseModel):
     chunk_id: str = Field(..., min_length=1, description="Unique chunk identifier")
     document_id: str = Field(..., min_length=1, description="Document identifier (matches PDF filename)")
     document_name: str = Field(..., min_length=1, description="Human-readable document name")
-    section_title: Optional[str] = Field(None, min_length=1, description="Section title")
-    section_path: Optional[str] = Field(None, min_length=1, description="Full section path/breadcrumb")
-    hierarchical_path: Optional[str] = Field(None, min_length=1, description="Full hierarchical path including document")
+    section_title: Optional[str] = Field(None, description="Section title")
+    section_path: Optional[str] = Field(None, description="Full section path/breadcrumb")
+    hierarchical_path: Optional[str] = Field(None, description="Full hierarchical path including document")
     page_number: Optional[int] = Field(None, ge=1, description="Page number in PDF (1-indexed)")
     pdf_available: bool = Field(..., description="Whether PDF file exists on server")
 
@@ -57,9 +59,8 @@ def _format_document_name(document_id: str) -> str:
 
 
 def _check_pdf_available(document_id: str) -> bool:
-    """Check if PDF file exists for document."""
-    pdf_path = PDF_BASE_DIR / f"{document_id}.pdf"
-    return pdf_path.is_file()
+    """Check if PDF file exists for document using pattern matching."""
+    return _find_pdf_for_document(document_id) is not None
 
 
 async def _fetch_chunk_metadata(
@@ -70,14 +71,15 @@ async def _fetch_chunk_metadata(
     Fetch chunk metadata from database.
 
     Searches all vector layers (3, 2, 1) to find the chunk.
+    Note: layer1 has different schema (title instead of section_title, no section_path).
 
     Raises:
         HTTPException: If database query fails
     """
     try:
         async with adapter.pool.acquire() as conn:
-            # Try each layer (chunks are primarily in layer3)
-            for layer in [3, 2, 1]:
+            # Try layer3 and layer2 first (have section_title, section_path)
+            for layer in [3, 2]:
                 row = await conn.fetchrow(
                     f"""
                     SELECT
@@ -95,6 +97,26 @@ async def _fetch_chunk_metadata(
                 )
                 if row:
                     return dict(row)
+
+            # Try layer1 (different schema: title instead of section_title, no section_path)
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    chunk_id,
+                    document_id,
+                    title AS section_title,
+                    NULL AS section_path,
+                    hierarchical_path,
+                    page_number
+                FROM vectors.layer1
+                WHERE chunk_id = $1
+                LIMIT 1
+                """,
+                chunk_id
+            )
+            if row:
+                return dict(row)
+
         return None
     except Exception as e:
         logger.error(f"Database query failed for chunk_id={chunk_id}: {e}", exc_info=True)
@@ -192,13 +214,17 @@ async def get_citations_batch(
 
         if row:
             document_id = row["document_id"]
+            # Convert empty strings to None for optional fields
+            section_title = row.get("section_title") or None
+            section_path = row.get("section_path") or None
+            hierarchical_path = row.get("hierarchical_path") or None
             results.append(CitationMetadata(
                 chunk_id=chunk_id,
                 document_id=document_id,
                 document_name=_format_document_name(document_id),
-                section_title=row.get("section_title"),
-                section_path=row.get("section_path"),
-                hierarchical_path=row.get("hierarchical_path"),
+                section_title=section_title,
+                section_path=section_path,
+                hierarchical_path=hierarchical_path,
                 page_number=row.get("page_number"),
                 pdf_available=_check_pdf_available(document_id)
             ))
