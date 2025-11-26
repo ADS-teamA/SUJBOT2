@@ -272,40 +272,39 @@ class AgentAdapter:
 
                 # Create runner with variant-specific models for ALL variants
                 # (including premium - OPUS_TIER_AGENTS need Opus model override)
-                if True:  # Always apply variant overrides
-                    # Load config and apply variant overrides
-                    project_root = Path(__file__).parent.parent
-                    config_path = project_root / "config.json"
+                # Load config and apply variant overrides
+                project_root = Path(__file__).parent.parent
+                config_path = project_root / "config.json"
 
-                    with open(config_path) as f:
-                        full_config = json.load(f)
-                        multi_agent_config = full_config.get("multi_agent", {})
+                with open(config_path) as f:
+                    full_config = json.load(f)
+                    multi_agent_config = full_config.get("multi_agent", {})
 
-                    # Apply variant overrides
-                    multi_agent_config = self._apply_variant_overrides(variant, multi_agent_config)
+                # Apply variant overrides
+                multi_agent_config = self._apply_variant_overrides(variant, multi_agent_config)
 
-                    # Build runner config with variant models
-                    runner_config = {
-                        "api_keys": {
-                            "anthropic_api_key": self.config.anthropic_api_key,
-                            "openai_api_key": self.config.openai_api_key,
-                            "google_api_key": self.config.google_api_key,
-                            "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
-                        },
-                        "vector_store_path": str(self.config.vector_store_path),
-                        "models": full_config.get("models", {}),
-                        "storage": full_config.get("storage", {}),
-                        "agent_tools": full_config.get("agent_tools", {}),
-                        "knowledge_graph": full_config.get("knowledge_graph", {}),
-                        "neo4j": full_config.get("neo4j", {}),
-                        "multi_agent": multi_agent_config,
-                    }
+                # Build runner config with variant models
+                runner_config = {
+                    "api_keys": {
+                        "anthropic_api_key": self.config.anthropic_api_key,
+                        "openai_api_key": self.config.openai_api_key,
+                        "google_api_key": self.config.google_api_key,
+                        "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
+                    },
+                    "vector_store_path": str(self.config.vector_store_path),
+                    "models": full_config.get("models", {}),
+                    "storage": full_config.get("storage", {}),
+                    "agent_tools": full_config.get("agent_tools", {}),
+                    "knowledge_graph": full_config.get("knowledge_graph", {}),
+                    "neo4j": full_config.get("neo4j", {}),
+                    "multi_agent": multi_agent_config,
+                }
 
-                    # Create fresh runner with variant config
-                    new_runner = MultiAgentRunner(runner_config)
-                    await new_runner.initialize()
-                    runner_to_use = new_runner  # Only assign after successful init
-                    logger.info(f"Created fresh runner with variant '{variant}'")
+                # Create fresh runner with variant config
+                new_runner = MultiAgentRunner(runner_config)
+                await new_runner.initialize()
+                runner_to_use = new_runner  # Only assign after successful init
+                logger.info(f"Created fresh runner with variant '{variant}'")
 
             except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
                 # Config file issues - log as warning and fall back
@@ -774,7 +773,6 @@ class AgentAdapter:
                     await asyncio.sleep(0.05)
 
             # Emit cost summary event with per-agent breakdown
-            tracker = get_global_tracker()
             total_cost_usd = tracker.get_total_cost()
             agent_breakdown = tracker.get_agent_breakdown()
 
@@ -817,9 +815,9 @@ class AgentAdapter:
         except Exception as e:
             # Capture execution context for debugging
             context = {
-                "query": query[:200] if query else "N/A",
-                "conversation_id": conversation_id,
-                "error_phase": "simple_mode_execution"
+                "thread_id": thread_id,
+                "user_response": user_response[:200] if user_response else "N/A",
+                "error_phase": "clarification_resume"
             }
 
             logger.error(

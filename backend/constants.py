@@ -81,6 +81,8 @@ def get_variant_model(variant: str) -> str:
     """
     Get default model identifier for a variant (backward compatibility).
 
+    Prefer get_agent_model() for new code - it handles tiered model selection.
+
     Args:
         variant: Agent variant ('premium', 'cheap', or 'local')
 

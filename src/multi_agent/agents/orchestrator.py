@@ -215,7 +215,7 @@ class OrchestratorAgent(BaseAgent):
             }
 
     async def _analyze_and_route(
-        self, query: str, conversation_history: List[Dict[str, str]] = None
+        self, query: str, conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
         Use LLM to analyze query complexity and determine routing.

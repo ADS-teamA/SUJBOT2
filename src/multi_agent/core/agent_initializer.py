@@ -7,11 +7,13 @@ to ensure SSOT (Single Source of Truth) and reduce code duplication.
 
 from __future__ import annotations
 
+__all__ = ["initialize_agent", "AgentComponents"]
+
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional, TYPE_CHECKING
 
-from src.exceptions import AgentInitializationError, ProviderError, APIKeyError
+from src.exceptions import AgentInitializationError, APIKeyError
 
 if TYPE_CHECKING:
     from src.agent.providers.base import BaseProvider
