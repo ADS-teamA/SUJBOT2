@@ -140,8 +140,8 @@ export interface CitationContextValue {
   closePdf: () => void;
   /** Fetch and cache metadata for chunk IDs */
   fetchCitationMetadata: (chunkIds: string[]) => Promise<void>;
-  /** Check if metadata is loading */
-  isLoading: boolean;
+  /** Set of chunk IDs currently being loaded (per-citation loading state) */
+  loadingIds: Set<string>;
   /** Error message if fetch failed */
   error: string | null;
   /** Clear error state */

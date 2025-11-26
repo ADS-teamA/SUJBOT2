@@ -115,11 +115,16 @@ export class ApiService {
 
   /**
    * Stream chat response using Server-Sent Events (SSE)
+   * @param message - Current user message
+   * @param conversationId - Optional conversation ID
+   * @param skipSaveUserMessage - Skip saving user message (for regenerate)
+   * @param messageHistory - Optional last N messages for conversation context
    */
   async *streamChat(
     message: string,
     conversationId?: string,
-    skipSaveUserMessage?: boolean
+    skipSaveUserMessage?: boolean,
+    messageHistory?: Array<{ role: string; content: string }>
   ): AsyncGenerator<SSEEvent, void, unknown> {
     let response;
     try {
@@ -131,6 +136,7 @@ export class ApiService {
           message,
           conversation_id: conversationId,
           skip_save_user_message: skipSaveUserMessage || false,
+          messages: messageHistory,  // Conversation history for context
         }),
       });
     } catch (error) {
