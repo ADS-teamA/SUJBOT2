@@ -211,7 +211,11 @@ docs/
 
 src/multi_agent/
 ├── runner.py (entry point)
-├── core/ (state, base classes, registry)
+├── core/
+│   ├── agent_base.py (BaseAgent with update_state_output helper)
+│   ├── agent_initializer.py (SSOT for agent initialization)
+│   ├── agent_registry.py (agent registration)
+│   └── state.py (MultiAgentState schema)
 ├── agents/ (8 specialized agents)
 ├── routing/ (complexity, workflow builder)
 ├── tools/ (tool adapter)
@@ -219,6 +223,11 @@ src/multi_agent/
 ├── caching/ (3-level caching)
 ├── prompts/ (prompt loading)
 └── observability/ (LangSmith)
+
+src/
+├── exceptions.py (typed exception hierarchy)
+└── utils/
+    └── cache.py (LRUCache + TTLCache abstractions)
 
 prompts/agents/
 ├── orchestrator.txt
@@ -367,10 +376,10 @@ Review: Component interactions diagram
 
 ## Version Information
 
-- **System Version:** 2.0.0 (Multi-Agent)
-- **Last Updated:** 2025-11-11
+- **System Version:** 2.1.0 (Multi-Agent + SSOT Refactoring)
+- **Last Updated:** 2025-11-26
 - **Status:** Production Ready
-- **Branch:** feat/multi-agent-system
+- **Branch:** main
 
 ---
 

@@ -8,7 +8,7 @@ all evaluation scripts. Critical for ensuring benchmark validity.
 import pytest
 import numpy as np
 import math
-from src.utils.evaluation_metrics import (
+from src.utils.eval_metrics import (
     dcg_at_k,
     ndcg_at_k,
     reciprocal_rank,
