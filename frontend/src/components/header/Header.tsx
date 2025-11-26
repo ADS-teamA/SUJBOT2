@@ -3,10 +3,12 @@
  */
 
 import { Menu, LogOut } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 import { useHover } from '../../design-system/animations/hooks/useHover';
 import { useAuth } from '../../contexts/AuthContext';
 import { AgentVariantSelector } from './AgentVariantSelector';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -17,6 +19,9 @@ export function Header({
   onToggleSidebar,
   sidebarOpen,
 }: HeaderProps) {
+  // Translations
+  const { t } = useTranslation();
+
   // Authentication
   const { logout } = useAuth();
 
@@ -104,7 +109,7 @@ export function Header({
                 'text-accent-500 dark:text-accent-400',
                 'transition-colors duration-700'
               )}>
-                Legal & Technical Document Intelligence
+                {t('header.tagline')}
               </p>
             </div>
           </div>
@@ -112,6 +117,9 @@ export function Header({
 
         {/* Controls */}
         <div className="flex items-center gap-3">
+          {/* Language switcher */}
+          <LanguageSwitcher />
+
           {/* Agent variant selector */}
           <AgentVariantSelector />
 
@@ -126,7 +134,7 @@ export function Header({
               'hover:bg-accent-100 dark:hover:bg-accent-800',
               'transition-all duration-700'
             )}
-            title="Sign out"
+            title={t('header.signOut')}
           >
             <LogOut size={20} className="transition-all duration-700" />
           </button>

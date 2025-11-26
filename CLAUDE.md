@@ -70,9 +70,15 @@ Storage (PostgreSQL: vectors + graph + checkpoints)
 - `src/agent/` - Agent CLI and tools (`tools/` has individual tool files)
 - `src/multi_agent/` - LangGraph-based multi-agent system (orchestrator, 7 specialized agents)
 - `src/retrieval/` - HyDE + Expansion Fusion retrieval pipeline
-- `src/graph/` - Knowledge graph extraction and storage
+- `src/graph/` - Graphiti temporal knowledge graph (Neo4j + PostgreSQL)
 - `backend/` - FastAPI web backend with auth, routes, middleware
 - `frontend/` - React + Vite web UI
+
+**Key utility modules:**
+- `src/exceptions.py` - Typed exception hierarchy (SSOT for error handling)
+- `src/utils/cache.py` - Unified `LRUCache` + `TTLCache` abstractions
+- `src/multi_agent/core/agent_initializer.py` - SSOT for agent initialization
+- `src/agent/providers/factory.py` - Provider creation + `detect_provider_from_model()`
 
 ## Critical Constraints (DO NOT CHANGE)
 
@@ -245,6 +251,23 @@ EXTRACTION_BACKEND=unstructured  # Force Unstructured
 - **No duplicate helpers** - use `src/utils/` for shared functions
 - **API keys in `.env` ONLY** - never in config.json or code
 
+**SSOT Modules (use these, don't duplicate):**
+```python
+# Agent initialization (all 8 agents use this)
+from src.multi_agent.core.agent_initializer import initialize_agent
+components = initialize_agent(config, "agent_name")
+
+# Caching (thread-safe, with hit rate tracking)
+from src.utils.cache import LRUCache, TTLCache
+cache = LRUCache[str](max_size=500, name="my_cache")
+cache.set("key", "value")
+result = cache.get("key")  # None if not found
+
+# Provider detection (don't inline this logic!)
+from src.agent.providers.factory import detect_provider_from_model
+provider = detect_provider_from_model("claude-sonnet-4")  # → "anthropic"
+```
+
 ### Code Quality
 
 - Type hints required for public APIs
@@ -255,10 +278,57 @@ EXTRACTION_BACKEND=unstructured  # Force Unstructured
 
 ### Error Handling
 
-- Catch specific exceptions (e.g., `ValueError`, `RuntimeError`, `json.JSONDecodeError`)
+**Use typed exceptions from `src/exceptions.py`:**
+```python
+from src.exceptions import (
+    ExtractionError, ValidationError, ProviderError,
+    APIKeyError, ToolExecutionError, AgentInitializationError
+)
+
+# ✅ CORRECT - typed exception
+raise APIKeyError(
+    "Missing API key for model",
+    details={"model": model_name},
+    cause=original_exception
+)
+
+# ❌ WRONG - generic exception
+raise ValueError("Missing API key")
+```
+
+**Exception hierarchy:**
+- `SujbotError` (base) → `ExtractionError`, `ValidationError`, `ProviderError`, `ToolExecutionError`, `AgentError`, `StorageError`, `RetrievalError`
+- Each has `message`, `details` dict, and optional `cause` for chaining
+
+**Best practices:**
+- Catch specific exceptions (e.g., `APIKeyError`, not bare `Exception`)
 - Log errors with context (file name, operation, exception type)
 - Use `exc_info=True` for unexpected errors to capture traceback
-- Provide actionable error messages for user-fixable issues
+- Use `wrap_exception()` helper to convert generic exceptions
+
+### Internationalization (i18n)
+
+Frontend supports CZ/EN language switching via react-i18next.
+
+**Rules:**
+- **Always maintain translations**: When adding/changing UI text, update BOTH files:
+  - `/frontend/src/i18n/locales/cs.json` - Czech
+  - `/frontend/src/i18n/locales/en.json` - English
+- **Use useTranslation hook**: `const { t } = useTranslation()`
+- **Hierarchical keys**: `section.subsection.key` (e.g., `login.signIn`)
+- **No hardcoded strings**: All user-visible text must use `t('key')`
+
+**Translation files structure:**
+```json
+{
+  "header": { "tagline": "...", "signOut": "..." },
+  "login": { "email": "...", "password": "...", "signIn": "..." },
+  "sidebar": { "newChat": "...", "noConversations": "..." },
+  "chat": { "placeholder": "...", "processing": "..." },
+  "welcome": { "suggestedQuestions": "..." },
+  "common": { "loading": "...", "verifyingSession": "..." }
+}
+```
 
 ### Git Workflow
 
@@ -329,5 +399,5 @@ curl -s "https://eu.api.smith.langchain.com/api/v1/runs/query" \
 
 ---
 
-**Last Updated:** 2025-11-25
-**Version:** PHASE 1-7 + HyDE Expansion Fusion + Multi-Agent + Gemini Extractor + Docker
+**Last Updated:** 2025-11-26
+**Version:** PHASE 1-7 + Multi-Agent + Graphiti KG + Gemini Extractor + Exception Hierarchy + SSOT Refactoring

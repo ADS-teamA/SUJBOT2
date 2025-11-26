@@ -1,0 +1,113 @@
+{
+  "header": {
+    "tagline": "Legal & Technical Document Intelligence",
+    "signOut": "Sign out"
+  },
+  "login": {
+    "email": "Email",
+    "password": "Password",
+    "enterPassword": "Enter password",
+    "signIn": "Sign In",
+    "authenticating": "Authenticating...",
+    "authorizedAccess": "Authorized Access Only"
+  },
+  "sidebar": {
+    "newChat": "New Chat",
+    "noConversations": "No conversations yet",
+    "messages": "messages",
+    "rename": "Rename",
+    "delete": "Delete"
+  },
+  "chat": {
+    "placeholder": "Ask about legal or technical documents...",
+    "processing": "Processing...",
+    "messageTooLong": "Message too long",
+    "characters": "characters",
+    "you": "You",
+    "assistant": "Assistant",
+    "editMessage": "Edit message",
+    "regenerate": "Regenerate response",
+    "saveAndSend": "Save & Send",
+    "cancel": "Cancel",
+    "details": "details",
+    "toolsUsed": "Tools used",
+    "responseTime": "Response time",
+    "agents": "agents",
+    "cached": "cached",
+    "emptyResponse": "Model returned empty response. This may indicate an API error. Try regenerating.",
+    "perAgentBreakdown": "Per-agent breakdown",
+    "tokensIn": "in",
+    "tokensOut": "out"
+  },
+  "progress": {
+    "planning": "Planning",
+    "planningDesc": "Analyzing query and planning approach",
+    "searching": "Searching",
+    "searchingDesc": "Retrieving relevant documents",
+    "classifying": "Classifying",
+    "classifyingDesc": "Categorizing content",
+    "complianceCheck": "Compliance Check",
+    "complianceCheckDesc": "Verifying regulatory compliance",
+    "riskAssessment": "Risk Assessment",
+    "riskAssessmentDesc": "Analyzing potential risks",
+    "citationAudit": "Citation Audit",
+    "citationAuditDesc": "Verifying citations and sources",
+    "synthesizing": "Synthesizing",
+    "synthesizingDesc": "Combining information from sources",
+    "generatingReport": "Generating Report",
+    "generatingReportDesc": "Creating final response",
+    "processing": "Processing",
+    "processingDesc": "Working on your request",
+    "activeTools": "Active Tools",
+    "initializing": "Initializing...",
+    "searchingDocuments": "Searching documents",
+    "classifyingQuery": "Classifying query",
+    "checkingCompliance": "Checking compliance",
+    "verifyingRisks": "Verifying risks",
+    "auditingCitations": "Auditing citations",
+    "synthesizingInfo": "Synthesizing information",
+    "generatingReportMsg": "Generating report",
+    "runningAgent": "Running {{agent}}"
+  },
+  "welcome": {
+    "suggestedQuestions": "Suggested Questions",
+    "regulatoryCompliance": "Regulatory Compliance",
+    "safetyAnalysis": "Safety Analysis",
+    "documentComparison": "Document Comparison",
+    "citationLookup": "Citation Lookup"
+  },
+  "clarification": {
+    "title": "Query Clarification Needed",
+    "subtitle": "Help improve search quality by providing more details",
+    "timeRemaining": "Time remaining to respond:",
+    "originalQuery": "Your Original Query:",
+    "questionsTitle": "Please answer these questions to improve your search:",
+    "yourResponse": "Your Response:",
+    "responsePlaceholder": "Please provide any clarifying details that would help refine your search...",
+    "submitTip": "Tip: Press",
+    "toSubmit": "to submit",
+    "continueWithout": "Continue Without Clarification",
+    "submit": "Submit Clarification"
+  },
+  "agentVariant": {
+    "premium": "Premium",
+    "premiumTooltip": "Premium - Opus 4.5 + Sonnet 4.5 (best quality)",
+    "cheap": "Cheap",
+    "cheapTooltip": "Cheap - Haiku 4.5 (fast and affordable)",
+    "local": "Local",
+    "localTooltip": "Local - Llama 3.1 70B (open-source via DeepInfra)"
+  },
+  "degradedMode": {
+    "title": "Running in Degraded Mode",
+    "description": "Some features are unavailable: {{components}}. Search quality may be reduced without reranking. Knowledge graph features are disabled."
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "verifyingSession": "Verifying session...",
+    "justNow": "Just now"
+  },
+  "language": {
+    "switchTo": "Switch language"
+  }
+}

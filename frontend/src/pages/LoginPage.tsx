@@ -10,11 +10,14 @@
 
 import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../design-system/utils/cn';
 import { useAuth } from '../contexts/AuthContext';
+import { LanguageSwitcher } from '../components/header/LanguageSwitcher';
 import './LoginPage.css';
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,6 +75,11 @@ export function LoginPage() {
           background: 'var(--gradient-dark)',
         }}
       />
+
+      {/* Language switcher - top right */}
+      <div className="absolute top-6 right-6 z-10">
+        <LanguageSwitcher />
+      </div>
 
       {/* Floating particles effect (subtle decoration) */}
       <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
@@ -160,7 +168,7 @@ export function LoginPage() {
             'text-sm font-light',
             'text-accent-500 dark:text-accent-400'
           )}>
-            Legal & Technical Document Intelligence
+            {t('header.tagline')}
           </p>
         </div>
 
@@ -182,7 +190,7 @@ export function LoginPage() {
                   'text-accent-700 dark:text-accent-300'
                 )}
               >
-                Email
+                {t('login.email')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -219,7 +227,7 @@ export function LoginPage() {
                   'text-accent-700 dark:text-accent-300'
                 )}
               >
-                Password
+                {t('login.password')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -240,7 +248,7 @@ export function LoginPage() {
                     'focus:border-transparent',
                     'transition-all duration-200'
                   )}
-                  placeholder="Enter password"
+                  placeholder={t('login.enterPassword')}
                   required
                   autoComplete="current-password"
                 />
@@ -305,10 +313,10 @@ export function LoginPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Authenticating...
+                  {t('login.authenticating')}
                 </span>
               ) : (
-                'Sign In'
+                t('login.signIn')
               )}
             </button>
           </form>
@@ -319,7 +327,7 @@ export function LoginPage() {
               'text-xs',
               'text-accent-400 dark:text-accent-600'
             )}>
-              Authorized Access Only
+              {t('login.authorizedAccess')}
             </p>
           </div>
         </div>

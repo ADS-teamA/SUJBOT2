@@ -9,6 +9,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 import type { AgentProgress as AgentProgressType } from '../../types';
 
@@ -16,69 +17,69 @@ interface ProgressPhaseDisplayProps {
   progress: AgentProgressType;
 }
 
-// Phase definitions with visual metadata
+// Phase definitions with visual metadata and translation keys
 interface PhaseConfig {
-  name: string;
+  nameKey: string;
+  descKey: string;
   icon: string;
-  description: string;
   color: string; // Tailwind color class
   darkColor: string;
 }
 
 const PHASE_MAP: Record<string, PhaseConfig> = {
   orchestrator: {
-    name: 'Planning',
+    nameKey: 'progress.planning',
+    descKey: 'progress.planningDesc',
     icon: '⚡',
-    description: 'Analyzing query and planning approach',
     color: 'text-purple-600',
     darkColor: 'dark:text-purple-400',
   },
   extractor: {
-    name: 'Searching',
+    nameKey: 'progress.searching',
+    descKey: 'progress.searchingDesc',
     icon: '🔍',
-    description: 'Retrieving relevant documents',
     color: 'text-blue-600',
     darkColor: 'dark:text-blue-400',
   },
   classifier: {
-    name: 'Classifying',
+    nameKey: 'progress.classifying',
+    descKey: 'progress.classifyingDesc',
     icon: '🏷️',
-    description: 'Categorizing content',
     color: 'text-green-600',
     darkColor: 'dark:text-green-400',
   },
   compliance: {
-    name: 'Compliance Check',
+    nameKey: 'progress.complianceCheck',
+    descKey: 'progress.complianceCheckDesc',
     icon: '✓',
-    description: 'Verifying regulatory compliance',
     color: 'text-amber-600',
     darkColor: 'dark:text-amber-400',
   },
   risk_verifier: {
-    name: 'Risk Assessment',
+    nameKey: 'progress.riskAssessment',
+    descKey: 'progress.riskAssessmentDesc',
     icon: '⚠️',
-    description: 'Analyzing potential risks',
     color: 'text-red-600',
     darkColor: 'dark:text-red-400',
   },
   citation_auditor: {
-    name: 'Citation Audit',
+    nameKey: 'progress.citationAudit',
+    descKey: 'progress.citationAuditDesc',
     icon: '📝',
-    description: 'Verifying citations and sources',
     color: 'text-indigo-600',
     darkColor: 'dark:text-indigo-400',
   },
   gap_synthesizer: {
-    name: 'Synthesizing',
+    nameKey: 'progress.synthesizing',
+    descKey: 'progress.synthesizingDesc',
     icon: '🔗',
-    description: 'Combining information from sources',
     color: 'text-teal-600',
     darkColor: 'dark:text-teal-400',
   },
   report_generator: {
-    name: 'Generating Report',
+    nameKey: 'progress.generatingReport',
+    descKey: 'progress.generatingReportDesc',
     icon: '📄',
-    description: 'Creating final response',
     color: 'text-violet-600',
     darkColor: 'dark:text-violet-400',
   },
@@ -86,14 +87,15 @@ const PHASE_MAP: Record<string, PhaseConfig> = {
 
 // Fallback for unknown agents
 const DEFAULT_PHASE: PhaseConfig = {
-  name: 'Processing',
+  nameKey: 'progress.processing',
+  descKey: 'progress.processingDesc',
   icon: '⚙️',
-  description: 'Working on your request',
   color: 'text-gray-600',
   darkColor: 'dark:text-gray-400',
 };
 
 export const ProgressPhaseDisplay: React.FC<ProgressPhaseDisplayProps> = ({ progress }) => {
+  const { t } = useTranslation();
   const { currentAgent, currentMessage, activeTools } = progress;
 
   // Only show during active generation (when there's a current agent)
@@ -104,6 +106,44 @@ export const ProgressPhaseDisplay: React.FC<ProgressPhaseDisplayProps> = ({ prog
 
   // Get phase config
   const phaseConfig = currentAgent ? (PHASE_MAP[currentAgent] || DEFAULT_PHASE) : DEFAULT_PHASE;
+  const phaseName = t(phaseConfig.nameKey);
+  const phaseDescription = t(phaseConfig.descKey);
+
+  // Translate backend messages that come in English
+  const getDisplayMessage = (message: string | null | undefined): string => {
+    if (!message) return phaseDescription;
+
+    // Map backend messages to translation keys
+    const messageMap: Record<string, string> = {
+      'searching documents': 'progress.searchingDocuments',
+      'classifying query': 'progress.classifyingQuery',
+      'checking compliance': 'progress.checkingCompliance',
+      'verifying risks': 'progress.verifyingRisks',
+      'auditing citations': 'progress.auditingCitations',
+      'synthesizing information': 'progress.synthesizingInfo',
+      'generating report': 'progress.generatingReportMsg',
+    };
+
+    const lowerMessage = message.toLowerCase();
+
+    // Check for exact matches first
+    if (messageMap[lowerMessage]) {
+      return t(messageMap[lowerMessage]);
+    }
+
+    // Check for "Initializing..." messages
+    if (lowerMessage.includes('initializing')) {
+      return t('progress.initializing');
+    }
+
+    // Check for "Running X" pattern
+    const runningMatch = message.match(/^Running\s+(.+)$/i);
+    if (runningMatch) {
+      return t('progress.runningAgent', { agent: runningMatch[1] });
+    }
+
+    return message;
+  };
 
   return (
     <div
@@ -145,7 +185,7 @@ export const ProgressPhaseDisplay: React.FC<ProgressPhaseDisplayProps> = ({ prog
                     phaseConfig.darkColor
                   )}
                 >
-                  {phaseConfig.name}
+                  {phaseName}
                 </h3>
 
                 <p
@@ -154,7 +194,7 @@ export const ProgressPhaseDisplay: React.FC<ProgressPhaseDisplayProps> = ({ prog
                     'text-gray-500 dark:text-gray-500'
                   )}
                 >
-                  {currentMessage || phaseConfig.description}
+                  {getDisplayMessage(currentMessage)}
                 </p>
               </div>
             </div>
@@ -191,7 +231,7 @@ export const ProgressPhaseDisplay: React.FC<ProgressPhaseDisplayProps> = ({ prog
             )}
           >
             <div className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">
-              Active Tools
+              {t('progress.activeTools')}
             </div>
 
             {activeTools.map((tool, index) => (
