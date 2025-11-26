@@ -233,6 +233,11 @@ class MultiAgentState(BaseModel):
     clarification_round: Annotated[int, take_max] = 0  # Track multi-round clarifications
     awaiting_user_input: Annotated[bool, operator.or_] = False  # Signal frontend to pause
 
+    # === CONVERSATION HISTORY (for multi-turn context) ===
+    # List of previous messages for conversational context
+    # Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
+    conversation_history: Annotated[List[Dict[str, str]], keep_first] = Field(default_factory=list)
+
     # === INTERNAL INFRASTRUCTURE (excluded from serialization) ===
     # EventBus for real-time progress streaming (NOT persisted to checkpoints)
     # Note: Pydantic V2 doesn't allow field names with leading underscores,

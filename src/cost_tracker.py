@@ -61,10 +61,12 @@ PRICING = {
         "sonnet": {"input": 3.00, "output": 15.00},
         "claude-sonnet-4": {"input": 3.00, "output": 15.00},
         "claude-sonnet-3-5": {"input": 3.00, "output": 15.00},
-        # Opus models
+        # Opus models (Opus 4.5 = $5/$25, older Opus 4/4.1 = $15/$75)
+        "claude-opus-4-5-20251101": {"input": 5.00, "output": 25.00},
+        "claude-opus-4-5": {"input": 5.00, "output": 25.00},
         "claude-opus-4": {"input": 15.00, "output": 75.00},
         "claude-opus-4-1": {"input": 15.00, "output": 75.00},
-        "opus": {"input": 15.00, "output": 75.00},
+        "opus": {"input": 5.00, "output": 25.00},  # Default to latest Opus 4.5
     },
     # OpenAI models (per 1M tokens)
     "openai": {

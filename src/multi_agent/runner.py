@@ -15,7 +15,7 @@ Replaces the old single-agent CLI (src/agent/cli.py).
 import logging
 import asyncio
 import json
-from typing import Optional, Dict, Any, AsyncGenerator
+from typing import Optional, Dict, Any, AsyncGenerator, List
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -500,13 +500,20 @@ class MultiAgentRunner:
             api_key=self.config.get("api_keys", {}).get("anthropic_api_key", ""),
         )
 
-    async def run_query(self, query: str, stream_progress: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
+    async def run_query(
+        self,
+        query: str,
+        stream_progress: bool = False,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Run query through multi-agent system.
 
         Args:
             query: User query
             stream_progress: If True, yields intermediate progress updates
+            conversation_history: Optional list of previous messages for context
+                Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
 
         Yields:
             Dict events with type 'progress', 'tool_call', or 'final'.
@@ -517,7 +524,7 @@ class MultiAgentRunner:
         # Create thread ID
         thread_id = self.state_manager.create_thread_id()
 
-        # Initialize state
+        # Initialize state with conversation history for context
         state = MultiAgentState(
             query=query,
             execution_phase=ExecutionPhase.ROUTING,
@@ -528,6 +535,7 @@ class MultiAgentRunner:
             citations=[],
             total_cost_cents=0.0,
             errors=[],
+            conversation_history=conversation_history or [],
         )
 
         try:

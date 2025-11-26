@@ -15,12 +15,19 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any, List, Optional
 
 from src.multi_agent.runner import MultiAgentRunner
 from src.agent.config import AgentConfig
 from src.cost_tracker import get_global_tracker, reset_global_tracker
-from backend.constants import VARIANT_CONFIG, DEFAULT_VARIANT, get_variant_model, is_valid_variant
+from backend.constants import (
+    VARIANT_CONFIG,
+    DEFAULT_VARIANT,
+    OPUS_TIER_AGENTS,
+    get_agent_model,
+    get_variant_model,
+    is_valid_variant,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,37 +144,46 @@ class AgentAdapter:
 
     def _apply_variant_overrides(self, variant: str, multi_agent_config: dict) -> dict:
         """
-        Apply variant-specific model overrides to multi-agent configuration.
+        Apply variant-specific per-agent model overrides to multi-agent configuration.
+
+        In Premium mode, OPUS_TIER_AGENTS (orchestrator, compliance, extractor,
+        requirement_extractor, gap_synthesizer) use Opus 4.5, while other agents
+        use Sonnet 4.5. In Cheap/Local modes, all agents use the same model.
 
         Args:
-            variant: Agent variant ('premium' or 'local')
+            variant: Agent variant ('premium', 'cheap', or 'local')
             multi_agent_config: Original multi_agent config from config.json
 
         Returns:
-            Modified config with variant models applied
+            Modified config with per-agent variant models applied
         """
-        # Use centralized config for model lookup
         if not is_valid_variant(variant):
             logger.warning(f"Unknown variant '{variant}', using config defaults")
             return multi_agent_config
 
-        model = get_variant_model(variant)
-
         # Deep copy to avoid modifying original
         config = copy.deepcopy(multi_agent_config)
 
-        # Override orchestrator model
+        # Override orchestrator model (using per-agent lookup)
         if "orchestrator" in config:
+            model = get_agent_model(variant, "orchestrator")
             config["orchestrator"]["model"] = model
             logger.debug(f"Orchestrator model: {model}")
 
-        # Override all agent models
+        # Override each agent's model individually
         if "agents" in config:
             for agent_name in config["agents"]:
+                model = get_agent_model(variant, agent_name)
                 config["agents"][agent_name]["model"] = model
                 logger.debug(f"Agent {agent_name} model: {model}")
 
-        logger.info(f"Applied variant '{variant}' - all agents using {model}")
+        # Log summary
+        variant_config = VARIANT_CONFIG[variant]
+        logger.info(
+            f"Applied variant '{variant}' ({variant_config['display_name']}): "
+            f"opus_tier={variant_config['opus_model']}, "
+            f"standard_tier={variant_config['default_model']}"
+        )
         return config
 
     async def initialize(self) -> bool:
@@ -206,7 +222,8 @@ class AgentAdapter:
         self,
         query: str,
         conversation_id: Optional[str] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        messages: Optional[List[Dict[str, str]]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream agent response as SSE-compatible events.
@@ -253,8 +270,9 @@ class AgentAdapter:
                 variant = await queries.get_agent_variant(user_id)
                 logger.info(f"User {user_id} variant: {variant}")
 
-                # Only create new runner if variant is not premium (to avoid overhead)
-                if variant != "premium":
+                # Create runner with variant-specific models for ALL variants
+                # (including premium - OPUS_TIER_AGENTS need Opus model override)
+                if True:  # Always apply variant overrides
                     # Load config and apply variant overrides
                     project_root = Path(__file__).parent.parent
                     config_path = project_root / "config.json"
@@ -332,10 +350,16 @@ class AgentAdapter:
 
             # Execute multi-agent workflow with progress streaming
             logger.info("Starting multi-agent query execution with streaming...")
+            if messages:
+                logger.info(f"Including {len(messages)} messages of conversation history")
 
             # Stream progress events from runner (use variant-specific runner if applicable)
             result = None
-            async for event in runner_to_use.run_query(query, stream_progress=True):
+            async for event in runner_to_use.run_query(
+                query,
+                stream_progress=True,
+                conversation_history=messages or []
+            ):
                 if event.get("type") == "agent_start":
                     # Agent start event (new format from runner.py)
                     agent_name = event.get("agent", "unknown")

@@ -15,9 +15,8 @@ from typing import Any, Dict, List
 
 
 from ..core.agent_base import BaseAgent
+from ..core.agent_initializer import initialize_agent
 from ..core.agent_registry import register_agent
-from ..prompts.loader import get_prompt_loader
-from ..tools.adapter import get_tool_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -35,27 +34,11 @@ class CitationAuditorAgent(BaseAgent):
         """Initialize citation auditor with config."""
         super().__init__(config)
 
-        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
-        try:
-            from src.agent.providers.factory import create_provider
-
-            self.provider = create_provider(model=config.model)
-            logger.info(f"Initialized provider for model: {config.model}")
-        except Exception as e:
-            logger.error(f"Failed to create provider: {e}")
-            raise ValueError(
-                f"Failed to initialize LLM provider for model {config.model}. "
-                f"Ensure API keys are configured in environment and model name is valid."
-            ) from e
-
-        # Load system prompt
-        prompt_loader = get_prompt_loader()
-        self.system_prompt = prompt_loader.get_prompt("citation_auditor")
-
-        # Initialize tool adapter
-        self.tool_adapter = get_tool_adapter()
-
-        logger.info(f"CitationAuditorAgent initialized with model: {config.model}")
+        # Initialize common components (provider, prompts, tools)
+        components = initialize_agent(config, "citation_auditor")
+        self.provider = components.provider
+        self.system_prompt = components.system_prompt
+        self.tool_adapter = components.tool_adapter
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """

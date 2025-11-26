@@ -20,10 +20,11 @@ from typing import Any, Dict, List, Optional
 import re
 
 from ..core.agent_base import BaseAgent
-from ..core.state import QueryType, MultiAgentState
+from ..core.agent_initializer import initialize_agent
 from ..core.agent_registry import register_agent
 from ..core.event_bus import EventType
-from ..prompts.loader import get_prompt_loader
+from ..core.state import QueryType, MultiAgentState
+from src.agent.providers.factory import detect_provider_from_model
 
 logger = logging.getLogger(__name__)
 
@@ -45,32 +46,16 @@ class OrchestratorAgent(BaseAgent):
         """Initialize orchestrator with config."""
         super().__init__(config)
 
-        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
-        # Provider factory loads API keys from environment variables
-        try:
-            from src.agent.providers.factory import create_provider
-
-            # Provider factory auto-detects provider from model name
-            # and loads appropriate API key from environment
-            self.provider = create_provider(model=config.model)
-            logger.info(f"Initialized provider for model: {config.model}")
-        except Exception as e:
-            logger.error(f"Failed to create provider: {e}")
-            raise ValueError(
-                f"Failed to initialize LLM provider for model {config.model}. "
-                f"Ensure API keys are configured in environment and model name is valid."
-            ) from e
-
-        # Load system prompt
-        prompt_loader = get_prompt_loader()
-        self.system_prompt = prompt_loader.get_prompt("orchestrator")
+        # Initialize common components (provider, prompts, tools)
+        components = initialize_agent(config, "orchestrator")
+        self.provider = components.provider
+        self.system_prompt = components.system_prompt
 
         # Routing configuration
         self.complexity_threshold_low = 30
         self.complexity_threshold_high = 70
 
         # Initialize orchestrator tools using registry (tier1 tools)
-        # Orchestrator uses same tools as agents for consistency
         from src.agent.tools import get_registry
 
         self.tool_registry = get_registry()
@@ -150,10 +135,11 @@ class OrchestratorAgent(BaseAgent):
             Updated state with routing decision
         """
         query = state.get("query", "")
+        conversation_history = state.get("conversation_history", [])
 
         try:
-            # Call LLM for complexity analysis and routing
-            routing_decision = await self._analyze_and_route(query)
+            # Call LLM for complexity analysis and routing (with conversation context)
+            routing_decision = await self._analyze_and_route(query, conversation_history)
 
             # Update state with routing decision
             state["complexity_score"] = routing_decision["complexity_score"]
@@ -228,12 +214,15 @@ class OrchestratorAgent(BaseAgent):
                 )
             }
 
-    async def _analyze_and_route(self, query: str) -> Dict[str, Any]:
+    async def _analyze_and_route(
+        self, query: str, conversation_history: List[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
         """
         Use LLM to analyze query complexity and determine routing.
 
         Args:
             query: User query
+            conversation_history: Previous messages for context
 
         Returns:
             Dict with:
@@ -242,8 +231,29 @@ class OrchestratorAgent(BaseAgent):
                 - agent_sequence (List[str])
                 - reasoning (str)
         """
-        # Prepare analysis prompt
-        user_message = f"""Analyze this query and provide routing decision:
+        # Build conversation context if available
+        history_context = ""
+        if conversation_history:
+            history_lines = []
+            for msg in conversation_history[-10:]:  # Last 10 messages max
+                role = msg.get("role", "unknown").upper()
+                content = msg.get("content", "")[:500]  # Truncate long messages
+                history_lines.append(f"{role}: {content}")
+            history_context = "\n".join(history_lines)
+
+        # Prepare analysis prompt with conversation context
+        if history_context:
+            user_message = f"""Analyze this query and provide routing decision:
+
+CONVERSATION HISTORY (for context):
+{history_context}
+
+CURRENT QUERY: {query}
+
+Use the conversation history to understand follow-up questions and resolve references.
+Provide your analysis in the exact JSON format specified in the system prompt."""
+        else:
+            user_message = f"""Analyze this query and provide routing decision:
 
 Query: {query}
 
@@ -304,17 +314,11 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                     cache_read_tokens = usage.get('cache_read_input_tokens', 0)
                     cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
 
-                    # Determine provider from model name
-                    if 'claude' in self.config.model.lower():
-                        provider = 'anthropic'
-                    elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
-                        provider = 'openai'
-                    elif 'gemini' in self.config.model.lower():
-                        provider = 'google'
-                    elif 'qwen' in self.config.model.lower() or 'llama' in self.config.model.lower():
-                        provider = 'deepinfra'
-                    else:
-                        provider = 'anthropic'  # Default
+                    # Use SSOT provider detection
+                    try:
+                        provider = detect_provider_from_model(self.config.model)
+                    except ValueError:
+                        provider = 'anthropic'  # Fallback
 
                     tracker.track_llm(
                         provider=provider,
@@ -455,6 +459,7 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
         query = state.get("query", "")
         agent_outputs = state.get("agent_outputs", {})
         complexity_score = state.get("complexity_score", 50)
+        conversation_history = state.get("conversation_history", [])
 
         logger.info(f"Synthesizing final answer from {len(agent_outputs)} agent outputs...")
 
@@ -462,8 +467,34 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
             # Build synthesis context from agent outputs
             synthesis_context = self._build_synthesis_context(state)
 
-            # Prepare synthesis prompt
-            user_message = f"""Generate final answer for this query using agent outputs.
+            # Build conversation context if available
+            history_context = ""
+            if conversation_history:
+                history_lines = []
+                for msg in conversation_history[-10:]:  # Last 10 messages max
+                    role = msg.get("role", "unknown").upper()
+                    content = msg.get("content", "")[:500]  # Truncate long messages
+                    history_lines.append(f"{role}: {content}")
+                history_context = "\n".join(history_lines)
+
+            # Prepare synthesis prompt with optional conversation context
+            if history_context:
+                user_message = f"""Generate final answer for this query using agent outputs.
+
+CONVERSATION HISTORY (for context):
+{history_context}
+
+CURRENT QUERY: {query}
+Complexity Score: {complexity_score}
+
+Agent Outputs:
+{synthesis_context}
+
+Use the conversation history to maintain continuity and reference previous topics if relevant.
+Generate final answer following the synthesis instructions in your system prompt.
+Ensure language matching and proper citations."""
+            else:
+                user_message = f"""Generate final answer for this query using agent outputs.
 
 Original Query: {query}
 Complexity Score: {complexity_score}
@@ -511,17 +542,11 @@ Ensure language matching and proper citations."""
                 cache_read_tokens = usage.get('cache_read_input_tokens', 0)
                 cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
 
-                # Determine provider from model name
-                if 'claude' in self.config.model.lower():
-                    provider = 'anthropic'
-                elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
-                    provider = 'openai'
-                elif 'gemini' in self.config.model.lower():
-                    provider = 'google'
-                elif 'qwen' in self.config.model.lower() or 'llama' in self.config.model.lower():
-                    provider = 'deepinfra'
-                else:
-                    provider = 'anthropic'  # Default
+                # Use SSOT provider detection
+                try:
+                    provider = detect_provider_from_model(self.config.model)
+                except ValueError:
+                    provider = 'anthropic'  # Fallback
 
                 tracker.track_llm(
                     provider=provider,
@@ -682,61 +707,6 @@ Ensure language matching and proper citations."""
 
         return "\n".join(context_parts)
 
-    def _format_cost_summary(self, total_cost: float, agent_outputs: dict) -> str:
-        """
-        [DEPRECATED] Format cost summary for display to user.
-
-        This method is no longer used. Cost information is now emitted via SSE events
-        and displayed in frontend metadata section (not in message content).
-
-        See:
-        - backend/agent_adapter.py: SSE cost_summary event emission
-        - frontend/src/components/chat/ChatMessage.tsx: Cost metadata display
-
-        Args:
-            total_cost: Total workflow cost in USD
-            agent_outputs: Dict mapping agent names to outputs
-
-        Returns:
-            Formatted markdown cost summary
-        """
-        lines = [
-            "---",
-            "## 💰 API Cost Summary",
-            f"**Total Workflow Cost:** ${total_cost:.6f}",
-            ""
-        ]
-
-        # Per-agent breakdown (if available)
-        agent_costs = {}
-        for agent_name, output in agent_outputs.items():
-            if isinstance(output, dict) and "total_tool_cost_usd" in output:
-                agent_cost = output["total_tool_cost_usd"]
-                if agent_cost > 0:
-                    agent_costs[agent_name] = agent_cost
-
-        if agent_costs:
-            lines.append("**Per-Agent Breakdown:**")
-            # Sort by cost descending
-            sorted_agents = sorted(agent_costs.items(), key=lambda x: x[1], reverse=True)
-            for agent_name, cost in sorted_agents:
-                lines.append(f"- {agent_name}: ${cost:.6f}")
-            lines.append("")
-
-        # Cost interpretation
-        if total_cost < 0.01:
-            lines.append("_Cost: Minimal (< $0.01)_")
-        elif total_cost < 0.05:
-            lines.append("_Cost: Low ($0.01 - $0.05)_")
-        elif total_cost < 0.20:
-            lines.append("_Cost: Moderate ($0.05 - $0.20)_")
-        else:
-            lines.append("_Cost: High (> $0.20)_")
-
-        lines.append("---")
-
-        return "\n".join(lines)
-
     def _parse_routing_response(self, response_text: str) -> Dict[str, Any]:
         """
         Parse LLM response to extract routing decision.
@@ -804,13 +774,17 @@ Ensure language matching and proper citations."""
                 "(for direct responses without agent pipeline)"
             )
 
-        # Validate query type
+        # Validate and normalize query type
         valid_types = ["simple_search", "cross_doc", "compliance", "risk", "synthesis", "reporting", "unknown"]
         query_type = decision["query_type"]
         if query_type not in valid_types:
             logger.warning(
-                f"Unknown query_type: {query_type}, expected one of {valid_types}"
+                f"Invalid query_type '{query_type}' from LLM, converting to 'unknown'. "
+                f"Expected one of {valid_types}"
             )
+            # Normalize invalid query_type to 'unknown' (defensive programming)
+            # This handles LLM returning values like 'greeting' which aren't in QueryType enum
+            decision["query_type"] = "unknown"
 
     def get_workflow_pattern(self, complexity_score: int) -> str:
         """

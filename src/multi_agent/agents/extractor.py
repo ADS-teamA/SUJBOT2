@@ -12,10 +12,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from ..core.agent_base import BaseAgent
+from ..core.agent_initializer import initialize_agent
 from ..core.agent_registry import register_agent
 from ..core.state import DocumentMetadata
-from ..prompts.loader import get_prompt_loader
-from ..tools.adapter import get_tool_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -33,31 +32,15 @@ class ExtractorAgent(BaseAgent):
         """Initialize extractor with config."""
         super().__init__(config)
 
-        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
-        try:
-            from src.agent.providers.factory import create_provider
-
-            self.provider = create_provider(model=config.model)
-            logger.info(f"Initialized provider for model: {config.model}")
-        except Exception as e:
-            logger.error(f"Failed to create provider: {e}")
-            raise ValueError(
-                f"Failed to initialize LLM provider for model {config.model}. "
-                f"Ensure API keys are configured in environment and model name is valid."
-            ) from e
-
-        # Load system prompt
-        prompt_loader = get_prompt_loader()
-        self.system_prompt = prompt_loader.get_prompt("extractor")
-
-        # Initialize tool adapter
-        self.tool_adapter = get_tool_adapter()
+        # Initialize common components (provider, prompts, tools)
+        components = initialize_agent(config, "extractor")
+        self.provider = components.provider
+        self.system_prompt = components.system_prompt
+        self.tool_adapter = components.tool_adapter
 
         # Retrieval parameters
         self.default_k = 6  # Default number of chunks to retrieve
         self.max_k = 10  # Maximum for complex queries (search tool limit)
-
-        logger.info(f"ExtractorAgent initialized with model: {config.model}")
 
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
