@@ -110,7 +110,12 @@ export function ChatContainer({
           hasMessages ? 'overflow-y-auto' : 'overflow-hidden'
         )}>
         {!hasMessages ? (
-          <WelcomeScreen onPromptClick={onSendMessage} />
+          <WelcomeScreen onPromptClick={onSendMessage}>
+            {/* ChatInput as child - in natural document flow */}
+            <div style={{ animation: 'fadeInScale 0.6s ease-out' }}>
+              <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+            </div>
+          </WelcomeScreen>
         ) : (
           <div
             className="max-w-5xl mx-auto py-4"
@@ -196,25 +201,18 @@ export function ChatContainer({
         )}
       </div>
 
-      {/* Input area with animation */}
-      <div
-        className={cn(
-          !hasMessages && 'absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl px-4'
-        )}
-        style={
-          hasMessages && inputAnimated
-            ? {
-              animation: 'slideDown 0.4s ease-out',
-            }
-            : !hasMessages
-              ? {
-                animation: 'fadeInScale 0.6s ease-out',
-              }
+      {/* Input area - only shown when there are messages (welcome state has input inline) */}
+      {hasMessages && (
+        <div
+          style={
+            inputAnimated
+              ? { animation: 'slideDown 0.4s ease-out' }
               : undefined
-        }
-      >
-        <ChatInput onSend={onSendMessage} disabled={isStreaming} />
-      </div>
+          }
+        >
+          <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+        </div>
+      )}
 
       {/* HITL Clarification Modal */}
       <ClarificationModal

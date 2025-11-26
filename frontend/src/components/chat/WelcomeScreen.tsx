@@ -13,36 +13,37 @@ import { cn } from '../../design-system/utils/cn';
 
 interface WelcomeScreenProps {
   onPromptClick: (prompt: string) => void;
+  children?: React.ReactNode;
 }
 
 const SUGGESTED_PROMPTS = [
   {
     icon: Scale,
-    title: 'Legal Compliance',
-    prompt: 'What are the GDPR compliance requirements for data processing?',
+    title: 'Regulatory Compliance',
+    prompt: 'Jaké jsou požadavky SÚJB pro provoz jaderných zařízení?',
   },
   {
     icon: Shield,
-    title: 'Risk Assessment',
-    prompt: 'Analyze the cybersecurity risks in our data retention policy',
+    title: 'Safety Analysis',
+    prompt: 'Analyzuj bezpečnostní opatření pro nakládání s radioaktivním odpadem',
   },
   {
     icon: FileCheck,
     title: 'Document Comparison',
-    prompt: 'Compare the privacy policies across our documents',
+    prompt: 'Porovnej požadavky různých vyhlášek SÚJB',
   },
   {
     icon: FileText,
     title: 'Citation Lookup',
-    prompt: 'Find all references to data protection regulations',
+    prompt: 'Najdi všechny reference na atomový zákon č. 263/2016 Sb.',
   },
 ];
 
-export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
+export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
   return (
     <div className={cn(
-      'flex-1 flex flex-col items-center justify-start',
-      'px-6 pt-12 pb-32 overflow-hidden'
+      'flex-1 flex flex-col items-center justify-center',
+      'px-6 py-8 overflow-hidden'
     )}>
       {/* Gradient background */}
       <div
@@ -83,7 +84,7 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
 
       {/* Main content */}
       <div
-        className="max-w-4xl w-full flex flex-col"
+        className="max-w-4xl w-full flex flex-col items-center gap-8"
         style={{
           animation: 'fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
@@ -139,11 +140,15 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
           </h1>
         </div>
 
-        {/* Spacer for centered input box (ChatInput is absolutely positioned here) */}
-        <div className="-mt-4" />
+        {/* Search bar slot */}
+        {children && (
+          <div className="w-full max-w-3xl">
+            {children}
+          </div>
+        )}
 
         {/* Suggested prompts */}
-        <div className="space-y-3 mt-44">
+        <div className="w-full space-y-3">
           <p className={cn(
             'text-sm font-medium tracking-wide uppercase',
             'text-accent-500 dark:text-accent-500',
@@ -204,21 +209,6 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
           </div>
         </div>
 
-        {/* Capabilities hint */}
-        <div className="text-center space-y-1 mt-6">
-          <p className={cn(
-            'text-xs',
-            'text-accent-400 dark:text-accent-600'
-          )}>
-            Multi-agent RAG system with 7 specialized agents
-          </p>
-          <p className={cn(
-            'text-xs',
-            'text-accent-400 dark:text-accent-600'
-          )}>
-            Hierarchical document analysis • Knowledge graph integration • Citation verification
-          </p>
-        </div>
       </div>
     </div>
   );
