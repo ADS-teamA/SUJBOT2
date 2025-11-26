@@ -20,10 +20,10 @@ Usage:
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Dict, Generic, Optional, TypeVar, Tuple
+from typing import Any, Dict, Generic, Optional, TypeVar
 import logging
 
 logger = logging.getLogger(__name__)
@@ -59,9 +59,14 @@ class BaseCache(ABC, Generic[T]):
         """Return number of items in cache."""
         pass
 
+    @abstractmethod
+    def has(self, key: str) -> bool:
+        """Check if key exists without side effects (no LRU update, no stats change)."""
+        pass
+
     def __contains__(self, key: str) -> bool:
-        """Check if key exists (and is not expired)."""
-        return self.get(key) is not None
+        """Check if key exists. Uses has() to avoid side effects."""
+        return self.has(key)
 
 
 class LRUCache(BaseCache[T]):
@@ -128,13 +133,18 @@ class LRUCache(BaseCache[T]):
         with self._lock:
             return len(self._cache)
 
+    def has(self, key: str) -> bool:
+        """Check if key exists without updating LRU order or stats."""
+        with self._lock:
+            return key in self._cache
+
     @property
     def hit_rate(self) -> float:
         """Return cache hit rate (0.0 to 1.0)."""
         total = self._hits + self._misses
         return self._hits / total if total > 0 else 0.0
 
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         with self._lock:
             return {
@@ -253,13 +263,20 @@ class TTLCache(BaseCache[T]):
         with self._lock:
             return len(self._cache)
 
+    def has(self, key: str) -> bool:
+        """Check if key exists and is not expired, without updating stats."""
+        with self._lock:
+            if key in self._cache:
+                return datetime.now() < self._cache[key].expires_at
+            return False
+
     @property
     def hit_rate(self) -> float:
         """Return cache hit rate (0.0 to 1.0)."""
         total = self._hits + self._misses
         return self._hits / total if total > 0 else 0.0
 
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         with self._lock:
             now = datetime.now()
