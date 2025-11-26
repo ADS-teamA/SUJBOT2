@@ -15,8 +15,11 @@
     "newChat": "New Chat",
     "noConversations": "No conversations yet",
     "messages": "messages",
+    "messageCount_one": "{{count}} message",
+    "messageCount_other": "{{count}} messages",
     "rename": "Rename",
-    "delete": "Delete"
+    "delete": "Delete",
+    "deleteConversation": "Delete conversation"
   },
   "chat": {
     "placeholder": "Ask about legal or technical documents...",
@@ -74,7 +77,13 @@
     "regulatoryCompliance": "Regulatory Compliance",
     "safetyAnalysis": "Safety Analysis",
     "documentComparison": "Document Comparison",
-    "citationLookup": "Citation Lookup"
+    "citationLookup": "Citation Lookup",
+    "prompts": {
+      "regulatoryCompliance": "What are SÚJB requirements for nuclear facilities?",
+      "safetyAnalysis": "Analyze safety measures for radioactive waste management",
+      "documentComparison": "Compare requirements of various SÚJB decrees",
+      "citationLookup": "Find all references to Atomic Act No. 263/2016 Coll."
+    }
   },
   "clarification": {
     "title": "Query Clarification Needed",
@@ -108,6 +117,8 @@
     "justNow": "Just now"
   },
   "language": {
-    "switchTo": "Switch language"
+    "switchTo": "Switch language",
+    "czech": "Čeština",
+    "english": "English"
   }
 }

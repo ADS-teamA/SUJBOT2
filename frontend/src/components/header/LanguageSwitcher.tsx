@@ -91,7 +91,7 @@ export function LanguageSwitcher() {
             ? 'text-accent-900'
             : 'text-accent-500 hover:text-accent-700'
         )}
-        aria-label="Čeština"
+        aria-label={t('language.czech')}
       >
         CZ
       </button>
@@ -107,7 +107,7 @@ export function LanguageSwitcher() {
             ? 'text-accent-900'
             : 'text-accent-500 hover:text-accent-700'
         )}
-        aria-label="English"
+        aria-label={t('language.english')}
       >
         EN
       </button>

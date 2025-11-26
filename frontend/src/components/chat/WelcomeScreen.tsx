@@ -17,27 +17,27 @@ interface WelcomeScreenProps {
   children?: React.ReactNode;
 }
 
-// Prompt templates - titles are translation keys, prompts are always in Czech
+// Prompt templates - titles and prompts use translation keys
 const SUGGESTED_PROMPTS = [
   {
     icon: Scale,
     titleKey: 'welcome.regulatoryCompliance',
-    prompt: 'Jaké jsou požadavky SÚJB pro provoz jaderných zařízení?',
+    promptKey: 'welcome.prompts.regulatoryCompliance',
   },
   {
     icon: Shield,
     titleKey: 'welcome.safetyAnalysis',
-    prompt: 'Analyzuj bezpečnostní opatření pro nakládání s radioaktivním odpadem',
+    promptKey: 'welcome.prompts.safetyAnalysis',
   },
   {
     icon: FileCheck,
     titleKey: 'welcome.documentComparison',
-    prompt: 'Porovnej požadavky různých vyhlášek SÚJB',
+    promptKey: 'welcome.prompts.documentComparison',
   },
   {
     icon: FileText,
     titleKey: 'welcome.citationLookup',
-    prompt: 'Najdi všechny reference na atomový zákon č. 263/2016 Sb.',
+    promptKey: 'welcome.prompts.citationLookup',
   },
 ];
 
@@ -166,7 +166,7 @@ export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
               return (
                 <button
                   key={index}
-                  onClick={() => onPromptClick(item.prompt)}
+                  onClick={() => onPromptClick(t(item.promptKey))}
                   className={cn(
                     'group relative',
                     'p-4 rounded-xl',
@@ -203,7 +203,7 @@ export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
                         'text-xs line-clamp-2',
                         'text-accent-600 dark:text-accent-400'
                       )}>
-                        {item.prompt}
+                        {t(item.promptKey)}
                       </div>
                     </div>
                   </div>

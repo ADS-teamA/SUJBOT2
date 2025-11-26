@@ -200,6 +200,7 @@ function ConversationItem({
   onRename,
   animationDelay,
 }: ConversationItemProps) {
+  const { t } = useTranslation();
   const { style: slideStyle } = useSlideIn({
     direction: 'left',
     delay: animationDelay,
@@ -270,7 +271,7 @@ function ConversationItem({
           'text-accent-500 dark:text-accent-400',
           'transition-colors duration-700'
         )}>
-          {conversation.messageCount} {conversation.messageCount === 1 ? 'message' : 'messages'}
+          {t('sidebar.messageCount', { count: conversation.messageCount })}
         </div>
       </div>
       <button
@@ -286,7 +287,7 @@ function ConversationItem({
           'hover:bg-accent-300 dark:hover:bg-accent-700',
           'transition-all duration-700'
         )}
-        title="Delete conversation"
+        title={t('sidebar.deleteConversation')}
       >
         <Trash2 size={14} className={cn(
           'text-accent-700 dark:text-accent-300',

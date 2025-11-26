@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, CheckCircle2, HelpCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 import { useFadeIn } from '../../design-system/animations/hooks/useFadeIn';
 import type { ClarificationData } from '../../types';
@@ -26,6 +27,7 @@ export function ClarificationModal({
   onCancel,
   disabled = false,
 }: ClarificationModalProps) {
+  const { t } = useTranslation();
   const [userResponse, setUserResponse] = useState('');
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -151,10 +153,10 @@ export function ClarificationModal({
               <HelpCircle className="text-blue-600 dark:text-blue-400" size={24} />
               <div>
                 <h2 className="text-xl font-semibold text-accent-900 dark:text-accent-100">
-                  Query Clarification Needed
+                  {t('clarification.title')}
                 </h2>
                 <p className="text-sm text-accent-600 dark:text-accent-400">
-                  Help improve search quality by providing more details
+                  {t('clarification.subtitle')}
                 </p>
               </div>
             </div>
@@ -189,7 +191,7 @@ export function ClarificationModal({
                   )}
                 >
                   <span className="text-sm text-yellow-800 dark:text-yellow-200">
-                    Time remaining to respond:
+                    {t('clarification.timeRemaining')}
                   </span>
                   <span className="text-lg font-mono font-semibold text-yellow-900 dark:text-yellow-100">
                     {formatTime(timeRemaining)}
@@ -200,7 +202,7 @@ export function ClarificationModal({
               {/* Original Query */}
               <div>
                 <h3 className="text-sm font-semibold text-accent-700 dark:text-accent-300 mb-2">
-                  Your Original Query:
+                  {t('clarification.originalQuery')}
                 </h3>
                 <div
                   className={cn(
@@ -220,7 +222,7 @@ export function ClarificationModal({
               {/* Clarification Questions */}
               <div>
                 <h3 className="text-sm font-semibold text-accent-700 dark:text-accent-300 mb-3">
-                  Please answer these questions to improve your search:
+                  {t('clarification.questionsTitle')}
                 </h3>
                 <div className="space-y-3">
                   {questions.map((question, index) => (
@@ -250,7 +252,7 @@ export function ClarificationModal({
                   htmlFor="clarification-response"
                   className="block text-sm font-semibold text-accent-700 dark:text-accent-300 mb-2"
                 >
-                  Your Response:
+                  {t('clarification.yourResponse')}
                 </label>
                 <textarea
                   ref={textareaRef}
@@ -259,7 +261,7 @@ export function ClarificationModal({
                   onChange={(e) => setUserResponse(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={disabled}
-                  placeholder="Please provide any clarifying details that would help refine your search..."
+                  placeholder={t('clarification.responsePlaceholder')}
                   className={cn(
                     'w-full px-4 py-3 rounded-lg',
                     'bg-white dark:bg-accent-800',
@@ -276,8 +278,8 @@ export function ClarificationModal({
                   rows={6}
                 />
                 <p className="mt-2 text-xs text-accent-500 dark:text-accent-400">
-                  Tip: Press <kbd className="px-1 py-0.5 bg-accent-200 dark:bg-accent-700 rounded">Ctrl</kbd> +{' '}
-                  <kbd className="px-1 py-0.5 bg-accent-200 dark:bg-accent-700 rounded">Enter</kbd> to submit
+                  {t('clarification.submitTip')} <kbd className="px-1 py-0.5 bg-accent-200 dark:bg-accent-700 rounded">Ctrl</kbd> +{' '}
+                  <kbd className="px-1 py-0.5 bg-accent-200 dark:bg-accent-700 rounded">Enter</kbd> {t('clarification.toSubmit')}
                 </p>
               </div>
             </div>
@@ -304,7 +306,7 @@ export function ClarificationModal({
                 disabled && 'opacity-50 cursor-not-allowed'
               )}
             >
-              Continue Without Clarification
+              {t('clarification.continueWithout')}
             </button>
             <button
               onClick={handleSubmit}
@@ -321,7 +323,7 @@ export function ClarificationModal({
               )}
             >
               <CheckCircle2 size={16} />
-              Submit Clarification
+              {t('clarification.submit')}
             </button>
           </div>
         </div>

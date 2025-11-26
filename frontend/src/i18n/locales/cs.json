@@ -15,8 +15,12 @@
     "newChat": "Nový chat",
     "noConversations": "Zatím žádné konverzace",
     "messages": "zpráv",
+    "messageCount_one": "{{count}} zpráva",
+    "messageCount_few": "{{count}} zprávy",
+    "messageCount_other": "{{count}} zpráv",
     "rename": "Přejmenovat",
-    "delete": "Smazat"
+    "delete": "Smazat",
+    "deleteConversation": "Smazat konverzaci"
   },
   "chat": {
     "placeholder": "Zeptejte se na právní nebo technické dokumenty...",
@@ -74,7 +78,13 @@
     "regulatoryCompliance": "Regulační shoda",
     "safetyAnalysis": "Bezpečnostní analýza",
     "documentComparison": "Porovnání dokumentů",
-    "citationLookup": "Vyhledání citací"
+    "citationLookup": "Vyhledání citací",
+    "prompts": {
+      "regulatoryCompliance": "Jaké jsou požadavky SÚJB na jaderná zařízení?",
+      "safetyAnalysis": "Analyzuj bezpečnostní opatření pro nakládání s radioaktivním odpadem",
+      "documentComparison": "Porovnej požadavky různých vyhlášek SÚJB",
+      "citationLookup": "Najdi všechny odkazy na atomový zákon č. 263/2016 Sb."
+    }
   },
   "clarification": {
     "title": "Je potřeba upřesnění dotazu",
@@ -108,6 +118,8 @@
     "justNow": "Právě teď"
   },
   "language": {
-    "switchTo": "Přepnout jazyk"
+    "switchTo": "Přepnout jazyk",
+    "czech": "Čeština",
+    "english": "English"
   }
 }
