@@ -1,7 +1,7 @@
 """
 RAG Tools
 
-11 specialized tools for retrieval and analysis.
+12 specialized tools for retrieval and analysis.
 All tools are registered automatically via @register_tool decorator.
 """
 
@@ -29,14 +29,15 @@ def _safe_import(module_name: str):
         return None
 
 
-# Basic retrieval tools (4)
+# Basic retrieval tools (5)
 _safe_import("get_tool_help")
 _safe_import("search")
 _safe_import("list_available_tools")
-_safe_import("get_document_info")  # Now includes document list functionality
+_safe_import("get_document_info")  # Document metadata and summaries
+_safe_import("get_document_list")  # List all documents for orchestrator routing
 
 # Advanced retrieval tools (5)
-_safe_import("graph_search")
+_safe_import("graphiti_search")  # Temporal knowledge graph search (replaces graph_search)
 _safe_import("multi_doc_synthesizer")
 _safe_import("expand_context")
 _safe_import("browse_entities")

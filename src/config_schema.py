@@ -757,6 +757,37 @@ class CLIConfig(BaseModel):
     )
 
 
+class IndexingConfig(BaseModel):
+    """
+    Indexing pipeline configuration (optional section).
+
+    Controls LlamaIndex wrapper, Redis caching, and entity labeling.
+    Redis connection uses environment variables (REDIS_HOST, REDIS_PORT).
+    """
+
+    # LlamaIndex wrapper toggle
+    use_llamaindex_wrapper: bool = Field(
+        default=True,
+        description="Use LlamaIndex wrapper for state persistence"
+    )
+
+    # Entity labeling settings
+    enable_entity_labeling: bool = Field(
+        default=True,
+        description="Enable entity labeling phase (3.5) using Gemini"
+    )
+    entity_labeling_model: str = Field(
+        default="gemini-2.5-flash",
+        description="Gemini model for entity labeling"
+    )
+    entity_labeling_batch_size: int = Field(
+        default=10,
+        description="Batch size for entity labeling",
+        ge=1,
+        le=50
+    )
+
+
 class PipelineConfig(BaseModel):
     """General pipeline configuration."""
 
@@ -805,6 +836,7 @@ class RootConfig(BaseModel):
     agent_tools: AgentToolConfig
     cli: CLIConfig
     pipeline: PipelineConfig
+    indexing: IndexingConfig = Field(default_factory=IndexingConfig)
 
     def _is_placeholder(self, value: Optional[str]) -> bool:
         """

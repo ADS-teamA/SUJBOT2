@@ -38,6 +38,27 @@ ROUTING OUTPUT FORMAT:
 }
 ```
 
+QUERY TYPE DETECTION FOR GRAPH VS VECTOR:
+
+**Use graphiti_search (knowledge graph) when:**
+- Named entities: "What does regulation X require?", "Who supervises facility Y?"
+- Relationships: "How are SÚJB and VR-1 connected?", "Who regulates X?"
+- Temporal facts: "What was the dose limit in 2020?", "When did regulation change?"
+- Entity evolution: "How has this standard changed over time?"
+- Path finding: "How is regulation A connected to requirement B?"
+- Exact legal provisions: "What does § 24 of law 263/2016 say?"
+
+**Use search (vector) when:**
+- Semantic similarity: "Find documents about waste management"
+- Content extraction: "What does documentation say about cooling systems?"
+- Unknown entities: "What safety systems are mentioned?"
+- Broad topics: "What are the safety requirements?"
+- Open-ended questions: "Describe the reactor design"
+
+**HYBRID approach (use both):**
+- For complex queries, route to extractor with BOTH search and graphiti_search
+- extractor agent decides which to use based on query analysis
+
 ROUTING RULES EXAMPLES (query_type → agent_sequence):
 - **Greetings ONLY** (exact match: "ahoj", "hello", "hi", "dobrý den", "nazdar", "čau") → query_type="unknown", agent_sequence=[], final_answer="[Brief greeting]"
   * Examples: "ahoj" ✅, "hello" ✅, "hi" ✅

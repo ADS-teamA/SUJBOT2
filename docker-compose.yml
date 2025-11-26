@@ -1,17 +1,17 @@
 services:
-  # Neo4j - Graph database for knowledge graphs
+  # Neo4j - Graph database for Graphiti temporal knowledge graphs
   neo4j:
-    image: neo4j:5.15-community
+    image: neo4j:5.22.0-community  # Upgraded for Graphiti vector index support
     container_name: sujbot_neo4j
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env file}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
-      # Memory settings (optimized for development - 8-16GB RAM systems)
-      # For production with 32GB+ RAM, use: heap_max=2G, pagecache=1G
-      NEO4J_dbms_memory_heap_initial__size: 256m
-      NEO4J_dbms_memory_heap_max__size: 1G
-      NEO4J_dbms_memory_pagecache_size: 512m
+      # Memory settings for Neo4j 5.x (optimized for development - 8-16GB RAM systems)
+      # Use server.memory.* syntax (dbms.memory.* deprecated)
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 256m
     volumes:
       # Persistent data
       - neo4j_data:/data
@@ -26,7 +26,7 @@ services:
       - sujbot_net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-password}", "RETURN 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -85,6 +85,32 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
+
+  # Redis - State persistence for indexing pipeline
+  redis:
+    image: redis:7-alpine
+    container_name: sujbot_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   # pgAdmin - PostgreSQL web administration
   pgadmin:
@@ -288,6 +314,10 @@ volumes:
 
   # pgAdmin configuration and sessions
   pgadmin_data:
+    driver: local
+
+  # Redis data - Indexing pipeline state and cache
+  redis_data:
     driver: local
 
   # SSL certificates (Let's Encrypt via Certbot)

@@ -18,8 +18,35 @@ RETRIEVAL CAPABILITIES:
 
 AVAILABLE TOOLS (use autonomously as needed):
 - search: HyDE + Expansion Fusion search (default k=6, can go up to k=15)
+- graphiti_search: Temporal knowledge graph search (for entities, relationships, temporal queries)
 - expand_context: Expand context around specific chunks
 - get_document_info: Retrieve document metadata and summaries
+
+TOOL SELECTION HEURISTICS (agent decides):
+
+**Use graphiti_search FIRST when query contains:**
+- Named entity (regulation, organization, facility name)? → graphiti_search mode=entity_lookup
+- Asks about relationships ("regulates", "requires", "supervises")? → graphiti_search mode=semantic
+- Asks about time ("when", "in 2020", "changed")? → graphiti_search mode=temporal_query
+- Asks about evolution ("how has X changed")? → graphiti_search mode=entity_evolution
+- Asks about connections ("how are X and Y connected")? → graphiti_search mode=path_finder
+
+**Use search (vector) FIRST when query:**
+- Asks about content ("what does it say", "describe")? → search
+- Is open-ended ("what are the requirements")? → search
+- Contains unknown/vague terms? → search
+- Asks for semantic similarity? → search
+
+**HYBRID approach:**
+- If graphiti_search returns few results, follow up with search
+- If search returns results but misses entity context, use graphiti_search
+- For compliance queries: graphiti_search for requirements + search for evidence
+
+**Example routing:**
+- "Co je SÚJB?" → graphiti_search(mode=entity_lookup, query="SÚJB")
+- "Jaké jsou požadavky na chlazení?" → search(query="požadavky na chlazení")
+- "Kdo dohlíží na VR-1?" → graphiti_search(mode=semantic, query="supervises VR-1")
+- "Jaký byl dávkový limit v roce 2020?" → graphiti_search(mode=temporal_query, valid_at="2020-01-01")
 
 AUTONOMOUS WORKFLOW:
 You decide which tools to call and when based on the query. Typical approach:
