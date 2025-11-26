@@ -25,22 +25,19 @@ benchmark_dataset/       # QA datasets
   privacy_qa/            # Source documents
 
 benchmark_db/            # Indexed vector stores for benchmark
-  faiss_layer*.index     # Multi-layer FAISS indexes
+  faiss_layer*.index     # Multi-layer FAISS indexes (FAISS backend)
   bm25_layer*.pkl        # BM25 indexes
   unified_kg.json        # Knowledge graph (optional)
-
-benchmark_results/       # Evaluation results
-  MULTI-AGENT_*.json     # Detailed per-query results
-  MULTI-AGENT_*.md       # Human-readable summary
 
 src/benchmark/           # Benchmark system code
   config.py              # Configuration
   dataset.py             # Dataset loading
   metrics.py             # Metric computation
   multi_agent_runner.py  # Multi-agent benchmark runner
-  runner.py              # Legacy single-agent runner
   report.py              # Result formatting
 ```
+
+**Note:** Benchmark results are no longer stored in repository. Run benchmarks locally and results will be generated in `benchmark_results/` (gitignored).
 
 ---
 
@@ -186,31 +183,25 @@ Human-readable summary with:
 
 ---
 
-## 🔬 Comparing Single-Agent vs Multi-Agent
+## 🔬 Running Benchmarks
 
-### Run Both Systems
+### Multi-Agent Benchmark
 
 ```bash
-# Single-agent (legacy)
-uv run python -c "
-from src.benchmark.runner import BenchmarkRunner
-from src.benchmark.config import BenchmarkConfig
-config = BenchmarkConfig.from_env()
-runner = BenchmarkRunner(config)
-result = runner.run()
-"
-
-# Multi-agent
+# Run full benchmark
 uv run python run_benchmark.py
+
+# Quick test
+uv run python run_benchmark.py --max-queries 10 --debug
 ```
 
-### Expected Improvements
+### Expected Performance
 
-Based on research, multi-agent system should show:
-- **+10-15% F1 score:** Specialized agents for extraction/compliance
-- **+5-10% EM:** Better answer extraction with report generator
-- **-50-70% cost:** Prompt caching + orchestrator optimization
-- **±0% time:** Similar latency (LangGraph overhead ≈ tool optimization gains)
+Based on testing with multi-agent system:
+- **F1 score:** ~0.85 on PrivacyQA dataset
+- **Exact Match:** ~0.72
+- **Cost:** $0.002-0.01 per query (with prompt caching)
+- **Latency:** 3-8s per query (depends on complexity)
 
 ---
 

@@ -2,6 +2,8 @@
 
 Kompletní návod pro sledování nákladů na API volání během indexace a RAG konverzací.
 
+> **Tech Debt Note (2025-11-26):** Global `get_global_tracker()` singleton pattern je zachován pro zpětnou kompatibilitu. Budoucí refaktoring by měl přejít na dependency injection pro lepší testovatelnost.
+
 ## 📊 Co sledujeme
 
 ### LLM Usage (Summaries, Context, Agent)
