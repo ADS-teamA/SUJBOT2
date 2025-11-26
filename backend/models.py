@@ -71,16 +71,15 @@ class ClarificationRequest(BaseModel):
 class AgentVariantRequest(BaseModel):
     """Request to update agent variant preference."""
 
-    variant: str = Field(
+    variant: Literal["premium", "local"] = Field(
         ...,
-        pattern="^(premium|local)$",
-        description="Agent variant: 'premium' (Claude Haiku) or 'local' (Qwen 72B)"
+        description="Agent variant: 'premium' (Claude Haiku) or 'local' (Llama 3.1 70B)"
     )
 
 
 class AgentVariantResponse(BaseModel):
     """Response with agent variant information."""
 
-    variant: str = Field(..., description="Current variant ('premium' or 'local')")
+    variant: Literal["premium", "local"] = Field(..., description="Current variant")
     display_name: str = Field(..., description="Human-readable variant name")
     model: str = Field(..., description="Model identifier for this variant")

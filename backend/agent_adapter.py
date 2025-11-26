@@ -9,6 +9,7 @@ This adapter:
 """
 
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ from typing import AsyncGenerator, Dict, Any, Optional
 from src.multi_agent.runner import MultiAgentRunner
 from src.agent.config import AgentConfig
 from src.cost_tracker import get_global_tracker, reset_global_tracker
+from backend.constants import VARIANT_CONFIG, DEFAULT_VARIANT, get_variant_model, is_valid_variant
 
 logger = logging.getLogger(__name__)
 
@@ -144,18 +146,12 @@ class AgentAdapter:
         Returns:
             Modified config with variant models applied
         """
-        import copy
-
-        # Map variants to models
-        variant_models = {
-            "premium": "claude-haiku-4-5",
-            "local": "meta-llama/Meta-Llama-3.1-70B-Instruct"
-        }
-
-        model = variant_models.get(variant)
-        if not model:
+        # Use centralized config for model lookup
+        if not is_valid_variant(variant):
             logger.warning(f"Unknown variant '{variant}', using config defaults")
             return multi_agent_config
+
+        model = get_variant_model(variant)
 
         # Deep copy to avoid modifying original
         config = copy.deepcopy(multi_agent_config)
@@ -293,12 +289,37 @@ class AgentAdapter:
                     runner_to_use = new_runner  # Only assign after successful init
                     logger.info(f"Created fresh runner with variant '{variant}'")
 
-            except Exception as e:
-                logger.warning(f"Failed to load/apply variant for user {user_id}: {e}")
-                # Continue with default runner (runner_to_use unchanged)
+            except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
+                # Config file issues - log as warning and fall back
+                logger.warning(f"Config error loading variant for user {user_id}: {e}")
                 runner_to_use = self.runner
+                # Will emit warning below
+            except Exception as e:
+                # Unexpected error - log as error for investigation
+                logger.error(f"Unexpected error loading variant for user {user_id}: {e}", exc_info=True)
+                runner_to_use = self.runner
+                # Will emit warning below
+
+        # Track if we fell back to default for warning emission
+        variant_fallback_warning = None
+        if user_id and variant != DEFAULT_VARIANT and runner_to_use == self.runner:
+            variant_fallback_warning = (
+                f"Could not apply '{variant}' variant preference. "
+                f"Using default '{DEFAULT_VARIANT}' variant instead."
+            )
 
         try:
+            # Emit warning if variant fallback occurred
+            if variant_fallback_warning:
+                yield {
+                    "event": "warning",
+                    "data": {
+                        "message": variant_fallback_warning,
+                        "type": "variant_fallback"
+                    }
+                }
+                await asyncio.sleep(0)
+
             # Emit start event
             yield {
                 "event": "progress",

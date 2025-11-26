@@ -385,18 +385,27 @@ async def _maybe_generate_title(
                 )
             return None
 
+    except asyncio.TimeoutError as e:
+        logger.warning(f"Title generation timed out for {conversation_id}: {e}")
+    except ConnectionError as e:
+        logger.warning(f"Connection error during title generation for {conversation_id}: {e}")
     except Exception as e:
-        logger.warning(f"Title generation failed for {conversation_id}: {e}")
-        # Attempt to release lock on error
-        try:
-            async with adapter.pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE auth.conversations SET is_title_generating = false WHERE id = $1",
-                    conversation_id
-                )
-        except Exception:
-            pass
-        return None
+        logger.error(f"Unexpected error in title generation for {conversation_id}: {e}", exc_info=True)
+
+    # Attempt to release lock on any error
+    try:
+        async with adapter.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE auth.conversations SET is_title_generating = false WHERE id = $1",
+                conversation_id
+            )
+    except Exception as lock_error:
+        # Log lock release failure - could leave orphaned lock
+        logger.error(
+            f"Failed to release title generation lock for {conversation_id}: {lock_error}. "
+            "This conversation may have orphaned is_title_generating=true flag."
+        )
+    return None
 
 
 @app.post("/chat/stream")

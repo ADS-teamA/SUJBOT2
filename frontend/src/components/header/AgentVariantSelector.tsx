@@ -106,7 +106,7 @@ export function AgentVariantSelector() {
             : 'text-accent-600 dark:text-accent-400 hover:text-accent-900 dark:hover:text-accent-100',
           isSwitching && 'opacity-50 cursor-not-allowed'
         )}
-        title="Local - Qwen 2.5-72B (open-source přes DeepInfra)"
+        title="Local - Llama 3.1 70B (open-source přes DeepInfra)"
       >
         <Server
           size={16}

@@ -421,8 +421,10 @@ class AuthQueries:
                 )
                 return variant or "premium"
         except Exception as e:
+            # _handle_db_error always raises, so this is the error path
             self._handle_db_error("get_agent_variant", {"user_id": user_id}, e)
-            return "premium"  # Fallback to default
+            # Note: _handle_db_error raises, so code below is unreachable
+            raise  # Make unreachable explicit for type checker
 
     async def update_agent_variant(self, user_id: int, variant: str) -> None:
         """

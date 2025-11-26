@@ -1,14 +1,13 @@
 """
 DeepInfra LLM Provider using OpenAI-compatible API.
 
-Supports Qwen models (Qwen/Qwen2.5-72B-Instruct, Qwen/Qwen2.5-7B-Instruct)
-via DeepInfra's OpenAI-compatible endpoint.
+Supports Llama and Qwen models via DeepInfra's OpenAI-compatible endpoint.
 """
 
 import logging
 import json
 import os
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional, Iterator, FrozenSet
 
 from openai import OpenAI
 
@@ -16,30 +15,50 @@ from .base import BaseProvider, ProviderResponse
 
 logger = logging.getLogger(__name__)
 
+# Supported models for validation
+SUPPORTED_MODELS: FrozenSet[str] = frozenset({
+    "meta-llama/Meta-Llama-3.1-70B-Instruct",
+    "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    "Qwen/Qwen2.5-72B-Instruct",
+    "Qwen/Qwen2.5-7B-Instruct",
+})
+
 
 class DeepInfraProvider(BaseProvider):
     """
-    DeepInfra provider for Qwen models.
+    DeepInfra provider for open-source LLMs.
 
     Uses OpenAI-compatible API format (https://api.deepinfra.com/v1/openai).
     Supports:
-    - Qwen/Qwen2.5-72B-Instruct (recommended for agents)
-    - Qwen/Qwen2.5-7B-Instruct (lighter model)
+    - meta-llama/Meta-Llama-3.1-70B-Instruct (recommended for agents)
+    - meta-llama/Meta-Llama-3.1-8B-Instruct (lighter model)
+    - Qwen/Qwen2.5-72B-Instruct
+    - Qwen/Qwen2.5-7B-Instruct
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "Qwen/Qwen2.5-72B-Instruct"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "meta-llama/Meta-Llama-3.1-70B-Instruct"):
         """
         Initialize DeepInfra provider.
 
         Args:
             api_key: DeepInfra API key (defaults to DEEPINFRA_API_KEY env var)
-            model: Model identifier (default: Qwen/Qwen2.5-72B-Instruct)
+            model: Model identifier (default: meta-llama/Meta-Llama-3.1-70B-Instruct)
+
+        Raises:
+            ValueError: If API key is missing or model is not supported
         """
         self.api_key = api_key or os.getenv("DEEPINFRA_API_KEY")
         if not self.api_key:
             raise ValueError(
                 "DEEPINFRA_API_KEY required. "
                 "Set in .env file or pass to constructor."
+            )
+
+        # Validate model
+        if model not in SUPPORTED_MODELS:
+            raise ValueError(
+                f"Unsupported model: {model}. "
+                f"Supported models: {', '.join(sorted(SUPPORTED_MODELS))}"
             )
 
         self.model = model
@@ -218,7 +237,13 @@ class DeepInfraProvider(BaseProvider):
 
         Returns:
             ProviderResponse in Anthropic format
+
+        Raises:
+            ValueError: If response has no choices
         """
+        if not response.choices:
+            raise ValueError("Empty response from DeepInfra API - no choices returned")
+
         choice = response.choices[0]
         message = choice.message
 
@@ -288,7 +313,15 @@ class DeepInfraProvider(BaseProvider):
 
         Args:
             model: Model identifier
+
+        Raises:
+            ValueError: If model is not supported
         """
+        if model not in SUPPORTED_MODELS:
+            raise ValueError(
+                f"Unsupported model: {model}. "
+                f"Supported models: {', '.join(sorted(SUPPORTED_MODELS))}"
+            )
         self.model = model
         logger.info(f"Switched to model: {model}")
 

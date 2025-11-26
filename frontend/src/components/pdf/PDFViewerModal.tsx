@@ -79,7 +79,17 @@ export function PDFViewerModal({
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          // Map HTTP status to user-friendly message
+          const errorMessages: Record<number, string> = {
+            401: 'Vaše relace vypršela. Přihlaste se prosím znovu.',
+            403: 'Nemáte oprávnění zobrazit tento dokument.',
+            404: 'Dokument nebyl nalezen nebo již není dostupný.',
+            500: 'Server je dočasně nedostupný. Zkuste to prosím později.',
+            502: 'Server je dočasně nedostupný. Zkuste to prosím později.',
+            503: 'Server je přetížen. Zkuste to prosím později.',
+          };
+          const message = errorMessages[response.status] || `Chyba při načítání PDF (${response.status})`;
+          throw new Error(message);
         }
 
         const arrayBuffer = await response.arrayBuffer();
@@ -87,7 +97,8 @@ export function PDFViewerModal({
         setPdfData({ data: arrayBuffer });
       } catch (err) {
         console.error('[PDFViewerModal] PDF fetch error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load PDF');
+        const message = err instanceof Error ? err.message : 'Nepodařilo se načíst PDF';
+        setError(message);
         setIsLoading(false);
       }
     };
