@@ -7,14 +7,61 @@ import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { Message, Conversation, ToolCall, ClarificationData } from '../types';
 
+// UUID validation regex for conversation IDs
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate and extract conversation ID from URL parameter
+ */
+function getValidConversationIdFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const urlConversationId = params.get('c');
+  // Only accept valid UUID format to prevent invalid state
+  if (urlConversationId && UUID_REGEX.test(urlConversationId)) {
+    return urlConversationId;
+  }
+  return null;
+}
+
 export function useChat() {
   const { isAuthenticated } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  // Current conversation state (NO localStorage - purely session state)
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  // Current conversation ID - initialized from URL query param for refresh persistence
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    getValidConversationIdFromUrl
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
+
+  // Sync URL with current conversation ID (for refresh persistence and shareable links)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    if (currentConversationId) {
+      url.searchParams.set('c', currentConversationId);
+    } else {
+      url.searchParams.delete('c');
+    }
+
+    // Update URL without page reload (replaceState to avoid history spam)
+    window.history.replaceState({}, '', url.toString());
+  }, [currentConversationId]);
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      // Use same validation as initial load
+      setCurrentConversationId(getValidConversationIdFromUrl());
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Load conversations from server when user is authenticated
   useEffect(() => {
@@ -93,6 +140,7 @@ export function useChat() {
 
   /**
    * Create a new conversation
+   * Uses pushState for browser history (back/forward navigation)
    */
   const createConversation = useCallback(async () => {
     try {
@@ -103,6 +151,11 @@ export function useChat() {
       setConversations((prev) => [...prev, newConversation]);
       setCurrentConversationId(newConversation.id);
 
+      // Add to browser history for back/forward navigation
+      const url = new URL(window.location.href);
+      url.searchParams.set('c', newConversation.id);
+      window.history.pushState({}, '', url.toString());
+
       return newConversation;
     } catch (error) {
       console.error('Failed to create conversation:', error);
@@ -112,10 +165,20 @@ export function useChat() {
 
   /**
    * Select a conversation
+   * Uses pushState for browser history (back/forward navigation)
    */
   const selectConversation = useCallback((id: string) => {
+    // Only update if different conversation
+    if (id === currentConversationId) return;
+
+    // Update state
     setCurrentConversationId(id);
-  }, []);
+
+    // Add to browser history for back/forward navigation
+    const url = new URL(window.location.href);
+    url.searchParams.set('c', id);
+    window.history.pushState({}, '', url.toString());
+  }, [currentConversationId]);
 
   /**
    * Load messages when conversation is selected
@@ -123,6 +186,14 @@ export function useChat() {
    */
   useEffect(() => {
     if (!currentConversationId) return;
+
+    // Wait for conversations to load before fetching messages
+    // This prevents unnecessary API calls for invalid/deleted conversation IDs
+    if (conversations.length === 0 && isAuthenticated) return;
+
+    // Verify conversation exists before loading messages
+    const conversationExists = conversations.some(c => c.id === currentConversationId);
+    if (!conversationExists && conversations.length > 0) return;
 
     const loadMessages = async () => {
       try {
@@ -141,7 +212,7 @@ export function useChat() {
     };
 
     loadMessages();
-  }, [currentConversationId]);
+  }, [currentConversationId, conversations.length, isAuthenticated]);
 
   /**
    * Delete a conversation
@@ -256,11 +327,26 @@ export function useChat() {
       setIsStreaming(true);
 
       try {
+        // Prepare message history for context (last 10 pairs = 20 messages)
+        // Exclude the current user message if we just added it to avoid duplication
+        const existingMessages = addUserMessage
+          ? updatedConversation.messages.slice(0, -1)  // Exclude just-added user message
+          : updatedConversation.messages;
+        const historyLimit = 20; // Last 10 user+assistant pairs
+        const messageHistory = existingMessages
+          .slice(-historyLimit)
+          .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+          .map(msg => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content
+          }));
+
         // Stream response from backend
         for await (const event of apiService.streamChat(
           content,
           conversation.id,
-          !addUserMessage  // Skip saving user message when regenerating/editing (already exists)
+          !addUserMessage,  // Skip saving user message when regenerating/editing (already exists)
+          messageHistory    // Pass conversation history for context
         )) {
           // Handle agent progress events
           if (event.event === 'agent_start') {
@@ -889,6 +975,36 @@ export function useChat() {
   }, []);
 
   /**
+   * Rename a conversation
+   * @param id - Conversation ID
+   * @param newTitle - New title for the conversation
+   */
+  const renameConversation = useCallback(
+    async (id: string, newTitle: string) => {
+      if (!newTitle.trim()) {
+        console.warn('Cannot rename conversation to empty title');
+        return;
+      }
+
+      try {
+        // Update on server
+        await apiService.updateConversationTitle(id, newTitle.trim());
+
+        // Update local state
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c
+          )
+        );
+      } catch (error) {
+        console.error('Failed to rename conversation:', error);
+        // Don't throw - UI should handle gracefully
+      }
+    },
+    []
+  );
+
+  /**
    * Delete a message from the current conversation
    * @param messageId - ID of the message to delete
    */
@@ -936,6 +1052,7 @@ export function useChat() {
     createConversation,
     selectConversation,
     deleteConversation,
+    renameConversation,
     sendMessage,
     editMessage,
     regenerateMessage,
