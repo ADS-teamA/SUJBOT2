@@ -399,7 +399,11 @@ class GraphitiSearchTool(BaseTool):
             logger.warning(f"Graphiti search connection error for query '{query}': {e}")
             return ToolResult(
                 success=False,
-                error=f"Search failed: {str(e)}. Check Neo4j connection.",
+                error=(
+                    f"Knowledge graph search unavailable: {str(e)}. "
+                    "Verify Neo4j is running (docker compose up neo4j) and "
+                    "NEO4J_URI/NEO4J_PASSWORD are set in .env file."
+                ),
             )
         except Exception as e:
             # Unexpected errors - log with traceback for debugging

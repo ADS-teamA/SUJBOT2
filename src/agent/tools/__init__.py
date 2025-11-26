@@ -23,8 +23,18 @@ def _safe_import(module_name: str):
     """Import a tool module with error handling."""
     try:
         return importlib.import_module(f".{module_name}", package=__name__)
+    except ImportError as e:
+        # Expected: missing optional dependency - log at warning level
+        logger.warning(f"Tool module '{module_name}' unavailable (missing dependency): {e}")
+        _failed_imports.append((module_name, str(e)))
+        return None
+    except (SyntaxError, NameError, AttributeError) as e:
+        # Code bugs should be fixed, not silently ignored
+        logger.error(f"Code error in tool module '{module_name}': {e}", exc_info=True)
+        raise
     except Exception as e:
-        logger.error(f"Failed to import tool module '{module_name}': {e}", exc_info=True)
+        # Unexpected errors - log with traceback but don't crash
+        logger.error(f"Unexpected error importing '{module_name}': {e}", exc_info=True)
         _failed_imports.append((module_name, str(e)))
         return None
 

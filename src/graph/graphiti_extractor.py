@@ -109,6 +109,10 @@ class ExtractedRelationship:
             raise ValueError("Relationship source_uuid cannot be empty")
         if not self.target_uuid:
             raise ValueError("Relationship target_uuid cannot be empty")
+        if not self.name:
+            raise ValueError("Relationship name cannot be empty")
+        if not self.fact:
+            raise ValueError("Relationship fact cannot be empty")
         if self.valid_at and self.invalid_at and self.invalid_at < self.valid_at:
             raise ValueError(
                 f"invalid_at ({self.invalid_at}) cannot be before valid_at ({self.valid_at})"
@@ -283,9 +287,19 @@ class GraphitiExtractor:
             raise RuntimeError(
                 "graphiti-core package required. Install with: uv add graphiti-core"
             ) from e
+        except (ConnectionError, TimeoutError, OSError) as e:
+            logger.error(f"Failed to connect to Neo4j: {e}")
+            raise RuntimeError(
+                f"Neo4j connection failed: {e}. "
+                "Verify Neo4j is running (docker compose up neo4j) and "
+                "NEO4J_URI/NEO4J_PASSWORD are set in .env file."
+            ) from e
+        except ValueError as e:
+            logger.error(f"Invalid Graphiti configuration: {e}", exc_info=True)
+            raise
         except Exception as e:
             logger.error(f"Failed to initialize Graphiti: {e}", exc_info=True)
-            raise
+            raise RuntimeError(f"Graphiti initialization failed: {e}") from e
 
     async def close(self) -> None:
         """Close Graphiti connection."""

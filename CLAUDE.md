@@ -41,6 +41,10 @@ docker compose up -d                       # Start all services
 docker compose logs -f backend             # Watch backend logs
 docker compose exec backend uv run pytest  # Run tests in container
 
+# Frontend development (HOT RELOAD)
+# Frontend runs with Vite hot reload - NO rebuild needed for .tsx/.css changes!
+# Just edit files and changes appear instantly in browser.
+
 # Agent CLI
 uv run python -m src.agent.cli             # Interactive mode
 uv run python -m src.agent.cli --debug     # Debug mode

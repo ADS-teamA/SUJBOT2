@@ -260,6 +260,14 @@ class SujbotIngestionPipeline:
                         f"Entity labeling failed: {e}. Document indexed without entity labels.",
                         exc_info=True
                     )
+                    logger.warning(
+                        "=" * 60 + "\n"
+                        "ENTITY LABELING FAILED\n"
+                        f"Error: {e}\n"
+                        "Document indexed but entity-based filtering will NOT work.\n"
+                        "Check GOOGLE_API_KEY in .env if using Gemini labeler.\n" +
+                        "=" * 60
+                    )
                     result["entity_labeling_error"] = str(e)
                     result["entity_labeling_succeeded"] = False
             else:

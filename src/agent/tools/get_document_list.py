@@ -5,7 +5,7 @@ Lists all documents in the vector store for orchestrator routing decisions.
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 
 from pydantic import Field
 
@@ -88,10 +88,24 @@ class GetDocumentListTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error(f"Failed to get document list: {e}", exc_info=True)
+        except AttributeError as e:
+            logger.error(f"Vector store missing required method: {e}", exc_info=True)
             return ToolResult(
                 success=False,
                 data=None,
-                error=f"Failed to retrieve document list: {e}",
+                error="Vector store not properly initialized. Check DATABASE_URL configuration.",
+            )
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Database connection failed: {e}")
+            return ToolResult(
+                success=False,
+                data=None,
+                error=f"Database connection failed: {e}. Verify DATABASE_URL in .env file.",
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error getting document list: {e}", exc_info=True)
+            return ToolResult(
+                success=False,
+                data=None,
+                error=f"Internal error: {type(e).__name__}: {e}",
             )

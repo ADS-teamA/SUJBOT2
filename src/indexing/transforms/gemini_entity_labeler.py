@@ -239,8 +239,8 @@ class GeminiEntityLabeler(TransformComponent):
             json_text = self._extract_json(text)
             if json_text:
                 return json.loads(json_text)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug(f"Initial JSON parse failed: {e}")
 
         # Try JSON repair
         try:
@@ -249,10 +249,10 @@ class GeminiEntityLabeler(TransformComponent):
                 parsed = json.loads(repaired)
                 if isinstance(parsed, dict):
                     return parsed
-        except Exception:
-            pass
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logger.debug(f"JSON repair also failed: {e}")
 
-        logger.warning("Failed to parse entity extraction response")
+        logger.warning(f"Failed to parse entity extraction response (length={len(text)})")
         return default
 
     def _extract_json(self, text: str) -> Optional[str]:

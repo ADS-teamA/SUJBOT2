@@ -661,7 +661,11 @@ class IndexingPipeline:
                 )
             except (ValueError, RuntimeError, PermissionError) as e:
                 logger.error(f"[ERROR] Failed to load existing PostgreSQL store: {e}")
-                logger.info("Falling back to creating new embeddings...")
+                logger.warning(
+                    "EMBEDDING RELOAD FAILED - Creating new embeddings. "
+                    "This may cause duplicate data if document already exists. "
+                    f"Error: {e}. Consider using force_reindex=True or checking DATABASE_URL."
+                )
                 skip_dense = False
 
         if not skip_dense:
@@ -862,6 +866,17 @@ class IndexingPipeline:
                     knowledge_graph = None
                     kg_error = str(e)
 
+            # Surface KG failure prominently to user
+            if self.config.enable_knowledge_graph and knowledge_graph is None and kg_error:
+                logger.warning(
+                    "=" * 60 + "\n"
+                    "KNOWLEDGE GRAPH EXTRACTION FAILED\n"
+                    f"Error: {kg_error}\n"
+                    "Document indexed for vector search, but graph search unavailable.\n"
+                    "Check Neo4j connection and API keys in .env file.\n" +
+                    "=" * 60
+                )
+
         # Save intermediate results
         if save_intermediate and output_dir:
             self._save_intermediate(
@@ -961,8 +976,19 @@ class IndexingPipeline:
                 if doc_kg:
                     knowledge_graphs.append(doc_kg)
 
+            except KeyboardInterrupt:
+                logger.warning(f"Batch indexing interrupted at document {i + 1}/{len(document_paths)}")
+                raise
+            except (MemoryError, SystemExit):
+                raise  # Always propagate system-level errors
+            except (FileNotFoundError, PermissionError) as e:
+                logger.error(f"[ERROR] File access error for {document_path}: {e}")
+                continue
+            except (ConnectionError, TimeoutError) as e:
+                logger.error(f"[ERROR] Network/database error for {document_path}: {e}")
+                continue
             except Exception as e:
-                logger.error(f"[ERROR] Failed to index {document_path}: {e}")
+                logger.error(f"[ERROR] Unexpected error indexing {document_path}: {e}", exc_info=True)
                 continue
 
         # Save combined knowledge graph (if any)

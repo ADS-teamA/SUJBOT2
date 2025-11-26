@@ -414,7 +414,15 @@ class HybridSearchConfig(BaseModel):
 
 
 class KnowledgeGraphConfig(BaseModel):
-    """Knowledge graph configuration (PHASE 5A)."""
+    """
+    Knowledge graph configuration (PHASE 5A) - config.json schema.
+
+    NOTE: This is the CONFIG SCHEMA for validating config.json.
+    For the internal pipeline configuration, see src/graph/config.py::KnowledgeGraphConfig.
+    The two classes serve different purposes:
+    - This class: Validates user-provided config.json (flat structure)
+    - graph/config.py: Rich internal representation with nested sub-configs
+    """
 
     enable: bool = Field(..., description="Enable knowledge graph extraction")
     llm_provider: str = Field(
