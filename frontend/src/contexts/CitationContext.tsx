@@ -29,8 +29,8 @@ export function CitationProvider({ children }: CitationProviderProps) {
     chunkId?: string;
   } | null>(null);
 
-  // Loading state
-  const [isLoading, setIsLoading] = useState(false);
+  // Per-citation loading state (tracks which chunk IDs are currently being fetched)
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   // Error state for user feedback
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +79,8 @@ export function CitationProvider({ children }: CitationProviderProps) {
 
       if (idsToFetch.length === 0) return;
 
-      setIsLoading(true);
+      // Mark these IDs as loading (per-citation loading state)
+      setLoadingIds(prev => new Set([...prev, ...idsToFetch]));
       setError(null); // Clear previous errors
 
       try {
@@ -132,7 +133,12 @@ export function CitationProvider({ children }: CitationProviderProps) {
         console.error('Error fetching citation metadata:', err);
         setError(`Citation fetch failed: ${errorMsg}`);
       } finally {
-        setIsLoading(false);
+        // Remove fetched IDs from loading state
+        setLoadingIds(prev => {
+          const next = new Set(prev);
+          idsToFetch.forEach(id => next.delete(id));
+          return next;
+        });
       }
     }, 100); // Increased to 100ms for better batching
   }, []); // No dependencies - uses refs
@@ -164,7 +170,7 @@ export function CitationProvider({ children }: CitationProviderProps) {
     openPdf,
     closePdf,
     fetchCitationMetadata,
-    isLoading,
+    loadingIds,
     error,
     clearError,
   };

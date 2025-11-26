@@ -19,7 +19,7 @@ interface CitationLinkProps {
 }
 
 export function CitationLink({ chunkId }: CitationLinkProps) {
-  const { citationCache, fetchCitationMetadata, openPdf, isLoading } = useCitationContext();
+  const { citationCache, fetchCitationMetadata, openPdf, loadingIds } = useCitationContext();
 
   // Fetch metadata on mount if not cached
   useEffect(() => {
@@ -37,8 +37,8 @@ export function CitationLink({ chunkId }: CitationLinkProps) {
     }
   };
 
-  // Loading state
-  if (!metadata && isLoading) {
+  // Loading state - only show spinner if THIS specific citation is being loaded
+  if (!metadata && loadingIds.has(chunkId)) {
     return (
       <span
         className={cn(

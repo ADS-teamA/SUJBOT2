@@ -2,11 +2,11 @@
 
 Research-based RAG system optimized for legal and technical documentation with 7-phase pipeline and **multi-agent AI framework**.
 
-**Status:** PHASE 1-7 COMPLETE + **MULTI-AGENT UPGRADE** ✅ (2025-11-11)
+**Status:** PHASE 1-7 COMPLETE + **MULTI-AGENT v2.1** ✅ (2025-11-26)
 
-## 🆕 NEW: Multi-Agent System (v2.0)
+## 🆕 Multi-Agent System (v2.1 - SSOT Refactoring)
 
-SUJBOT2 has been upgraded to a **research-backed multi-agent framework** achieving:
+SUJBOT2 is a **research-backed multi-agent framework** achieving:
 - ✅ **90% cost savings** via 3-level prompt caching (Harvey AI case study)
 - ✅ **8 specialized agents** for higher quality (Orchestrator, Extractor, Classifier, Compliance, Risk Verifier, Citation Auditor, Gap Synthesizer, Report Generator)
 - ✅ **State persistence** with PostgreSQL checkpointing
@@ -56,11 +56,12 @@ Production-ready RAG system based on 4 research papers implementing state-of-the
 
 **Agent (PHASE 7) - Multi-Agent System:**
 - **8 specialized agents** (Orchestrator, Extractor, Classifier, Compliance, Risk Verifier, Citation Auditor, Gap Synthesizer, Report Generator)
-- **16 existing tools** integrated via adapter pattern (zero changes needed)
-- **3-level prompt caching** for 90% cost savings (regulatory docs + contract templates + system prompts)
+- **SSOT agent initialization** (`agent_initializer.py`) - centralized provider/prompt/tool setup
+- **Typed exception hierarchy** (`src/exceptions.py`) - `SujbotError` → specific error types
+- **Unified cache abstractions** (`src/utils/cache.py`) - thread-safe `LRUCache` + `TTLCache`
 - **PostgreSQL checkpointing** for state persistence and recovery
 - **LangSmith observability** for full workflow tracing
-- **Adaptive routing** with 3 workflow patterns (Simple, Standard, Complex)
+- **Graphiti temporal knowledge graph** (Neo4j + PostgreSQL hybrid)
 
 ---
 
