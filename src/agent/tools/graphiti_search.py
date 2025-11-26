@@ -24,14 +24,13 @@ Search Modes:
 - path_finder: Find paths between two entities
 """
 
-import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from src.agent.tools._base import BaseTool, ToolInput, ToolResult
 from src.agent.tools._registry import register_tool
@@ -192,10 +191,22 @@ class GraphitiSearchTool(BaseTool):
 
         try:
             from graphiti_core import Graphiti
+        except ImportError as e:
+            logger.error(f"graphiti-core not installed: {e}")
+            raise RuntimeError(
+                "graphiti-core required. Install with: uv add graphiti-core"
+            ) from e
 
-            neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-            neo4j_password = os.getenv("NEO4J_PASSWORD")
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
 
+        if not neo4j_password:
+            raise RuntimeError(
+                "NEO4J_PASSWORD environment variable not set. "
+                "Set it in .env file for Neo4j authentication."
+            )
+
+        try:
             self._graphiti = Graphiti(
                 uri=neo4j_uri,
                 user="neo4j",
@@ -203,22 +214,23 @@ class GraphitiSearchTool(BaseTool):
             )
             self._initialized = True
             logger.info(f"GraphitiSearchTool connected to {neo4j_uri}")
-
-        except ImportError as e:
-            logger.error(f"graphiti-core not installed: {e}")
+        except Exception as e:
+            logger.error(f"Failed to connect to Neo4j at {neo4j_uri}: {e}", exc_info=True)
             raise RuntimeError(
-                "graphiti-core required. Install with: uv add graphiti-core"
+                f"Cannot connect to Neo4j at {neo4j_uri}. "
+                "Check NEO4J_URI, NEO4J_PASSWORD env vars and that Neo4j is running."
             ) from e
 
     def _parse_datetime(self, dt_str: Optional[str]) -> Optional[datetime]:
-        """Parse ISO datetime string."""
+        """Parse ISO datetime string. Raises ValueError for invalid formats."""
         if not dt_str:
             return None
         try:
             return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        except ValueError:
-            logger.warning(f"Invalid datetime format: {dt_str}")
-            return None
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid datetime format '{dt_str}'. Use ISO format like '2020-01-01T00:00:00Z'"
+            ) from e
 
     async def execute_impl(
         self,
@@ -256,9 +268,12 @@ class GraphitiSearchTool(BaseTool):
             await self._ensure_initialized()
 
             # Parse temporal filters
-            valid_at_dt = self._parse_datetime(valid_at)
-            valid_after_dt = self._parse_datetime(valid_after)
-            valid_before_dt = self._parse_datetime(valid_before)
+            try:
+                valid_at_dt = self._parse_datetime(valid_at)
+                valid_after_dt = self._parse_datetime(valid_after)
+                valid_before_dt = self._parse_datetime(valid_before)
+            except ValueError as e:
+                return ToolResult(success=False, error=str(e))
 
             # Execute search based on mode
             if mode == "semantic":
@@ -311,6 +326,13 @@ class GraphitiSearchTool(BaseTool):
                 return ToolResult(
                     success=False,
                     error=f"Unknown search mode: {mode}",
+                )
+
+            # Check if search returned an error
+            if result.get("error"):
+                return ToolResult(
+                    success=False,
+                    error=result["error"],
                 )
 
             processing_time_ms = (
@@ -372,11 +394,19 @@ class GraphitiSearchTool(BaseTool):
                 data=search_result.to_dict(),
             )
 
-        except Exception as e:
-            logger.error(f"Graphiti search error: {e}")
+        except (ConnectionError, TimeoutError, RuntimeError) as e:
+            # Expected connection/configuration errors
+            logger.warning(f"Graphiti search connection error for query '{query}': {e}")
             return ToolResult(
                 success=False,
-                error=f"Graphiti search failed: {str(e)}",
+                error=f"Search failed: {str(e)}. Check Neo4j connection.",
+            )
+        except Exception as e:
+            # Unexpected errors - log with traceback for debugging
+            logger.error(f"Unexpected Graphiti search error: {e}", exc_info=True)
+            return ToolResult(
+                success=False,
+                error=f"Internal error in Graphiti search: {str(e)}",
             )
 
     async def _semantic_search(
@@ -608,11 +638,17 @@ class GraphitiSearchTool(BaseTool):
         )
 
         if not source_results or not target_results:
+            error_msg = (
+                f"Could not find entities for path_finder: "
+                f"source='{source_entity}' ({'found' if source_results else 'NOT FOUND'}), "
+                f"target='{target_entity}' ({'found' if target_results else 'NOT FOUND'})"
+            )
+            logger.warning(error_msg)
             return {
                 "facts": [],
                 "entities": [],
                 "total": 0,
-                "error": "Could not find one or both entities",
+                "error": error_msg,
             }
 
         # Use center_node_uuid to find paths near source

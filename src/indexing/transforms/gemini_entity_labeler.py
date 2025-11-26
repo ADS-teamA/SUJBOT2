@@ -100,20 +100,38 @@ class GeminiEntityLabeler(TransformComponent):
             batch_size: Number of nodes to process per batch
             min_confidence: Minimum confidence threshold for entities
             max_text_length: Maximum text length to send to Gemini
+
+        Raises:
+            ValueError: If parameters are invalid.
         """
         super().__init__()
+
+        # Validate parameters
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+        if not 0.0 <= min_confidence <= 1.0:
+            raise ValueError(f"min_confidence must be 0.0-1.0, got {min_confidence}")
+        if max_text_length < 1:
+            raise ValueError(f"max_text_length must be >= 1, got {max_text_length}")
+
         self.model_name = model_name
         self.batch_size = batch_size
         self.min_confidence = min_confidence
         self.max_text_length = max_text_length
 
-        # Initialize Gemini model
+        # Initialize Gemini model (lazy)
         self._model: Optional[genai.GenerativeModel] = None
 
     @property
     def model(self) -> genai.GenerativeModel:
         """Lazy initialization of Gemini model."""
         if self._model is None:
+            import os
+            if not os.getenv("GOOGLE_API_KEY"):
+                raise RuntimeError(
+                    "GOOGLE_API_KEY environment variable not set. "
+                    "Required for Gemini entity labeling. Set it in .env file."
+                )
             self._model = genai.GenerativeModel(self.model_name)
         return self._model
 
@@ -171,7 +189,11 @@ class GeminiEntityLabeler(TransformComponent):
 
             except Exception as e:
                 # Preserve node even if labeling fails
-                logger.warning(f"Entity extraction failed for node: {e}")
+                node_id = getattr(node, 'id_', 'unknown')
+                logger.warning(
+                    f"Entity extraction failed for node {node_id}: {e}",
+                    exc_info=True
+                )
                 node.metadata["entity_extraction_error"] = str(e)
                 node.metadata["entities"] = []
                 node.metadata["entity_types"] = []

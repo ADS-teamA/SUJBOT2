@@ -387,7 +387,7 @@ class IndexingPipeline:
         # Initialize Graphiti extractor (uses GPT-4o-mini for extraction)
         try:
             model_name = os.getenv("GRAPHITI_MODEL", "gpt-4o-mini")
-            batch_size = self.kg_config.batch_size if self.kg_config else 10
+            batch_size = getattr(self.config.kg_config, 'batch_size', 10) if self.config.kg_config else 10
             self.kg_extractor = GraphitiExtractor(
                 model_name=model_name,
                 batch_size=batch_size,

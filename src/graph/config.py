@@ -345,6 +345,7 @@ class KnowledgeGraphConfig:
     enable_cross_document_relationships: bool = False  # Expensive, for multi-doc graphs
 
     # Performance settings
+    batch_size: int = 10  # Chunks per Graphiti batch (parallel processing)
     max_retries: int = 3  # Retry failed extractions
     retry_delay: float = 1.0  # seconds
     timeout: int = 300  # seconds per extraction batch

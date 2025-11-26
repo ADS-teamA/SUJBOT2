@@ -126,12 +126,19 @@ class SujbotIngestionPipeline:
                     ),
                     collection=REDIS_COLLECTION,
                 )
-                logger.debug(f"Redis cache initialized: {self.redis_host}:{self.redis_port}")
+                logger.info(f"Redis cache connected: {self.redis_host}:{self.redis_port}")
             except ImportError as e:
-                logger.warning(f"Redis cache not available: {e}")
+                logger.error(
+                    f"Redis packages not installed: {e}. "
+                    "Install with: uv add llama-index-storage-kvstore-redis"
+                )
                 self._cache = None
             except Exception as e:
-                logger.warning(f"Failed to connect to Redis: {e}")
+                logger.error(
+                    f"Redis connection failed ({self.redis_host}:{self.redis_port}): {e}. "
+                    "Pipeline will run WITHOUT caching - indexing will NOT be resumable.",
+                    exc_info=True
+                )
                 self._cache = None
         return self._cache
 
@@ -173,7 +180,18 @@ class SujbotIngestionPipeline:
             - stats: Pipeline statistics
 
         Returns None if document is duplicate.
+
+        Raises:
+            ValueError: If phase parameters are invalid.
         """
+        # Validate phase parameters
+        if not 1 <= start_phase <= 5:
+            raise ValueError(f"start_phase must be 1-5, got {start_phase}")
+        if not 1 <= end_phase <= 5:
+            raise ValueError(f"end_phase must be 1-5, got {end_phase}")
+        if start_phase > end_phase:
+            raise ValueError(f"start_phase ({start_phase}) cannot be greater than end_phase ({end_phase})")
+
         document_path = Path(document_path)
         doc_id = document_path.stem
 
@@ -238,8 +256,12 @@ class SujbotIngestionPipeline:
                         self._cache_phase_result(doc_id, 3, {"labeled": True})
 
                 except Exception as e:
-                    logger.error(f"Entity labeling failed: {e}")
+                    logger.error(
+                        f"Entity labeling failed: {e}. Document indexed without entity labels.",
+                        exc_info=True
+                    )
                     result["entity_labeling_error"] = str(e)
+                    result["entity_labeling_succeeded"] = False
             else:
                 logger.warning(f"Chunks file not found: {chunks_path}")
 

@@ -20,7 +20,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
 
 
 # =============================================================================
@@ -173,6 +175,14 @@ class VyhlaskaEntity(GraphitiEntityBase):
     ucinnost_od: Optional[datetime] = Field(default=None, description="Effective from date")
     parent_zakon: Optional[str] = Field(default=None, description="Parent law reference")
 
+    @field_validator("cislo")
+    @classmethod
+    def validate_cislo(cls, v: Optional[str]) -> Optional[str]:
+        """Validate Czech decree number format (e.g., '422/2016')."""
+        if v is not None and not re.match(r"^\d+/\d{4}$", v):
+            raise ValueError(f"Invalid decree number format: '{v}'. Expected format: '422/2016'")
+        return v
+
 
 class NarizeniEntity(GraphitiEntityBase):
     """
@@ -186,6 +196,14 @@ class NarizeniEntity(GraphitiEntityBase):
     rok: Optional[int] = Field(default=None, ge=1900, le=2100, description="Year of issue")
     nazev: Optional[str] = Field(default=None, description="Full title in Czech")
     ucinnost_od: Optional[datetime] = Field(default=None, description="Effective from date")
+
+    @field_validator("cislo")
+    @classmethod
+    def validate_cislo(cls, v: Optional[str]) -> Optional[str]:
+        """Validate Czech regulation number format (e.g., '361/2007')."""
+        if v is not None and not re.match(r"^\d+/\d{4}$", v):
+            raise ValueError(f"Invalid regulation number format: '{v}'. Expected format: '361/2007'")
+        return v
 
 
 class SbirkaZakonuEntity(GraphitiEntityBase):
@@ -202,6 +220,14 @@ class SbirkaZakonuEntity(GraphitiEntityBase):
         description="Type of legal act"
     )
     castka: Optional[int] = Field(default=None, description="Issue number (částka)")
+
+    @field_validator("cislo")
+    @classmethod
+    def validate_cislo(cls, v: str) -> str:
+        """Validate Czech legal reference number format (e.g., '263/2016')."""
+        if not re.match(r"^\d+/\d{4}$", v):
+            raise ValueError(f"Invalid reference number format: '{v}'. Expected format: '263/2016'")
+        return v
 
 
 class MetodickyPokynEntity(GraphitiEntityBase):

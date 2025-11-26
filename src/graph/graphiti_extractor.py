@@ -78,6 +78,15 @@ class ExtractedEntity:
     attributes: Dict[str, Any] = field(default_factory=dict)
     source_chunk_id: str = ""
 
+    def __post_init__(self):
+        """Validate entity data."""
+        if not self.uuid:
+            raise ValueError("Entity uuid cannot be empty")
+        if not self.name:
+            raise ValueError("Entity name cannot be empty")
+        if not self.labels:
+            raise ValueError("Entity must have at least one label")
+
 
 @dataclass
 class ExtractedRelationship:
@@ -91,6 +100,19 @@ class ExtractedRelationship:
     valid_at: Optional[datetime] = None
     invalid_at: Optional[datetime] = None
     source_chunk_id: str = ""
+
+    def __post_init__(self):
+        """Validate relationship data."""
+        if not self.uuid:
+            raise ValueError("Relationship uuid cannot be empty")
+        if not self.source_uuid:
+            raise ValueError("Relationship source_uuid cannot be empty")
+        if not self.target_uuid:
+            raise ValueError("Relationship target_uuid cannot be empty")
+        if self.valid_at and self.invalid_at and self.invalid_at < self.valid_at:
+            raise ValueError(
+                f"invalid_at ({self.invalid_at}) cannot be before valid_at ({self.valid_at})"
+            )
 
 
 @dataclass
@@ -119,6 +141,17 @@ class GraphitiExtractionResult:
     chunk_results: List[ChunkExtractionResult] = field(default_factory=list)
     processing_time_ms: float = 0.0
     entity_type_counts: Dict[str, int] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Validate extraction result consistency."""
+        if self.successful_chunks + self.failed_chunks != self.total_chunks:
+            raise ValueError(
+                f"Chunk count mismatch: {self.successful_chunks} + {self.failed_chunks} != {self.total_chunks}"
+            )
+        if self.unique_entity_count > self.total_entities:
+            raise ValueError(
+                f"unique_entity_count ({self.unique_entity_count}) cannot exceed total_entities ({self.total_entities})"
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -251,7 +284,7 @@ class GraphitiExtractor:
                 "graphiti-core package required. Install with: uv add graphiti-core"
             ) from e
         except Exception as e:
-            logger.error(f"Failed to initialize Graphiti: {e}")
+            logger.error(f"Failed to initialize Graphiti: {e}", exc_info=True)
             raise
 
     async def close(self) -> None:
@@ -319,7 +352,11 @@ class GraphitiExtractor:
             for i, result in enumerate(batch_results):
                 if isinstance(result, Exception):
                     chunk_id = batch[i].get("chunk_id", f"unknown_{batch_start + i}")
-                    logger.error(f"Failed to process chunk {chunk_id}: {result}")
+                    # Log with traceback for debugging
+                    logger.error(
+                        f"Failed to process chunk {chunk_id}: {result}",
+                        exc_info=(type(result), result, result.__traceback__) if hasattr(result, '__traceback__') else True
+                    )
                     chunk_results.append(
                         ChunkExtractionResult(
                             chunk_id=chunk_id,
@@ -454,8 +491,17 @@ class GraphitiExtractor:
                 processing_time_ms=processing_time_ms,
             )
 
+        except (ConnectionError, TimeoutError) as e:
+            # Expected network errors - log and continue
+            logger.warning(f"Network error processing chunk {chunk_id}: {e}")
+            return ChunkExtractionResult(
+                chunk_id=chunk_id,
+                episode_uuid="",
+                error=f"Network error: {str(e)}",
+            )
         except Exception as e:
-            logger.error(f"Error processing chunk {chunk_id}: {e}")
+            # Unexpected errors - log with traceback for debugging
+            logger.error(f"Unexpected error processing chunk {chunk_id}: {e}", exc_info=True)
             return ChunkExtractionResult(
                 chunk_id=chunk_id,
                 episode_uuid="",

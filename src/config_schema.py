@@ -452,6 +452,12 @@ class KnowledgeGraphConfig(BaseModel):
         ...,
         description="Extract cross-document relationships (expensive)"
     )
+    batch_size: int = Field(
+        default=10,
+        description="Batch size for Graphiti chunk processing (parallel)",
+        ge=1,
+        le=50
+    )
     max_retries: int = Field(..., description="Max retry attempts", ge=0)
     retry_delay: float = Field(..., description="Delay between retries in seconds", ge=0.0)
     timeout: int = Field(..., description="Timeout per extraction batch in seconds", ge=1)
