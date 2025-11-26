@@ -9,6 +9,7 @@
  */
 
 import { FileText, Scale, Shield, FileCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 
 interface WelcomeScreenProps {
@@ -16,30 +17,33 @@ interface WelcomeScreenProps {
   children?: React.ReactNode;
 }
 
+// Prompt templates - titles and prompts use translation keys
 const SUGGESTED_PROMPTS = [
   {
     icon: Scale,
-    title: 'Regulatory Compliance',
-    prompt: 'Jaké jsou požadavky SÚJB pro provoz jaderných zařízení?',
+    titleKey: 'welcome.regulatoryCompliance',
+    promptKey: 'welcome.prompts.regulatoryCompliance',
   },
   {
     icon: Shield,
-    title: 'Safety Analysis',
-    prompt: 'Analyzuj bezpečnostní opatření pro nakládání s radioaktivním odpadem',
+    titleKey: 'welcome.safetyAnalysis',
+    promptKey: 'welcome.prompts.safetyAnalysis',
   },
   {
     icon: FileCheck,
-    title: 'Document Comparison',
-    prompt: 'Porovnej požadavky různých vyhlášek SÚJB',
+    titleKey: 'welcome.documentComparison',
+    promptKey: 'welcome.prompts.documentComparison',
   },
   {
     icon: FileText,
-    title: 'Citation Lookup',
-    prompt: 'Najdi všechny reference na atomový zákon č. 263/2016 Sb.',
+    titleKey: 'welcome.citationLookup',
+    promptKey: 'welcome.prompts.citationLookup',
   },
 ];
 
 export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
+  const { t } = useTranslation();
+
   return (
     <div className={cn(
       'flex-1 flex flex-col items-center justify-center',
@@ -154,7 +158,7 @@ export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
             'text-accent-500 dark:text-accent-500',
             'text-center'
           )}>
-            Suggested Questions
+            {t('welcome.suggestedQuestions')}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {SUGGESTED_PROMPTS.map((item, index) => {
@@ -162,7 +166,7 @@ export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
               return (
                 <button
                   key={index}
-                  onClick={() => onPromptClick(item.prompt)}
+                  onClick={() => onPromptClick(t(item.promptKey))}
                   className={cn(
                     'group relative',
                     'p-4 rounded-xl',
@@ -193,13 +197,13 @@ export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
                         'text-sm font-medium mb-1',
                         'text-accent-900 dark:text-accent-100'
                       )}>
-                        {item.title}
+                        {t(item.titleKey)}
                       </div>
                       <div className={cn(
                         'text-xs line-clamp-2',
                         'text-accent-600 dark:text-accent-400'
                       )}>
-                        {item.prompt}
+                        {t(item.promptKey)}
                       </div>
                     </div>
                   </div>

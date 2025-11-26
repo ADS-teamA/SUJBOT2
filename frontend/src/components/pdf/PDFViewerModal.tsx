@@ -52,7 +52,7 @@ export function PDFViewerModal({
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [scale, setScale] = useState(1.2);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [_isLoading, setIsLoading] = useState(true);
   const [pdfData, setPdfData] = useState<{ data: ArrayBuffer } | null>(null);
   const [pageInputValue, setPageInputValue] = useState(String(initialPage));
 

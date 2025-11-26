@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { Zap, Server } from 'lucide-react';
+import { DollarSign, Server } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 
-type Variant = 'premium' | 'local';
+type Variant = 'premium' | 'cheap' | 'local';
 
 interface VariantInfo {
   variant: Variant;
@@ -16,12 +17,14 @@ interface IndicatorStyle {
 }
 
 export function AgentVariantSelector() {
-  const [currentVariant, setCurrentVariant] = useState<Variant>('premium');
+  const { t } = useTranslation();
+  const [currentVariant, setCurrentVariant] = useState<Variant>('cheap');
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
   const [indicatorStyle, setIndicatorStyle] = useState<IndicatorStyle>({ left: 4, width: 80 });
 
   const premiumRef = useRef<HTMLButtonElement>(null);
+  const cheapRef = useRef<HTMLButtonElement>(null);
   const localRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -32,7 +35,12 @@ export function AgentVariantSelector() {
   // Measure button positions and update indicator
   useLayoutEffect(() => {
     const updateIndicator = () => {
-      const activeRef = currentVariant === 'premium' ? premiumRef : localRef;
+      const refs: Record<Variant, React.RefObject<HTMLButtonElement | null>> = {
+        premium: premiumRef,
+        cheap: cheapRef,
+        local: localRef,
+      };
+      const activeRef = refs[currentVariant];
       const button = activeRef.current;
       const container = containerRef.current;
 
@@ -94,7 +102,7 @@ export function AgentVariantSelector() {
 
   if (isLoading) {
     return (
-      <div className="h-9 w-40 bg-accent-200 dark:bg-accent-700 rounded-lg animate-pulse" />
+      <div className="h-9 w-56 bg-accent-200 dark:bg-accent-700 rounded-lg animate-pulse" />
     );
   }
 
@@ -126,23 +134,51 @@ export function AgentVariantSelector() {
         onClick={() => switchVariant('premium')}
         disabled={isSwitching}
         className={cn(
-          'relative z-10 flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium',
+          'relative z-10 flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium',
           'transition-colors duration-300',
           currentVariant === 'premium'
             ? 'text-accent-900'
             : 'text-accent-500 hover:text-accent-700',
           isSwitching && 'opacity-50 cursor-not-allowed'
         )}
-        title="Premium - Claude Haiku 4.5 (rychlé, kvalitní)"
+        title={t('agentVariant.premiumTooltip')}
       >
-        <Zap
+        <span
+          className={cn(
+            'flex -space-x-1.5 transition-colors duration-300',
+            currentVariant === 'premium' ? 'text-yellow-500' : ''
+          )}
+        >
+          <DollarSign size={14} />
+          <DollarSign size={14} />
+          <DollarSign size={14} />
+        </span>
+        <span>{t('agentVariant.premium')}</span>
+      </button>
+
+      {/* Cheap Button */}
+      <button
+        ref={cheapRef}
+        onClick={() => switchVariant('cheap')}
+        disabled={isSwitching}
+        className={cn(
+          'relative z-10 flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium',
+          'transition-colors duration-300',
+          currentVariant === 'cheap'
+            ? 'text-accent-900'
+            : 'text-accent-500 hover:text-accent-700',
+          isSwitching && 'opacity-50 cursor-not-allowed'
+        )}
+        title={t('agentVariant.cheapTooltip')}
+      >
+        <DollarSign
           size={16}
           className={cn(
             'transition-colors duration-300',
-            currentVariant === 'premium' ? 'text-yellow-500' : ''
+            currentVariant === 'cheap' ? 'text-green-500' : ''
           )}
         />
-        <span>Premium</span>
+        <span>{t('agentVariant.cheap')}</span>
       </button>
 
       {/* Local Button */}
@@ -158,7 +194,7 @@ export function AgentVariantSelector() {
             : 'text-accent-500 hover:text-accent-700',
           isSwitching && 'opacity-50 cursor-not-allowed'
         )}
-        title="Local - Llama 3.1 70B (open-source přes DeepInfra)"
+        title={t('agentVariant.localTooltip')}
       >
         <Server
           size={16}
@@ -167,7 +203,7 @@ export function AgentVariantSelector() {
             currentVariant === 'local' ? 'text-blue-500' : ''
           )}
         />
-        <span>Local</span>
+        <span>{t('agentVariant.local')}</span>
       </button>
     </div>
   );

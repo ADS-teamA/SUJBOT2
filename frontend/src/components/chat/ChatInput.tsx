@@ -4,6 +4,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 
 interface ChatInputProps {
@@ -12,6 +13,7 @@ interface ChatInputProps {
 }
 
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
+  const { t } = useTranslation();
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -63,7 +65,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about legal or technical documents..."
+            placeholder={t('chat.placeholder')}
             disabled={disabled}
             className={cn(
               'flex-1 resize-none px-4 py-3',
@@ -93,10 +95,10 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             )}
             title={
               disabled
-                ? 'Processing...'
+                ? t('chat.processing')
                 : isMessageTooLong
-                ? `Message too long (${message.length.toLocaleString()}/${MAX_MESSAGE_LENGTH.toLocaleString()} chars)`
-                : 'Send message'
+                ? `${t('chat.messageTooLong')} (${message.length.toLocaleString()}/${MAX_MESSAGE_LENGTH.toLocaleString()})`
+                : t('chat.placeholder')
             }
           >
             {disabled ? (
@@ -117,9 +119,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             )}
           >
             {isMessageTooLong && (
-              <span className="mr-2">⚠️ Message too long -</span>
+              <span className="mr-2">⚠️ {t('chat.messageTooLong')} -</span>
             )}
-            {message.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()} characters
+            {message.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()} {t('chat.characters')}
           </div>
         )}
       </div>

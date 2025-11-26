@@ -1,0 +1,125 @@
+{
+  "header": {
+    "tagline": "Inteligentní analýza právních a technických dokumentů",
+    "signOut": "Odhlásit se"
+  },
+  "login": {
+    "email": "E-mail",
+    "password": "Heslo",
+    "enterPassword": "Zadejte heslo",
+    "signIn": "Přihlásit se",
+    "authenticating": "Ověřuji...",
+    "authorizedAccess": "Pouze autorizovaný přístup"
+  },
+  "sidebar": {
+    "newChat": "Nový chat",
+    "noConversations": "Zatím žádné konverzace",
+    "messages": "zpráv",
+    "messageCount_one": "{{count}} zpráva",
+    "messageCount_few": "{{count}} zprávy",
+    "messageCount_other": "{{count}} zpráv",
+    "rename": "Přejmenovat",
+    "delete": "Smazat",
+    "deleteConversation": "Smazat konverzaci"
+  },
+  "chat": {
+    "placeholder": "Zeptejte se na právní nebo technické dokumenty...",
+    "processing": "Zpracovávám...",
+    "messageTooLong": "Zpráva je příliš dlouhá",
+    "characters": "znaků",
+    "you": "Vy",
+    "assistant": "Asistent",
+    "editMessage": "Upravit zprávu",
+    "regenerate": "Vygenerovat znovu",
+    "saveAndSend": "Uložit a odeslat",
+    "cancel": "Zrušit",
+    "details": "detaily",
+    "toolsUsed": "Použité nástroje",
+    "responseTime": "Doba odezvy",
+    "agents": "agentů",
+    "cached": "z cache",
+    "emptyResponse": "Model vrátil prázdnou odpověď. Může jít o chybu API. Zkuste vygenerovat znovu.",
+    "perAgentBreakdown": "Rozpad podle agentů",
+    "tokensIn": "vstup",
+    "tokensOut": "výstup"
+  },
+  "progress": {
+    "planning": "Plánování",
+    "planningDesc": "Analyzuji dotaz a plánuji přístup",
+    "searching": "Vyhledávání",
+    "searchingDesc": "Získávám relevantní dokumenty",
+    "classifying": "Klasifikace",
+    "classifyingDesc": "Kategorizuji obsah",
+    "complianceCheck": "Kontrola shody",
+    "complianceCheckDesc": "Ověřuji regulační shodu",
+    "riskAssessment": "Hodnocení rizik",
+    "riskAssessmentDesc": "Analyzuji potenciální rizika",
+    "citationAudit": "Audit citací",
+    "citationAuditDesc": "Ověřuji citace a zdroje",
+    "synthesizing": "Syntéza",
+    "synthesizingDesc": "Kombinuji informace ze zdrojů",
+    "generatingReport": "Generování reportu",
+    "generatingReportDesc": "Vytvářím finální odpověď",
+    "processing": "Zpracování",
+    "processingDesc": "Pracuji na vašem požadavku",
+    "activeTools": "Aktivní nástroje",
+    "initializing": "Inicializace...",
+    "searchingDocuments": "Vyhledávám dokumenty",
+    "classifyingQuery": "Klasifikuji dotaz",
+    "checkingCompliance": "Kontroluji shodu",
+    "verifyingRisks": "Ověřuji rizika",
+    "auditingCitations": "Audituji citace",
+    "synthesizingInfo": "Syntetizuji informace",
+    "generatingReportMsg": "Generuji report",
+    "runningAgent": "Spouštím {{agent}}"
+  },
+  "welcome": {
+    "suggestedQuestions": "Návrhy",
+    "regulatoryCompliance": "Regulační shoda",
+    "safetyAnalysis": "Bezpečnostní analýza",
+    "documentComparison": "Porovnání dokumentů",
+    "citationLookup": "Vyhledání citací",
+    "prompts": {
+      "regulatoryCompliance": "Jaké jsou požadavky SÚJB na jaderná zařízení?",
+      "safetyAnalysis": "Analyzuj bezpečnostní opatření pro nakládání s radioaktivním odpadem",
+      "documentComparison": "Porovnej požadavky různých vyhlášek SÚJB",
+      "citationLookup": "Najdi všechny odkazy na atomový zákon č. 263/2016 Sb."
+    }
+  },
+  "clarification": {
+    "title": "Je potřeba upřesnění dotazu",
+    "subtitle": "Pomozte zlepšit kvalitu vyhledávání poskytnutím více detailů",
+    "timeRemaining": "Zbývající čas pro odpověď:",
+    "originalQuery": "Váš původní dotaz:",
+    "questionsTitle": "Odpovězte prosím na tyto otázky pro zlepšení vyhledávání:",
+    "yourResponse": "Vaše odpověď:",
+    "responsePlaceholder": "Uveďte prosím jakékoli upřesňující detaily, které pomohou zpřesnit vyhledávání...",
+    "submitTip": "Tip: Stiskněte",
+    "toSubmit": "pro odeslání",
+    "continueWithout": "Pokračovat bez upřesnění",
+    "submit": "Odeslat upřesnění"
+  },
+  "agentVariant": {
+    "premium": "Premium",
+    "premiumTooltip": "Premium - Opus 4.5 + Sonnet 4.5 (nejlepší kvalita)",
+    "cheap": "Levný",
+    "cheapTooltip": "Levný - Haiku 4.5 (rychlé a levné)",
+    "local": "Lokální",
+    "localTooltip": "Lokální - Llama 3.1 70B (open-source přes DeepInfra)"
+  },
+  "degradedMode": {
+    "title": "Běžím v omezeném režimu",
+    "description": "Některé funkce nejsou dostupné: {{components}}. Kvalita vyhledávání může být snížena bez rerankingu. Funkce znalostního grafu jsou vypnuty."
+  },
+  "common": {
+    "loading": "Načítám...",
+    "error": "Chyba",
+    "verifyingSession": "Ověřuji relaci...",
+    "justNow": "Právě teď"
+  },
+  "language": {
+    "switchTo": "Přepnout jazyk",
+    "czech": "Čeština",
+    "english": "English"
+  }
+}

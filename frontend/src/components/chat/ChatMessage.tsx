@@ -14,6 +14,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import { Clock, DollarSign, Edit2, RotateCw, Check, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 import type { Message } from '../../types';
 import { ToolCallDisplay } from './ToolCallDisplay';
@@ -71,6 +72,7 @@ export function ChatMessage({
   disabled = false,
   responseDurationMs,
 }: ChatMessageProps) {
+  const { t } = useTranslation();
   const isUser = message.role === 'user';
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
@@ -130,7 +132,7 @@ export function ChatMessage({
             isUser ? 'text-right' : 'text-left'
           )}
         >
-          {isUser ? 'You' : 'Assistant'}
+          {isUser ? t('chat.you') : t('chat.assistant')}
         </div>
 
         {/* Message bubble */}
@@ -188,7 +190,7 @@ export function ChatMessage({
                   )}
                 >
                   <Check size={14} />
-                  Save & Send
+                  {t('chat.saveAndSend')}
                 </button>
                 <button
                   onClick={handleCancelEdit}
@@ -201,7 +203,7 @@ export function ChatMessage({
                   )}
                 >
                   <X size={14} />
-                  Cancel
+                  {t('chat.cancel')}
                 </button>
               </div>
             </div>
@@ -287,7 +289,7 @@ export function ChatMessage({
                         'text-accent-700 dark:text-accent-300',
                         'text-sm italic'
                       )}>
-                        ⚠️ Model returned empty response. This may indicate an API error. Try regenerating.
+                        ⚠️ {t('chat.emptyResponse')}
                       </div>
                     );
                   }
@@ -406,7 +408,7 @@ export function ChatMessage({
                     'hover:bg-accent-100 dark:hover:bg-accent-800',
                     'transition-colors'
                   )}
-                  title="Edit message"
+                  title={t('chat.editMessage')}
                 >
                   <Edit2 size={14} />
                 </button>
@@ -421,7 +423,7 @@ export function ChatMessage({
                     'hover:bg-accent-100 dark:hover:bg-accent-800',
                     'transition-colors'
                   )}
-                  title="Regenerate response"
+                  title={t('chat.regenerate')}
                 >
                   <RotateCw size={14} />
                 </button>
@@ -439,7 +441,7 @@ export function ChatMessage({
             <Clock size={12} />
             {(() => {
               const date = message.timestamp ? new Date(message.timestamp) : new Date();
-              return !isNaN(date.getTime()) ? date.toLocaleTimeString() : 'Just now';
+              return !isNaN(date.getTime()) ? date.toLocaleTimeString() : t('common.justNow');
             })()}
 
             {/* Minimalist details chevron (only for assistant messages with metadata) */}
@@ -460,7 +462,7 @@ export function ChatMessage({
                       'group-open:rotate-90',
                       'text-xs leading-none'
                     )}>▸</span>
-                    <span className="text-xs leading-none">details</span>
+                    <span className="text-xs leading-none">{t('chat.details')}</span>
                   </summary>
 
                   {/* Dropdown panel below */}
@@ -488,15 +490,15 @@ export function ChatMessage({
                           </span>
                           {message.cost.inputTokens !== undefined && message.cost.outputTokens !== undefined && (
                             <span>
-                              {message.cost.inputTokens.toLocaleString()} in /{' '}
-                              {message.cost.outputTokens.toLocaleString()} out
+                              {message.cost.inputTokens.toLocaleString()} {t('chat.tokensIn')} /{' '}
+                              {message.cost.outputTokens.toLocaleString()} {t('chat.tokensOut')}
                             </span>
                           )}
                           {message.cost.cachedTokens !== undefined && message.cost.cachedTokens > 0 && (
                             <span className={cn(
                               'text-accent-600 dark:text-accent-400'
                             )}>
-                              {message.cost.cachedTokens.toLocaleString()} cached
+                              {message.cost.cachedTokens.toLocaleString()} {t('chat.cached')}
                             </span>
                           )}
                         </div>
@@ -513,7 +515,7 @@ export function ChatMessage({
                               'transition-colors'
                             )}>
                               <span className="inline-block w-3">▸</span>
-                              Per-agent breakdown ({message.cost.agentBreakdown.length} agents)
+                              {t('chat.perAgentBreakdown')} ({message.cost.agentBreakdown.length} {t('chat.agents')})
                             </summary>
                             <div className="mt-2 ml-3 space-y-1">
                               {message.cost.agentBreakdown.map((agent, idx) => {
@@ -546,11 +548,11 @@ export function ChatMessage({
                                     <div className="flex items-center gap-3 text-[11px]">
                                       <span>${cost.toFixed(6)}</span>
                                       <span className="text-accent-400 dark:text-accent-500">
-                                        {inputTokens.toLocaleString()} in / {outputTokens.toLocaleString()} out
+                                        {inputTokens.toLocaleString()} {t('chat.tokensIn')} / {outputTokens.toLocaleString()} {t('chat.tokensOut')}
                                       </span>
                                       {cacheTokens > 0 && (
                                         <span className="text-accent-600 dark:text-accent-400">
-                                          {cacheTokens.toLocaleString()} cached
+                                          {cacheTokens.toLocaleString()} {t('chat.cached')}
                                         </span>
                                       )}
                                       {responseTime > 0 && (
@@ -576,7 +578,7 @@ export function ChatMessage({
                         'text-accent-400 dark:text-accent-500'
                       )}>
                         <Clock size={12} />
-                        Response time: {(responseDurationMs / 1000).toFixed(2)}s
+                        {t('chat.responseTime')}: {(responseDurationMs / 1000).toFixed(2)}s
                       </div>
                     )}
 
@@ -586,7 +588,7 @@ export function ChatMessage({
                         'text-xs',
                         'text-accent-600 dark:text-accent-400'
                       )}>
-                        Tools used: {message.toolCalls.length}
+                        {t('chat.toolsUsed')}: {message.toolCalls.length}
                       </div>
                     )}
                   </div>
