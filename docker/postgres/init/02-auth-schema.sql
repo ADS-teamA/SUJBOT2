@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS auth.users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_login_at TIMESTAMP WITH TIME ZONE,
 
-    -- Agent variant preference
-    agent_variant VARCHAR(20) DEFAULT 'premium' CHECK (agent_variant IN ('premium', 'local'))
+    -- Agent variant preference (premium=Opus+Sonnet, cheap=Haiku, local=Llama)
+    agent_variant VARCHAR(20) DEFAULT 'cheap' CHECK (agent_variant IN ('premium', 'cheap', 'local'))
 );
 
 -- Indexes for fast lookups

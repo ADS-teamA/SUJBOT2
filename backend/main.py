@@ -328,6 +328,25 @@ async def get_models(user: Dict = Depends(get_current_user)):
     )
 
 
+def _create_fallback_title(user_message: str, max_length: int = 50) -> str:
+    """
+    Create fallback title from user message when LLM generation fails.
+
+    Truncates at word boundary if possible, adds ellipsis if truncated.
+    """
+    message = user_message.strip()
+    if len(message) <= max_length:
+        return message
+
+    # Try to truncate at word boundary
+    truncated = message[:max_length].rsplit(' ', 1)[0]
+    if len(truncated) < max_length // 2:
+        # Word boundary too far back, just truncate
+        truncated = message[:max_length - 3]
+
+    return truncated + "..."
+
+
 async def _maybe_generate_title(
     conversation_id: str,
     user_message: str,
@@ -336,9 +355,14 @@ async def _maybe_generate_title(
     """
     Generate title for new conversation with DB lock (multi-worker safe).
 
-    Returns generated title if successful, None otherwise.
+    Returns generated title if successful, fallback title if LLM fails, None if not first message.
     Only generates if this is the first message and no other worker is generating.
+
+    Fallback behavior: If LLM title generation fails, uses truncated user message as title.
+    This ensures conversations never remain with "New Conversation" after first message.
     """
+    title = None
+
     try:
         async with adapter.pool.acquire() as conn:
             # Atomically check conditions and set lock
@@ -358,32 +382,31 @@ async def _maybe_generate_title(
 
             if not result:
                 # Either already generating, or not first message
+                logger.debug(f"Skipping title generation for {conversation_id}: not first message or already generating")
                 return None
 
-        # Generate title (outside the DB connection to avoid blocking)
+        logger.debug(f"Acquired title generation lock for {conversation_id}")
+
+        # Generate title via LLM (outside the DB connection to avoid blocking)
         title = await title_generator.generate_title(user_message)
 
-        if title:
-            # Update title and release lock
-            async with adapter.pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    UPDATE auth.conversations
-                    SET title = $1, is_title_generating = false, updated_at = NOW()
-                    WHERE id = $2
-                    """,
-                    title, conversation_id
-                )
-            logger.info(f"Generated title for {conversation_id}: {title}")
-            return title
-        else:
-            # Release lock even if generation failed
-            async with adapter.pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE auth.conversations SET is_title_generating = false WHERE id = $1",
-                    conversation_id
-                )
-            return None
+        if not title:
+            # LLM failed - use fallback
+            title = _create_fallback_title(user_message)
+            logger.info(f"LLM title generation failed for {conversation_id}, using fallback: {title}")
+
+        # Update title and release lock
+        async with adapter.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE auth.conversations
+                SET title = $1, is_title_generating = false, updated_at = NOW()
+                WHERE id = $2
+                """,
+                title, conversation_id
+            )
+        logger.info(f"Saved title for {conversation_id}: {title}")
+        return title
 
     except asyncio.TimeoutError as e:
         logger.warning(f"Title generation timed out for {conversation_id}: {e}")
@@ -392,20 +415,27 @@ async def _maybe_generate_title(
     except Exception as e:
         logger.error(f"Unexpected error in title generation for {conversation_id}: {e}", exc_info=True)
 
-    # Attempt to release lock on any error
+    # On any error, try to save fallback title and release lock
     try:
+        fallback_title = _create_fallback_title(user_message)
         async with adapter.pool.acquire() as conn:
             await conn.execute(
-                "UPDATE auth.conversations SET is_title_generating = false WHERE id = $1",
-                conversation_id
+                """
+                UPDATE auth.conversations
+                SET title = $1, is_title_generating = false, updated_at = NOW()
+                WHERE id = $2
+                """,
+                fallback_title, conversation_id
             )
+        logger.info(f"Saved fallback title after error for {conversation_id}: {fallback_title}")
+        return fallback_title
     except Exception as lock_error:
         # Log lock release failure - could leave orphaned lock
         logger.error(
-            f"Failed to release title generation lock for {conversation_id}: {lock_error}. "
+            f"Failed to save fallback title and release lock for {conversation_id}: {lock_error}. "
             "This conversation may have orphaned is_title_generating=true flag."
         )
-    return None
+    return title  # Return whatever we generated (may be None)
 
 
 @app.post("/chat/stream")
@@ -496,10 +526,19 @@ async def chat_stream(
         collected_metadata = {}
 
         try:
+            # Convert messages to list of dicts for agent
+            message_history = None
+            if request.messages:
+                message_history = [
+                    {"role": msg.role, "content": msg.content}
+                    for msg in request.messages
+                ]
+
             async for event in agent_adapter.stream_response(
                 query=request.message,
                 conversation_id=request.conversation_id,
-                user_id=user["id"]
+                user_id=user["id"],
+                messages=message_history
             ):
                 # Format as SSE event
                 event_type = event["event"]
