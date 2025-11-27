@@ -216,6 +216,7 @@ class MultiAgentRunner:
         from ..embedding_generator import EmbeddingGenerator
         from ..reranker import CrossEncoderReranker
         from ..agent.config import ToolConfig
+        from ..graph_retrieval import GraphEnhancedRetriever, GraphRetrievalConfig
         from ..agent.providers.factory import create_provider
         import os
 
@@ -441,7 +442,39 @@ class MultiAgentRunner:
                 lazy_load_reranker=agent_tools_config.get("lazy_load_reranker", False),
                 lazy_load_graph=agent_tools_config.get("lazy_load_graph", True),
                 cache_embeddings=agent_tools_config.get("cache_embeddings", True),
+                hyde_num_hypotheses=agent_tools_config.get("hyde_num_hypotheses", 3),
+                query_expansion_provider=agent_tools_config.get(
+                    "query_expansion_provider", "openai"
+                ),
+                query_expansion_model=agent_tools_config.get("query_expansion_model", "gpt-4o-mini"),
             )
+
+            # Instantiate graph retriever if KG + boost enabled
+            graph_retriever = None
+            if (
+                knowledge_graph
+                and vector_store
+                and tool_config.enable_graph_boost
+                and len(knowledge_graph.entities) > 0
+            ):
+                try:
+                    graph_retriever_config = GraphRetrievalConfig(
+                        enable_graph_boost=True,
+                        graph_boost_weight=tool_config.graph_boost_weight,
+                        enable_multi_hop=agent_tools_config.get("enable_graph_multi_hop", False),
+                        max_hop_depth=agent_tools_config.get("graph_max_hop_depth", 2),
+                    )
+                    graph_retriever = GraphEnhancedRetriever(
+                        vector_store=vector_store,
+                        knowledge_graph=knowledge_graph,
+                        config=graph_retriever_config,
+                    )
+                    logger.info(
+                        "GraphEnhancedRetriever initialized "
+                        f"(boost_weight={graph_retriever_config.graph_boost_weight})"
+                    )
+                except Exception as e:
+                    logger.warning(f"Graph retriever unavailable: {e}. Continuing without boost.")
 
             # Initialize tools in registry
             registry = get_registry()
@@ -450,14 +483,11 @@ class MultiAgentRunner:
                 vector_store=vector_store,
                 embedder=embedder,
                 reranker=reranker,
-                graph_retriever=None,  # TODO: Add graph retriever if needed
+                graph_retriever=graph_retriever,
                 knowledge_graph=knowledge_graph,
-                context_assembler=None,  # TODO: Add context assembler if needed
+                context_assembler=context_assembler,
                 llm_provider=self.llm_provider,
-                config=ToolConfig(
-                    default_k=6,
-                    enable_reranking=reranker is not None,
-                ),
+                config=tool_config,
             )
 
             # Log results

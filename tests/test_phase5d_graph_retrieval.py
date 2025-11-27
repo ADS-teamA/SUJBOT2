@@ -394,13 +394,15 @@ def test_graph_enhanced_search_with_boost(
     mock_vector_store, sample_knowledge_graph, sample_hybrid_results
 ):
     """Test search with graph boosting enabled."""
-    from src.graph_retrieval import GraphEnhancedRetriever
+    from src.graph_retrieval import GraphEnhancedRetriever, GraphRetrievalConfig
 
     # Mock vector store
     mock_vector_store.hierarchical_search.return_value = sample_hybrid_results
 
     retriever = GraphEnhancedRetriever(
-        vector_store=mock_vector_store, knowledge_graph=sample_knowledge_graph
+        vector_store=mock_vector_store,
+        knowledge_graph=sample_knowledge_graph,
+        config=GraphRetrievalConfig(graph_boost_weight=0.3),
     )
 
     query = "GRI 306 requirements"
@@ -416,6 +418,30 @@ def test_graph_enhanced_search_with_boost(
     # Check that chunks have boost scores
     for chunk in results["layer3"]:
         assert "graph_boost" in chunk or "boosted_score" in chunk
+
+
+def test_graph_boost_weight_respected(
+    mock_vector_store, sample_knowledge_graph, sample_hybrid_results
+):
+    """Graph boost weight from config should control entity boost magnitude."""
+    from src.graph_retrieval import GraphEnhancedRetriever, GraphRetrievalConfig
+
+    mock_vector_store.hierarchical_search.return_value = sample_hybrid_results
+
+    config = GraphRetrievalConfig(graph_boost_weight=0.5)
+    retriever = GraphEnhancedRetriever(
+        vector_store=mock_vector_store, knowledge_graph=sample_knowledge_graph, config=config
+    )
+
+    query = "Explain GRI 306 waste rules"
+    query_embedding = np.array([0.2] * 3072)
+
+    results = retriever.search(
+        query=query, query_embedding=query_embedding, k=3, enable_graph_boost=True
+    )
+
+    boosted_chunk = next(c for c in results["layer3"] if c.get("graph_boost", 0) > 0)
+    assert boosted_chunk["graph_boost"] == pytest.approx(0.5)
 
 
 # Test: Statistics
