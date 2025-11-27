@@ -429,6 +429,13 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
    - Hlavní téma a účel dokumentu
    - Genericky srozumitelné pro laiky
 
+9. **page_number** = FYZICKÉ číslo stránky v PDF (1-based od začátku souboru)
+   - NEPOUŽÍVEJ tištěné číslo stránky ze zápatí/záhlaví dokumentu
+   - První stránka PDF souboru = page_number: 1
+   - Pokud sekce začíná na stránce 5 PDF souboru → page_number: 5
+   - Pokud není stránka jasná, vynech pole page_number (neuvádej null ani 0)
+   - page_number je POVINNÉ pro každou sekci kde je stránka zjistitelná
+
 ## PŘÍKLAD VÝSTUPU pro právní dokument:
 
 ```json
@@ -442,10 +449,10 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
     "summary": "Zákon upravuje podmínky využívání jaderné energie, ionizujícího záření a nakládání s radioaktivními odpady. Stanoví požadavky na bezpečnost, odpovědnost provozovatelů a ochranu před zářením."
   },
   "sections": [
-    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": "OBECNÁ USTANOVENÍ", "content": "Tato část stanoví základní pojmy a principy pro využívání jaderné energie.", "level": 1, "path": "ČÁST I", "summary": "Definuje základní pojmy a principy atomového zákona."},
-    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "content": "Tato hlava upravuje odpovědnost za škody způsobené jadernou havárií.", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I", "summary": "Definuje pravidla odpovědnosti za jaderné škody."},
-    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": "Odpovědnost provozovatele", "content": "Provozovatel jaderného zařízení odpovídá za škody způsobené jadernou havárií.", "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ", "summary": "Stanoví odpovědnost provozovatele."},
-    {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 1, "summary": "Odkazuje na mezinárodní smlouvu pro řešení odpovědnosti za jaderné škody."}
+    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": "OBECNÁ USTANOVENÍ", "content": "Tato část stanoví základní pojmy a principy pro využívání jaderné energie.", "level": 1, "path": "ČÁST I", "page_number": 3, "summary": "Definuje základní pojmy a principy atomového zákona."},
+    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "content": "Tato hlava upravuje odpovědnost za škody způsobené jadernou havárií.", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I", "page_number": 15, "summary": "Definuje pravidla odpovědnosti za jaderné škody."},
+    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": "Odpovědnost provozovatele", "content": "Provozovatel jaderného zařízení odpovídá za škody způsobené jadernou havárií.", "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ", "page_number": 15, "summary": "Stanoví odpovědnost provozovatele."},
+    {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 15, "summary": "Odkazuje na mezinárodní smlouvu pro řešení odpovědnosti za jaderné škody."}
   ]
 }
 ```
@@ -524,7 +531,20 @@ class GeminiExtractor:
             gemini_config: Gemini-specific configuration
         """
         self.config = config
-        self.gemini_config = gemini_config or GeminiExtractionConfig()
+
+        # Create GeminiExtractionConfig from ExtractionConfig if not provided
+        if gemini_config is not None:
+            self.gemini_config = gemini_config
+        elif config is not None:
+            # Read gemini-specific settings from ExtractionConfig
+            self.gemini_config = GeminiExtractionConfig(
+                model=getattr(config, 'gemini_model', DEFAULT_MODEL),
+                max_output_tokens=getattr(config, 'gemini_max_output_tokens', 65536),
+                file_size_threshold_mb=getattr(config, 'gemini_file_size_threshold_mb', 10.0),
+                fallback_to_unstructured=getattr(config, 'gemini_fallback_to_unstructured', True),
+            )
+        else:
+            self.gemini_config = GeminiExtractionConfig()
 
         # Configure Gemini API
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -633,14 +653,17 @@ class GeminiExtractor:
                 # 2. Extract hierarchy with Gemini
                 raw_extraction = self._extract_with_gemini(uploaded_file)
 
-                # 3. Convert to ExtractedDocument format
+                # 3. Get page count for validation
+                total_pages = self._get_page_count(file_path)
+
+                # 4. Convert to ExtractedDocument format
                 extraction_time = time.time() - start_time
                 return self._convert_to_extracted_document(
-                    raw_extraction, file_path, extraction_time
+                    raw_extraction, file_path, extraction_time, total_pages
                 )
 
             finally:
-                # 4. Cleanup uploaded file
+                # 5. Cleanup uploaded file
                 self._cleanup_file(uploaded_file)
 
         except json.JSONDecodeError as e:
@@ -695,8 +718,15 @@ class GeminiExtractor:
         logger.info(f"File ready: {uploaded_file.uri}")
         return uploaded_file
 
-    def _extract_with_gemini(self, uploaded_file: genai.types.File) -> dict:
-        """Run extraction with Gemini model."""
+    def _extract_with_gemini(
+        self, uploaded_file: genai.types.File, prompt: Optional[str] = None
+    ) -> dict:
+        """Run extraction with Gemini model.
+
+        Args:
+            uploaded_file: The uploaded file to extract from
+            prompt: Optional custom prompt (defaults to EXTRACTION_PROMPT)
+        """
         model = genai.GenerativeModel(
             self.model_id,
             generation_config={
@@ -706,8 +736,9 @@ class GeminiExtractor:
             },
         )
 
+        extraction_prompt = prompt if prompt is not None else EXTRACTION_PROMPT
         logger.info(f"Generating extraction with {self.model_id}...")
-        response = model.generate_content([uploaded_file, EXTRACTION_PROMPT])
+        response = model.generate_content([uploaded_file, extraction_prompt])
 
         # Parse JSON response with SOTA repair for truncated/malformed output
         result = _repair_truncated_json(response.text)
@@ -816,8 +847,19 @@ class GeminiExtractor:
             uploaded_file = self._upload_document(chunk_path)
 
             try:
-                # Extract from chunk
-                raw_extraction = self._extract_with_gemini(uploaded_file)
+                # Extract from chunk with chunk-specific prompt
+                # Tell Gemini this is a chunk and to use 1-based page numbers within the chunk
+                max_pages = self.gemini_config.max_pages_per_chunk
+                chunk_prompt = f"""DŮLEŽITÉ: Zpracováváš ČÁST většího dokumentu (chunk {chunk_index + 1}).
+Tento chunk obsahuje stránky {page_offset + 1} až {page_offset + max_pages} původního dokumentu.
+
+Pro page_number uvádějte čísla RELATIVNĚ k tomuto chunku:
+- První stránka tohoto chunku = page_number: 1
+- Druhá stránka tohoto chunku = page_number: 2
+- atd.
+
+{EXTRACTION_PROMPT}"""
+                raw_extraction = self._extract_with_gemini(uploaded_file, prompt=chunk_prompt)
 
                 # Handle case where Gemini returns a list instead of dict
                 if isinstance(raw_extraction, list):
@@ -1003,7 +1045,7 @@ class GeminiExtractor:
             f"(success rate: {success_rate:.0%}, parallel batches of {batch_size})"
         )
 
-        return self._convert_to_extracted_document(merged_raw, file_path, extraction_time)
+        return self._convert_to_extracted_document(merged_raw, file_path, extraction_time, total_pages)
 
     def _deduplicate_sections_by_path(self, sections: List[Dict]) -> List[Dict]:
         """
@@ -1083,7 +1125,7 @@ class GeminiExtractor:
         return deduplicated
 
     def _convert_to_extracted_document(
-        self, raw: dict, file_path: Path, extraction_time: float
+        self, raw: dict, file_path: Path, extraction_time: float, total_pages: int = 0
     ) -> ExtractedDocument:
         """
         Convert Gemini JSON output to ExtractedDocument format.
@@ -1095,11 +1137,13 @@ class GeminiExtractor:
         4. Calculates char_start/char_end offsets for each section
         5. Populates children_ids based on parent relationships
         6. Generates markdown representation
+        7. Validates and interpolates page numbers
 
         Args:
             raw: Raw JSON dict from Gemini extraction
             file_path: Path to source document
             extraction_time: Time taken for extraction in seconds
+            total_pages: Total number of pages in the PDF (for validation)
 
         Returns:
             ExtractedDocument with all sections and metadata
@@ -1142,7 +1186,26 @@ class GeminiExtractor:
             content = _to_str(sec.get("content"))
             level = sec.get("level", 1)
             path = _to_str(sec.get("path"))
-            page_number = sec.get("page_number") or 0
+
+            # Validate page_number: must be positive and within PDF page count
+            raw_page = sec.get("page_number")
+            if raw_page is not None:
+                try:
+                    page_number = int(raw_page)
+                    # Validate against total_pages if available
+                    if total_pages > 0 and page_number > total_pages:
+                        logger.warning(
+                            f"Section {section_id} has invalid page_number {page_number} > {total_pages}, "
+                            "will attempt interpolation"
+                        )
+                        page_number = None  # Mark for interpolation
+                    elif page_number <= 0:
+                        page_number = None  # Invalid, mark for interpolation
+                except (ValueError, TypeError):
+                    page_number = None  # Invalid value
+            else:
+                page_number = None  # Missing
+
             element_type = sec.get("element_type", "unknown")
             parent_number = sec.get("parent_number")
             summary = _to_str(sec.get("summary")) or None  # Section summary from Gemini
@@ -1194,14 +1257,15 @@ class GeminiExtractor:
                         parent.children_ids.append(section.section_id)
                         break
 
-        # Build full text and markdown
+        # Interpolate missing page numbers from neighbors
+        self._interpolate_page_numbers(sections, total_pages)
+
+        # Build full text (markdown generation removed - not used in pipeline)
         full_text = "\n\n".join(
             f"{sec.title}\n{sec.content}" if sec.title else sec.content
             for sec in sections
             if sec.content
         )
-
-        markdown = self._generate_markdown(sections)
 
         # Calculate stats
         hierarchy_depth = max((s.depth for s in sections), default=0)
@@ -1212,7 +1276,7 @@ class GeminiExtractor:
             source_path=str(file_path),
             extraction_time=extraction_time,
             full_text=full_text,
-            markdown=markdown,
+            markdown="",  # Not used in pipeline
             json_content=json.dumps(raw, ensure_ascii=False),
             sections=sections,
             hierarchy_depth=hierarchy_depth,
@@ -1233,23 +1297,65 @@ class GeminiExtractor:
             },
         )
 
-    def _generate_markdown(self, sections: List[DocumentSection]) -> str:
-        """Generate markdown from sections."""
-        lines = []
+    def _interpolate_page_numbers(
+        self, sections: List[DocumentSection], total_pages: int
+    ) -> None:
+        """
+        Interpolate missing page numbers based on surrounding sections.
 
-        for section in sections:
-            # Add heading based on level
-            if section.title:
-                heading_level = min(section.level, 6)
-                lines.append("#" * heading_level + " " + section.title)
+        For sections with page_number=None, attempts to estimate the page number
+        by looking at neighboring sections with valid page numbers.
 
-            # Add content
-            if section.content and section.content != section.title:
-                lines.append(section.content)
+        Args:
+            sections: List of DocumentSection objects (modified in place)
+            total_pages: Total number of pages in the PDF (for validation)
+        """
+        missing_count = sum(1 for s in sections if s.page_number is None)
+        if missing_count == 0:
+            return
 
-            lines.append("")  # Empty line
+        logger.info(f"Interpolating {missing_count} missing page numbers")
 
-        return "\n".join(lines)
+        for i, section in enumerate(sections):
+            if section.page_number is not None:
+                continue
+
+            # Look for nearest neighbors with valid page numbers
+            prev_page = None
+            next_page = None
+
+            # Search backwards for previous valid page
+            for j in range(i - 1, -1, -1):
+                if sections[j].page_number is not None:
+                    prev_page = sections[j].page_number
+                    break
+
+            # Search forwards for next valid page
+            for j in range(i + 1, len(sections)):
+                if sections[j].page_number is not None:
+                    next_page = sections[j].page_number
+                    break
+
+            # Interpolate based on available neighbors
+            if prev_page is not None and next_page is not None:
+                # Use average of neighbors
+                section.page_number = (prev_page + next_page) // 2
+            elif prev_page is not None:
+                # Use previous page (assume same page or next)
+                section.page_number = prev_page
+            elif next_page is not None:
+                # Use next page (assume same page or previous)
+                section.page_number = max(1, next_page)
+            else:
+                # No neighbors with valid pages - use 1 as fallback
+                section.page_number = 1
+
+            # Final validation against total_pages
+            if total_pages > 0 and section.page_number > total_pages:
+                section.page_number = total_pages
+
+        interpolated = sum(1 for s in sections if s.page_number is not None)
+        logger.info(f"After interpolation: {interpolated}/{len(sections)} sections have page numbers")
 
 
 def get_extractor(

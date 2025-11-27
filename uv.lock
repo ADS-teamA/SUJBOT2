@@ -3705,6 +3705,7 @@ dependencies = [
     { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "python-pptx" },
+    { name = "pyvis" },
     { name = "pyyaml" },
     { name = "rank-bm25" },
     { name = "rapidocr" },
@@ -3791,7 +3792,7 @@ requires-dist = [
     { name = "filetype", specifier = ">=1.2.0" },
     { name = "google-api-core", specifier = ">=2.0.0" },
     { name = "google-generativeai", specifier = ">=0.8.0" },
-    { name = "graphiti-core", specifier = ">=0.8.0" },
+    { name = "graphiti-core", specifier = "==0.24.1" },
     { name = "hdbscan", specifier = ">=0.8.33" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
     { name = "json-repair", specifier = ">=0.54.1" },
@@ -3817,7 +3818,7 @@ requires-dist = [
     { name = "nltk", marker = "extra == 'all'", specifier = ">=3.8.0" },
     { name = "nltk", marker = "extra == 'language-support'", specifier = ">=3.8.0" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "openai", specifier = ">=1.3.0" },
+    { name = "openai", specifier = ">=2.0.0" },
     { name = "opencv-python", specifier = ">=4.5.1" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.1.4" },
@@ -3835,6 +3836,7 @@ requires-dist = [
     { name = "python-docx", specifier = ">=1.1.2" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-pptx", specifier = ">=1.0.2" },
+    { name = "pyvis", specifier = ">=0.3.2" },
     { name = "pyvis", marker = "extra == 'knowledge-graph'", specifier = ">=0.3.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
@@ -4528,7 +4530,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "2.7.2"
+version = "2.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -4540,9 +4542,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/e3/cec27fa28ef36c4ccea71e9e8c20be9b8539618732989a82027575aab9d4/openai-2.7.2.tar.gz", hash = "sha256:082ef61163074d8efad0035dd08934cf5e3afd37254f70fc9165dd6a8c67dcbd", size = 595732, upload-time = "2025-11-10T16:42:31.108Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/e4/42591e356f1d53c568418dc7e30dcda7be31dd5a4d570bca22acb0525862/openai-2.8.1.tar.gz", hash = "sha256:cb1b79eef6e809f6da326a7ef6038719e35aa944c42d081807bfa1be8060f15f", size = 602490, upload-time = "2025-11-17T22:39:59.549Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/25/66/22cfe4b695b5fd042931b32c67d685e867bfd169ebf46036b95b57314c33/openai-2.7.2-py3-none-any.whl", hash = "sha256:116f522f4427f8a0a59b51655a356da85ce092f3ed6abeca65f03c8be6e073d9", size = 1008375, upload-time = "2025-11-10T16:42:28.574Z" },
+    { url = "https://files.pythonhosted.org/packages/55/4f/dbc0c124c40cb390508a82770fb9f6e3ed162560181a85089191a851c59a/openai-2.8.1-py3-none-any.whl", hash = "sha256:c6c3b5a04994734386e8dad3c00a393f56d3b68a27cd2e8acae91a59e4122463", size = 1022688, upload-time = "2025-11-17T22:39:57.675Z" },
 ]
 
 [[package]]

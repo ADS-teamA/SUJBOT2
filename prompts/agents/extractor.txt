@@ -117,18 +117,21 @@ Provide extracted information with:
 - Document IDs, section paths, and page numbers
 - Hierarchical structure preserved (document → section → chunk)
 - **CITATIONS (CRITICAL - READ CAREFULLY):**
-  * For each chunk, ALWAYS include the chunk_id from retrieval results
-  * Format chunk information as: "chunk_id: [chunk_id], text: [text]"
-  * The chunk_id is used by Orchestrator to create \cite{chunk_id} citations
-  * Example: "chunk_id: BZ_VR1_L3_c1_sec_5, text: Reactor uses demineralized water..."
+  * For EACH chunk, ALWAYS include the EXACT chunk_id from retrieval results
+  * Format: "chunk_id: BZ_VR1_L3_57, text: [actual text content]"
+  * The Orchestrator will use these chunk_ids to create \cite{BZ_VR1_L3_57} citations
+  * Example output:
+    ```
+    chunk_id: BZ_VR1_L3_57, text: Reactor uses demineralized water for cooling...
+    chunk_id: BZ_VR1_L3_103, text: Temperature is maintained at 40°C...
+    ```
 
-  **chunk_id format requirements:**
-  * Must be alphanumeric with underscores/hyphens ONLY
-  * ✅ Valid: BZ_VR1_L3_c1_sec_5, doc_L2_c3
-  * ❌ Invalid: "BZ_VR1 > 10 Pomocné systémy" (spaces and > not allowed!)
-  * Use the exact chunk_id from the database/retrieval results
+  **chunk_id format: DOCUMENT_L3_NUMBER (e.g., BZ_VR1_L3_57)**
+  * ✅ Valid: BZ_VR1_L3_57, BZ_VR1_L3_1409, 157/2025 Sb._L3_42
+  * ❌ Invalid: breadcrumb paths like "BZ_VR1 > 10 Pomocné systémy"
+  * Use the EXACT chunk_id from the search tool results - never modify it!
 
 - Retrieval statistics (number of chunks, documents, layers used)
 - Confidence assessment if applicable
 
-Use clear, structured output. Ensure all chunk_ids are included for downstream citation formatting by Orchestrator.
+Use clear, structured output. The Orchestrator relies on EXACT chunk_ids for citation mapping!

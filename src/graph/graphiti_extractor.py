@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,36 @@ from src.graph.graphiti_types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+
+def _sanitize_group_id(document_id: str) -> str:
+    """
+    Sanitize document_id to be valid for Graphiti group_id.
+
+    Graphiti requires group_id to contain only alphanumeric characters,
+    dashes, or underscores. This function converts Czech legal document
+    identifiers like "18/1997 Sb." to "18_1997_Sb".
+
+    Args:
+        document_id: Original document identifier
+
+    Returns:
+        Sanitized group_id safe for Graphiti
+    """
+    # Replace / with underscore
+    sanitized = document_id.replace("/", "_")
+    # Replace spaces with underscore
+    sanitized = sanitized.replace(" ", "_")
+    # Remove dots at the end (e.g., "Sb.")
+    sanitized = sanitized.rstrip(".")
+    # Remove any remaining invalid characters (keep only alphanumeric, dash, underscore)
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "", sanitized)
+    return sanitized
 
 
 # =============================================================================
@@ -223,12 +254,13 @@ class GraphitiExtractor:
         self._graphiti = None
         self._initialized = False
 
-        # Custom entity types for extraction
-        self._entity_types = self._build_entity_types()
+        # Don't use custom entity types - they cause Neo4j nested Map errors
+        # Graphiti's default extraction works fine without custom types
+        self._entity_types = None
 
         logger.info(
             f"GraphitiExtractor initialized: model={self.model_name}, "
-            f"batch_size={batch_size}, entity_types={len(self._entity_types)}"
+            f"batch_size={batch_size}, entity_types=default"
         )
 
     def _build_entity_types(self) -> Dict[str, Type[BaseModel]]:
@@ -254,6 +286,92 @@ class GraphitiExtractor:
         logger.debug(f"Built {len(entity_types)} entity types for Graphiti")
         return entity_types
 
+    def _patch_neo4j_community_compatibility(self) -> None:
+        """
+        Monkey-patch Graphiti to work with Neo4j Community Edition.
+
+        Neo4j Community doesn't support dynamic label syntax: SET n:$(node.labels)
+        Standard solution: Store labels as a property array (like KUZU does) instead
+        of dynamic Neo4j labels. Queries filter via WHERE "Type" IN n.labels.
+
+        IMPORTANT: Must patch both the module AND imported references in bulk_utils.
+        """
+        import graphiti_core.models.nodes.node_db_queries as node_queries
+        import graphiti_core.utils.bulk_utils as bulk_utils
+        from graphiti_core.driver.driver import GraphProvider
+
+        # Store original function
+        original_get_entity_node_save_bulk_query = node_queries.get_entity_node_save_bulk_query
+
+        def patched_get_entity_node_save_bulk_query(
+            provider: GraphProvider, nodes: list, has_aoss: bool = False
+        ):
+            """Patched version that works with Neo4j Community Edition.
+
+            Uses KUZU-style approach: labels stored as property array, not dynamic labels.
+            This is the standard way - no Enterprise features needed.
+            """
+            if provider != GraphProvider.NEO4J:
+                return original_get_entity_node_save_bulk_query(provider, nodes, has_aoss)
+
+            # Standard approach: store labels as property (like KUZU)
+            # No dynamic SET n:$(labels) - just SET n.labels = node.labels
+            save_embedding_query = (
+                'WITH n, node CALL db.create.setNodeVectorProperty(n, "name_embedding", node.name_embedding)'
+                if not has_aoss
+                else ""
+            )
+
+            # Simple query - labels stored in n.labels property array
+            return (
+                """
+                    UNWIND $nodes AS node
+                    MERGE (n:Entity {uuid: node.uuid})
+                    SET n = node
+                    """
+                + save_embedding_query
+                + """
+                RETURN n.uuid AS uuid
+            """
+            )
+
+        # Also patch single-node save query
+        original_get_entity_node_save_query = node_queries.get_entity_node_save_query
+
+        def patched_get_entity_node_save_query(
+            provider: GraphProvider, labels: str, has_aoss: bool = False
+        ) -> str:
+            """Patched single-node save query for Neo4j Community."""
+            if provider != GraphProvider.NEO4J:
+                return original_get_entity_node_save_query(provider, labels, has_aoss)
+
+            # Standard approach: don't use SET n:{labels}, let labels be stored as property
+            save_embedding_query = (
+                'WITH n CALL db.create.setNodeVectorProperty(n, "name_embedding", $entity_data.name_embedding)'
+                if not has_aoss
+                else ""
+            )
+            return (
+                """
+                MERGE (n:Entity {uuid: $entity_data.uuid})
+                SET n = $entity_data
+                """
+                + save_embedding_query
+                + """
+                RETURN n.uuid AS uuid
+            """
+            )
+
+        # Apply patches to both the module AND the imported references
+        # This is critical because Python caches imports
+        node_queries.get_entity_node_save_bulk_query = patched_get_entity_node_save_bulk_query
+        node_queries.get_entity_node_save_query = patched_get_entity_node_save_query
+
+        # Also patch the imported reference in bulk_utils (Python import caching!)
+        bulk_utils.get_entity_node_save_bulk_query = patched_get_entity_node_save_bulk_query
+
+        logger.info("Applied Neo4j Community compatibility patch (labels as property)")
+
     async def initialize(self) -> None:
         """
         Lazy async initialization of Graphiti client.
@@ -270,10 +388,30 @@ class GraphitiExtractor:
 
             logger.info(f"Initializing Graphiti connection to {self.neo4j_uri}")
 
+            # Use OpenAI client since we're not using custom entity types anymore
+            # (Custom entity types with nested maps caused the original OpenAI schema issues,
+            # but without them, OpenAI works fine)
+            # IMPORTANT: Disable reasoning parameter - gpt-4o-mini doesn't support it
+            from graphiti_core.llm_client.openai_client import OpenAIClient
+            from graphiti_core.llm_client.config import LLMConfig
+
+            llm_config = LLMConfig(
+                api_key=os.environ.get("OPENAI_API_KEY"),
+                model=self.model_name if "gpt" in self.model_name.lower() else "gpt-4o-mini",
+            )
+            # Disable reasoning and verbosity parameters (only supported by gpt-5/o1/o3)
+            llm_client = OpenAIClient(config=llm_config, reasoning=None, verbosity=None)
+
+            # MONKEY-PATCH: Fix Neo4j Community Edition compatibility
+            # Neo4j Community doesn't support dynamic labels (SET n:$(node.labels))
+            # We patch the bulk query to use Neptune-style per-node queries instead
+            self._patch_neo4j_community_compatibility()
+
             self._graphiti = Graphiti(
                 uri=self.neo4j_uri,
                 user=self.neo4j_user,
                 password=self.neo4j_password,
+                llm_client=llm_client,
             )
 
             # Build indices and constraints for efficient queries
@@ -454,13 +592,15 @@ class GraphitiExtractor:
 
         try:
             # Add chunk as episode
+            # Sanitize group_id for Graphiti (only alphanumeric, dash, underscore allowed)
+            sanitized_group_id = _sanitize_group_id(document_id)
             result = await self._graphiti.add_episode(
                 name=f"chunk_{chunk_id}",
                 episode_body=raw_content,
                 source=EpisodeType.text,
                 source_description=f"Document chunk from {document_id}",
                 reference_time=reference_time,
-                group_id=document_id,
+                group_id=sanitized_group_id,
                 entity_types=self._entity_types,
             )
 
@@ -551,7 +691,13 @@ class GraphitiExtractor:
         if isinstance(data, list):
             chunks = data
         elif isinstance(data, dict):
-            chunks = data.get("chunks", data.get("items", []))
+            # Support multi-layer format (layer1, layer2, layer3)
+            if "layer3" in data:
+                # Use Layer 3 chunks for KG extraction (most granular)
+                chunks = data["layer3"]
+                logger.info(f"Using layer3 chunks ({len(chunks)} items) for KG extraction")
+            else:
+                chunks = data.get("chunks", data.get("items", []))
         else:
             raise ValueError(f"Unexpected phase3 format: {type(data)}")
 

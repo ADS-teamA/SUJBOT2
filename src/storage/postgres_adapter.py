@@ -3,11 +3,17 @@ PostgreSQL Vector Store Adapter with pgvector
 
 New implementation using PostgreSQL + pgvector for vector similarity search.
 Replaces FAISS in-memory store with persistent database backend.
+
+Supports metadata filtering for:
+- Categories (document-level, propagated to chunks)
+- Keywords (section-level, propagated to chunks)
+- Entities (from entity labeling)
 """
 
 import asyncio
 import asyncpg
 import numpy as np
+from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, TYPE_CHECKING
 import logging
 import nest_asyncio
@@ -18,6 +24,127 @@ if TYPE_CHECKING:
     from src.multi_layer_chunker import Chunk
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MetadataFilter:
+    """
+    Metadata filter for vector search queries.
+
+    Supports filtering by:
+    - category: Exact match on category (from document labeling)
+    - categories: Match any of these categories
+    - keywords: Must contain ALL of these keywords (AND)
+    - keywords_any: Must contain ANY of these keywords (OR)
+    - entities: Must contain ANY of these entities
+    - entity_types: Must contain ANY of these entity types
+    - min_confidence: Minimum category confidence (0.0-1.0)
+
+    Example:
+        >>> filter = MetadataFilter(
+        ...     category="nuclear_safety",
+        ...     keywords=["dozimetrie", "radiace"],
+        ...     min_confidence=0.8
+        ... )
+        >>> results = adapter.search_layer3(query_vec, k=10, metadata_filter=filter)
+    """
+
+    # Category filtering (from document labeling)
+    category: Optional[str] = None
+    categories: Optional[List[str]] = None  # Match any
+
+    # Keyword filtering (from section labeling)
+    keywords: Optional[List[str]] = None  # Match all (AND)
+    keywords_any: Optional[List[str]] = None  # Match any (OR)
+
+    # Entity filtering (from entity labeling)
+    entities: Optional[List[str]] = None  # Match any
+    entity_types: Optional[List[str]] = None  # Match any
+
+    # Confidence threshold
+    min_confidence: Optional[float] = None
+
+    def to_sql_conditions(self, param_offset: int = 0) -> tuple[str, List[Any]]:
+        """
+        Convert filter to SQL WHERE conditions and parameters.
+
+        Uses PostgreSQL JSONB operators:
+        - ->> for text extraction
+        - @> for containment
+        - ?| for any-of array match
+        - ?& for all-of array match
+
+        Args:
+            param_offset: Starting parameter number (for $1, $2, etc.)
+
+        Returns:
+            Tuple of (SQL condition string, list of parameter values)
+        """
+        conditions = []
+        params = []
+        param_idx = param_offset + 1
+
+        # Category exact match
+        if self.category:
+            conditions.append(f"metadata->>'category' = ${param_idx}")
+            params.append(self.category)
+            param_idx += 1
+
+        # Categories any-of match
+        if self.categories:
+            # metadata->>'category' IN ('cat1', 'cat2', ...)
+            placeholders = ", ".join(f"${param_idx + i}" for i in range(len(self.categories)))
+            conditions.append(f"metadata->>'category' IN ({placeholders})")
+            params.extend(self.categories)
+            param_idx += len(self.categories)
+
+        # Keywords ALL match (AND)
+        if self.keywords:
+            # metadata->'keywords' ?& ARRAY['kw1', 'kw2']
+            conditions.append(f"metadata->'keywords' ?& ${param_idx}::text[]")
+            params.append(self.keywords)
+            param_idx += 1
+
+        # Keywords ANY match (OR)
+        if self.keywords_any:
+            # metadata->'keywords' ?| ARRAY['kw1', 'kw2']
+            conditions.append(f"metadata->'keywords' ?| ${param_idx}::text[]")
+            params.append(self.keywords_any)
+            param_idx += 1
+
+        # Entities ANY match
+        if self.entities:
+            # metadata->'entities' ?| ARRAY['entity1', 'entity2']
+            conditions.append(f"metadata->'entities' ?| ${param_idx}::text[]")
+            params.append(self.entities)
+            param_idx += 1
+
+        # Entity types ANY match
+        if self.entity_types:
+            # metadata->'entity_types' ?| ARRAY['type1', 'type2']
+            conditions.append(f"metadata->'entity_types' ?| ${param_idx}::text[]")
+            params.append(self.entity_types)
+            param_idx += 1
+
+        # Minimum confidence
+        if self.min_confidence is not None:
+            conditions.append(f"(metadata->>'category_confidence')::float >= ${param_idx}")
+            params.append(self.min_confidence)
+            param_idx += 1
+
+        return " AND ".join(conditions) if conditions else "", params
+
+    def is_empty(self) -> bool:
+        """Check if filter has any conditions."""
+        return not any([
+            self.category,
+            self.categories,
+            self.keywords,
+            self.keywords_any,
+            self.entities,
+            self.entity_types,
+            self.min_confidence is not None,
+        ])
 
 # Enable nested event loops
 nest_asyncio.apply()
@@ -283,12 +410,28 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         k: int,
         document_filter: Optional[str] = None,
         query_text: Optional[str] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
+        exclude_bibliography: bool = True,
     ) -> List[Dict]:
         """
         Search specific layer using pgvector cosine similarity.
 
         Uses <=> operator (cosine distance) from pgvector.
         Score = 1 - distance (0=dissimilar, 1=identical)
+
+        Args:
+            conn: Database connection
+            layer: Vector layer (1, 2, or 3)
+            query_vec: Query embedding
+            k: Number of results
+            document_filter: Filter by document ID
+            query_text: Enable hybrid search with this query text
+            metadata_filter: Filter by metadata (categories, keywords, entities)
+            exclude_bibliography: Exclude chunks from "Literatura" sections (default True)
+                This prevents bibliography entries from dominating search results.
+
+        Returns:
+            List of matching chunks with scores
         """
         # Convert query vector to PostgreSQL-compatible string format
         query_str = self._vector_to_pgvector_string(query_vec)
@@ -306,41 +449,59 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         if query_text:
             # Hybrid search: Dense (pgvector) + Sparse (full-text)
             return await self._hybrid_search_layer(
-                conn, layer, query_vec, query_text, k, document_filter
+                conn, layer, query_vec, query_text, k, document_filter, metadata_filter,
+                exclude_bibliography
             )
         else:
-            # Pure vector search
+            # Pure vector search with optional filtering
+            where_conditions = []
+            params = [query_str]  # $1 is always the query vector
+            param_idx = 1
+
+            # Document filter
             if document_filter:
-                sql = f"""
-                    SELECT
-                        chunk_id,
-                        document_id,
-                        metadata,
-                        content,
-                        {section_columns}
-                        hierarchical_path,
-                        1 - (embedding <=> $1::vector) AS score
-                    FROM vectors.layer{layer}
-                    WHERE document_id = $2
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT $3
-                """
-                rows = await conn.fetch(sql, query_str, document_filter, k)
-            else:
-                sql = f"""
-                    SELECT
-                        chunk_id,
-                        document_id,
-                        metadata,
-                        content,
-                        {section_columns}
-                        hierarchical_path,
-                        1 - (embedding <=> $1::vector) AS score
-                    FROM vectors.layer{layer}
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT $2
-                """
-                rows = await conn.fetch(sql, query_str, k)
+                param_idx += 1
+                where_conditions.append(f"document_id = ${param_idx}")
+                params.append(document_filter)
+
+            # Metadata filter (categories, keywords, entities)
+            if metadata_filter and not metadata_filter.is_empty():
+                meta_conditions, meta_params = metadata_filter.to_sql_conditions(param_idx)
+                if meta_conditions:
+                    where_conditions.append(meta_conditions)
+                    params.extend(meta_params)
+                    param_idx += len(meta_params)
+
+            # Bibliography filter - exclude "Literatura" sections by default
+            # This prevents bibliography entries (high keyword density, low info) from
+            # dominating search results over actual content chunks
+            if exclude_bibliography and layer > 1:  # Only for layer2/3 which have section_path
+                where_conditions.append("(section_path IS NULL OR section_path NOT LIKE 'Literatura%')")
+
+            # Build WHERE clause
+            where_clause = ""
+            if where_conditions:
+                where_clause = "WHERE " + " AND ".join(where_conditions)
+
+            # Add LIMIT parameter
+            param_idx += 1
+            params.append(k)
+
+            sql = f"""
+                SELECT
+                    chunk_id,
+                    document_id,
+                    metadata,
+                    content,
+                    {section_columns}
+                    hierarchical_path,
+                    1 - (embedding <=> $1::vector) AS score
+                FROM vectors.layer{layer}
+                {where_clause}
+                ORDER BY embedding <=> $1::vector
+                LIMIT ${param_idx}
+            """
+            rows = await conn.fetch(sql, *params)
 
         # Convert rows to dicts
         results = []
@@ -369,6 +530,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         query_text: str,
         k: int,
         document_filter: Optional[str] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
+        exclude_bibliography: bool = True,
     ) -> List[Dict]:
         """
         Hybrid search: Dense (pgvector) + Sparse (BM25) with RRF fusion.
@@ -376,6 +539,10 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         Uses BM25 from bm25_layer{layer} tables (NOT PostgreSQL full-text search).
         RRF (Reciprocal Rank Fusion): score = 1/(k + rank)
         k=60 (standard parameter from research)
+
+        Args:
+            metadata_filter: Filter by categories, keywords, entities (applied to dense search)
+            exclude_bibliography: Exclude chunks from "Literatura" sections (default True)
         """
         # Strategy: Get dense from PostgreSQL, sparse from BM25, fuse in Python
         # This matches how FAISS hybrid works and avoids complex SQL
@@ -390,26 +557,48 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         # sufficient diversity for RRF when k is small (k < 20).
         candidates_k = max(k * 10, 200)  # At least 200 for good fusion
 
-        # Get dense results
+        # Build WHERE clause with optional filters
+        where_conditions = []
+        params = [query_str]  # $1 is always the query vector
+        param_idx = 1
+
+        # Document filter
         if document_filter:
-            dense_sql = f"""
-                SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
-                       1 - (embedding <=> $1::vector) AS score
-                FROM vectors.layer{layer}
-                WHERE document_id = $2
-                ORDER BY embedding <=> $1::vector
-                LIMIT $3
-            """
-            dense_rows = await conn.fetch(dense_sql, query_str, document_filter, candidates_k)
-        else:
-            dense_sql = f"""
-                SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
-                       1 - (embedding <=> $1::vector) AS score
-                FROM vectors.layer{layer}
-                ORDER BY embedding <=> $1::vector
-                LIMIT $2
-            """
-            dense_rows = await conn.fetch(dense_sql, query_str, candidates_k)
+            param_idx += 1
+            where_conditions.append(f"document_id = ${param_idx}")
+            params.append(document_filter)
+
+        # Metadata filter (categories, keywords, entities)
+        if metadata_filter and not metadata_filter.is_empty():
+            meta_conditions, meta_params = metadata_filter.to_sql_conditions(param_idx)
+            if meta_conditions:
+                where_conditions.append(meta_conditions)
+                params.extend(meta_params)
+                param_idx += len(meta_params)
+
+        # Bibliography filter - exclude "Literatura" sections by default
+        if exclude_bibliography and layer > 1:
+            where_conditions.append("(section_path IS NULL OR section_path NOT LIKE 'Literatura%')")
+
+        # Build WHERE clause
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+
+        # Add LIMIT parameter
+        param_idx += 1
+        params.append(candidates_k)
+
+        # Get dense results with filtering
+        dense_sql = f"""
+            SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
+                   1 - (embedding <=> $1::vector) AS score
+            FROM vectors.layer{layer}
+            {where_clause}
+            ORDER BY embedding <=> $1::vector
+            LIMIT ${param_idx}
+        """
+        dense_rows = await conn.fetch(dense_sql, *params)
 
         # 2. Get BM25 results (same number of candidates for balanced fusion)
         bm25_results = []
@@ -585,10 +774,25 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         k: int = 6,
         document_filter: Optional[str] = None,
         similarity_threshold: Optional[float] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
     ) -> List[Dict]:
-        """Direct Layer 3 search (sync wrapper)."""
+        """
+        Direct Layer 3 search (sync wrapper).
+
+        Args:
+            query_embedding: Query vector
+            k: Number of results
+            document_filter: Filter by document ID
+            similarity_threshold: Minimum similarity score
+            metadata_filter: Filter by categories, keywords, entities
+
+        Returns:
+            List of matching chunks
+        """
         return _run_async_safe(
-            self._async_search_layer3(query_embedding, k, document_filter, similarity_threshold)
+            self._async_search_layer3(
+                query_embedding, k, document_filter, similarity_threshold, metadata_filter
+            )
         )
 
     async def search_layer3_async(
@@ -597,14 +801,25 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         k: int = 6,
         document_filter: Optional[str] = None,
         similarity_threshold: Optional[float] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
     ) -> List[Dict]:
         """
         Direct Layer 3 search (async version for parallel execution).
 
         Use this with asyncio.gather() for parallel searches.
+
+        Args:
+            query_embedding: Query vector
+            k: Number of results
+            document_filter: Filter by document ID
+            similarity_threshold: Minimum similarity score
+            metadata_filter: Filter by categories, keywords, entities
+
+        Returns:
+            List of matching chunks
         """
         return await self._async_search_layer3(
-            query_embedding, k, document_filter, similarity_threshold
+            query_embedding, k, document_filter, similarity_threshold, metadata_filter
         )
 
     async def _ensure_pool(self):
@@ -621,14 +836,32 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         k: int,
         document_filter: Optional[str],
         similarity_threshold: Optional[float],
+        metadata_filter: Optional[MetadataFilter] = None,
     ) -> List[Dict]:
-        """Async Layer 3 search."""
+        """
+        Async Layer 3 search with optional metadata filtering.
+
+        Args:
+            query_embedding: Query vector
+            k: Number of results
+            document_filter: Filter by document ID
+            similarity_threshold: Minimum similarity score
+            metadata_filter: Filter by categories, keywords, entities
+
+        Returns:
+            List of matching chunks
+        """
         await self._ensure_pool()
         query_vec = self._normalize_vector(query_embedding)
 
         async with self.pool.acquire() as conn:
             results = await self._search_layer(
-                conn, layer=3, query_vec=query_vec, k=k, document_filter=document_filter
+                conn,
+                layer=3,
+                query_vec=query_vec,
+                k=k,
+                document_filter=document_filter,
+                metadata_filter=metadata_filter,
             )
 
             # Apply similarity threshold

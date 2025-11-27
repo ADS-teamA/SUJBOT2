@@ -249,6 +249,8 @@ class ExtractionConfig:
     extraction_backend: str = "auto"  # "gemini", "unstructured", "auto"
     gemini_model: str = "gemini-2.5-flash"  # Gemini model to use
     gemini_fallback_to_unstructured: bool = True  # Fall back to Unstructured on Gemini failure
+    gemini_max_output_tokens: int = 65536  # Max output tokens for Gemini
+    gemini_file_size_threshold_mb: float = 10.0  # File size threshold for chunked extraction
 
     # Unstructured model configuration
     strategy: str = "hi_res"  # "hi_res", "fast", "ocr_only"
@@ -343,6 +345,8 @@ class ExtractionConfig:
             extraction_backend=os.getenv("EXTRACTION_BACKEND", "gemini"),
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
             gemini_fallback_to_unstructured=get_bool_env("GEMINI_FALLBACK_TO_UNSTRUCTURED", True),
+            gemini_max_output_tokens=get_int_env("GEMINI_MAX_OUTPUT_TOKENS", 65536),
+            gemini_file_size_threshold_mb=get_float_env("GEMINI_FILE_SIZE_THRESHOLD_MB", 10.0),
             # Unstructured settings
             strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
             model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),

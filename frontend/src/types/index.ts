@@ -123,6 +123,7 @@ export interface CitationMetadata {
   hierarchicalPath: string | null;
   pageNumber: number | null;
   pdfAvailable: boolean;
+  content: string | null;  // Chunk text content for PDF highlighting
 }
 
 export interface CitationContextValue {

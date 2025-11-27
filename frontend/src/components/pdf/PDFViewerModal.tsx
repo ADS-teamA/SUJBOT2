@@ -12,8 +12,9 @@
  * - Auto-scroll to initial page from citation context
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
+import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import {
@@ -39,13 +40,52 @@ interface PDFViewerModalProps {
   isOpen: boolean;
   documentId: string;
   initialPage?: number;
+  chunkContent?: string;  // Chunk text content for highlighting
   onClose: () => void;
+}
+
+// ============================================================================
+// Highlighting utilities
+// ============================================================================
+
+/**
+ * Extract significant phrases from chunk content for fuzzy matching.
+ * Returns array of 4-word phrases that are likely to appear in PDF.
+ */
+function extractSearchPhrases(content: string, maxPhrases: number = 15): string[] {
+  if (!content) return [];
+
+  // Normalize: lowercase, collapse whitespace, take first 800 chars
+  const normalized = content.slice(0, 800).toLowerCase().replace(/\s+/g, ' ').trim();
+
+  // Split into words, filter very short words (keep Czech words with diacritics)
+  const words = normalized.split(' ').filter(w => w.length > 2);
+
+  if (words.length < 4) return [];
+
+  // Extract phrases of 4 consecutive words
+  const phrases: string[] = [];
+  for (let i = 0; i < words.length - 3 && phrases.length < maxPhrases; i++) {
+    phrases.push(words.slice(i, i + 4).join(' '));
+  }
+
+  return phrases;
+}
+
+/**
+ * Check if a text item contains any of the search phrases.
+ */
+function textContainsPhrase(text: string, phrases: string[]): boolean {
+  if (!text || phrases.length === 0) return false;
+  const normalizedText = text.toLowerCase().replace(/\s+/g, ' ');
+  return phrases.some(phrase => normalizedText.includes(phrase));
 }
 
 export function PDFViewerModal({
   isOpen,
   documentId,
   initialPage = 1,
+  chunkContent,
   onClose,
 }: PDFViewerModalProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
@@ -57,6 +97,42 @@ export function PDFViewerModal({
   const [pageInputValue, setPageInputValue] = useState(String(initialPage));
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ============================================================================
+  // Highlighting logic
+  // ============================================================================
+
+  // Extract search phrases from chunk content (memoized)
+  const highlightPhrases = useMemo(() => {
+    if (!chunkContent) return [];
+    const phrases = extractSearchPhrases(chunkContent);
+    if (phrases.length > 0) {
+      console.log('[PDFViewerModal] Extracted highlight phrases:', phrases.length);
+    }
+    return phrases;
+  }, [chunkContent]);
+
+  // Only highlight on the initial page (where chunk is located)
+  const shouldHighlight = currentPage === initialPage && highlightPhrases.length > 0;
+
+  // Custom text renderer for highlighting matching text
+  const customTextRenderer = useCallback(
+    (textItem: TextItem) => {
+      const str = textItem.str;
+      if (!shouldHighlight || !str.trim()) {
+        return str;
+      }
+
+      // Check if this text item is part of our chunk
+      if (textContainsPhrase(str, highlightPhrases)) {
+        // Wrap entire text item in highlight mark
+        return `<mark class="chunk-highlight">${str}</mark>`;
+      }
+
+      return str;
+    },
+    [highlightPhrases, shouldHighlight]
+  );
 
   // PDF URL
   const pdfUrl = documentId
@@ -411,6 +487,7 @@ export function PDFViewerModal({
                   scale={scale}
                   renderTextLayer={true}
                   renderAnnotationLayer={true}
+                  customTextRenderer={shouldHighlight ? customTextRenderer : undefined}
                   className="shadow-2xl"
                   loading={
                     <div className="flex items-center justify-center w-full h-96 text-white">
