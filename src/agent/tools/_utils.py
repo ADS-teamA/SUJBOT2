@@ -40,8 +40,11 @@ def _ensure_token_manager_imported():
             _SmartTruncator = SmartTruncator
             _token_manager_imported = True
         except ImportError as e:
-            # token_manager is optional - silently fall back to legacy limits
-            logger.debug(f"token_manager not available, using legacy limits: {e}")
+            # token_manager is optional - fall back to legacy character-based limits
+            logger.warning(
+                f"Token manager import failed - using legacy character-based truncation. "
+                f"This may cause suboptimal results. Error: {e}"
+            )
             _token_manager_imported = False
 
 

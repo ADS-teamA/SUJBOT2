@@ -997,7 +997,7 @@ class MultiAgentRunner:
             }
 
     def shutdown(self) -> None:
-        """Shutdown and cleanup resources."""
+        """Shutdown and cleanup resources (sync only, use shutdown_async for full cleanup)."""
         logger.info("Shutting down multi-agent system...")
 
         if self.checkpointer:
@@ -1007,6 +1007,19 @@ class MultiAgentRunner:
             self.langsmith.disable()
 
         logger.info("Multi-agent system shut down")
+
+    async def shutdown_async(self) -> None:
+        """Async shutdown - closes both sync and async resources."""
+        logger.info("Shutting down multi-agent system (async)...")
+
+        if self.checkpointer:
+            await self.checkpointer.aclose()  # Close async pool first
+            self.checkpointer.close()  # Then sync connection
+
+        if self.langsmith:
+            self.langsmith.disable()
+
+        logger.info("Multi-agent system shut down (async)")
 
 
 async def main():

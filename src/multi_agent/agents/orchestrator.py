@@ -356,8 +356,12 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                     # Use SSOT provider detection
                     try:
                         provider = detect_provider_from_model(self.config.model)
-                    except ValueError:
-                        provider = 'anthropic'  # Fallback
+                    except ValueError as e:
+                        logger.warning(
+                            f"Could not detect provider for model '{self.config.model}': {e}. "
+                            f"Falling back to 'anthropic'. Cost tracking may be inaccurate."
+                        )
+                        provider = 'anthropic'
 
                     tracker.track_llm(
                         provider=provider,
@@ -584,8 +588,12 @@ Ensure language matching and proper citations."""
                 # Use SSOT provider detection
                 try:
                     provider = detect_provider_from_model(self.config.model)
-                except ValueError:
-                    provider = 'anthropic'  # Fallback
+                except ValueError as e:
+                    logger.warning(
+                        f"Could not detect provider for model '{self.config.model}': {e}. "
+                        f"Falling back to 'anthropic'. Cost tracking may be inaccurate."
+                    )
+                    provider = 'anthropic'
 
                 tracker.track_llm(
                     provider=provider,

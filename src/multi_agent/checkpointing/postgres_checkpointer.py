@@ -228,8 +228,16 @@ class PostgresCheckpointer:
             await self._async_pool.open()
 
             # Create AsyncPostgresSaver with the pool
-            self._async_saver = AsyncPostgresSaver(conn=self._async_pool)
-            await self._async_saver.setup()
+            # Wrap setup in try/except to prevent pool leak on failure
+            try:
+                self._async_saver = AsyncPostgresSaver(conn=self._async_pool)
+                await self._async_saver.setup()
+            except Exception as e:
+                logger.error(f"AsyncPostgresSaver setup failed, closing pool: {e}")
+                await self._async_pool.close()
+                self._async_pool = None
+                self._async_saver = None
+                raise
 
             logger.info("AsyncPostgresSaver created and set up with connection pool")
 
