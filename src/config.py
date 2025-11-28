@@ -256,6 +256,8 @@ class ExtractionConfig:
     # Extraction backend selection
     extraction_backend: str  # "gemini", "unstructured", "auto"
     gemini_model: str  # e.g., "gemini-2.5-flash"
+    gemini_file_size_threshold_mb: float  # File size threshold for chunked extraction
+    gemini_max_output_tokens: int  # Max output tokens for Gemini
     fallback_to_unstructured: bool
 
     # OCR settings
@@ -306,6 +308,8 @@ class ExtractionConfig:
         return cls(
             extraction_backend=extraction_config.backend,
             gemini_model=extraction_config.gemini_model,
+            gemini_file_size_threshold_mb=extraction_config.gemini_file_size_threshold_mb,
+            gemini_max_output_tokens=extraction_config.gemini_max_output_tokens,
             fallback_to_unstructured=extraction_config.fallback_to_unstructured,
             enable_ocr=extraction_config.enable_ocr,
             ocr_engine=extraction_config.ocr_engine,

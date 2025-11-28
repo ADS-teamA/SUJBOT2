@@ -126,9 +126,11 @@ class GraphitiEntityBase(BaseModel):
     Base model for all Graphiti entities.
 
     Provides common fields required by Graphiti for node creation.
+    Note: 'name' and 'summary' are reserved attributes in Graphiti,
+    so we use 'label' and 'description' instead.
     """
 
-    name: str = Field(
+    label: str = Field(
         ...,
         description="Primary name/value of the entity",
         min_length=1,
@@ -144,7 +146,7 @@ class GraphitiEntityBase(BaseModel):
         le=1.0,
         description="Extraction confidence score (0.0-1.0)"
     )
-    summary: Optional[str] = Field(
+    entity_description: Optional[str] = Field(
         default=None,
         max_length=1000,
         description="Brief description of the entity"

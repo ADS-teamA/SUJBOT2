@@ -109,6 +109,7 @@ export function CitationProvider({ children }: CitationProviderProps) {
           hierarchical_path: string | null;
           page_number: number | null;
           pdf_available: boolean;
+          content: string | null;
         }> = await response.json();
 
         // Update cache
@@ -124,6 +125,7 @@ export function CitationProvider({ children }: CitationProviderProps) {
               hierarchicalPath: item.hierarchical_path,
               pageNumber: item.page_number,
               pdfAvailable: item.pdf_available,
+              content: item.content,
             });
           });
           return next;
@@ -185,6 +187,7 @@ export function CitationProvider({ children }: CitationProviderProps) {
           isOpen={true}
           documentId={activePdf.documentId}
           initialPage={activePdf.page}
+          chunkContent={activePdf.chunkId ? citationCache.get(activePdf.chunkId)?.content ?? undefined : undefined}
           onClose={closePdf}
         />
       )}

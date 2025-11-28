@@ -65,6 +65,24 @@ class ChunkMetadata:
     cluster_label: Optional[str] = None  # Human-readable cluster topic
     cluster_confidence: Optional[float] = None  # Distance to cluster centroid (0-1, lower is better)
 
+    # Document labeling (PHASE 3.5 extension)
+    # Categories (propagated from document)
+    category: Optional[str] = None  # Primary document category
+    subcategory: Optional[str] = None  # Subcategory
+    secondary_categories: Optional[List[str]] = None  # Secondary categories
+    category_confidence: Optional[float] = None  # Classification confidence
+
+    # Keywords (propagated from section)
+    keywords: Optional[List[str]] = None  # Extracted keywords (5-10)
+    key_phrases: Optional[List[str]] = None  # Multi-word key phrases (3-5)
+
+    # Synthetic questions (per-chunk, HyDE boost)
+    questions: Optional[List[str]] = None  # Questions this chunk answers (3-5)
+    hyde_text: Optional[str] = None  # Combined questions for embedding
+
+    # Labeling metadata
+    labels_source: Optional[str] = None  # "generated" | "propagated"
+
 
 @dataclass
 class Chunk:
@@ -83,32 +101,44 @@ class Chunk:
 
     def to_dict(self) -> Dict:
         # Build breadcrumb for embedding text
+        # Format: [Document Title > Section Path > Section Title]
         breadcrumb_parts = []
+
+        # 1. Add document title/id first (ALWAYS include document context)
+        if self.metadata.title:
+            breadcrumb_parts.append(self.metadata.title)
+        elif self.metadata.document_id:
+            breadcrumb_parts.append(self.metadata.document_id)
+
+        # 2. Add section path (hierarchical structure)
         if self.metadata.section_path:
             breadcrumb_parts.append(self.metadata.section_path)
+
+        # 3. Add section title only if different from path (avoid duplication)
         if (
             self.metadata.section_title
             and self.metadata.section_title != self.metadata.section_path
+            and self.metadata.section_title not in (self.metadata.section_path or "")
         ):
             breadcrumb_parts.append(self.metadata.section_title)
 
         # Construct embedding text: [breadcrumb]\n\ncontext\n\nraw_content
-        # - breadcrumb: hierarchical path for structure awareness
-        # - context: SAC summary for semantic context (self.content minus raw_content)
+        # - breadcrumb: document + hierarchical path for structure awareness
+        # - context: SAC summary for semantic context (first part before \n\n)
         # - raw_content: actual text for retrieval
         if breadcrumb_parts:
             breadcrumb = " > ".join(breadcrumb_parts)
             # Check if content contains context prefix (SAC augmentation)
             if self.content != self.raw_content and "\n\n" in self.content:
-                # Content has SAC prefix - extract it
-                context_part = self.content.rsplit("\n\n", 1)[0]
+                # Content has SAC prefix - extract it (first part, not last!)
+                context_part = self.content.split("\n\n", 1)[0]
                 embedding_text = f"[{breadcrumb}]\n\n{context_part}\n\n{self.raw_content}"
             else:
                 # No SAC prefix - use raw_content directly
                 embedding_text = f"[{breadcrumb}]\n\n{self.raw_content}"
         else:
             if self.content != self.raw_content and "\n\n" in self.content:
-                context_part = self.content.rsplit("\n\n", 1)[0]
+                context_part = self.content.split("\n\n", 1)[0]
                 embedding_text = f"{context_part}\n\n{self.raw_content}"
             else:
                 embedding_text = self.raw_content

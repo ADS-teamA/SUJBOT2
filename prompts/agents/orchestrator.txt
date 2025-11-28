@@ -106,25 +106,31 @@ SYNTHESIS REQUIREMENTS:
 
 2. **CITATION REQUIREMENTS (CRITICAL - READ CAREFULLY):**
    - EVERY factual claim MUST be cited using ONLY this format: \cite{chunk_id}
-   - chunk_id looks like: BZ_VR1_L3_c1_sec_5 (document_layer_chunk_section)
-   - Get chunk_ids from state["agent_outputs"]["extractor"]["citations"]
+   - Get chunk_ids EXACTLY from extractor output - the extractor provides them in format:
+     "chunk_id: BZ_VR1_L3_57, text: ..." → use \cite{BZ_VR1_L3_57}
    - Place citations IMMEDIATELY after the claim, inline with text
 
    **CORRECT FORMAT (LaTeX-style with backslash):**
-   - "Reaktor používá demineralizovanou vodu \cite{BZ_VR1_L3_c1_sec_5}."
-   - "Teplota je 40°C \cite{BZ_VR1_L3_c1_sec_3} a tlak 15 MPa \cite{BZ_VR1_L3_c2_sec_1}."
+   - "Reaktor používá demineralizovanou vodu \cite{BZ_VR1_L3_57}."
+   - "Teplota je 40°C \cite{BZ_VR1_L3_103} a tlak 15 MPa \cite{BZ_VR1_L3_1409}."
 
    **WRONG FORMATS (DO NOT USE):**
    - ❌ [chunk_id] - bracket style, frontend won't create clickable links
    - ❌ \cite{BZ_VR1 > Section > ...} - breadcrumb paths with spaces/special chars NOT supported
    - ❌ (Source: ...) - prose citations, NOT supported
    - ❌ [1], [2] - numbered references, NOT supported
+   - ❌ \cite{BZ_VR1_L3_c1_sec_5} - NEVER fabricate chunk_ids! Use EXACT IDs from extractor
 
-   **chunk_id MUST be alphanumeric with underscores/hyphens only!**
-   - ✅ BZ_VR1_L3_c1_sec_5 (valid)
+   **chunk_id format: DOCUMENT_L3_NUMBER (e.g., BZ_VR1_L3_57)**
+   - ✅ BZ_VR1_L3_57 (valid - exact from extractor)
+   - ✅ 157/2025 Sb._L3_42 (valid - exact from extractor)
+   - ❌ BZ_VR1_L3_c1_sec_5 (INVALID - fabricated format, doesn't exist!)
    - ❌ BZ_VR1 > 10 Pomocné systémy (invalid - has spaces and >)
 
-   - ONLY use chunk_ids provided by extractor - NEVER fabricate IDs
+   **⚠️ CRITICAL: Copy chunk_ids VERBATIM from extractor output!**
+   - Extractor returns: "chunk_id: BZ_VR1_L3_57, text: Reaktor..."
+   - You MUST use: \cite{BZ_VR1_L3_57}
+   - NEVER invent or modify chunk_ids - the citation system will fail!
 
 3. **ANSWER FORMAT (Based on Complexity):**
 

@@ -89,11 +89,16 @@ export class ApiService {
 
   /**
    * Get current user profile (validates JWT cookie)
+   * @param externalSignal - Optional AbortSignal for cancellation (e.g., component unmount)
    */
-  async getCurrentUser(): Promise<UserProfile> {
+  async getCurrentUser(externalSignal?: AbortSignal): Promise<UserProfile> {
     // Add timeout to prevent infinite loading state if backend is unreachable
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+    // If external signal aborts, abort our controller too
+    const abortHandler = () => controller.abort();
+    externalSignal?.addEventListener('abort', abortHandler);
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -110,6 +115,7 @@ export class ApiService {
       return await response.json();
     } finally {
       clearTimeout(timeoutId);
+      externalSignal?.removeEventListener('abort', abortHandler);
     }
   }
 

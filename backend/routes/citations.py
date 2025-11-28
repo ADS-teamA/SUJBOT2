@@ -40,6 +40,7 @@ class CitationMetadata(BaseModel):
     hierarchical_path: Optional[str] = Field(None, description="Full hierarchical path including document")
     page_number: Optional[int] = Field(None, ge=1, description="Page number in PDF (1-indexed)")
     pdf_available: bool = Field(..., description="Whether PDF file exists on server")
+    content: Optional[str] = Field(None, description="Chunk text content for PDF highlighting")
 
 
 class BatchCitationRequest(BaseModel):
@@ -88,7 +89,8 @@ async def _fetch_chunk_metadata(
                         section_title,
                         section_path,
                         hierarchical_path,
-                        page_number
+                        page_number,
+                        content
                     FROM vectors.layer{layer}
                     WHERE chunk_id = $1
                     LIMIT 1
@@ -107,7 +109,8 @@ async def _fetch_chunk_metadata(
                     title AS section_title,
                     NULL AS section_path,
                     hierarchical_path,
-                    page_number
+                    page_number,
+                    content
                 FROM vectors.layer1
                 WHERE chunk_id = $1
                 LIMIT 1
@@ -175,7 +178,8 @@ async def get_citation_metadata(
         section_path=row.get("section_path"),
         hierarchical_path=row.get("hierarchical_path"),
         page_number=row.get("page_number"),
-        pdf_available=_check_pdf_available(document_id)
+        pdf_available=_check_pdf_available(document_id),
+        content=row.get("content"),
     )
 
 
@@ -226,7 +230,8 @@ async def get_citations_batch(
                 section_path=section_path,
                 hierarchical_path=hierarchical_path,
                 page_number=row.get("page_number"),
-                pdf_available=_check_pdf_available(document_id)
+                pdf_available=_check_pdf_available(document_id),
+                content=row.get("content"),
             ))
 
     logger.info(f"Batch citation lookup: {len(request.chunk_ids)} requested, {len(results)} found")

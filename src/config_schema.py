@@ -92,6 +92,18 @@ class ExtractionConfig(BaseModel):
         ...,
         description="Gemini model for extraction (e.g., 'gemini-2.5-flash')"
     )
+    gemini_file_size_threshold_mb: float = Field(
+        default=0.3,
+        description="File size threshold in MB for chunked extraction (lower = more reliable for large docs)",
+        ge=0.1,
+        le=50.0
+    )
+    gemini_max_output_tokens: int = Field(
+        default=100000,
+        description="Maximum output tokens for Gemini extraction",
+        ge=1000,
+        le=200000
+    )
     fallback_to_unstructured: bool = Field(
         ...,
         description="Fallback to Unstructured if Gemini fails"
@@ -771,6 +783,126 @@ class CLIConfig(BaseModel):
     )
 
 
+class LabelingConfig(BaseModel):
+    """
+    Document labeling configuration (PHASE 3.5 extension).
+
+    Adds hierarchical labeling with smart propagation:
+    - Categories: Document-level (1 LLM call), propagated to sections/chunks
+    - Keywords: Section-level (~100 LLM calls), propagated to chunks
+    - Synthetic Questions: Chunk-level (HyDE boost for retrieval)
+
+    Uses OpenAI Batch API for 50% cost savings.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable document labeling pipeline"
+    )
+
+    # Feature toggles
+    enable_categories: bool = Field(
+        default=True,
+        description="Enable category/classification extraction"
+    )
+    enable_keywords: bool = Field(
+        default=True,
+        description="Enable keyword extraction"
+    )
+    enable_questions: bool = Field(
+        default=True,
+        description="Enable synthetic question generation (HyDE boost)"
+    )
+
+    # Model configuration
+    provider: Literal["openai", "gemini", "anthropic"] = Field(
+        default="openai",
+        description="LLM provider for labeling"
+    )
+    model: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model for labeling (gpt-4o-mini recommended for cost)"
+    )
+    use_batch_api: bool = Field(
+        default=True,
+        description="Use OpenAI Batch API for 50% cost savings (async, up to 24h)"
+    )
+
+    # Smart propagation
+    category_generation_level: Literal["document", "section", "chunk"] = Field(
+        default="document",
+        description="Level at which to generate categories (document = 1 LLM call)"
+    )
+    keyword_generation_level: Literal["document", "section", "chunk"] = Field(
+        default="section",
+        description="Level at which to generate keywords (section = ~100 LLM calls)"
+    )
+    question_generation_level: Literal["chunk"] = Field(
+        default="chunk",
+        description="Level at which to generate questions (always chunk-level)"
+    )
+
+    # Dynamic categories
+    use_dynamic_categories: bool = Field(
+        default=True,
+        description="LLM creates document-specific taxonomy (vs fixed categories)"
+    )
+    fixed_categories: Optional[List[str]] = Field(
+        default=None,
+        description="Fixed category list if use_dynamic_categories=False"
+    )
+
+    # HyDE embedding boost
+    include_questions_in_embedding: bool = Field(
+        default=True,
+        description="Add synthetic questions to embedding_text (+20-30% retrieval precision)"
+    )
+
+    # Performance
+    batch_size: int = Field(
+        default=50,
+        description="Batch size for Batch API requests",
+        ge=1,
+        le=1000
+    )
+    max_keywords_per_chunk: int = Field(
+        default=10,
+        description="Maximum keywords per chunk",
+        ge=1,
+        le=20
+    )
+    max_questions_per_chunk: int = Field(
+        default=5,
+        description="Maximum synthetic questions per chunk",
+        ge=1,
+        le=10
+    )
+
+    # Caching
+    cache_enabled: bool = Field(
+        default=True,
+        description="Enable content-hash based caching"
+    )
+    cache_size: int = Field(
+        default=1000,
+        description="Maximum cache entries",
+        ge=100
+    )
+
+    # Batch API timeouts
+    batch_api_poll_interval: int = Field(
+        default=30,
+        description="Seconds between batch status checks",
+        ge=5
+    )
+    batch_api_timeout_hours: int = Field(
+        default=12,
+        description="Maximum hours to wait for batch completion",
+        ge=1,
+        le=24
+    )
+
+
 class IndexingConfig(BaseModel):
     """
     Indexing pipeline configuration (optional section).
@@ -799,6 +931,12 @@ class IndexingConfig(BaseModel):
         description="Batch size for entity labeling",
         ge=1,
         le=50
+    )
+
+    # Document labeling (categories, keywords, questions)
+    labeling: LabelingConfig = Field(
+        default_factory=LabelingConfig,
+        description="Document labeling configuration (categories, keywords, questions)"
     )
 
 
@@ -880,7 +1018,8 @@ class RootConfig(BaseModel):
 
         return any(pattern in value.upper() for pattern in PLACEHOLDER_PATTERNS)
 
-    def validate_api_keys(self):
+    @model_validator(mode="after")
+    def validate_api_keys(self) -> "RootConfig":
         """
         Validate that at least one API key is provided and matches model selection.
         API keys are loaded from .env file - this validation runs after loading.
@@ -944,6 +1083,8 @@ class RootConfig(BaseModel):
                 "See .env.example for template."
             )
 
+        return self
+
     @classmethod
     def from_json_file(cls, path: Path) -> "RootConfig":
         """
@@ -984,8 +1125,7 @@ class RootConfig(BaseModel):
 
         try:
             config = cls(**data)
-            # Run additional validation
-            config.validate_api_keys()
+            # validate_api_keys() is now a @model_validator, runs automatically
             return config
         except ValidationError as e:
             # Pydantic validation errors - user config issues

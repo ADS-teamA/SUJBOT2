@@ -24,15 +24,17 @@ from .vector_store_adapter import VectorStoreAdapter
 
 # PostgreSQL adapter (requires asyncpg)
 try:
-    from .postgres_adapter import PostgresVectorStoreAdapter
+    from .postgres_adapter import PostgresVectorStoreAdapter, MetadataFilter
     POSTGRES_AVAILABLE = True
 except ImportError:
     POSTGRES_AVAILABLE = False
     PostgresVectorStoreAdapter = None
+    MetadataFilter = None
 
 __all__ = [
     "VectorStoreAdapter",
     "PostgresVectorStoreAdapter",
+    "MetadataFilter",
     "create_vector_store_adapter",
     "load_vector_store_adapter",
 ]

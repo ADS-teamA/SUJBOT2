@@ -34,26 +34,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Check for existing session on mount (validates httpOnly cookie)
   useEffect(() => {
+    // AbortController for cleanup when component unmounts during fetch
+    const abortController = new AbortController();
+
     const verifySession = async () => {
       try {
         // Verify JWT cookie with backend (/auth/me endpoint)
         // Cookie is sent automatically by browser (httpOnly)
-        const userProfile = await apiService.getCurrentUser();
+        const userProfile = await apiService.getCurrentUser(abortController.signal);
+
+        // Don't update state if component was unmounted
+        if (abortController.signal.aborted) return;
 
         // Session is valid
         setUser(userProfile);
         setIsAuthenticated(true);
       } catch (error) {
+        // Don't update state if this was an abort (component unmounted)
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
         // No valid session (cookie expired, invalid, or missing)
         console.info('No existing session found');
         setUser(null);
         setIsAuthenticated(false);
       } finally {
-        setIsLoading(false);
+        // Don't update loading state if aborted
+        if (!abortController.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     };
 
     verifySession();
+
+    // Cleanup: abort pending request when component unmounts
+    return () => {
+      abortController.abort();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<{success: boolean, error?: string}> => {
@@ -68,6 +86,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsAuthenticated(true);
       return { success: true };
     } catch (error) {
+      // Don't show error if request was aborted (e.g., user navigated away)
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, error: 'Request cancelled' };
+      }
+
       console.error('Login failed:', error);
       setUser(null);
       setIsAuthenticated(false);

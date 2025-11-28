@@ -282,7 +282,7 @@ export function useChat() {
           ...conversation,
           messages: [...conversation.messages, userMessage],
           updatedAt: new Date().toISOString(),
-          title: conversation.messages.length === 0 ? content.slice(0, 50) : conversation.title,
+          title: conversation.title,  // Let backend generate LLM title
         };
       } else {
         // Regenerate/edit mode - use conversation as-is
