@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from langgraph.graph import StateGraph
 
 from .event_bus import EventBus, EventType
+from ..observability.trajectory import AgentTrajectory, TrajectoryStep, StepType
 
 logger = logging.getLogger(__name__)
 
@@ -311,14 +312,24 @@ class BaseAgent(ABC):
     # ========================================================================
     # Methods for building truly autonomous agents where LLM decides tool calling
 
+    # Debug/metadata fields to exclude from agent context (token optimization)
+    _EXCLUDE_FIELDS = {
+        "iterations", "retrieval_method", "total_tool_cost_usd",
+        "tool_calls_made", "chunks", "expanded_results", "_internal"
+    }
+
     def _build_agent_context(self, state: Dict[str, Any]) -> str:
         """
         Build context string from state for agent.
 
+        Token-optimized: Filters debug/metadata fields and uses compact JSON.
+        Preserves all content fields including full citations.
+
         Includes:
+        - Conversation history (last 3 turns, compact format)
         - Original query
-        - Previous agent outputs
-        - Retrieved documents/chunks
+        - Previous agent outputs (filtered, compact JSON)
+        - Retrieved documents summary
 
         Args:
             state: Current workflow state
@@ -326,7 +337,28 @@ class BaseAgent(ABC):
         Returns:
             Formatted context string
         """
+        import json
+
         context_parts = []
+
+        # Add conversation history (last 3 turns for context)
+        # This allows sub-agents to resolve follow-up references like "it", "this", "to"
+        conversation_history = state.get("conversation_history", [])
+        if conversation_history:
+            # Token-optimized: compact format, truncate long messages
+            history_lines = []
+            for msg in conversation_history[-6:]:  # Last 3 Q&A pairs = 6 messages
+                role = msg.get("role", "").upper()
+                content = msg.get("content", "")
+                # Truncate long messages to save tokens (keep first 300 chars)
+                if len(content) > 300:
+                    content = content[:300] + "..."
+                history_lines.append(f"{role}: {content}")
+
+            if history_lines:
+                context_parts.append("**Conversation History (for follow-up context):**")
+                context_parts.append("\n".join(history_lines))
+                context_parts.append("")
 
         # Add query
         query = state.get("query", "")
@@ -340,24 +372,12 @@ class BaseAgent(ABC):
             for agent_name, output in agent_outputs.items():
                 if agent_name != self.config.name:  # Don't include self
                     context_parts.append(f"\n[{agent_name}]")
-                    # Summarize output (don't dump full chunks)
                     if isinstance(output, dict):
-                        summary = {k: v for k, v in output.items() if k not in ['chunks', 'expanded_results']}
-
-                        # CRITICAL: Always show full citations (don't truncate)
-                        if 'citations' in output:
-                            citations = output.get('citations', [])
-                            # Show metadata without citations first
-                            summary_without_citations = {k: v for k, v in summary.items() if k != 'citations'}
-                            context_parts.append(str(summary_without_citations)[:500])
-                            # Then show ALL citations in full
-                            if citations:
-                                context_parts.append(f"\nCITATIONS ({len(citations)} total):")
-                                for citation in citations:
-                                    context_parts.append(f"  {citation}")
-                        else:
-                            # No citations - use normal truncation
-                            context_parts.append(str(summary)[:500])
+                        # Filter debug fields, keep all content
+                        filtered = {k: v for k, v in output.items()
+                                  if k not in self._EXCLUDE_FIELDS}
+                        # Compact JSON: no indent, minimal separators
+                        context_parts.append(json.dumps(filtered, ensure_ascii=False, separators=(',', ':')))
             context_parts.append("")
 
         # Add retrieved documents summary (if available)
@@ -447,6 +467,12 @@ class BaseAgent(ABC):
         tool_call_history = []
         total_tool_cost = 0.0  # Track cumulative API cost for all tool calls
 
+        # Initialize trajectory capture for evaluation
+        trajectory = AgentTrajectory(
+            agent_name=self.config.name,
+            query=state.get("query", "")[:500],  # Truncate for storage
+        )
+
         # Convert system prompt to cacheable format if caching enabled
         # (only needs to be done once before loop)
         cacheable_system = system_prompt
@@ -520,6 +546,15 @@ class BaseAgent(ABC):
                     f"Response type: {type(response)}, has 'usage' attr: {hasattr(response, 'usage')}"
                 )
 
+            # Capture THOUGHT from LLM response (text blocks before tool calls)
+            text_blocks = [
+                block.get('text', '') for block in response.content
+                if isinstance(block, dict) and block.get('type') == 'text'
+            ] if isinstance(response.content, list) else []
+            if text_blocks:
+                thought_content = "\n".join(text_blocks)[:500]
+                trajectory.add_thought(thought_content, iteration=iteration)
+
             # Check if LLM wants to call tools
             if hasattr(response, 'stop_reason') and response.stop_reason == 'tool_use':
                 # LLM decided to call tools (content is list of dicts)
@@ -536,6 +571,9 @@ class BaseAgent(ABC):
 
                     self.logger.info(f"Calling tool: {tool_name}")
 
+                    # Capture ACTION step in trajectory
+                    trajectory.add_action(tool_name, tool_input, iteration=iteration)
+
                     # Emit tool call start event via EventBus (for real-time progress streaming)
                     if event_bus:
                         await event_bus.emit(
@@ -548,11 +586,14 @@ class BaseAgent(ABC):
                             tool_name=tool_name
                         )
 
+                    # Measure tool execution time for trajectory
+                    tool_start_time = time.time()
                     result = await tool_adapter.execute(
                         tool_name=tool_name,
                         inputs=tool_input,
                         agent_name=self.config.name
                     )
+                    tool_duration_ms = (time.time() - tool_start_time) * 1000
 
                     # Extract API cost from result metadata
                     tool_cost = result.get("metadata", {}).get("api_cost_usd", 0.0) if isinstance(result, dict) else 0.0
@@ -616,6 +657,16 @@ class BaseAgent(ABC):
                         "result": result  # CRITICAL: Store full result for downstream agents (includes citations!)
                     })
 
+                    # Capture OBSERVATION step in trajectory
+                    observation_content = str(result.get("data", ""))[:200] if result.get("success", False) else f"Error: {result.get('error', 'Unknown')}"
+                    trajectory.add_observation(
+                        content=observation_content,
+                        success=result.get("success", False),
+                        error=result.get("error") if not result.get("success", False) else None,
+                        duration_ms=tool_duration_ms,
+                        iteration=iteration
+                    )
+
                 # Add assistant message + tool results to conversation
                 messages.append({"role": "assistant", "content": response.content})
                 messages.append({"role": "user", "content": tool_results})
@@ -629,12 +680,19 @@ class BaseAgent(ABC):
 
                 final_text = response.text if hasattr(response, 'text') else str(response.content)
 
+                # Finalize trajectory and compute metrics
+                trajectory.total_iterations = iteration + 1
+                trajectory.finalize(final_text)
+                trajectory_metrics = trajectory.compute_metrics()
+
                 return {
                     "final_answer": final_text,
                     "tool_calls": tool_call_history,
                     "iterations": iteration + 1,
                     "reasoning": "Autonomous tool calling completed",
-                    "total_tool_cost_usd": total_tool_cost  # Total API cost for all tool calls
+                    "total_tool_cost_usd": total_tool_cost,  # Total API cost for all tool calls
+                    "trajectory": trajectory.to_dict(),
+                    "trajectory_metrics": trajectory_metrics.to_dict()
                 }
 
         # Max iterations reached
@@ -643,10 +701,81 @@ class BaseAgent(ABC):
             f"(total tool cost: ${total_tool_cost:.6f})"
         )
 
+        # Finalize trajectory for max iterations case
+        trajectory.total_iterations = max_iterations
+        trajectory.finalize("Analysis incomplete - maximum reasoning steps reached.")
+        trajectory_metrics = trajectory.compute_metrics()
+
         return {
             "final_answer": "Analysis incomplete - maximum reasoning steps reached. Please rephrase your query for a more focused response.",
             "tool_calls": tool_call_history,
             "iterations": max_iterations,
             "reasoning": "Max iterations reached",
-            "total_tool_cost_usd": total_tool_cost
+            "total_tool_cost_usd": total_tool_cost,
+            "trajectory": trajectory.to_dict(),
+            "trajectory_metrics": trajectory_metrics.to_dict()
         }
+
+    @staticmethod
+    def compress_output_for_downstream(output: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compress agent output for efficient downstream agent consumption.
+
+        Token optimization: Reduces verbose agent outputs from ~500-1000 tokens
+        to ~100-200 tokens while preserving essential information.
+
+        Used by orchestrator when building synthesis context.
+
+        Args:
+            output: Full agent output dict
+
+        Returns:
+            Compressed dict with only essential fields:
+            - status: "success" | "partial" | "needs_clarification" | "error"
+            - key_findings: List of 3-5 bullet points
+            - citations: List of chunk_ids found
+            - error: Error message if any
+        """
+        compressed = {
+            "status": "success",
+            "key_findings": [],
+            "citations": []
+        }
+
+        # Extract status from various indicators
+        if output.get("error") or output.get("errors"):
+            compressed["status"] = "error"
+            compressed["error"] = str(output.get("error") or output.get("errors", ["Unknown error"])[0])[:200]
+        elif "needs_clarification" in str(output.get("final_answer", "")).lower():
+            compressed["status"] = "needs_clarification"
+        elif output.get("iterations", 0) >= 10:
+            compressed["status"] = "partial"
+
+        # Extract key findings from final_answer or analysis
+        answer_text = output.get("final_answer", "") or output.get("analysis", "")
+        if answer_text:
+            # Take first 3 sentences or bullet points as key findings
+            import re
+            # Split by sentences or bullet points
+            lines = re.split(r'[.\n•\-*]', answer_text)
+            findings = [line.strip() for line in lines if len(line.strip()) > 20][:5]
+            compressed["key_findings"] = findings
+
+        # Extract citations from tool calls or direct citations field
+        if "citations" in output:
+            compressed["citations"] = output["citations"][:10]  # Max 10 citations
+        elif "tool_calls" in output:
+            for call in output.get("tool_calls", []):
+                result = call.get("result", {})
+                if isinstance(result, dict):
+                    # Extract chunk_ids from search results
+                    data = result.get("data", "")
+                    if isinstance(data, str):
+                        import re
+                        chunk_ids = re.findall(r'chunk_id:\s*([A-Za-z0-9_]+_L3_\d+)', data)
+                        compressed["citations"].extend(chunk_ids[:5])
+
+        # Deduplicate citations
+        compressed["citations"] = list(dict.fromkeys(compressed["citations"]))[:10]
+
+        return compressed

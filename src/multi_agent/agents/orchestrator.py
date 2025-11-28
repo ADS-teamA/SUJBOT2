@@ -128,23 +128,47 @@ class OrchestratorAgent(BaseAgent):
         """
         PHASE 1: Route query to appropriate agents.
 
+        Uses unified LLM analysis for:
+        - Follow-up detection and query rewriting
+        - Complexity scoring
+        - Vagueness scoring
+        - Query type classification
+
         Args:
             state: Current workflow state with query
 
         Returns:
-            Updated state with routing decision
+            Updated state with routing decision and unified analysis
         """
         query = state.get("query", "")
         conversation_history = state.get("conversation_history", [])
+        original_query = query  # Store original for logging
 
         try:
-            # Call LLM for complexity analysis and routing (with conversation context)
+            # UNIFIED: Single LLM call handles ALL analysis (follow-up, complexity, vagueness, type)
+            # The orchestrator system prompt now includes UNIFIED QUERY ANALYSIS section
             routing_decision = await self._analyze_and_route(query, conversation_history)
+
+            # Extract unified analysis from routing decision
+            analysis = routing_decision.get("analysis", {})
+
+            # Handle follow-up rewrite if LLM detected it
+            if analysis.get("is_follow_up") and analysis.get("follow_up_rewrite"):
+                rewritten = analysis["follow_up_rewrite"]
+                if rewritten and rewritten != query and len(rewritten) > 10:
+                    logger.info(f"LLM detected follow-up, rewritten: '{rewritten[:80]}...'")
+                    # Update query in state so all downstream agents use the rewritten version
+                    state["query"] = rewritten
+                    state["original_query"] = original_query
+                    query = rewritten
 
             # Update state with routing decision
             state["complexity_score"] = routing_decision["complexity_score"]
             state["query_type"] = routing_decision["query_type"]
             state["agent_sequence"] = routing_decision["agent_sequence"]
+
+            # Store unified analysis for downstream use (HITL quality detector, etc.)
+            state["unified_analysis"] = analysis
 
             # If orchestrator provided final_answer directly (for greetings/simple queries),
             # store it in state so runner can return it without building workflow
@@ -152,20 +176,24 @@ class OrchestratorAgent(BaseAgent):
                 state["final_answer"] = routing_decision["final_answer"]
                 logger.info("Orchestrator provided direct answer without agents")
 
-            # Track orchestrator output
+            # Track orchestrator output (include unified analysis)
             agent_outputs = state.get("agent_outputs", {})
             agent_outputs["orchestrator"] = {
                 "complexity_score": routing_decision["complexity_score"],
                 "query_type": routing_decision["query_type"],
                 "agent_sequence": routing_decision["agent_sequence"],
                 "reasoning": routing_decision.get("reasoning", ""),
-                "final_answer": routing_decision.get("final_answer")
+                "final_answer": routing_decision.get("final_answer"),
+                "analysis": analysis  # Include unified analysis in output
             }
 
+            # Log unified analysis results
             logger.info(
                 f"Routing decision: complexity={routing_decision['complexity_score']}, "
                 f"type={routing_decision['query_type']}, "
-                f"sequence={routing_decision['agent_sequence']}"
+                f"sequence={routing_decision['agent_sequence']}, "
+                f"is_follow_up={analysis.get('is_follow_up', False)}, "
+                f"vagueness={analysis.get('vagueness_score', 'N/A')}"
             )
 
             # Return ONLY changed keys (partial update) to avoid LangGraph state conflicts
@@ -173,8 +201,14 @@ class OrchestratorAgent(BaseAgent):
                 "complexity_score": routing_decision["complexity_score"],
                 "query_type": routing_decision["query_type"],
                 "agent_sequence": routing_decision["agent_sequence"],
-                "agent_outputs": agent_outputs
+                "agent_outputs": agent_outputs,
+                "unified_analysis": analysis  # Include in state update
             }
+
+            # Add query update if it was rewritten
+            if state.get("original_query"):
+                update["query"] = state["query"]
+                update["original_query"] = state["original_query"]
 
             # Add final_answer if orchestrator provided direct response (no agents)
             if "final_answer" in routing_decision and routing_decision["final_answer"]:
@@ -213,6 +247,11 @@ class OrchestratorAgent(BaseAgent):
                     f"Please check system configuration and try again."
                 )
             }
+
+    # NOTE: _rewrite_query_with_context has been REMOVED
+    # Follow-up detection and query rewriting is now handled by unified analysis
+    # in the orchestrator system prompt. The LLM returns analysis.is_follow_up
+    # and analysis.follow_up_rewrite directly in the routing response.
 
     async def _analyze_and_route(
         self, query: str, conversation_history: Optional[List[Dict[str, str]]] = None
@@ -317,8 +356,12 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                     # Use SSOT provider detection
                     try:
                         provider = detect_provider_from_model(self.config.model)
-                    except ValueError:
-                        provider = 'anthropic'  # Fallback
+                    except ValueError as e:
+                        logger.warning(
+                            f"Could not detect provider for model '{self.config.model}': {e}. "
+                            f"Falling back to 'anthropic'. Cost tracking may be inaccurate."
+                        )
+                        provider = 'anthropic'
 
                     tracker.track_llm(
                         provider=provider,
@@ -545,8 +588,12 @@ Ensure language matching and proper citations."""
                 # Use SSOT provider detection
                 try:
                     provider = detect_provider_from_model(self.config.model)
-                except ValueError:
-                    provider = 'anthropic'  # Fallback
+                except ValueError as e:
+                    logger.warning(
+                        f"Could not detect provider for model '{self.config.model}': {e}. "
+                        f"Falling back to 'anthropic'. Cost tracking may be inaccurate."
+                    )
+                    provider = 'anthropic'
 
                 tracker.track_llm(
                     provider=provider,
@@ -674,35 +721,61 @@ Ensure language matching and proper citations."""
                 )
             }
 
-    def _build_synthesis_context(self, state: Dict[str, Any]) -> str:
+    # Debug/metadata fields to exclude from synthesis context (token optimization)
+    _EXCLUDE_FIELDS = {
+        "iterations", "retrieval_method", "total_tool_cost_usd",
+        "tool_calls_made", "chunks", "expanded_results", "_internal"
+    }
+
+    def _build_synthesis_context(self, state: Dict[str, Any], compress: bool = False) -> str:
         """
         Build synthesis context from agent outputs.
 
+        Token-optimized: Filters debug/metadata fields and uses compact JSON.
+        Expected savings: ~25-30% compared to full JSON dumps (or ~60-70% with compression).
+
         Args:
             state: Current workflow state
+            compress: If True, use aggressive compression for downstream agents
+                     (~100-200 tokens per agent instead of ~500-1000)
 
         Returns:
-            Formatted string with agent outputs
+            Formatted string with agent outputs (compact JSON, no indent)
         """
+        from ..core.agent_base import BaseAgent
+
         agent_outputs = state.get("agent_outputs", {})
         context_parts = []
 
         # Order agents by execution sequence (if available)
         agent_sequence = state.get("agent_sequence", [])
 
+        def filter_output(output: dict) -> dict:
+            """Keep all content fields, exclude only debug/metadata."""
+            return {k: v for k, v in output.items() if k not in self._EXCLUDE_FIELDS}
+
+        def process_output(output: dict) -> dict:
+            """Process output based on compression setting."""
+            if compress:
+                return BaseAgent.compress_output_for_downstream(output)
+            return filter_output(output)
+
         # Add outputs in sequence order
         for agent_name in agent_sequence:
             if agent_name in agent_outputs and agent_name != "orchestrator":
                 output = agent_outputs[agent_name]
+                processed = process_output(output)
                 context_parts.append(f"### {agent_name.upper()} OUTPUT:")
-                context_parts.append(json.dumps(output, indent=2, ensure_ascii=False))
+                # Compact JSON: no indent, minimal separators
+                context_parts.append(json.dumps(processed, ensure_ascii=False, separators=(',', ':')))
                 context_parts.append("")
 
         # Add any remaining outputs not in sequence
         for agent_name, output in agent_outputs.items():
             if agent_name != "orchestrator" and agent_name not in agent_sequence:
+                processed = process_output(output)
                 context_parts.append(f"### {agent_name.upper()} OUTPUT:")
-                context_parts.append(json.dumps(output, indent=2, ensure_ascii=False))
+                context_parts.append(json.dumps(processed, ensure_ascii=False, separators=(',', ':')))
                 context_parts.append("")
 
         return "\n".join(context_parts)
@@ -785,6 +858,44 @@ Ensure language matching and proper citations."""
             # Normalize invalid query_type to 'unknown' (defensive programming)
             # This handles LLM returning values like 'greeting' which aren't in QueryType enum
             decision["query_type"] = "unknown"
+
+        # Validate unified analysis structure if present (graceful handling)
+        if "analysis" in decision:
+            analysis = decision["analysis"]
+
+            # Validate vagueness_score range and clamp if needed
+            if "vagueness_score" in analysis:
+                score = analysis["vagueness_score"]
+                if not isinstance(score, (int, float)):
+                    logger.warning(f"Invalid vagueness_score type: {type(score)}, setting to 0.5")
+                    analysis["vagueness_score"] = 0.5
+                elif score < 0.0 or score > 1.0:
+                    logger.warning(f"vagueness_score {score} out of range, clamping to [0,1]")
+                    analysis["vagueness_score"] = max(0.0, min(1.0, float(score)))
+
+            # Ensure boolean fields are actually booleans
+            for bool_field in ["is_follow_up", "needs_clarification"]:
+                if bool_field in analysis and not isinstance(analysis[bool_field], bool):
+                    analysis[bool_field] = bool(analysis[bool_field])
+
+            # Validate semantic_type if present
+            valid_semantic_types = [
+                "greeting", "specific_factual", "comparative",
+                "procedural", "analytical", "compliance_check"
+            ]
+            if "semantic_type" in analysis and analysis["semantic_type"] not in valid_semantic_types:
+                logger.warning(f"Invalid semantic_type '{analysis['semantic_type']}', defaulting to 'specific_factual'")
+                analysis["semantic_type"] = "specific_factual"
+        else:
+            # If LLM didn't return analysis, create empty default (backwards compatibility)
+            decision["analysis"] = {
+                "is_follow_up": False,
+                "follow_up_rewrite": None,
+                "vagueness_score": 0.5,
+                "needs_clarification": False,
+                "semantic_type": "specific_factual"
+            }
+            logger.debug("LLM didn't return analysis field, using defaults")
 
     def get_workflow_pattern(self, complexity_score: int) -> str:
         """

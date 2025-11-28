@@ -15,7 +15,9 @@ from contextlib import contextmanager
 import psycopg
 from psycopg import Connection
 from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,8 @@ class PostgresCheckpointer:
 
         # LangGraph PostgresSaver (will be initialized lazily)
         self._saver: Optional[PostgresSaver] = None
+        self._async_saver: Optional[AsyncPostgresSaver] = None
+        self._async_pool: Optional[AsyncConnectionPool] = None
         self._connection: Optional[Connection] = None
 
         logger.info(f"PostgresCheckpointer initialized (table={self.table_name})")
@@ -178,10 +182,10 @@ class PostgresCheckpointer:
 
     def get_saver(self) -> PostgresSaver:
         """
-        Get LangGraph PostgresSaver instance.
+        Get LangGraph PostgresSaver instance (synchronous).
 
         Returns:
-            PostgresSaver for LangGraph integration
+            PostgresSaver for LangGraph integration (sync workflows)
         """
         if self._saver is None:
             # Initialize database tables first
@@ -198,6 +202,46 @@ class PostgresCheckpointer:
             logger.info("PostgresSaver created and set up")
 
         return self._saver
+
+    async def get_async_saver(self) -> AsyncPostgresSaver:
+        """
+        Get LangGraph AsyncPostgresSaver instance (asynchronous).
+
+        IMPORTANT: Use this for async workflows (astream, ainvoke).
+        The sync PostgresSaver raises NotImplementedError for async operations.
+
+        Returns:
+            AsyncPostgresSaver for async LangGraph integration
+        """
+        if self._async_saver is None:
+            # Initialize database tables first (sync operation, ok to call here)
+            self.initialize()
+
+            # Create async connection pool (must be kept alive for the app lifetime)
+            # open=False prevents deprecation warning; we call open() explicitly
+            self._async_pool = AsyncConnectionPool(
+                conninfo=self.connection_string,
+                max_size=10,
+                kwargs={"autocommit": True, "prepare_threshold": 0},
+                open=False,
+            )
+            await self._async_pool.open()
+
+            # Create AsyncPostgresSaver with the pool
+            # Wrap setup in try/except to prevent pool leak on failure
+            try:
+                self._async_saver = AsyncPostgresSaver(conn=self._async_pool)
+                await self._async_saver.setup()
+            except Exception as e:
+                logger.error(f"AsyncPostgresSaver setup failed, closing pool: {e}")
+                await self._async_pool.close()
+                self._async_pool = None
+                self._async_saver = None
+                raise
+
+            logger.info("AsyncPostgresSaver created and set up with connection pool")
+
+        return self._async_saver
 
     def save_snapshot(
         self, thread_id: str, checkpoint_id: str, query: str, state: Dict[str, Any]
@@ -316,13 +360,21 @@ class PostgresCheckpointer:
             return 0
 
     def close(self) -> None:
-        """Close database connection."""
+        """Close database connection (sync only, use aclose() for async pool)."""
         if self._connection:
             self._connection.close()
             self._connection = None
             self._saver = None
 
-            logger.info("PostgreSQL checkpointer closed")
+        logger.info("PostgreSQL checkpointer sync connection closed")
+
+    async def aclose(self) -> None:
+        """Close async database connection pool."""
+        if self._async_pool:
+            await self._async_pool.close()
+            self._async_pool = None
+            self._async_saver = None
+            logger.info("AsyncPostgresSaver connection pool closed")
 
 
 def create_checkpointer(config: Dict[str, Any]) -> Optional[PostgresCheckpointer]:

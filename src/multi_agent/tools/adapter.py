@@ -3,16 +3,33 @@ Tool Adapter - Bridge between LangGraph agents and existing tools.
 
 Translates LangGraph tool calls to existing SDK tool execution.
 Zero changes required to existing tools.
+
+Includes hallucination detection for evaluation:
+- Tracks when LLM calls non-existent tools
+- Validates inputs against Pydantic schema before execution
+- Categorizes errors (hallucination vs validation vs execution)
 """
 
 import logging
 from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
+from enum import Enum
+
+from pydantic import ValidationError as PydanticValidationError
 
 from ...agent.tools import get_registry as get_old_registry, ToolResult
-from ..core.state import ToolExecution
+from ..core.state import ToolExecution, ToolUsageMetrics
 
 logger = logging.getLogger(__name__)
+
+
+class ToolErrorType(str, Enum):
+    """Categorization of tool execution errors."""
+    HALLUCINATION = "hallucination"    # Tool doesn't exist in registry
+    VALIDATION = "validation"          # Tool exists but input invalid
+    EXECUTION = "execution"            # Tool executed but failed
+    TIMEOUT = "timeout"                # Tool execution timed out
+    SUCCESS = "success"                # No error
 
 
 class ToolAdapter:
@@ -42,6 +59,10 @@ class ToolAdapter:
         self.registry = tool_registry
         self.execution_history: List[ToolExecution] = []
 
+        # Evaluation metrics tracking
+        self.usage_metrics = ToolUsageMetrics()
+        self._available_tools_cache: Optional[Set[str]] = None
+
         logger.info(f"ToolAdapter initialized with {len(self.registry)} tools")
 
     async def execute(
@@ -53,9 +74,15 @@ class ToolAdapter:
         """
         Execute a tool with LangGraph interface.
 
+        Includes hallucination detection and input validation:
+        1. Check if tool exists (hallucination detection)
+        2. Validate inputs against Pydantic schema
+        3. Execute tool
+        4. Track metrics for evaluation
+
         Args:
             tool_name: Name of tool to execute
-            inputs: Validated input dict
+            inputs: Input dict (will be validated)
             agent_name: Name of agent executing the tool
 
         Returns:
@@ -65,27 +92,44 @@ class ToolAdapter:
                 - citations: List[str]
                 - metadata: Dict
                 - error: Optional[str]
+                - error_type: ToolErrorType (for evaluation)
         """
         start_time = datetime.now()
 
+        # Step 1: Check if tool exists (HALLUCINATION DETECTION)
+        tool = self.registry.get_tool(tool_name)
+
+        if tool is None:
+            logger.warning(
+                f"HALLUCINATION DETECTED: Agent '{agent_name}' called "
+                f"non-existent tool '{tool_name}'"
+            )
+            return self._format_error_result(
+                tool_name=tool_name,
+                agent_name=agent_name,
+                error=f"Tool '{tool_name}' does not exist. Available tools: {self._get_available_tools_str()}",
+                start_time=start_time,
+                error_type=ToolErrorType.HALLUCINATION,
+                was_hallucinated=True
+            )
+
+        # Step 2: Validate inputs against Pydantic schema
+        validation_error = self._validate_inputs(tool, inputs)
+        if validation_error:
+            logger.warning(
+                f"INPUT VALIDATION FAILED: Tool '{tool_name}' by agent '{agent_name}': {validation_error}"
+            )
+            return self._format_error_result(
+                tool_name=tool_name,
+                agent_name=agent_name,
+                error=f"Invalid inputs for tool '{tool_name}': {validation_error}",
+                start_time=start_time,
+                error_type=ToolErrorType.VALIDATION,
+                validation_error=validation_error
+            )
+
+        # Step 3: Execute tool
         try:
-            # Get tool from existing registry
-            tool = self.registry.get_tool(tool_name)
-
-            if tool is None:
-                logger.error(f"Tool not found: {tool_name}")
-                return self._format_error_result(
-                    tool_name=tool_name,
-                    agent_name=agent_name,
-                    error=f"Tool '{tool_name}' not found",
-                    start_time=start_time
-                )
-
-            # Execute tool using existing infrastructure
-            # The tool.execute() method already handles:
-            # - Input validation via Pydantic
-            # - Error handling
-            # - Result formatting
             result: ToolResult = tool.execute(**inputs)
 
             # Calculate execution time
@@ -101,9 +145,12 @@ class ToolAdapter:
                 output_tokens=result.estimated_tokens,
                 success=result.success,
                 error=result.error,
-                result_summary=self._summarize_result(result)
+                result_summary=self._summarize_result(result),
+                was_hallucinated=False,
+                validation_error=None
             )
             self.execution_history.append(execution)
+            self.usage_metrics.record_execution(execution)
 
             # Convert ToolResult to dict format for LangGraph
             return {
@@ -116,8 +163,19 @@ class ToolAdapter:
                     "duration_ms": duration_ms,
                     "estimated_tokens": result.estimated_tokens
                 },
-                "error": result.error
+                "error": result.error,
+                "error_type": ToolErrorType.SUCCESS if result.success else ToolErrorType.EXECUTION
             }
+
+        except TimeoutError as e:
+            logger.error(f"Tool timeout: {tool_name} by {agent_name}")
+            return self._format_error_result(
+                tool_name=tool_name,
+                agent_name=agent_name,
+                error=f"Tool '{tool_name}' timed out: {e}",
+                start_time=start_time,
+                error_type=ToolErrorType.TIMEOUT
+            )
 
         except Exception as e:
             logger.error(
@@ -128,20 +186,72 @@ class ToolAdapter:
                 tool_name=tool_name,
                 agent_name=agent_name,
                 error=str(e),
-                start_time=start_time
+                start_time=start_time,
+                error_type=ToolErrorType.EXECUTION
             )
+
+    def _validate_inputs(self, tool, inputs: Dict[str, Any]) -> Optional[str]:
+        """
+        Validate inputs against tool's Pydantic schema.
+
+        Args:
+            tool: Tool instance with input_schema
+            inputs: Input dict to validate
+
+        Returns:
+            Error message if validation failed, None if valid
+        """
+        if not hasattr(tool, 'input_schema') or tool.input_schema is None:
+            return None  # No schema to validate against
+
+        try:
+            # Attempt to create Pydantic model instance
+            tool.input_schema(**inputs)
+            return None
+        except PydanticValidationError as e:
+            # Extract first error message for clarity
+            errors = e.errors()
+            if errors:
+                first_error = errors[0]
+                field = ".".join(str(loc) for loc in first_error.get("loc", []))
+                msg = first_error.get("msg", "validation error")
+                return f"{field}: {msg}"
+            return str(e)
+        except TypeError as e:
+            # Missing required arguments
+            return str(e)
+
+    def _get_available_tools_str(self) -> str:
+        """Get comma-separated list of available tools (cached)."""
+        if self._available_tools_cache is None:
+            self._available_tools_cache = set(self.registry._tools.keys())
+        return ", ".join(sorted(self._available_tools_cache)[:10]) + "..."
 
     def _format_error_result(
         self,
         tool_name: str,
         agent_name: str,
         error: str,
-        start_time: datetime
+        start_time: datetime,
+        error_type: ToolErrorType = ToolErrorType.EXECUTION,
+        was_hallucinated: bool = False,
+        validation_error: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Format error result."""
+        """
+        Format error result with evaluation metadata.
+
+        Args:
+            tool_name: Name of tool that failed
+            agent_name: Agent that called the tool
+            error: Error message
+            start_time: When execution started
+            error_type: Category of error
+            was_hallucinated: True if tool doesn't exist
+            validation_error: Validation error message if applicable
+        """
         duration_ms = (datetime.now() - start_time).total_seconds() * 1000
 
-        # Track failed execution
+        # Track failed execution with evaluation metadata
         execution = ToolExecution(
             tool_name=tool_name,
             agent_name=agent_name,
@@ -151,9 +261,12 @@ class ToolAdapter:
             output_tokens=0,
             success=False,
             error=error,
-            result_summary=f"Error: {error[:100]}"
+            result_summary=f"Error ({error_type.value}): {error[:80]}",
+            was_hallucinated=was_hallucinated,
+            validation_error=validation_error
         )
         self.execution_history.append(execution)
+        self.usage_metrics.record_execution(execution)
 
         return {
             "success": False,
@@ -162,9 +275,12 @@ class ToolAdapter:
             "metadata": {
                 "agent_name": agent_name,
                 "duration_ms": duration_ms,
-                "error_type": "execution_error"
+                "error_type": error_type.value,
+                "was_hallucinated": was_hallucinated,
+                "validation_error": validation_error
             },
-            "error": error
+            "error": error,
+            "error_type": error_type
         }
 
     def _estimate_tokens(self, data: Any) -> int:
@@ -228,82 +344,67 @@ class ToolAdapter:
 
         return True
 
-    def get_tool_schema(self, tool_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Get Anthropic-compatible tool schema for a tool.
-
-        Args:
-            tool_name: Name of tool
-
-        Returns:
-            Tool schema dict in Anthropic format, or None if tool not found
-        """
-        tool = self.registry.get_tool(tool_name)
-
-        if tool is None:
-            logger.warning(f"Tool not found for schema: {tool_name}")
-            return None
-
-        try:
-            # Get Pydantic schema from input_schema class
-            pydantic_schema = tool.input_schema.model_json_schema()
-
-            # Convert to Anthropic format
-            # Anthropic expects: {name, description, input_schema: {type, properties, required}}
-            anthropic_schema = {
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": {
-                    "type": "object",
-                    "properties": pydantic_schema.get("properties", {}),
-                    "required": pydantic_schema.get("required", [])
-                }
-            }
-
-            return anthropic_schema
-
-        except Exception as e:
-            logger.error(f"Failed to generate schema for tool {tool_name}: {e}")
-            return None
-
     def get_execution_stats(self) -> Dict[str, Any]:
-        """Get execution statistics."""
+        """Get execution statistics including evaluation metrics."""
         if not self.execution_history:
             return {
                 "total_executions": 0,
                 "successful": 0,
                 "failed": 0,
                 "avg_duration_ms": 0,
-                "total_tokens": 0
+                "total_tokens": 0,
+                "hallucination_rate": 0.0,
+                "validation_error_rate": 0.0
             }
 
         successful = [e for e in self.execution_history if e.success]
         failed = [e for e in self.execution_history if not e.success]
+        hallucinated = [e for e in self.execution_history if e.was_hallucinated]
+        validation_errors = [e for e in self.execution_history if e.validation_error]
 
         total_duration = sum(e.duration_ms for e in self.execution_history)
         total_tokens = sum(e.input_tokens + e.output_tokens for e in self.execution_history)
+        total_count = len(self.execution_history)
 
         return {
-            "total_executions": len(self.execution_history),
+            "total_executions": total_count,
             "successful": len(successful),
             "failed": len(failed),
-            "success_rate": len(successful) / len(self.execution_history) * 100,
-            "avg_duration_ms": total_duration / len(self.execution_history),
+            "success_rate": len(successful) / total_count * 100,
+            "avg_duration_ms": total_duration / total_count,
             "total_tokens": total_tokens,
+            # Evaluation metrics
+            "hallucinated": len(hallucinated),
+            "validation_errors": len(validation_errors),
+            "hallucination_rate": len(hallucinated) / total_count,
+            "validation_error_rate": len(validation_errors) / total_count,
             "by_agent": self._get_stats_by_agent(),
             "by_tool": self._get_stats_by_tool()
         }
 
-    def _get_stats_by_agent(self) -> Dict[str, Dict]:
+    def get_usage_metrics(self) -> ToolUsageMetrics:
+        """
+        Get aggregated tool usage metrics for evaluation.
+
+        Returns:
+            ToolUsageMetrics instance with hallucination rate, success rate, etc.
+        """
+        return self.usage_metrics
+
+    def reset_metrics(self) -> None:
+        """Reset usage metrics (for testing or between runs)."""
+        self.usage_metrics = ToolUsageMetrics()
+
+    def _get_stats_by_agent(self) -> Dict[str, Dict[str, Any]]:
         """Get statistics grouped by agent."""
-        stats = {}
+        stats: Dict[str, Dict[str, Any]] = {}
         for execution in self.execution_history:
             if execution.agent_name not in stats:
                 stats[execution.agent_name] = {
                     "executions": 0,
                     "successful": 0,
                     "failed": 0,
-                    "total_duration_ms": 0
+                    "total_duration_ms": 0.0
                 }
 
             stats[execution.agent_name]["executions"] += 1
@@ -315,16 +416,16 @@ class ToolAdapter:
 
         return stats
 
-    def _get_stats_by_tool(self) -> Dict[str, Dict]:
+    def _get_stats_by_tool(self) -> Dict[str, Dict[str, Any]]:
         """Get statistics grouped by tool."""
-        stats = {}
+        stats: Dict[str, Dict[str, Any]] = {}
         for execution in self.execution_history:
             if execution.tool_name not in stats:
                 stats[execution.tool_name] = {
                     "executions": 0,
                     "successful": 0,
                     "failed": 0,
-                    "total_duration_ms": 0
+                    "total_duration_ms": 0.0
                 }
 
             stats[execution.tool_name]["executions"] += 1
@@ -395,8 +496,10 @@ class ToolAdapter:
             return None
 
     def clear_history(self) -> None:
-        """Clear execution history (for testing)."""
+        """Clear execution history and reset metrics (for testing)."""
         self.execution_history.clear()
+        self.reset_metrics()
+        self._available_tools_cache = None
 
 
 # Global adapter instance

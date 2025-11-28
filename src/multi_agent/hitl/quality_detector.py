@@ -13,7 +13,7 @@ Weighted scoring determines if clarification is needed.
 import re
 import statistics
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 
 import numpy as np
@@ -64,7 +64,8 @@ class QualityDetector:
         self,
         query: str,
         search_results: List[Dict[str, Any]],
-        complexity_score: int
+        complexity_score: int,
+        unified_analysis: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, QualityMetrics]:
         """
         Evaluate retrieval quality and determine if clarification needed.
@@ -73,6 +74,7 @@ class QualityDetector:
             query: Original user query
             search_results: List of retrieved chunks/documents
             complexity_score: Query complexity (0-100)
+            unified_analysis: Optional unified analysis from orchestrator (for LLM-based vagueness)
 
         Returns:
             (should_clarify, quality_metrics)
@@ -82,15 +84,21 @@ class QualityDetector:
             logger.debug(f"Query complexity {complexity_score} below threshold, skipping clarification")
             return False, self._create_passing_metrics()
 
+        # Check unified analysis for needs_clarification flag (LLM-based decision)
+        if unified_analysis and unified_analysis.get("needs_clarification"):
+            logger.info("LLM unified analysis indicates clarification needed")
+            # Still calculate metrics for completeness
+            # Fall through to metric calculation
+
         # Policy check: zero results always trigger if enabled
         if len(search_results) == 0 and self.config.always_ask_if_zero_results:
             logger.warning("Zero results retrieved, triggering clarification")
             return True, self._create_zero_results_metrics()
 
-        # Calculate individual metrics
+        # Calculate individual metrics (using unified_analysis if available)
         retrieval_score = self._calc_retrieval_score(search_results)
         semantic_coherence = self._calc_semantic_coherence(search_results)
-        query_pattern_score = self._calc_query_pattern_score(query)
+        query_pattern_score = self._calc_query_pattern_score(query, unified_analysis)
         document_diversity = self._calc_document_diversity(search_results)
 
         # Identify failing metrics
@@ -218,9 +226,39 @@ class QualityDetector:
         logger.debug(f"Semantic coherence: {coherence:.3f} (avg_sim={avg_similarity:.3f}, var={variance:.3f})")
         return float(coherence)
 
-    def _calc_query_pattern_score(self, query: str) -> float:
+    def _calc_query_pattern_score(
+        self, query: str, unified_analysis: Optional[Dict[str, Any]] = None
+    ) -> float:
         """
-        Analyze query for vague patterns.
+        Get query specificity score.
+
+        PREFERS: LLM-based vagueness_score from unified analysis (more accurate).
+        FALLBACK: Keyword-based scoring (legacy).
+
+        Args:
+            query: User query string
+            unified_analysis: Unified analysis from orchestrator (if available)
+
+        Returns:
+            Specificity score (0-1), where 1=specific, 0=vague
+        """
+        # PREFER: Use unified analysis from orchestrator (LLM-based, more accurate)
+        if unified_analysis and "vagueness_score" in unified_analysis:
+            vagueness = unified_analysis["vagueness_score"]
+            # Invert: vagueness (0=specific, 1=vague) -> specificity (0=vague, 1=specific)
+            specificity = 1.0 - float(vagueness)
+            logger.debug(
+                f"Query pattern score (LLM): {specificity:.3f} "
+                f"(vagueness_score={vagueness}, semantic_type={unified_analysis.get('semantic_type', 'N/A')})"
+            )
+            return specificity
+
+        # FALLBACK: Legacy keyword-based scoring
+        return self._legacy_query_pattern_score(query)
+
+    def _legacy_query_pattern_score(self, query: str) -> float:
+        """
+        Legacy keyword-based query specificity scoring.
 
         Lower score = more vague (generic keywords, no specifics).
         Higher score = more specific (entities, numbers, quotes).
@@ -265,7 +303,7 @@ class QualityDetector:
         score = max(0.0, min(1.0, base_score - vague_penalty + specificity_bonus))
 
         logger.debug(
-            f"Query pattern score: {score:.3f} "
+            f"Query pattern score (legacy): {score:.3f} "
             f"(vague={vague_count}, nums={has_numbers}, entities={has_entities})"
         )
         return score

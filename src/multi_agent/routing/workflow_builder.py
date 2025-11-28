@@ -12,7 +12,7 @@ import logging
 from typing import Any, Dict, List, Optional, Callable
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.types import interrupt
 
 from ..core.state import MultiAgentState, ExecutionPhase
@@ -23,6 +23,24 @@ from ..hitl.clarification_generator import ClarificationGenerator
 from ..core.event_bus import EventType
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_non_serializable(state_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Remove non-serializable fields from state dict before returning from nodes.
+
+    LangGraph's checkpointer uses msgpack which cannot serialize arbitrary objects.
+    This function removes EventBus and any other non-serializable fields.
+
+    Args:
+        state_dict: State dictionary potentially containing non-serializable fields
+
+    Returns:
+        State dictionary safe for checkpointing
+    """
+    # Remove event_bus - it's not serializable and not needed in checkpoints
+    state_dict.pop("event_bus", None)
+    return state_dict
 
 
 class WorkflowBuilder:
@@ -36,7 +54,7 @@ class WorkflowBuilder:
     def __init__(
         self,
         agent_registry: AgentRegistry,
-        checkpointer: Optional[PostgresSaver] = None,
+        checkpointer: Optional[BaseCheckpointSaver] = None,
         hitl_config: Optional[HITLConfig] = None,
         quality_detector: Optional[QualityDetector] = None,
         clarification_generator: Optional[ClarificationGenerator] = None,
@@ -46,7 +64,7 @@ class WorkflowBuilder:
 
         Args:
             agent_registry: Registry containing all agent instances
-            checkpointer: Optional PostgreSQL checkpointer for state persistence
+            checkpointer: Optional checkpointer for state persistence (sync or async)
             hitl_config: Optional HITL configuration
             quality_detector: Optional quality detector for HITL
             clarification_generator: Optional clarification generator for HITL
@@ -117,19 +135,14 @@ class WorkflowBuilder:
             raise ValueError(f"Agent not found in registry: {agent_name}")
 
         # Create node function that wraps agent execution
-        async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        # Note: LangGraph passes (state, config) to node functions
+        async def agent_node(state: Dict[str, Any], config: Dict[str, Any] = None) -> Dict[str, Any]:
             """Execute agent and update state."""
             try:
-                # LangGraph may pass state as MultiAgentState (Pydantic) or dict
-                # Extract EventBus using proper accessor based on type
-                if hasattr(state, "event_bus"):
-                    # Pydantic model - access as attribute (field name: event_bus)
-                    event_bus = state.event_bus
-                elif isinstance(state, dict):
-                    # Plain dict - access as key
-                    event_bus = state.get("event_bus")
-                else:
-                    event_bus = None
+                # Get EventBus from config (NOT state - state is checkpointed and event_bus is not serializable)
+                event_bus = None
+                if config and "configurable" in config:
+                    event_bus = config["configurable"].get("event_bus")
 
                 # Convert MultiAgentState to dict if needed
                 if hasattr(state, "model_dump"):
@@ -138,17 +151,12 @@ class WorkflowBuilder:
                     state_dict = dict(state)
 
                 # Update execution phase
+                # NOTE: Do NOT add event_bus to state - it breaks checkpointing
                 updated_state = {
                     **state_dict,
                     "execution_phase": ExecutionPhase.AGENT_EXECUTION.value,
                     "current_agent": agent_name,
                 }
-
-                # Restore EventBus into state dict (for agent's autonomous tool loop to emit progress events)
-                # NOTE: This will be converted back to Pydantic model by LangGraph
-                # Use "event_bus" key (no underscore) to match MultiAgentState field name
-                if event_bus:
-                    updated_state["event_bus"] = event_bus
 
                 # Add agent to sequence if not already there
                 agent_sequence = updated_state.get("agent_sequence", [])
@@ -178,7 +186,7 @@ class WorkflowBuilder:
                 if "current_agent" not in result:
                     result["current_agent"] = agent_name
 
-                return result
+                return _strip_non_serializable(result)
 
             except Exception as e:
                 logger.error(f"Agent {agent_name} failed: {e}", exc_info=True)
@@ -193,7 +201,7 @@ class WorkflowBuilder:
                 errors = state_dict.get("errors", [])
                 errors.append(f"{agent_name} error: {str(e)}")
 
-                return {**state_dict, "errors": errors}
+                return _strip_non_serializable({**state_dict, "errors": errors})
 
         # Add node to workflow
         workflow.add_node(agent_name, agent_node)
@@ -217,16 +225,13 @@ class WorkflowBuilder:
             logger.error("Orchestrator agent not found in registry")
             raise ValueError("Orchestrator agent required for synthesis")
 
-        async def orchestrator_synthesis_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        async def orchestrator_synthesis_node(state: Dict[str, Any], config: Dict[str, Any] = None) -> Dict[str, Any]:
             """Execute orchestrator synthesis and update state."""
             try:
-                # Extract EventBus if present
-                if hasattr(state, "event_bus"):
-                    event_bus = state.event_bus
-                elif isinstance(state, dict):
-                    event_bus = state.get("event_bus")
-                else:
-                    event_bus = None
+                # Get EventBus from config (NOT state - state is checkpointed)
+                event_bus = None
+                if config and "configurable" in config:
+                    event_bus = config["configurable"].get("event_bus")
 
                 # Convert to dict if needed
                 if hasattr(state, "model_dump"):
@@ -235,15 +240,12 @@ class WorkflowBuilder:
                     state_dict = dict(state)
 
                 # Update execution phase
+                # NOTE: Do NOT add event_bus to state - it breaks checkpointing
                 updated_state = {
                     **state_dict,
                     "execution_phase": ExecutionPhase.SYNTHESIS.value,
                     "current_agent": "orchestrator",
                 }
-
-                # Restore EventBus
-                if event_bus:
-                    updated_state["event_bus"] = event_bus
 
                 logger.info("Executing orchestrator synthesis...")
 
@@ -267,7 +269,7 @@ class WorkflowBuilder:
                 if "current_agent" not in result:
                     result["current_agent"] = "orchestrator"
 
-                return result
+                return _strip_non_serializable(result)
 
             except Exception as e:
                 logger.error(f"Orchestrator synthesis failed: {e}", exc_info=True)
@@ -288,7 +290,7 @@ class WorkflowBuilder:
                     f"Agents completed their analysis, but final answer generation failed."
                 )
 
-                return {**state_dict, "errors": errors}
+                return _strip_non_serializable({**state_dict, "errors": errors})
 
         # Add node to workflow
         workflow.add_node("orchestrator_synthesis", orchestrator_synthesis_node)
@@ -338,7 +340,7 @@ class WorkflowBuilder:
                     updated_state["quality_check_required"] = False
 
                     logger.info(f"HITL: Query enriched, continuing workflow")
-                    return updated_state
+                    return _strip_non_serializable(updated_state)
 
                 # Check complexity threshold
                 complexity_score = state_dict.get("complexity_score", 0)
@@ -347,7 +349,7 @@ class WorkflowBuilder:
                         f"HITL: Complexity {complexity_score} below threshold "
                         f"{self.hitl_config.min_complexity_score}, skipping"
                     )
-                    return {**state_dict, "quality_check_required": False}
+                    return _strip_non_serializable({**state_dict, "quality_check_required": False})
 
                 # Evaluate retrieval quality
                 query = state_dict.get("query", "")
@@ -377,7 +379,7 @@ class WorkflowBuilder:
                         f"HITL: Quality acceptable ({metrics.overall_quality:.2f}), "
                         f"continuing workflow"
                     )
-                    return {**updated_state, "quality_check_required": False}
+                    return _strip_non_serializable({**updated_state, "quality_check_required": False})
 
                 # Check clarification round limit
                 current_round = state_dict.get("clarification_round", 0)
@@ -386,7 +388,7 @@ class WorkflowBuilder:
                         f"HITL: Max clarification rounds ({self.hitl_config.max_rounds}) "
                         f"reached, continuing anyway"
                     )
-                    return {**updated_state, "quality_check_required": False}
+                    return _strip_non_serializable({**updated_state, "quality_check_required": False})
 
                 # Generate clarifying questions
                 logger.info(
@@ -426,7 +428,7 @@ class WorkflowBuilder:
                     }
                 )
 
-                return final_state
+                return _strip_non_serializable(final_state)
 
             except Exception as e:
                 # Check if this is an Interrupt (not an error)
@@ -442,7 +444,7 @@ class WorkflowBuilder:
                     state_dict = dict(state)
                 errors = state_dict.get("errors", [])
                 errors.append(f"HITL gate error: {str(e)}")
-                return {**state_dict, "quality_check_required": False, "errors": errors}
+                return _strip_non_serializable({**state_dict, "quality_check_required": False, "errors": errors})
 
         # Add gate node to workflow
         workflow.add_node("hitl_gate", hitl_gate)
@@ -507,7 +509,7 @@ class WorkflowBuilder:
 
             logger.info(f"Iteration {iteration_count}: All agents completed, returning to synthesis")
 
-            return state_dict
+            return _strip_non_serializable(state_dict)
 
         workflow.add_node("iteration_dispatcher", iteration_dispatcher)
         logger.debug("Added iteration_dispatcher node")
@@ -662,8 +664,8 @@ class WorkflowBuilder:
                     """Entry point for parallel execution - just passes through state."""
                     # Convert to dict if needed
                     if hasattr(state, "model_dump"):
-                        return state.model_dump()
-                    return dict(state)
+                        return _strip_non_serializable(state.model_dump())
+                    return _strip_non_serializable(dict(state))
 
                 workflow.add_node("start", start_node)
                 workflow.set_entry_point("start")

@@ -40,8 +40,11 @@ def _ensure_token_manager_imported():
             _SmartTruncator = SmartTruncator
             _token_manager_imported = True
         except ImportError as e:
-            # token_manager is optional - silently fall back to legacy limits
-            logger.debug(f"token_manager not available, using legacy limits: {e}")
+            # token_manager is optional - fall back to legacy character-based limits
+            logger.warning(
+                f"Token manager import failed - using legacy character-based truncation. "
+                f"This may cause suboptimal results. Error: {e}"
+            )
             _token_manager_imported = False
 
 
@@ -205,15 +208,9 @@ def format_chunk_result(
     if "page_number" in chunk:
         result["page"] = chunk["page_number"]
 
-    # Add truncation flag
-    if was_truncated:
-        result["truncated"] = True
-
-    # Preserve dense_score and bm25_score for training data collection
-    if "dense_score" in chunk:
-        result["dense_score"] = chunk["dense_score"]
-    if "bm25_score" in chunk:
-        result["bm25_score"] = chunk["bm25_score"]
+    # NOTE: Removed debug fields (truncated, dense_score, bm25_score) to reduce token usage
+    # These were only used for training data collection, not for agent reasoning
+    # Token savings: ~5% per chunk (approx 15-20 tokens per chunk)
 
     return result
 
