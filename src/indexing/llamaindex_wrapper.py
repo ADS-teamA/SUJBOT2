@@ -35,6 +35,14 @@ from typing import Any, Dict, List, Optional
 from llama_index.core.schema import TextNode
 
 from src.config_schema import LabelingConfig
+from src.exceptions import (
+    APIKeyError,
+    ConfigurationError,
+    ProviderError,
+    StorageError,
+    is_recoverable,
+    wrap_exception,
+)
 from src.extraction_models import ExtractedDocument
 from src.indexing_pipeline import IndexingConfig, IndexingPipeline
 from src.indexing.transforms.gemini_entity_labeler import GeminiEntityLabeler
@@ -152,10 +160,21 @@ class SujbotIngestionPipeline:
                     "Install with: uv add llama-index-storage-kvstore-redis"
                 )
                 self._cache = None
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
+                # Network-related errors - recoverable, continue without cache
                 logger.error(
                     f"Redis connection failed ({self.redis_host}:{self.redis_port}): {e}. "
                     "Pipeline will run WITHOUT caching - indexing will NOT be resumable.",
+                    exc_info=True
+                )
+                self._cache = None
+            except Exception as e:
+                # Unexpected errors - check if recoverable
+                if not is_recoverable(e):
+                    raise  # Re-raise KeyboardInterrupt, MemoryError, etc.
+                logger.error(
+                    f"Unexpected Redis error ({self.redis_host}:{self.redis_port}): {e}. "
+                    "Pipeline will run WITHOUT caching.",
                     exc_info=True
                 )
                 self._cache = None
@@ -289,7 +308,27 @@ class SujbotIngestionPipeline:
                     if self.cache is not None:
                         self._cache_phase_result(doc_id, 3, {"labeled": True})
 
+                except (APIKeyError, ConfigurationError) as e:
+                    # Non-recoverable: missing API key or bad config - fail fast
+                    logger.error(
+                        f"Entity labeling configuration error: {e}. "
+                        "Fix configuration before continuing.",
+                        exc_info=True
+                    )
+                    raise  # Don't silently fallback for config errors
+                except ProviderError as e:
+                    # Recoverable: API rate limit, timeout, etc.
+                    logger.warning(
+                        f"Entity labeling provider error: {e}. "
+                        "Document indexed without entity labels.",
+                        exc_info=True
+                    )
+                    result["entity_labeling_error"] = str(e)
+                    result["entity_labeling_succeeded"] = False
                 except Exception as e:
+                    # Check if recoverable before falling back
+                    if not is_recoverable(e):
+                        raise  # Re-raise KeyboardInterrupt, MemoryError, etc.
                     logger.error(
                         f"Entity labeling failed: {e}. Document indexed without entity labels.",
                         exc_info=True
@@ -339,7 +378,27 @@ class SujbotIngestionPipeline:
                             doc_id, 3, {"document_labeled": True}
                         )
 
+                except (APIKeyError, ConfigurationError) as e:
+                    # Non-recoverable: missing API key or bad config - fail fast
+                    logger.error(
+                        f"Document labeling configuration error: {e}. "
+                        "Fix configuration before continuing.",
+                        exc_info=True
+                    )
+                    raise  # Don't silently fallback for config errors
+                except ProviderError as e:
+                    # Recoverable: API rate limit, timeout, etc.
+                    logger.warning(
+                        f"Document labeling provider error: {e}. "
+                        "Document indexed without categories/keywords/questions.",
+                        exc_info=True
+                    )
+                    result["document_labeling_error"] = str(e)
+                    result["document_labeling_succeeded"] = False
                 except Exception as e:
+                    # Check if recoverable before falling back
+                    if not is_recoverable(e):
+                        raise  # Re-raise KeyboardInterrupt, MemoryError, etc.
                     logger.error(
                         f"Document labeling failed: {e}. "
                         "Document indexed without categories/keywords/questions.",

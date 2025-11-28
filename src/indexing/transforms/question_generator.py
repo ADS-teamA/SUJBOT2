@@ -22,6 +22,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from src.exceptions import APIKeyError, ProviderError, is_recoverable
 from src.utils.cache import LRUCache
 
 logger = logging.getLogger(__name__)
@@ -152,8 +153,9 @@ class ChunkQuestionGenerator:
 
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
-                raise RuntimeError(
-                    "OPENAI_API_KEY not set. Required for question generation."
+                raise APIKeyError(
+                    "OPENAI_API_KEY not set. Required for question generation.",
+                    details={"component": "ChunkQuestionGenerator"}
                 )
             self._client = OpenAI(api_key=api_key)
         return self._client
@@ -299,8 +301,22 @@ class ChunkQuestionGenerator:
             self._processed_count += 1
             return questions
 
+        except APIKeyError:
+            # Re-raise API key errors - these are not recoverable
+            raise
         except Exception as e:
-            logger.error(f"Question generation failed for {chunk_id}: {e}")
+            # Check if recoverable before falling back
+            if not is_recoverable(e):
+                raise
+            # Wrap OpenAI errors as ProviderError for upstream handling
+            import openai
+            if isinstance(e, (openai.APIError, openai.APIConnectionError, openai.RateLimitError)):
+                raise ProviderError(
+                    f"Question generation API error: {e}",
+                    details={"model": self.model_name, "chunk_id": chunk_id},
+                    cause=e
+                )
+            logger.error(f"Question generation failed for {chunk_id}: {e}", exc_info=True)
             return ChunkQuestions.default(chunk_id)
 
     async def generate_async(

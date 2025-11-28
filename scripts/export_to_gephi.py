@@ -48,92 +48,16 @@ def sanitize_text(text: str | None) -> str:
     return cleaned
 
 from src.graph.config import Neo4jConfig
+from src.graph.entity_display import (
+    ENTITY_CATEGORIES,
+    CATEGORY_COLORS_RGB,
+    get_entity_category,
+    get_category_rgb,
+)
 from src.graph.neo4j_manager import Neo4jManager
 
-# Entity type to category mapping for Gephi modularity classes
-ENTITY_CATEGORIES = {
-    # Core Entities
-    "standard": "core",
-    "organization": "core",
-    "date": "core",
-    "clause": "core",
-    "topic": "core",
-    "person": "core",
-    "location": "core",
-    "contract": "core",
-    # Regulatory Hierarchy
-    "regulation": "regulatory",
-    "decree": "regulatory",
-    "directive": "regulatory",
-    "treaty": "regulatory",
-    "legal_provision": "regulatory",
-    "requirement": "regulatory",
-    # Authorization
-    "permit": "authorization",
-    "license_condition": "authorization",
-    # Nuclear Technical
-    "reactor": "nuclear",
-    "facility": "nuclear",
-    "system": "nuclear",
-    "safety_function": "nuclear",
-    "fuel_type": "nuclear",
-    "isotope": "nuclear",
-    "radiation_source": "nuclear",
-    "waste_category": "nuclear",
-    "dose_limit": "nuclear",
-    # Events
-    "incident": "events",
-    "emergency_classification": "events",
-    "inspection": "events",
-    "decommissioning_phase": "events",
-    # Liability
-    "liability_regime": "liability",
-    # Legal Terminology
-    "legal_term": "terminology",
-    "definition": "terminology",
-    # Czech Legal Types
-    "vyhlaska": "czech_legal",
-    "narizeni": "czech_legal",
-    "sbirka_zakonu": "czech_legal",
-    "metodicky_pokyn": "czech_legal",
-    "sujb_rozhodnuti": "czech_legal",
-    "bezpecnostni_dokumentace": "czech_legal",
-    "limitni_stav": "czech_legal",
-    "mezni_hodnota": "czech_legal",
-    # Technical Parameters
-    "numeric_threshold": "parameters",
-    "measurement_unit": "parameters",
-    "time_period": "parameters",
-    "frequency": "parameters",
-    "percentage": "parameters",
-    "temperature": "parameters",
-    "pressure": "parameters",
-    # Process Types
-    "radiation_activity": "processes",
-    "maintenance_activity": "processes",
-    "emergency_procedure": "processes",
-    "training_requirement": "processes",
-    "documentation_requirement": "processes",
-    # Compliance Types
-    "compliance_gap": "compliance",
-    "risk_factor": "compliance",
-    "mitigation_measure": "compliance",
-}
-
-# Color palette for Gephi (RGB tuples)
-CATEGORY_COLORS = {
-    "core": (52, 152, 219),  # Blue
-    "regulatory": (155, 89, 182),  # Purple
-    "authorization": (230, 126, 34),  # Orange
-    "nuclear": (231, 76, 60),  # Red
-    "events": (241, 196, 15),  # Yellow
-    "liability": (160, 82, 45),  # Brown
-    "terminology": (127, 140, 141),  # Gray
-    "czech_legal": (39, 174, 96),  # Green
-    "parameters": (0, 188, 212),  # Cyan
-    "processes": (92, 107, 192),  # Indigo
-    "compliance": (211, 47, 47),  # Deep Red
-}
+# Alias for backwards compatibility
+CATEGORY_COLORS = CATEGORY_COLORS_RGB
 
 
 def fetch_graph_data(manager: Neo4jManager) -> tuple[list[dict], list[dict]]:

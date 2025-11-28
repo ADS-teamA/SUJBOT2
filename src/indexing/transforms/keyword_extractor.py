@@ -15,6 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from src.exceptions import APIKeyError, ProviderError, is_recoverable
 from src.extraction_models import DocumentSection
 
 logger = logging.getLogger(__name__)
@@ -120,8 +121,9 @@ class SectionKeywordExtractor:
 
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
-                raise RuntimeError(
-                    "OPENAI_API_KEY not set. Required for keyword extraction."
+                raise APIKeyError(
+                    "OPENAI_API_KEY not set. Required for keyword extraction.",
+                    details={"component": "SectionKeywordExtractor"}
                 )
             self._client = OpenAI(api_key=api_key)
         return self._client
@@ -230,8 +232,22 @@ class SectionKeywordExtractor:
             response_text = response.choices[0].message.content or ""
             return self._parse_response(response_text, section.section_id or "")
 
+        except APIKeyError:
+            # Re-raise API key errors - these are not recoverable
+            raise
         except Exception as e:
-            logger.error(f"Keyword extraction failed for {section.section_id}: {e}")
+            # Check if recoverable before falling back
+            if not is_recoverable(e):
+                raise
+            # Wrap OpenAI errors as ProviderError for upstream handling
+            import openai
+            if isinstance(e, (openai.APIError, openai.APIConnectionError, openai.RateLimitError)):
+                raise ProviderError(
+                    f"Keyword extraction API error: {e}",
+                    details={"model": self.model_name, "section_id": section.section_id},
+                    cause=e
+                )
+            logger.error(f"Keyword extraction failed for {section.section_id}: {e}", exc_info=True)
             return SectionKeywords.default(section.section_id or "")
 
     async def extract_async(

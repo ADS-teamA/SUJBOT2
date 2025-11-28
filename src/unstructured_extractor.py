@@ -118,6 +118,25 @@ class DocumentSection:
     # PHASE 2: Summaries
     summary: Optional[str] = None  # 150-char generic summary
 
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        # Validate character range consistency
+        if self.char_end < self.char_start:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': char_end ({self.char_end}) "
+                f"< char_start ({self.char_start})"
+            )
+        # Validate depth (must be >= 1 for all sections)
+        if self.depth < 1:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': depth ({self.depth}) must be >= 1"
+            )
+        # Validate level (must be >= 0)
+        if self.level < 0:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': level ({self.level}) must be >= 0"
+            )
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
@@ -209,6 +228,33 @@ class ExtractedDocument:
     # Extraction metadata
     extraction_method: str = "unstructured_detectron2"
     config: Optional[Dict] = None
+
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        # Validate num_sections matches actual sections list
+        if self.num_sections != len(self.sections):
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': num_sections ({self.num_sections}) "
+                f"!= len(sections) ({len(self.sections)})"
+            )
+        # Validate num_tables matches actual tables list
+        if self.num_tables != len(self.tables):
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': num_tables ({self.num_tables}) "
+                f"!= len(tables) ({len(self.tables)})"
+            )
+        # Validate hierarchy_depth is positive if sections exist
+        if self.sections and self.hierarchy_depth < 1:
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': hierarchy_depth ({self.hierarchy_depth}) "
+                f"must be >= 1 when sections exist"
+            )
+        # Validate total_chars is non-negative
+        if self.total_chars < 0:
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': total_chars ({self.total_chars}) "
+                f"must be >= 0"
+            )
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""

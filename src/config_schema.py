@@ -1018,7 +1018,8 @@ class RootConfig(BaseModel):
 
         return any(pattern in value.upper() for pattern in PLACEHOLDER_PATTERNS)
 
-    def validate_api_keys(self):
+    @model_validator(mode="after")
+    def validate_api_keys(self) -> "RootConfig":
         """
         Validate that at least one API key is provided and matches model selection.
         API keys are loaded from .env file - this validation runs after loading.
@@ -1082,6 +1083,8 @@ class RootConfig(BaseModel):
                 "See .env.example for template."
             )
 
+        return self
+
     @classmethod
     def from_json_file(cls, path: Path) -> "RootConfig":
         """
@@ -1122,8 +1125,7 @@ class RootConfig(BaseModel):
 
         try:
             config = cls(**data)
-            # Run additional validation
-            config.validate_api_keys()
+            # validate_api_keys() is now a @model_validator, runs automatically
             return config
         except ValidationError as e:
             # Pydantic validation errors - user config issues

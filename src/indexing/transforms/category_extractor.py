@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from src.exceptions import APIKeyError, ProviderError, is_recoverable
 from src.extraction_models import DocumentSection, ExtractedDocument
 
 logger = logging.getLogger(__name__)
@@ -159,8 +160,9 @@ class DocumentCategoryExtractor:
 
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
-                raise RuntimeError(
-                    "OPENAI_API_KEY not set. Required for category extraction."
+                raise APIKeyError(
+                    "OPENAI_API_KEY not set. Required for category extraction.",
+                    details={"component": "DocumentCategoryExtractor"}
                 )
             self._client = OpenAI(api_key=api_key)
         return self._client
@@ -277,8 +279,22 @@ class DocumentCategoryExtractor:
             response_text = response.choices[0].message.content or ""
             return self._parse_response(response_text)
 
+        except APIKeyError:
+            # Re-raise API key errors - these are not recoverable
+            raise
         except Exception as e:
-            logger.error(f"Category extraction failed: {e}")
+            # Check if recoverable before falling back
+            if not is_recoverable(e):
+                raise
+            # Wrap OpenAI errors as ProviderError for upstream handling
+            import openai
+            if isinstance(e, (openai.APIError, openai.APIConnectionError, openai.RateLimitError)):
+                raise ProviderError(
+                    f"Category extraction API error: {e}",
+                    details={"model": self.model_name},
+                    cause=e
+                )
+            logger.error(f"Category extraction failed: {e}", exc_info=True)
             return DocumentTaxonomy.default()
 
     async def extract_taxonomy_async(
