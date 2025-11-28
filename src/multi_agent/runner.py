@@ -123,9 +123,14 @@ class MultiAgentRunner:
                 logger.info("HITL clarification system disabled")
 
             # 7. Initialize workflow builder (with HITL components if enabled)
+            # IMPORTANT: Use async checkpointer for astream() compatibility
+            async_checkpointer = None
+            if self.checkpointer:
+                async_checkpointer = await self.checkpointer.get_async_saver()
+
             self.workflow_builder = WorkflowBuilder(
                 agent_registry=self.agent_registry,
-                checkpointer=self.checkpointer.get_saver() if self.checkpointer else None,
+                checkpointer=async_checkpointer,
                 hitl_config=self.hitl_config,
                 quality_detector=self.quality_detector,
                 clarification_generator=self.clarification_generator,
@@ -434,6 +439,35 @@ class MultiAgentRunner:
                 query_expansion_model=agent_tools_config.get("query_expansion_model", "gpt-4o-mini"),
             )
 
+            # Initialize graph-enhanced retriever (optional)
+            graph_retriever = None
+            graph_retrieval_config = self.config.get("graph_retrieval", {})
+            if graph_retrieval_config.get("enable_graph_boost", False) and knowledge_graph:
+                try:
+                    from ..graph_retrieval import GraphEnhancedRetriever, GraphRetrievalConfig
+
+                    gr_config = GraphRetrievalConfig(
+                        enable_graph_boost=graph_retrieval_config.get("enable_graph_boost", True),
+                        graph_boost_weight=graph_retrieval_config.get("graph_boost_weight", 0.3),
+                        enable_entity_extraction=graph_retrieval_config.get("enable_entity_extraction", True),
+                        enable_multi_hop=graph_retrieval_config.get("enable_multi_hop", False),
+                        max_hop_depth=graph_retrieval_config.get("max_hop_depth", 2),
+                        fusion_mode=graph_retrieval_config.get("fusion_mode", "weighted"),
+                    )
+
+                    graph_retriever = GraphEnhancedRetriever(
+                        vector_store=vector_store,
+                        knowledge_graph=knowledge_graph,
+                        config=gr_config,
+                    )
+                    logger.info(
+                        f"Graph-enhanced retriever initialized: "
+                        f"multi_hop={gr_config.enable_multi_hop}, "
+                        f"boost_weight={gr_config.graph_boost_weight}"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to initialize graph-enhanced retriever: {e}")
+
             # Initialize tools in registry
             registry = get_registry()
 
@@ -441,7 +475,7 @@ class MultiAgentRunner:
                 vector_store=vector_store,
                 embedder=embedder,
                 reranker=None,  # Reranker removed - HyDE + Expansion Fusion pipeline
-                graph_retriever=None,  # TODO: Add graph retriever if needed
+                graph_retriever=graph_retriever,
                 knowledge_graph=knowledge_graph,
                 context_assembler=None,  # TODO: Add context assembler if needed
                 llm_provider=self.llm_provider,
@@ -656,17 +690,24 @@ class MultiAgentRunner:
             logger.info("Step 3: Executing workflow with streaming...")
             state.execution_phase = ExecutionPhase.AGENT_EXECUTION
 
-            # Re-inject EventBus into state dict for workflow execution
-            # Note: MultiAgentState has field named "event_bus" (without underscore)
-            # to comply with Pydantic V2 (no leading underscores allowed)
+            # Convert state to dict for workflow
+            # NOTE: Do NOT include event_bus in state - it's not serializable and breaks checkpointing
+            # Pass event_bus through config["configurable"] instead
             state_dict = state.model_dump()
-            state_dict["event_bus"] = event_bus
+            # Ensure event_bus is NOT in state_dict (Pydantic exclude=True should handle this, but be explicit)
+            state_dict.pop("event_bus", None)
 
             # DEBUG: Verify query is in state_dict
             logger.info(f"State dict query before workflow: {state_dict.get('query', 'MISSING')}")
 
             # Run workflow with streaming to get intermediate state updates
-            config = {"configurable": {"thread_id": thread_id}}
+            # Pass event_bus through config (not state) to avoid serialization issues
+            config = {
+                "configurable": {
+                    "thread_id": thread_id,
+                    "event_bus": event_bus,  # Pass through config, not state
+                }
+            }
             final_result = None
 
             if self.langsmith and self.langsmith.is_enabled():

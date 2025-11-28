@@ -1,6 +1,22 @@
 """
 Complexity Analyzer - Query complexity assessment and routing decisions.
 
+.. deprecated::
+    This module is DEPRECATED as of 2024-11-28.
+    Complexity scoring and query type classification are now handled by the
+    unified LLM-based analysis in the orchestrator system prompt.
+
+    The orchestrator now returns:
+    - complexity_score: In routing decision (always present)
+    - query_type: In routing decision (always present)
+    - analysis.vagueness_score: For query specificity
+    - analysis.semantic_type: For query intent classification
+
+    Use state["complexity_score"] and state["query_type"] from orchestrator
+    routing decision instead of instantiating ComplexityAnalyzer.
+
+    This module is retained for backwards compatibility only.
+
 Analyzes query characteristics to determine:
 1. Complexity score (0-100)
 2. Query type (compliance, risk, synthesis, search, reporting)
@@ -10,12 +26,22 @@ Analyzes query characteristics to determine:
 
 import logging
 import re
+import warnings
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
 
 from ..core.state import QueryType
 
 logger = logging.getLogger(__name__)
+
+# Emit deprecation warning on module import
+warnings.warn(
+    "complexity_analyzer module is deprecated. "
+    "Complexity scoring is now handled by orchestrator's unified LLM analysis. "
+    "Use state['complexity_score'] and state['query_type'] from orchestrator routing decision.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class WorkflowPattern(Enum):

@@ -4,12 +4,26 @@ Custom exception hierarchy for SUJBOT2.
 Provides typed exceptions for better error handling and debugging.
 Use these instead of generic Exception where possible.
 
+Exception Hierarchy:
+    SujbotError (base)
+    ├── ExtractionError → PDFExtractionError, ChunkedExtractionError, JSONRepairError
+    ├── ValidationError → ConfigurationError, SchemaValidationError
+    ├── ProviderError → APIKeyError, RateLimitError, ProviderTimeoutError, ModelNotFoundError
+    ├── ToolExecutionError → ToolNotFoundError, ToolValidationError, ToolTimeoutError
+    ├── StorageError → DatabaseConnectionError, VectorStoreError, GraphStoreError
+    ├── AgentError → AgentInitializationError, AgentExecutionError, OrchestratorError,
+    │                ToolHallucinationError, AgentTimeoutError, MaxIterationsError
+    ├── EvaluationError → JudgeError, TrajectoryError, FeedbackSubmissionError
+    └── RetrievalError → EmbeddingError, SearchError
+
 Usage:
     from src.exceptions import (
         ExtractionError,
         ValidationError,
         ToolExecutionError,
         ProviderError,
+        ToolHallucinationError,
+        EvaluationError,
     )
 
     try:
@@ -186,6 +200,45 @@ class AgentExecutionError(AgentError):
 
 class OrchestratorError(AgentError):
     """Error in orchestrator routing or synthesis."""
+    pass
+
+
+class ToolHallucinationError(AgentError):
+    """Agent called a tool that doesn't exist (hallucination)."""
+    pass
+
+
+class AgentTimeoutError(AgentError):
+    """Agent execution timed out."""
+    pass
+
+
+class MaxIterationsError(AgentError):
+    """Agent exceeded maximum iterations without completing."""
+    pass
+
+
+# =============================================================================
+# Evaluation Errors
+# =============================================================================
+
+class EvaluationError(SujbotError):
+    """Error in evaluation pipeline."""
+    pass
+
+
+class JudgeError(EvaluationError):
+    """Error in LLM-as-Judge evaluation."""
+    pass
+
+
+class TrajectoryError(EvaluationError):
+    """Error capturing or analyzing trajectory."""
+    pass
+
+
+class FeedbackSubmissionError(EvaluationError):
+    """Error submitting feedback to LangSmith."""
     pass
 
 
