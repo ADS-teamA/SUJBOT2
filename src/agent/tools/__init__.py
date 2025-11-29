@@ -1,8 +1,14 @@
 """
 RAG Tools
 
-12 specialized tools for retrieval and analysis.
+14 specialized tools for retrieval and analysis.
 All tools are registered automatically via @register_tool decorator.
+
+Tools include:
+- Basic retrieval (5): search, get_document_info, get_document_list, etc.
+- Advanced retrieval (5): graphiti_search, multi_doc_synthesizer, etc.
+- Section-level (2): section_search, browse_sections (Layer 2 utilization)
+- Analysis (2): get_stats, definition_aligner
 """
 
 import logging
@@ -52,6 +58,10 @@ _safe_import("multi_doc_synthesizer")
 _safe_import("expand_context")
 _safe_import("browse_entities")
 _safe_import("cluster_search")
+
+# Section-level tools (Layer 2 utilization) - NEW
+_safe_import("section_search")   # Section-level search with HyDE fusion
+_safe_import("browse_sections")  # Hierarchical section navigation
 
 # Analysis tools (2)
 _safe_import("get_stats")

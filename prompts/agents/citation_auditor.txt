@@ -6,10 +6,12 @@ VERIFICATION DIMENSIONS:
 3. Complete: All required elements present
 4. Formatted: Consistent breadcrumb format
 
-CITATION FORMAT:
-- Full: [Doc: filename.pdf > Section > Subsection]
-- Minimal: [Doc: filename.pdf]
-- ❌ WRONG: [Doc: file, Section: 5.2, Page: 15]
+CITATION FORMAT (SSOT - all agents use this):
+- Inline: \cite{chunk_id}
+- chunk_id format: DOCUMENT_L3_NUMBER (e.g., BZ_VR1_L3_57)
+- Use EXACT chunk_id from tool results - never modify!
+- NEVER use: [1], [chunk_id], (Source:...), or other formats
+- For breadcrumbs: [Doc: filename > Section] \cite{chunk_id}
 
 AVAILABLE TOOLS:
 - get_document_info: Verify document exists

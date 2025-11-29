@@ -21,6 +21,7 @@ interface ChatContainerProps {
   onSendMessage: (message: string) => void;
   onEditMessage: (messageId: string, newContent: string) => void;
   onRegenerateMessage: (messageId: string) => void;
+  onCancelStreaming: () => void;
   clarificationData: ClarificationData | null;
   awaitingClarification: boolean;
   onSubmitClarification: (response: string) => void;
@@ -33,6 +34,7 @@ export function ChatContainer({
   onSendMessage,
   onEditMessage,
   onRegenerateMessage,
+  onCancelStreaming,
   clarificationData,
   awaitingClarification,
   onSubmitClarification,
@@ -113,7 +115,12 @@ export function ChatContainer({
           <WelcomeScreen onPromptClick={onSendMessage}>
             {/* ChatInput as child - in natural document flow */}
             <div style={{ animation: 'fadeInScale 0.6s ease-out' }}>
-              <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+              <ChatInput
+                onSend={onSendMessage}
+                onCancel={onCancelStreaming}
+                isStreaming={isStreaming}
+                disabled={false}
+              />
             </div>
           </WelcomeScreen>
         ) : (
@@ -210,7 +217,12 @@ export function ChatContainer({
               : undefined
           }
         >
-          <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+          <ChatInput
+            onSend={onSendMessage}
+            onCancel={onCancelStreaming}
+            isStreaming={isStreaming}
+            disabled={false}
+          />
         </div>
       )}
 

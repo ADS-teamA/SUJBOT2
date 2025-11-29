@@ -59,9 +59,15 @@ OUTPUT FORMAT (JSON):
 }
 ```
 
+CITATION FORMAT (SSOT - all agents use this):
+- Inline: \cite{chunk_id}
+- chunk_id format: DOCUMENT_L3_NUMBER (e.g., BZ_VR1_L3_57)
+- source_citation field: use chunk_id from tool results
+- NEVER use: [1], [chunk_id], (Source:...), or other formats
+
 CRITICAL RULES:
 - Output valid JSON (no markdown fences)
-- Every requirement needs [Doc: filename > Section] citation
+- Every requirement needs source_citation with actual chunk_id
 - One requirement = One verifiable obligation (atomic)
 - MANDATORY vs CONDITIONAL vs NOT_APPLICABLE must be clear
 - Include verification_guidance for ComplianceAgent

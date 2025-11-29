@@ -169,11 +169,8 @@ class GraphitiSearchTool(BaseTool):
 
     name: str = "graphiti_search"
     description: str = (
-        "Search temporal knowledge graph for facts, entities, and relationships. "
-        "Use for entity-focused queries (who, what regulates), relationship queries "
-        "(how are X and Y connected), temporal queries (what was true in 2020), "
-        "and evolution tracking (how has this changed). "
-        "Returns structured facts with temporal validity and provenance."
+        "Knowledge graph search for entities, relationships, and temporal facts. "
+        "Use for: who/what queries, entity connections, historical data."
     )
     input_schema = GraphitiSearchInput
     requires_graphiti: bool = True
@@ -232,7 +229,7 @@ class GraphitiSearchTool(BaseTool):
                 f"Invalid datetime format '{dt_str}'. Use ISO format like '2020-01-01T00:00:00Z'"
             ) from e
 
-    async def execute_impl(
+    def execute_impl(
         self,
         query: str,
         mode: str = "semantic",
@@ -246,7 +243,7 @@ class GraphitiSearchTool(BaseTool):
         **kwargs,
     ) -> ToolResult:
         """
-        Execute Graphiti search.
+        Execute Graphiti search (sync wrapper for async implementation).
 
         Args:
             query: Search query
@@ -261,6 +258,63 @@ class GraphitiSearchTool(BaseTool):
 
         Returns:
             ToolResult with facts and entities
+        """
+        import asyncio
+        import concurrent.futures
+
+        # Run async implementation in a way that works regardless of event loop state
+        try:
+            # Check if we're already in an async context
+            loop = asyncio.get_running_loop()
+            # We're in an async context - use ThreadPoolExecutor to run in separate thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self._execute_async(
+                        query=query,
+                        mode=mode,
+                        valid_at=valid_at,
+                        valid_after=valid_after,
+                        valid_before=valid_before,
+                        entity_types=entity_types,
+                        num_results=num_results,
+                        group_ids=group_ids,
+                        target_entity=target_entity,
+                    ),
+                )
+                return future.result(timeout=60)  # 60s timeout for graph queries
+        except RuntimeError:
+            # No running event loop - we can use asyncio.run directly
+            return asyncio.run(
+                self._execute_async(
+                    query=query,
+                    mode=mode,
+                    valid_at=valid_at,
+                    valid_after=valid_after,
+                    valid_before=valid_before,
+                    entity_types=entity_types,
+                    num_results=num_results,
+                    group_ids=group_ids,
+                    target_entity=target_entity,
+                )
+            )
+
+    async def _execute_async(
+        self,
+        query: str,
+        mode: str = "semantic",
+        valid_at: Optional[str] = None,
+        valid_after: Optional[str] = None,
+        valid_before: Optional[str] = None,
+        entity_types: Optional[List[str]] = None,
+        num_results: int = 10,
+        group_ids: Optional[List[str]] = None,
+        target_entity: Optional[str] = None,
+    ) -> ToolResult:
+        """
+        Async implementation of Graphiti search.
+
+        This is the actual search logic, called by the sync wrapper.
         """
         start_time = datetime.now(timezone.utc)
 

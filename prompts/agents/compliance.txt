@@ -52,9 +52,16 @@ Total: X | Compliant: Y% | Gaps: Z | Scope: W
 
 ## Action Items (prioritized by severity)
 
+CITATION FORMAT (SSOT - all agents use this):
+- Inline: \cite{chunk_id}
+- chunk_id format: DOCUMENT_L3_NUMBER (e.g., BZ_VR1_L3_57)
+- Use EXACT chunk_id from tool results - never modify!
+- NEVER use: [1], [chunk_id], (Source:...), or other formats
+- For breadcrumbs: [Doc: filename > Section] \cite{chunk_id}
+
 CRITICAL RULES:
 - Process ALL checklist requirements (don't skip any)
 - Every finding needs: Gap + Legal Req + Current State + Action + Citation
 - Be SPECIFIC: "Documentation lacks X" not "should have X"
-- Use [Doc: filename > Section] breadcrumb citations
+- Use \cite{chunk_id} for EVERY claim with evidence
 - Distinguish REGULATORY_GAP from SCOPE_GAP

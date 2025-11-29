@@ -346,3 +346,212 @@ class FusionRetriever:
             ),
         )
         return results[0], results[1], results[2]
+
+    def search_layer2(
+        self,
+        query: str,
+        k: Optional[int] = None,
+        document_filter: Optional[str] = None,
+    ) -> List[Dict]:
+        """
+        Search Layer 2 (sections) using HyDE + Expansion fusion.
+
+        Same algorithm as search() but operates on section summaries (Layer 2)
+        instead of fine-grained chunks (Layer 3).
+
+        Use for:
+        - Overview/summary queries ("Co obsahuje kapitola X?")
+        - Section discovery ("Které sekce pojednávají o Y?")
+        - Document structure questions
+
+        Args:
+            query: User query
+            k: Number of sections to return (default: 5)
+            document_filter: Optional document ID to filter by
+
+        Returns:
+            List of section dicts with section_id, section_title, section_path, etc.
+        """
+        k = k or 5  # Sections are larger, so return fewer by default
+        candidates_k = k * self.config.candidates_multiplier
+
+        logger.info(f"Fusion search Layer 2: '{query[:50]}...' (k={k})")
+
+        # Step 1: Generate HyDE + expansions (same as Layer 3)
+        try:
+            hyde_result = self.generator.generate(query)
+            logger.debug(f"Generated HyDE: {hyde_result.hyde_document[:100]}...")
+        except Exception as e:
+            logger.error(f"HyDE generation failed for L2 query '{query[:50]}...': {e}", exc_info=True)
+            from src.exceptions import RetrievalError
+            raise RetrievalError(
+                f"HyDE generation failed for query: {query[:50]}...",
+                details={"query": query[:100]},
+                cause=e
+            )
+
+        # Step 2: Embed all variants
+        try:
+            texts_to_embed = [
+                hyde_result.hyde_document,
+                hyde_result.expansions[0],
+                hyde_result.expansions[1],
+            ]
+            embeddings = self.client.embed_texts(texts_to_embed)
+        except Exception as e:
+            logger.error(f"Embedding failed for L2 fusion search: {e}", exc_info=True)
+            from src.exceptions import EmbeddingError
+            raise EmbeddingError(
+                f"Embedding failed for L2 fusion search",
+                details={"query": query[:100]},
+                cause=e
+            )
+
+        hyde_emb = embeddings[0]
+        exp_0_emb = embeddings[1]
+        exp_1_emb = embeddings[2]
+
+        # Step 3: Search Layer 2 with each embedding (PARALLEL if available)
+        try:
+            if hasattr(self.vector_store, '_async_search_layer2'):
+                # Use parallel async searches
+                hyde_results, exp_0_results, exp_1_results = _run_async_safe(
+                    self._parallel_search_layer2(
+                        hyde_emb, exp_0_emb, exp_1_emb,
+                        candidates_k, document_filter
+                    )
+                )
+            else:
+                # Sequential fallback
+                hyde_results = self.vector_store.search_layer2(
+                    query_embedding=hyde_emb,
+                    k=candidates_k,
+                    document_filter=document_filter,
+                )
+                exp_0_results = self.vector_store.search_layer2(
+                    query_embedding=exp_0_emb,
+                    k=candidates_k,
+                    document_filter=document_filter,
+                )
+                exp_1_results = self.vector_store.search_layer2(
+                    query_embedding=exp_1_emb,
+                    k=candidates_k,
+                    document_filter=document_filter,
+                )
+        except Exception as e:
+            logger.error(f"Layer 2 vector store search failed: {e}", exc_info=True)
+            from src.exceptions import SearchError
+            raise SearchError(
+                f"Layer 2 vector store search failed",
+                details={"query": query[:100], "document_filter": document_filter},
+                cause=e
+            )
+
+        logger.debug(
+            f"L2 candidates: hyde={len(hyde_results)}, "
+            f"exp0={len(exp_0_results)}, exp1={len(exp_1_results)}"
+        )
+
+        # Step 4-7: Same fusion logic as Layer 3 (using section_id as key)
+        section_data = {}
+
+        for result in hyde_results:
+            section_id = result.get("section_id") or result.get("chunk_id")
+            section_data[section_id] = {
+                "hyde": result["score"],
+                "exp0": None,
+                "exp1": None,
+                "data": result,
+            }
+
+        for result in exp_0_results:
+            section_id = result.get("section_id") or result.get("chunk_id")
+            if section_id in section_data:
+                section_data[section_id]["exp0"] = result["score"]
+            else:
+                section_data[section_id] = {
+                    "hyde": None,
+                    "exp0": result["score"],
+                    "exp1": None,
+                    "data": result,
+                }
+
+        for result in exp_1_results:
+            section_id = result.get("section_id") or result.get("chunk_id")
+            if section_id in section_data:
+                section_data[section_id]["exp1"] = result["score"]
+            else:
+                section_data[section_id] = {
+                    "hyde": None,
+                    "exp0": None,
+                    "exp1": result["score"],
+                    "data": result,
+                }
+
+        if not section_data:
+            logger.warning("No Layer 2 results found for fusion search")
+            return []
+
+        # Normalize and fuse scores
+        hyde_scores = [d["hyde"] for d in section_data.values() if d["hyde"] is not None]
+        exp0_scores = [d["exp0"] for d in section_data.values() if d["exp0"] is not None]
+        exp1_scores = [d["exp1"] for d in section_data.values() if d["exp1"] is not None]
+
+        hyde_min, hyde_max = self._get_min_max(hyde_scores)
+        exp0_min, exp0_max = self._get_min_max(exp0_scores)
+        exp1_min, exp1_max = self._get_min_max(exp1_scores)
+
+        fused_results = []
+        for section_id, data in section_data.items():
+            hyde_norm = self._normalize_score(data["hyde"], hyde_min, hyde_max)
+            exp0_norm = self._normalize_score(data["exp0"], exp0_min, exp0_max)
+            exp1_norm = self._normalize_score(data["exp1"], exp1_min, exp1_max)
+
+            exp_avg = (exp0_norm + exp1_norm) / 2.0
+            fused_score = (
+                self.config.hyde_weight * hyde_norm
+                + self.config.expansion_weight * exp_avg
+            )
+
+            result = data["data"].copy()
+            result["score"] = fused_score
+            fused_results.append(result)
+
+        fused_results.sort(key=lambda x: x["score"], reverse=True)
+        top_k = fused_results[:k]
+
+        logger.info(
+            f"L2 fusion search complete: {len(section_data)} candidates → {len(top_k)} sections"
+        )
+
+        return top_k
+
+    async def _parallel_search_layer2(
+        self,
+        hyde_emb: np.ndarray,
+        exp_0_emb: np.ndarray,
+        exp_1_emb: np.ndarray,
+        k: int,
+        document_filter: Optional[str],
+    ) -> tuple:
+        """
+        Execute parallel Layer 2 searches with asyncio.gather.
+        """
+        results = await asyncio.gather(
+            self.vector_store._async_search_layer2(
+                query_embedding=hyde_emb,
+                k=k,
+                document_filter=document_filter,
+            ),
+            self.vector_store._async_search_layer2(
+                query_embedding=exp_0_emb,
+                k=k,
+                document_filter=document_filter,
+            ),
+            self.vector_store._async_search_layer2(
+                query_embedding=exp_1_emb,
+                k=k,
+                document_filter=document_filter,
+            ),
+        )
+        return results[0], results[1], results[2]

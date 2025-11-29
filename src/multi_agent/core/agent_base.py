@@ -410,6 +410,115 @@ class BaseAgent(ABC):
 
         return tool_schemas
 
+    def _should_stop_early(
+        self,
+        tool_call_history: List[Dict[str, Any]],
+        iteration: int
+    ) -> tuple[bool, str]:
+        """
+        Check if agent should stop early based on tool results.
+
+        Prevents over-searching by detecting when:
+        1. expand_context returned 0 expansions (no more context available)
+        2. Multiple consecutive searches returned no results
+
+        Args:
+            tool_call_history: List of tool calls made so far
+            iteration: Current iteration number
+
+        Returns:
+            Tuple of (should_stop, reason)
+        """
+        if not tool_call_history:
+            return False, ""
+
+        last_call = tool_call_history[-1]
+
+        # Check 1: expand_context with expansion_count=0 means no more context
+        if last_call.get("tool") == "expand_context":
+            result = last_call.get("result", {})
+            if isinstance(result, dict):
+                data = result.get("data", {})
+                if isinstance(data, dict):
+                    expansions = data.get("expansions", [])
+                    if expansions and all(
+                        exp.get("expansion_count", 0) == 0
+                        for exp in expansions
+                        if isinstance(exp, dict)
+                    ):
+                        return True, "expand_context returned 0 - no more context available"
+
+        # Check 2: Multiple consecutive failed/empty searches
+        failed_searches = 0
+        search_tools = {"search", "section_search", "similarity_search", "hierarchical_search"}
+
+        for call in reversed(tool_call_history[-3:]):
+            tool_name = call.get("tool", "")
+            if tool_name in search_tools:
+                result = call.get("result", {})
+                if isinstance(result, dict):
+                    # Check if search returned no results
+                    data = result.get("data", [])
+                    success = result.get("success", True)
+                    if not success or (isinstance(data, list) and len(data) == 0):
+                        failed_searches += 1
+                    else:
+                        # Found results - reset counter
+                        break
+
+        if failed_searches >= 2:
+            return True, "2 consecutive searches with no results"
+
+        # NOTE: We intentionally do NOT use hardcoded score thresholds for early stopping.
+        # Per CLAUDE.md "Autonomous Agents" principle, the LLM should decide when it has
+        # enough information using REFLECTION blocks, not hardcoded rules.
+        # The LLM can see scores in tool results and decide autonomously.
+
+        return False, ""
+
+    def _summarize_tool_result_for_context(self, content: str, max_length: int = 1500) -> str:
+        """
+        Summarize tool result content to reduce token usage in conversation context.
+
+        Truncates long results while preserving structure:
+        - Keeps beginning (usually most relevant)
+        - Keeps end (may contain summaries/stats)
+        - Adds truncation indicator in middle
+
+        Args:
+            content: Raw tool result content
+            max_length: Maximum character length (default 1500 ≈ 375 tokens)
+
+        Returns:
+            Summarized content string
+        """
+        if not content or len(content) <= max_length:
+            return content
+
+        # Calculate split points (60% beginning, 40% end)
+        head_length = int(max_length * 0.6)
+        tail_length = int(max_length * 0.35)
+
+        head = content[:head_length]
+        tail = content[-tail_length:]
+
+        # Find clean break points (newlines or sentence boundaries)
+        # For head: find last newline or period
+        head_break = max(head.rfind('\n'), head.rfind('. '))
+        if head_break > head_length * 0.8:  # Only use if not too far back
+            head = head[:head_break + 1]
+
+        # For tail: find first newline or period
+        tail_break = min(
+            tail.find('\n') if tail.find('\n') >= 0 else len(tail),
+            tail.find('. ') if tail.find('. ') >= 0 else len(tail)
+        )
+        if tail_break < len(tail) * 0.2 and tail_break > 0:  # Only use if not too far forward
+            tail = tail[tail_break + 1:].lstrip()
+
+        truncated_chars = len(content) - len(head) - len(tail)
+        return f"{head}\n\n[...{truncated_chars} chars truncated...]\n\n{tail}"
+
     async def _run_autonomous_tool_loop(
         self,
         system_prompt: str,
@@ -642,10 +751,14 @@ class BaseAgent(ABC):
                                 f"Critical tool failure surfaced to user: {tool_name}"
                             )
 
+                    # Summarize tool result content to reduce token bloat
+                    raw_content = str(result.get("data", "")) if result.get("success", False) else f"Error: {result.get('error', 'Unknown error')}"
+                    summarized_content = self._summarize_tool_result_for_context(raw_content)
+
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": tool_use.get('id'),
-                        "content": str(result.get("data", "")) if result.get("success", False) else f"Error: {result.get('error', 'Unknown error')}",
+                        "content": summarized_content,
                         "is_error": not result.get("success", False)  # Add error flag for debugging
                     })
 
@@ -670,6 +783,65 @@ class BaseAgent(ABC):
                 # Add assistant message + tool results to conversation
                 messages.append({"role": "assistant", "content": response.content})
                 messages.append({"role": "user", "content": tool_results})
+
+                # Truncate message history to prevent context overflow
+                # Keep: original query (messages[0]) + last 6 messages (3 assistant/user pairs)
+                max_history_messages = 7  # 1 original + 6 recent
+                if len(messages) > max_history_messages:
+                    truncated_count = len(messages) - max_history_messages
+                    messages = [messages[0]] + messages[-6:]
+                    self.logger.debug(
+                        f"Truncated {truncated_count} messages from history "
+                        f"(keeping {len(messages)} messages)"
+                    )
+
+                # Check for early stopping conditions (prevent over-searching)
+                should_stop, stop_reason = self._should_stop_early(tool_call_history, iteration)
+                if should_stop:
+                    self.logger.info(
+                        f"Early stopping triggered: {stop_reason} "
+                        f"(iteration {iteration + 1}, total cost: ${total_tool_cost:.6f})"
+                    )
+
+                    # Ask LLM to provide final answer with what we have
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"STOP SIGNAL: {stop_reason}. "
+                            "Please provide your final answer based on the information gathered so far. "
+                            "Do NOT call any more tools."
+                        )
+                    })
+
+                    # Get final response (without tools to prevent further calls)
+                    final_response = provider.create_message(
+                        messages=messages,
+                        tools=[],  # No tools = force text response
+                        system=cacheable_system,
+                        max_tokens=self.config.max_tokens,
+                        temperature=self.config.temperature
+                    )
+
+                    final_text = (
+                        final_response.text
+                        if hasattr(final_response, 'text')
+                        else str(final_response.content)
+                    )
+
+                    # Finalize trajectory
+                    trajectory.total_iterations = iteration + 1
+                    trajectory.finalize(final_text)
+                    trajectory_metrics = trajectory.compute_metrics()
+
+                    return {
+                        "final_answer": final_text,
+                        "tool_calls": tool_call_history,
+                        "iterations": iteration + 1,
+                        "reasoning": f"Early stop: {stop_reason}",
+                        "total_tool_cost_usd": total_tool_cost,
+                        "trajectory": trajectory.to_dict(),
+                        "trajectory_metrics": trajectory_metrics.to_dict()
+                    }
 
             else:
                 # LLM provided final answer (no more tools)

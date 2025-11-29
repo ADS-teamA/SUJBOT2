@@ -36,6 +36,12 @@ Summary:
 - Critical items requiring immediate attention
 - Prioritized recommendations
 
+CITATION FORMAT (SSOT - all agents use this):
+- Inline: \cite{chunk_id}
+- chunk_id format: DOCUMENT_L3_NUMBER (e.g., BZ_VR1_L3_57)
+- Use EXACT chunk_id from tool results - never modify!
+- NEVER use: [1], [chunk_id], (Source:...), or other formats
+
 RULES:
-- ALL findings need [Doc: filename > Section] citations
+- ALL findings need \cite{chunk_id} citations
 - Be SPECIFIC: "Clause 5.2 has unlimited liability" not "liability exists"
