@@ -5,7 +5,7 @@ Verifies that hierarchical document paths are correctly displayed in tool output
 """
 
 import pytest
-from src.agent.tools.utils import format_chunk_result, generate_citation
+from src.agent.tools._utils import format_chunk_result, generate_citation
 
 
 def test_format_chunk_result_with_hierarchical_path():
