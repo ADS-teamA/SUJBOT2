@@ -101,6 +101,37 @@ export function useChat() {
   const currentMessageRef = useRef<Message | null>(null);
   const currentToolCallsRef = useRef<Map<string, ToolCall>>(new Map());
 
+  // AbortController for cancelling streaming on page refresh/navigation
+  // This ensures backend doesn't continue processing when user leaves the page
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Warn user and cancel streaming on page unload (refresh, close, navigation)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only show warning if actively streaming
+      if (abortControllerRef.current) {
+        // Standard way to show browser's "Leave page?" dialog
+        e.preventDefault();
+        // For older browsers (Chrome < 119)
+        e.returnValue = '';
+
+        console.log('🔄 useChat: Aborting stream due to page unload');
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Also cleanup on hook unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+
   // Ref pattern to avoid stale closures in async callbacks
   //
   // Problem: In regenerateMessage and editMessage, we read conversation state from an async callback
@@ -326,6 +357,13 @@ export function useChat() {
 
       setIsStreaming(true);
 
+      // Create new AbortController for this stream
+      // Abort any previous stream first (shouldn't happen but defensive)
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       try {
         // Prepare message history for context (last 10 pairs = 20 messages)
         // Exclude the current user message if we just added it to avoid duplication
@@ -341,12 +379,13 @@ export function useChat() {
             content: msg.content
           }));
 
-        // Stream response from backend
+        // Stream response from backend with abort signal for page refresh handling
         for await (const event of apiService.streamChat(
           content,
           conversation.id,
           !addUserMessage,  // Skip saving user message when regenerating/editing (already exists)
-          messageHistory    // Pass conversation history for context
+          messageHistory,   // Pass conversation history for context
+          abortControllerRef.current.signal  // Allow cancellation on page refresh
         )) {
           // Handle agent progress events
           if (event.event === 'agent_start') {
@@ -656,17 +695,24 @@ export function useChat() {
           );
         }
       } catch (error) {
-        console.error('❌ Error during streaming:', error);
-        console.error('Error stack:', (error as Error).stack);
+        // Check if this was an intentional abort (page refresh)
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('🔄 useChat: Stream aborted (page refresh or navigation)');
+          // Don't show error to user - this is expected behavior
+        } else {
+          console.error('❌ Error during streaming:', error);
+          console.error('Error stack:', (error as Error).stack);
 
-        // Add error message
-        if (currentMessageRef.current) {
-          currentMessageRef.current.content += `\n\n[Error: ${(error as Error).message}]`;
+          // Add error message
+          if (currentMessageRef.current) {
+            currentMessageRef.current.content += `\n\n[Error: ${(error as Error).message}]`;
+          }
         }
       } finally {
         setIsStreaming(false);
         currentMessageRef.current = null;
         currentToolCallsRef.current = new Map();
+        abortControllerRef.current = null;  // Cleanup abort controller
       }
     },
     [isStreaming, createConversation, currentConversationId, conversations]
@@ -1043,6 +1089,23 @@ export function useChat() {
     [currentConversationId]
   );
 
+  /**
+   * Cancel ongoing streaming
+   * Aborts the current stream and cleans up state
+   */
+  const cancelStreaming = useCallback(() => {
+    if (abortControllerRef.current) {
+      console.log('🛑 useChat: User cancelled streaming');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+
+      // Clean up streaming state
+      setIsStreaming(false);
+      currentMessageRef.current = null;
+      currentToolCallsRef.current = new Map();
+    }
+  }, []);
+
   return {
     conversations,
     currentConversation,
@@ -1059,5 +1122,6 @@ export function useChat() {
     deleteMessage,
     submitClarification,
     cancelClarification,
+    cancelStreaming,
   };
 }

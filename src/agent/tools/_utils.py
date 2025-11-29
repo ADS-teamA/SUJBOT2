@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # Import smart token management (lazy import to avoid circular deps)
+_token_manager_import_attempted = False
 _token_manager_imported = False
 _DetailLevel = None
 _get_adaptive_formatter = None
@@ -22,30 +23,33 @@ _SmartTruncator = None
 
 def _ensure_token_manager_imported():
     """Lazy import token management to avoid circular dependencies."""
-    global _token_manager_imported, _DetailLevel, _get_adaptive_formatter
-    global _get_token_counter, _SmartTruncator
+    global _token_manager_import_attempted, _token_manager_imported
+    global _DetailLevel, _get_adaptive_formatter, _get_token_counter, _SmartTruncator
 
-    if not _token_manager_imported:
-        try:
-            from .token_manager import (
-                DetailLevel,
-                get_adaptive_formatter,
-                get_token_counter,
-                SmartTruncator,
-            )
+    # Only attempt import once
+    if _token_manager_import_attempted:
+        return
 
-            _DetailLevel = DetailLevel
-            _get_adaptive_formatter = get_adaptive_formatter
-            _get_token_counter = get_token_counter
-            _SmartTruncator = SmartTruncator
-            _token_manager_imported = True
-        except ImportError as e:
-            # token_manager is optional - fall back to legacy character-based limits
-            logger.warning(
-                f"Token manager import failed - using legacy character-based truncation. "
-                f"This may cause suboptimal results. Error: {e}"
-            )
-            _token_manager_imported = False
+    _token_manager_import_attempted = True
+
+    try:
+        from .token_manager import (
+            DetailLevel,
+            get_adaptive_formatter,
+            get_token_counter,
+            SmartTruncator,
+        )
+
+        _DetailLevel = DetailLevel
+        _get_adaptive_formatter = get_adaptive_formatter
+        _get_token_counter = get_token_counter
+        _SmartTruncator = SmartTruncator
+        _token_manager_imported = True
+    except ImportError:
+        # token_manager is optional - fall back to legacy character-based limits
+        # Log only once at debug level (not warning) to avoid log spam
+        logger.debug("Token manager not available - using legacy character-based truncation")
+        _token_manager_imported = False
 
 
 def format_chunk_result(

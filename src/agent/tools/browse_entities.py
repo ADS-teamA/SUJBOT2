@@ -97,11 +97,7 @@ class BrowseEntitiesTool(BaseTool):
     """
 
     name = "browse_entities"
-    description = (
-        "Browse and list entities from the knowledge graph by type, confidence, or search term. "
-        "Useful for discovering what entities exist without knowing specific names. "
-        "Complements graph_search which requires a specific entity_value."
-    )
+    description = "List knowledge graph entities by type/search. For discovery without specific names."
 
     input_schema = BrowseEntitiesInput
     requires_kg = True

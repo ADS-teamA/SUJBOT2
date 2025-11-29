@@ -65,14 +65,30 @@ class ExtractorAgent(BaseAgent):
         logger.info(f"Running autonomous document extraction for: {query[:100]}...")
 
         try:
+            # Determine max iterations based on query complexity
+            # (set by orchestrator during routing, defaults to 50 = medium)
+            complexity_score = state.get("complexity_score", 50)
+            if complexity_score < 30:
+                # Simple queries: "Co je X?" - 1 search should suffice
+                max_iterations = 3
+            elif complexity_score < 70:
+                # Medium queries: may need search + expand_context
+                max_iterations = 5
+            else:
+                # Complex queries: multi-document, comparative analysis
+                max_iterations = 8
+
+            logger.info(
+                f"Complexity-aware iterations: complexity={complexity_score}, "
+                f"max_iterations={max_iterations}"
+            )
+
             # Run autonomous tool calling loop
             # LLM decides: search parameters, which documents to fetch, whether to expand context
-            # Note: max_iterations=8 for complex queries (e.g. ambiguous terms like "bezpečnostní koeficient")
-            # Simple queries typically complete in 2-3 iterations
             result = await self._run_autonomous_tool_loop(
                 system_prompt=self.system_prompt,
                 state=state,
-                max_iterations=8
+                max_iterations=max_iterations
             )
 
             # Parse result from autonomous loop

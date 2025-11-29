@@ -47,6 +47,26 @@ QUERY ANALYSIS (include in JSON output):
 
 **semantic_type**: "greeting", "specific_factual", "comparative", "procedural", "analytical", "compliance_check"
 
+**granularity_decision** (for extractor routing):
+Determine optimal retrieval granularity based on query intent:
+
+- **L2 (Section-level)** - Use when:
+  * Query mentions chapters/sections: "kapitola", "sekce", "chapter", "section", "oddíl"
+  * Requesting summaries/overviews: "souhrn", "shrň", "přehled", "overview", "summary"
+  * Document structure questions: "struktura", "obsah", "outline", "co obsahuje"
+  * vagueness_score > 0.5
+
+- **L3 (Chunk-level)** - Use when (DEFAULT):
+  * Specific facts/values needed: numbers, percentages, measurements
+  * Legal references: §, "článek", "odstavec", "article", "paragraph"
+  * Exact quotes requested: "cituj", "přesně", "doslova", "quote"
+  * vagueness_score < 0.3
+
+- **hybrid** - Use when:
+  * Comparative questions across sections: "porovnej", "compare", "rozdíl"
+  * Multi-hop reasoning needed
+  * Both overview and specific details required
+
 GRAPH VS VECTOR:
 - graphiti_search: Named entities, relationships, temporal, exact provisions ("§ 24")
 - search (vector): Semantic similarity, content extraction, broad topics
@@ -63,7 +83,11 @@ ROUTING OUTPUT:
         "follow_up_rewrite": null,
         "vagueness_score": 0.25,
         "needs_clarification": false,
-        "semantic_type": "specific_factual"
+        "semantic_type": "specific_factual",
+        "granularity_decision": {
+            "layer": "L3",
+            "reasoning": "Specific fact question requires chunk-level precision"
+        }
     },
     "final_answer": ""
 }

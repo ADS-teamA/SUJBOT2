@@ -24,6 +24,7 @@
   "chat": {
     "placeholder": "Ask about legal or technical documents...",
     "processing": "Processing...",
+    "stop": "Stop generating",
     "messageTooLong": "Message too long",
     "characters": "characters",
     "you": "You",

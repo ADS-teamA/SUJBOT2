@@ -596,8 +596,33 @@ async def chat_stream(
                     # Don't crash stream if database save fails - message was already sent to client
 
         except asyncio.CancelledError:
-            # Client disconnected - this is normal, don't log as error
-            logger.info("Stream cancelled by client")
+            # Client disconnected (page refresh, navigation, tab close)
+            # Save partial response to database so user doesn't lose progress
+            if request.conversation_id and collected_response:
+                try:
+                    # Mark response as interrupted so user knows it's incomplete
+                    partial_response = collected_response + "\n\n---\n*[Response interrupted - page was refreshed]*"
+                    await adapter.append_message(
+                        conversation_id=request.conversation_id,
+                        role="assistant",
+                        content=partial_response,
+                        metadata={
+                            **(collected_metadata if collected_metadata else {}),
+                            "interrupted": True,
+                            "interrupt_reason": "client_disconnect"
+                        }
+                    )
+                    logger.info(
+                        f"Saved partial response ({len(collected_response)} chars) "
+                        f"for conversation {request.conversation_id} after client disconnect"
+                    )
+                except Exception as save_error:
+                    logger.warning(
+                        f"Failed to save partial response on client disconnect: {save_error}"
+                    )
+            else:
+                logger.info("Stream cancelled by client (no partial response to save)")
+
             # Re-raise to properly close ASGI response stream
             # CRITICAL: ASGI spec requires CancelledError to propagate for clean shutdown
             raise

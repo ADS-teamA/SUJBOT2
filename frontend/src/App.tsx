@@ -49,6 +49,7 @@ function App() {
     regenerateMessage,
     submitClarification,
     cancelClarification,
+    cancelStreaming,
   } = useChat();
 
   useTheme(); // Apply light theme
@@ -149,6 +150,7 @@ function App() {
           onSendMessage={sendMessage}
           onEditMessage={editMessage}
           onRegenerateMessage={regenerateMessage}
+          onCancelStreaming={cancelStreaming}
           clarificationData={clarificationData}
           awaitingClarification={awaitingClarification}
           onSubmitClarification={submitClarification}

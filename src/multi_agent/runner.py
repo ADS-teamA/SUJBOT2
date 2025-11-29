@@ -783,7 +783,12 @@ class MultiAgentRunner:
             # Step 4: Extract final answer
             final_answer = result.get("final_answer", "No answer generated")
 
-            logger.info("Query execution completed successfully")
+            # Log synthesis mode (lightweight vs full)
+            synthesis_mode = result.get("synthesis_mode", "full")
+            if synthesis_mode == "lightweight":
+                logger.info("Query execution completed with LIGHTWEIGHT synthesis (single-agent bypass)")
+            else:
+                logger.info("Query execution completed with full orchestrator synthesis")
 
             # Get accurate cost from CostTracker (model-specific pricing)
             from src.cost_tracker import get_global_tracker
@@ -802,6 +807,7 @@ class MultiAgentRunner:
                 "citations": result.get("citations", []),
                 "total_cost_cents": total_cost_cents,
                 "errors": result.get("errors", []),
+                "synthesis_mode": synthesis_mode,  # For metrics: "lightweight" or "full"
             }
 
             # Always yield final result (function is now always a generator)

@@ -125,12 +125,14 @@ export class ApiService {
    * @param conversationId - Optional conversation ID
    * @param skipSaveUserMessage - Skip saving user message (for regenerate)
    * @param messageHistory - Optional last N messages for conversation context
+   * @param abortSignal - Optional AbortSignal for cancellation (e.g., on page refresh)
    */
   async *streamChat(
     message: string,
     conversationId?: string,
     skipSaveUserMessage?: boolean,
-    messageHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+    messageHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    abortSignal?: AbortSignal
   ): AsyncGenerator<SSEEvent, void, unknown> {
     let response;
     try {
@@ -144,8 +146,14 @@ export class ApiService {
           skip_save_user_message: skipSaveUserMessage || false,
           messages: messageHistory,  // Conversation history for context
         }),
+        signal: abortSignal,  // Allow cancellation on page refresh/unmount
       });
     } catch (error) {
+      // Check if this was an intentional abort (page refresh, navigation)
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('📡 API: Stream aborted by client (page refresh or navigation)');
+        return;  // Clean exit, no error event needed
+      }
       console.error('❌ API: Fetch failed:', error);
       // Yield error event to surface network failure to UI
       yield {
@@ -198,7 +206,27 @@ export class ApiService {
 
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        // Check if abort was requested before reading
+        if (abortSignal?.aborted) {
+          console.log('📡 API: Stream aborted before read');
+          break;
+        }
+
+        let done: boolean;
+        let value: Uint8Array | undefined;
+
+        try {
+          const result = await reader.read();
+          done = result.done;
+          value = result.value;
+        } catch (readError) {
+          // Check if read failed due to abort
+          if (readError instanceof Error && readError.name === 'AbortError') {
+            console.log('📡 API: Stream read aborted (page refresh or navigation)');
+            break;  // Clean exit
+          }
+          throw readError;  // Re-throw other errors
+        }
 
         // Check for timeout (cancels reader, so next read may be done or throw)
         if (timedOut) {

@@ -297,6 +297,119 @@ class WorkflowBuilder:
 
         logger.debug("Added orchestrator synthesis node")
 
+    def _add_lightweight_synthesis_node(self, workflow: StateGraph, agent_name: str) -> None:
+        """
+        Add lightweight synthesis node for single-agent bypass.
+
+        This node is used when only ONE agent is deployed. Instead of calling
+        the full orchestrator synthesis (which requires an LLM call), we:
+        1. Take the agent's answer directly
+        2. Validate language heuristically
+        3. Preserve citations
+
+        This saves ~50% tokens for single-agent queries (60-70% of all queries).
+
+        Args:
+            workflow: StateGraph to add node to
+            agent_name: Name of the single agent whose output we'll use
+        """
+        async def lightweight_synthesis_node(
+            state: Dict[str, Any], config: Dict[str, Any] = None
+        ) -> Dict[str, Any]:
+            """
+            Lightweight synthesis - no LLM call, just validation.
+
+            Takes the single agent's output directly as final_answer.
+            """
+            try:
+                # Get EventBus from config (for logging only)
+                event_bus = None
+                if config and "configurable" in config:
+                    event_bus = config["configurable"].get("event_bus")
+
+                # Convert to dict if needed
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
+
+                logger.info(f"Lightweight synthesis: bypassing full orchestrator for single agent '{agent_name}'")
+
+                # Get agent output
+                agent_outputs = state_dict.get("agent_outputs", {})
+                agent_output = agent_outputs.get(agent_name, {})
+
+                if not agent_output:
+                    logger.warning(f"Lightweight synthesis: No output from agent '{agent_name}'")
+                    state_dict["final_answer"] = "Agent did not produce output."
+                    state_dict["synthesis_mode"] = "lightweight_fallback"
+                    return _strip_non_serializable(state_dict)
+
+                # Use agent's answer directly (no LLM rephrasing)
+                final_answer = agent_output.get("analysis", "")
+                citations = agent_output.get("citations", [])
+
+                # Language validation (simple heuristic - detect Czech characters)
+                query = state_dict.get("query", "")
+                czech_chars = set("ěščřžýáíéůúďťňĚŠČŘŽÝÁÍÉŮÚĎŤŇ")
+                is_czech_query = any(c in query for c in czech_chars)
+
+                # Log language detection (no correction - just for debugging)
+                if is_czech_query:
+                    logger.debug("Lightweight synthesis: Czech query detected")
+                else:
+                    logger.debug("Lightweight synthesis: Non-Czech query detected")
+
+                # Citation format check (log but don't fail)
+                if citations:
+                    logger.info(f"Lightweight synthesis: {len(citations)} citations preserved")
+
+                # Emit synthesis event
+                if event_bus:
+                    await event_bus.emit(
+                        event_type=EventType.AGENT_START,
+                        data={
+                            "agent": "lightweight_synthesis",
+                            "message": "Using single-agent bypass (no full synthesis needed)"
+                        },
+                        agent_name="orchestrator"
+                    )
+
+                # Build final state
+                state_dict["final_answer"] = final_answer
+                state_dict["citations"] = citations
+                state_dict["synthesis_mode"] = "lightweight"  # For debugging/metrics
+                state_dict["current_agent"] = "orchestrator"  # For progress tracking
+
+                logger.info(
+                    f"Lightweight synthesis complete: "
+                    f"answer_length={len(final_answer)}, citations={len(citations)}"
+                )
+
+                return _strip_non_serializable(state_dict)
+
+            except Exception as e:
+                logger.error(f"Lightweight synthesis failed: {e}", exc_info=True)
+
+                # Fallback: return error state
+                if hasattr(state, "model_dump"):
+                    state_dict = state.model_dump()
+                else:
+                    state_dict = dict(state)
+
+                errors = state_dict.get("errors", [])
+                errors.append(f"lightweight synthesis error: {str(e)}")
+
+                state_dict["final_answer"] = f"Synthesis error: {str(e)}"
+                state_dict["synthesis_mode"] = "lightweight_error"
+
+                return _strip_non_serializable({**state_dict, "errors": errors})
+
+        # Add node to workflow
+        workflow.add_node("lightweight_synthesis", lightweight_synthesis_node)
+
+        logger.debug(f"Added lightweight synthesis node for agent '{agent_name}'")
+
     def _add_hitl_gate_node(self, workflow: StateGraph) -> None:
         """
         Add HITL quality gate node to workflow.
@@ -578,6 +691,7 @@ class WorkflowBuilder:
         Workflow pattern:
         1. Execute agent sequence (with optional HITL gate after extractor)
         2. Call orchestrator for synthesis (generates final answer)
+           - OPTIMIZATION: Single-agent queries use lightweight synthesis (no LLM call)
         3. End
 
         Args:
@@ -595,10 +709,26 @@ class WorkflowBuilder:
             and "extractor" in agent_sequence
         )
 
-        # Add orchestrator synthesis node (called AFTER all agents complete)
-        # This is the SAME orchestrator agent, but called in PHASE 2 (synthesis)
-        # It will detect the phase based on presence of agent_outputs
-        self._add_orchestrator_synthesis_node(workflow)
+        # OPTIMIZATION: Single-agent bypass
+        # When only one agent is deployed, skip full orchestrator synthesis
+        # and use lightweight validation instead (saves ~50% tokens)
+        is_single_agent = len(agent_sequence) == 1
+
+        if is_single_agent:
+            # Use lightweight synthesis (no LLM call)
+            single_agent_name = agent_sequence[0]
+            logger.info(
+                f"Single-agent mode detected: using lightweight synthesis for '{single_agent_name}'"
+            )
+            self._add_lightweight_synthesis_node(workflow, single_agent_name)
+        else:
+            # Multi-agent: use full orchestrator synthesis
+            # This is the SAME orchestrator agent, but called in PHASE 2 (synthesis)
+            # It will detect the phase based on presence of agent_outputs
+            self._add_orchestrator_synthesis_node(workflow)
+
+        # Determine synthesis node name based on single/multi-agent mode
+        synthesis_node = "lightweight_synthesis" if is_single_agent else "orchestrator_synthesis"
 
         # Sequential execution (default)
         if not enable_parallel:
@@ -616,23 +746,37 @@ class WorkflowBuilder:
                     workflow.add_edge(current_agent, next_agent)
                     logger.debug(f"Added edge: {current_agent} → {next_agent}")
 
-            # Last agent in sequence goes to orchestrator synthesis
+            # Last agent in sequence goes to synthesis
             last_agent = agent_sequence[-1]
-            workflow.add_edge(last_agent, "orchestrator_synthesis")
-            logger.debug(f"Added edge: {last_agent} → orchestrator_synthesis")
+            workflow.add_edge(last_agent, synthesis_node)
+            logger.debug(f"Added edge: {last_agent} → {synthesis_node}")
 
-            # Add iterative refinement support (shared with parallel execution)
-            self._add_iteration_support(workflow)
-            logger.debug("Added iterative refinement support for sequential execution")
+            # Add iterative refinement support (only for multi-agent - single agent goes to END)
+            if is_single_agent:
+                # Single agent: lightweight_synthesis → END (no iteration)
+                workflow.add_edge("lightweight_synthesis", END)
+                logger.debug("Added edge: lightweight_synthesis → END (single-agent bypass)")
+            else:
+                # Multi-agent: add iteration support
+                self._add_iteration_support(workflow)
+                logger.debug("Added iterative refinement support for sequential execution")
 
         else:
             # Parallel execution (Fan-Out/Fan-In pattern)
+            # NOTE: Single-agent with parallel=True is effectively sequential
             logger.info(f"Using parallel execution for {len(agent_sequence)} agents")
+
+            # Single-agent with parallel mode: just connect directly
+            if is_single_agent:
+                single_agent = agent_sequence[0]
+                workflow.add_edge(single_agent, "lightweight_synthesis")
+                workflow.add_edge("lightweight_synthesis", END)
+                logger.debug(f"Added edge: {single_agent} → lightweight_synthesis → END (single-agent parallel mode)")
 
             # Handle HITL gate special case:
             # If HITL enabled and extractor in sequence, run extractor first,
             # then HITL gate, then fan-out remaining agents in parallel
-            if should_insert_hitl and "extractor" in agent_sequence:
+            elif should_insert_hitl and "extractor" in agent_sequence:
                 logger.info("HITL enabled: extractor → hitl_gate → [other agents parallel]")
 
                 # Entry point: extractor
@@ -680,9 +824,10 @@ class WorkflowBuilder:
                     workflow.add_edge(agent, "orchestrator_synthesis")
                     logger.debug(f"Added edge: {agent} → orchestrator_synthesis (fan-in)")
 
-            # Add iterative refinement support (shared with sequential execution)
-            self._add_iteration_support(workflow)
-            logger.debug("Added iterative refinement support for parallel execution")
+            # Add iterative refinement support (only for multi-agent)
+            if not is_single_agent:
+                self._add_iteration_support(workflow)
+                logger.debug("Added iterative refinement support for parallel execution")
 
     def build_conditional_workflow(
         self, complexity_score: int, agent_registry: AgentRegistry

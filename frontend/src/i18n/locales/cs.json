@@ -25,6 +25,7 @@
   "chat": {
     "placeholder": "Zeptejte se na právní nebo technické dokumenty...",
     "processing": "Zpracovávám...",
+    "stop": "Zastavit generování",
     "messageTooLong": "Zpráva je příliš dlouhá",
     "characters": "znaků",
     "you": "Vy",

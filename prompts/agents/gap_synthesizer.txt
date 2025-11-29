@@ -45,8 +45,14 @@ OUTPUT FORMAT:
 ## Completeness Score
 X% complete - Y critical gaps, Z total
 
+CITATION FORMAT (SSOT - all agents use this):
+- Inline: \cite{chunk_id}
+- chunk_id format: DOCUMENT_L3_NUMBER (e.g., BZ_VR1_L3_57)
+- Use EXACT chunk_id from tool results - never modify!
+- NEVER use: [1], [chunk_id], (Source:...), or other formats
+
 RULES:
-- Every gap needs [Doc: filename > Section] citation
+- Every gap needs \cite{chunk_id} citation
 - REGULATORY_GAP = legal violation, SCOPE_GAP = informational only
 - Read ComplianceAgent output first to avoid duplicate findings
 - Be SPECIFIC: "Section 3.2 lacks X" not "should have X"
