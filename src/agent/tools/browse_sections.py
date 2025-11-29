@@ -11,14 +11,45 @@ Use cases:
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Literal, Optional, TypedDict
 
 from pydantic import Field
 
 from ._base import BaseTool, ToolInput, ToolResult
 from ._registry import register_tool
+from src.exceptions import ToolExecutionError
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# TypedDicts for return types (strong typing per CLAUDE.md)
+# =============================================================================
+
+
+class SectionNode(TypedDict, total=False):
+    """Typed structure for section tree nodes."""
+
+    section_id: str
+    section_title: str
+    section_path: str
+    section_level: int
+    page_number: Optional[int]
+    has_children: bool
+    children_count: int
+    chunk_count: int  # -1 indicates unknown/error
+    children: List["SectionNode"]  # Recursive reference
+    summary: str  # Only when include_summaries=True
+
+
+class BrowseSectionsResult(TypedDict):
+    """Typed result from browse_sections tool."""
+
+    document_id: str
+    parent_path: Optional[str]
+    sections: List[SectionNode]
+    total_sections: int
+    returned_sections: int
 
 
 class BrowseSectionsInput(ToolInput):
@@ -45,7 +76,7 @@ class BrowseSectionsInput(ToolInput):
         False,
         description="Include section content summaries (increases response size)",
     )
-    sort_by: str = Field(
+    sort_by: Literal["path", "page", "size"] = Field(
         "path",
         description="Sort sections by: 'path' (hierarchical), 'page' (document order), 'size' (chunk count)",
     )
@@ -179,6 +210,8 @@ class BrowseSectionsTool(BaseTool):
                 },
             )
 
+        except (KeyboardInterrupt, SystemExit, MemoryError):
+            raise  # Never catch these - let them propagate
         except Exception as e:
             logger.error(f"Browse sections error: {e}", exc_info=True)
             return ToolResult(
@@ -188,16 +221,36 @@ class BrowseSectionsTool(BaseTool):
             )
 
     def _get_document_sections(self, document_id: str) -> List[dict]:
-        """Get all Layer 2 sections for a document."""
+        """Get all Layer 2 sections for a document.
+
+        Raises:
+            ToolExecutionError: If vector store is not initialized or metadata access fails
+        """
+        if self.vector_store is None:
+            raise ToolExecutionError(
+                "Vector store not initialized",
+                details={"document_id": document_id}
+            )
+
         try:
-            layer2_meta = getattr(self.vector_store, "metadata_layer2", [])
+            layer2_meta = getattr(self.vector_store, "metadata_layer2", None)
+            if layer2_meta is None:
+                # No metadata available - this is expected for some vector stores
+                logger.debug(f"No Layer 2 metadata available for document {document_id}")
+                return []
+
             return [
                 s for s in layer2_meta
                 if s.get("document_id") == document_id
             ]
-        except Exception as e:
-            logger.error(f"Failed to get Layer 2 metadata: {e}")
-            return []
+        except (TypeError, AttributeError) as e:
+            # Specific errors we can handle - propagate to caller
+            logger.error(f"Layer 2 metadata access error for {document_id}: {e}")
+            raise ToolExecutionError(
+                f"Failed to access section metadata: {type(e).__name__}",
+                details={"document_id": document_id},
+                cause=e
+            )
 
     def _get_children_of_path(
         self, all_sections: List[dict], parent_path: str
@@ -275,10 +328,18 @@ class BrowseSectionsTool(BaseTool):
 
         return result
 
-    def _add_chunk_counts(self, tree: List[dict]) -> None:
-        """Add chunk counts from Layer 3 metadata to tree nodes."""
+    def _add_chunk_counts(self, tree: List[dict]) -> bool:
+        """Add chunk counts from Layer 3 metadata to tree nodes.
+
+        Returns:
+            True if enrichment succeeded, False if it failed (chunk_count=-1 indicates unknown)
+        """
         try:
-            layer3_meta = getattr(self.vector_store, "metadata_layer3", [])
+            layer3_meta = getattr(self.vector_store, "metadata_layer3", None)
+            if layer3_meta is None:
+                # No metadata available - mark all as unknown
+                self._mark_chunk_counts_unknown(tree)
+                return False
 
             def add_counts(nodes: List[dict]) -> None:
                 for node in nodes:
@@ -296,9 +357,20 @@ class BrowseSectionsTool(BaseTool):
                         add_counts(node["children"])
 
             add_counts(tree)
+            return True
 
-        except Exception as e:
-            logger.warning(f"Failed to add chunk counts: {e}")
+        except (TypeError, AttributeError) as e:
+            logger.warning(f"Failed to add chunk counts: {e}", exc_info=True)
+            # Mark all nodes as having unknown chunk counts (-1 != 0)
+            self._mark_chunk_counts_unknown(tree)
+            return False
+
+    def _mark_chunk_counts_unknown(self, tree: List[dict]) -> None:
+        """Mark all nodes as having unknown chunk counts (-1)."""
+        for node in tree:
+            node["chunk_count"] = -1  # -1 indicates "unknown", not 0
+            if "children" in node:
+                self._mark_chunk_counts_unknown(node["children"])
 
     def _sort_sections(self, tree: List[dict], sort_by: str) -> List[dict]:
         """Sort sections by specified field."""

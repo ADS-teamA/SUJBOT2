@@ -469,25 +469,10 @@ class BaseAgent(ABC):
         if failed_searches >= 2:
             return True, "2 consecutive searches with no results"
 
-        # Check 3: High-confidence match - if top result has score > 0.85, likely found answer
-        # This allows agent to stop early for simple "What is X?" queries
-        search_tools = {"search", "section_search", "similarity_search", "hierarchical_search"}
-        if last_call.get("tool") in search_tools:
-            result = last_call.get("result", {})
-            if isinstance(result, dict) and result.get("success", True):
-                data = result.get("data", [])
-                if isinstance(data, list) and len(data) >= 1:
-                    top_result = data[0]
-                    if isinstance(top_result, dict):
-                        # Check for high score (rerank_score, boosted_score, or score)
-                        score = (
-                            top_result.get("rerank_score")
-                            or top_result.get("boosted_score")
-                            or top_result.get("score")
-                            or 0.0
-                        )
-                        if isinstance(score, (int, float)) and score > 0.85:
-                            return True, f"high_confidence_match (score={score:.3f})"
+        # NOTE: We intentionally do NOT use hardcoded score thresholds for early stopping.
+        # Per CLAUDE.md "Autonomous Agents" principle, the LLM should decide when it has
+        # enough information using REFLECTION blocks, not hardcoded rules.
+        # The LLM can see scores in tool results and decide autonomously.
 
         return False, ""
 

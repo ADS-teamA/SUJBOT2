@@ -16,7 +16,7 @@ from pydantic import Field
 
 from ._base import BaseTool, ToolInput, ToolResult
 from ._registry import register_tool
-from ._utils import format_chunk_result, generate_citation
+from ._utils import create_fusion_retriever, format_chunk_result, generate_citation
 
 logger = logging.getLogger(__name__)
 
@@ -85,40 +85,14 @@ class SearchTool(BaseTool):
         self._fusion_retriever = None  # Lazy initialization
 
     def _get_fusion_retriever(self):
-        """Lazy initialization of FusionRetriever."""
+        """Lazy initialization of FusionRetriever using SSOT factory."""
         if self._fusion_retriever is None:
-            try:
-                from src.retrieval import DeepInfraClient, FusionRetriever, FusionConfig
-
-                # Initialize DeepInfra client
-                client = DeepInfraClient()
-
-                # Get fusion config from tool config (if available)
-                fusion_config = FusionConfig(
-                    hyde_weight=getattr(self.config, 'hyde_weight', 0.6),
-                    expansion_weight=getattr(self.config, 'expansion_weight', 0.4),
-                    default_k=getattr(self.config, 'default_k', 10),
-                )
-
-                # Initialize fusion retriever
-                self._fusion_retriever = FusionRetriever(
-                    client=client,
-                    vector_store=self.vector_store,
-                    config=fusion_config,
-                )
-
-                logger.info("FusionRetriever initialized successfully")
-
-            except ImportError as e:
-                logger.error(f"Failed to import retrieval module: {e}")
-                raise
-            except ValueError as e:
-                logger.error(f"FusionRetriever configuration error: {e}")
-                raise
-            except Exception as e:
-                logger.error(f"Unexpected error initializing FusionRetriever: {e}")
-                raise
-
+            # Use shared factory from _utils.py (SSOT for FusionRetriever creation)
+            self._fusion_retriever = create_fusion_retriever(
+                vector_store=self.vector_store,
+                config=self.config,
+                layer=3,  # Layer 3 = chunk-level search
+            )
         return self._fusion_retriever
 
     def execute_impl(

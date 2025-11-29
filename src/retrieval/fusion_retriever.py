@@ -383,7 +383,12 @@ class FusionRetriever:
             logger.debug(f"Generated HyDE: {hyde_result.hyde_document[:100]}...")
         except Exception as e:
             logger.error(f"HyDE generation failed for L2 query '{query[:50]}...': {e}", exc_info=True)
-            raise RuntimeError(f"HyDE generation failed: {e}") from e
+            from src.exceptions import RetrievalError
+            raise RetrievalError(
+                f"HyDE generation failed for query: {query[:50]}...",
+                details={"query": query[:100]},
+                cause=e
+            )
 
         # Step 2: Embed all variants
         try:
@@ -395,7 +400,12 @@ class FusionRetriever:
             embeddings = self.client.embed_texts(texts_to_embed)
         except Exception as e:
             logger.error(f"Embedding failed for L2 fusion search: {e}", exc_info=True)
-            raise RuntimeError(f"Embedding failed: {e}") from e
+            from src.exceptions import EmbeddingError
+            raise EmbeddingError(
+                f"Embedding failed for L2 fusion search",
+                details={"query": query[:100]},
+                cause=e
+            )
 
         hyde_emb = embeddings[0]
         exp_0_emb = embeddings[1]
@@ -430,7 +440,12 @@ class FusionRetriever:
                 )
         except Exception as e:
             logger.error(f"Layer 2 vector store search failed: {e}", exc_info=True)
-            raise RuntimeError(f"Layer 2 vector store search failed: {e}") from e
+            from src.exceptions import SearchError
+            raise SearchError(
+                f"Layer 2 vector store search failed",
+                details={"query": query[:100], "document_filter": document_filter},
+                cause=e
+            )
 
         logger.debug(
             f"L2 candidates: hyde={len(hyde_results)}, "

@@ -16,7 +16,7 @@ from pydantic import Field
 
 from ._base import BaseTool, ToolInput, ToolResult
 from ._registry import register_tool
-from ._utils import format_chunk_result, generate_citation
+from ._utils import create_fusion_retriever, format_chunk_result, generate_citation
 
 logger = logging.getLogger(__name__)
 
@@ -107,34 +107,14 @@ class SectionSearchTool(BaseTool):
         self._fusion_retriever = None
 
     def _get_fusion_retriever(self):
-        """Lazy initialization of FusionRetriever for Layer 2."""
+        """Lazy initialization of FusionRetriever using SSOT factory."""
         if self._fusion_retriever is None:
-            try:
-                from src.retrieval import DeepInfraClient, FusionRetriever, FusionConfig
-
-                client = DeepInfraClient()
-
-                fusion_config = FusionConfig(
-                    hyde_weight=getattr(self.config, "hyde_weight", 0.6),
-                    expansion_weight=getattr(self.config, "expansion_weight", 0.4),
-                    default_k=getattr(self.config, "default_k", 5),
-                )
-
-                self._fusion_retriever = FusionRetriever(
-                    client=client,
-                    vector_store=self.vector_store,
-                    config=fusion_config,
-                )
-
-                logger.info("FusionRetriever initialized for section_search")
-
-            except ImportError as e:
-                logger.error(f"Failed to import retrieval module: {e}")
-                raise
-            except ValueError as e:
-                logger.error(f"FusionRetriever configuration error: {e}")
-                raise
-
+            # Use shared factory from _utils.py (SSOT for FusionRetriever creation)
+            self._fusion_retriever = create_fusion_retriever(
+                vector_store=self.vector_store,
+                config=self.config,
+                layer=2,  # Layer 2 = section-level search
+            )
         return self._fusion_retriever
 
     def execute_impl(

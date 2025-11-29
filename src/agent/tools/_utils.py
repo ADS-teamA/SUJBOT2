@@ -385,6 +385,115 @@ def deduplicate_chunks(chunks: List[Dict], key: str = "chunk_id") -> List[Dict]:
     return result
 
 
+# =============================================================================
+# FusionRetriever Factory (SSOT)
+# =============================================================================
+
+# Lazy-loaded FusionRetriever dependencies (avoid circular imports)
+_fusion_retriever_import_attempted = False
+_fusion_retriever_imported = False
+_DeepInfraClient = None
+_FusionRetriever = None
+_FusionConfig = None
+
+
+def _ensure_fusion_retriever_imported():
+    """Lazy import FusionRetriever dependencies to avoid circular imports."""
+    global _fusion_retriever_import_attempted, _fusion_retriever_imported
+    global _DeepInfraClient, _FusionRetriever, _FusionConfig
+
+    if _fusion_retriever_import_attempted:
+        return _fusion_retriever_imported
+
+    _fusion_retriever_import_attempted = True
+
+    try:
+        from src.retrieval import DeepInfraClient, FusionRetriever, FusionConfig
+
+        _DeepInfraClient = DeepInfraClient
+        _FusionRetriever = FusionRetriever
+        _FusionConfig = FusionConfig
+        _fusion_retriever_imported = True
+        return True
+    except ImportError as e:
+        logger.error(f"Failed to import retrieval module: {e}")
+        _fusion_retriever_imported = False
+        return False
+
+
+def create_fusion_retriever(
+    vector_store,
+    config,
+    layer: int = 3,
+    hyde_weight: float = 0.6,
+    expansion_weight: float = 0.4,
+):
+    """
+    SSOT factory for FusionRetriever initialization.
+
+    This is the single source of truth for creating FusionRetriever instances.
+    Both SearchTool (Layer 3) and SectionSearchTool (Layer 2) use this factory.
+
+    Args:
+        vector_store: PostgreSQL vector store instance
+        config: Tool config object (may have hyde_weight, expansion_weight, default_k)
+        layer: Layer number (2=sections, 3=chunks). Affects default_k.
+        hyde_weight: Weight for HyDE component (default: 0.6)
+        expansion_weight: Weight for expansion component (default: 0.4)
+
+    Returns:
+        Initialized FusionRetriever instance
+
+    Raises:
+        ImportError: If retrieval module cannot be imported
+        ValueError: If configuration is invalid
+
+    Example:
+        retriever = create_fusion_retriever(
+            vector_store=self.vector_store,
+            config=self.config,
+            layer=2,  # For section search
+        )
+    """
+    if not _ensure_fusion_retriever_imported():
+        raise ImportError("Failed to import retrieval module (DeepInfraClient, FusionRetriever)")
+
+    # Determine default_k based on layer
+    # Layer 3 (chunks): higher k (10) because chunks are smaller
+    # Layer 2 (sections): lower k (5) because sections are larger
+    layer_default_k = {2: 5, 3: 10}
+    default_k = layer_default_k.get(layer, 10)
+
+    # Get config values with fallbacks
+    actual_hyde_weight = getattr(config, "hyde_weight", hyde_weight)
+    actual_expansion_weight = getattr(config, "expansion_weight", expansion_weight)
+    actual_default_k = getattr(config, "default_k", default_k)
+
+    # Initialize DeepInfra client
+    client = _DeepInfraClient()
+
+    # Create fusion config
+    fusion_config = _FusionConfig(
+        hyde_weight=actual_hyde_weight,
+        expansion_weight=actual_expansion_weight,
+        default_k=actual_default_k,
+    )
+
+    # Create and return FusionRetriever
+    retriever = _FusionRetriever(
+        client=client,
+        vector_store=vector_store,
+        config=fusion_config,
+    )
+
+    logger.info(
+        f"FusionRetriever initialized (layer={layer}, default_k={actual_default_k}, "
+        f"hyde_weight={actual_hyde_weight}, expansion_weight={actual_expansion_weight})"
+    )
+
+    return retriever
+
+
 def merge_chunk_lists(
     *chunk_lists: List[Dict], max_total: int = None, sort_by: str = "score"
 ) -> List[Dict]:
