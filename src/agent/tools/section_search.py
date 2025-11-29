@@ -10,15 +10,34 @@ Based on:
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, TypedDict
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ._base import BaseTool, ToolInput, ToolResult
 from ._registry import register_tool
 from ._utils import create_fusion_retriever, format_chunk_result, generate_citation
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# TypedDicts for return types (strong typing per CLAUDE.md)
+# =============================================================================
+
+
+class SectionSearchResult(TypedDict, total=False):
+    """Typed result from section search."""
+
+    chunk_id: str
+    content: str
+    score: float
+    document_id: str
+    section_id: str
+    section_title: str
+    section_level: int
+    section_path: str
+    chunk_count: int  # -1 indicates unknown
 
 
 class SectionSearchInput(ToolInput):
@@ -58,6 +77,17 @@ class SectionSearchInput(ToolInput):
         ge=1,
         le=10,
     )
+
+    @model_validator(mode="after")
+    def validate_level_range(self) -> "SectionSearchInput":
+        """Ensure min_section_level <= max_section_level if both are provided."""
+        if self.min_section_level is not None and self.max_section_level is not None:
+            if self.min_section_level > self.max_section_level:
+                raise ValueError(
+                    f"min_section_level ({self.min_section_level}) cannot be greater "
+                    f"than max_section_level ({self.max_section_level})"
+                )
+        return self
 
 
 @register_tool
@@ -221,6 +251,9 @@ class SectionSearchTool(BaseTool):
                 error=f"Database connection error: {e}",
             )
 
+        except (KeyboardInterrupt, SystemExit, MemoryError):
+            raise  # Never catch these - let them propagate
+
         except Exception as e:
             logger.error(f"Unexpected section search error: {e}", exc_info=True)
             return ToolResult(
@@ -278,21 +311,22 @@ class SectionSearchTool(BaseTool):
         Add chunk_count from Layer 3 metadata to each section.
 
         This helps the LLM understand how much content each section contains.
+        Uses -1 to indicate unknown counts (instead of 0 which means "no chunks").
 
         Args:
             sections: List of section dicts
 
         Returns:
-            Sections with chunk_count field added
+            Sections with chunk_count field added (-1 if unknown)
         """
         try:
             # Get Layer 3 metadata (cached property on vector store)
-            layer3_meta = getattr(self.vector_store, "metadata_layer3", [])
+            layer3_meta = getattr(self.vector_store, "metadata_layer3", None)
 
-            if not layer3_meta:
-                # No Layer 3 metadata available, skip enrichment
+            if layer3_meta is None:
+                # No Layer 3 metadata available - mark as unknown
                 for section in sections:
-                    section["chunk_count"] = 0
+                    section["chunk_count"] = -1  # -1 = unknown, not 0
                 return sections
 
             for section in sections:
@@ -309,9 +343,10 @@ class SectionSearchTool(BaseTool):
                 else:
                     section["chunk_count"] = 0
 
-        except Exception as e:
-            logger.warning(f"Failed to enrich sections with chunk counts: {e}")
+        except (TypeError, AttributeError) as e:
+            logger.warning(f"Failed to enrich sections with chunk counts: {e}", exc_info=True)
+            # Mark as unknown (-1), not zero
             for section in sections:
-                section["chunk_count"] = 0
+                section["chunk_count"] = -1
 
         return sections
