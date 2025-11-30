@@ -615,9 +615,18 @@ Ensure language matching and proper citations."""
 
             if not citation_validation["valid"]:
                 if citation_validation["invalid_citations"]:
+                    # Strip invalid citations to prevent user confusion
+                    invalid_set = set(citation_validation["invalid_citations"])
+                    for invalid_cite in invalid_set:
+                        # Remove \cite{invalid_id} patterns
+                        final_answer = re.sub(
+                            rf'\\cite\{{{re.escape(invalid_cite)}\}}',
+                            '',
+                            final_answer
+                        )
                     logger.warning(
-                        f"Synthesis produced invalid citations: {citation_validation['invalid_citations']}. "
-                        f"These will be visible to user but reference non-existent chunks."
+                        f"Stripped {len(invalid_set)} invalid citations from answer: "
+                        f"{list(invalid_set)[:5]}{'...' if len(invalid_set) > 5 else ''}"
                     )
                 if citation_validation["missing_citations"]:
                     logger.warning(

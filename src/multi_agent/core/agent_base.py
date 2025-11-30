@@ -877,17 +877,26 @@ class BaseAgent(ABC):
         found_chunk_ids = []
         found_chunks_summary = []
         for call in tool_call_history:
+            tool_name = call.get("tool", "unknown")
             result = call.get("result", {})
-            if isinstance(result, dict):
-                data = result.get("data", [])
-                if isinstance(data, list):
-                    for chunk in data:
-                        if isinstance(chunk, dict):
-                            chunk_id = chunk.get("chunk_id")
-                            content = chunk.get("content", "")[:150]
-                            if chunk_id and chunk_id not in found_chunk_ids:
-                                found_chunk_ids.append(chunk_id)
-                                found_chunks_summary.append(f"chunk_id: {chunk_id}, text: {content}...")
+            if not isinstance(result, dict):
+                self.logger.debug(f"Partial results: skipping non-dict result from {tool_name}")
+                continue
+            data = result.get("data", [])
+            if not isinstance(data, list):
+                self.logger.debug(f"Partial results: non-list data from {tool_name}: {type(data)}")
+                continue
+            for chunk in data:
+                if not isinstance(chunk, dict):
+                    self.logger.debug(f"Partial results: skipping non-dict chunk from {tool_name}")
+                    continue
+                chunk_id = chunk.get("chunk_id")
+                if not chunk_id:
+                    continue
+                content = chunk.get("content", "")[:150]
+                if chunk_id not in found_chunk_ids:
+                    found_chunk_ids.append(chunk_id)
+                    found_chunks_summary.append(f"chunk_id: {chunk_id}, text: {content}...")
 
         # Build partial answer with found chunks
         if found_chunk_ids:

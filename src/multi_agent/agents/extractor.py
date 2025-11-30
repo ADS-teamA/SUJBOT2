@@ -103,22 +103,32 @@ class ExtractorAgent(BaseAgent):
             all_chunks_data = []  # Store full chunk data for downstream agents
 
             for tool_call in tool_calls:
+                tool_name = tool_call.get("tool", "unknown")
                 tool_result = tool_call.get("result", {})
-                if isinstance(tool_result, dict):
-                    # Extract chunk_ids from data field (list of chunk dicts)
-                    data = tool_result.get("data", [])
-                    if isinstance(data, list):
-                        for chunk in data:
-                            if isinstance(chunk, dict):
-                                chunk_id = chunk.get("chunk_id")
-                                if chunk_id and chunk_id not in all_chunk_ids:
-                                    all_chunk_ids.append(chunk_id)
-                                    all_chunks_data.append(chunk)
+                if not isinstance(tool_result, dict):
+                    logger.debug(f"Skipping non-dict tool result from {tool_name}: {type(tool_result)}")
+                    continue
+                # Extract chunk_ids from data field (list of chunk dicts)
+                data = tool_result.get("data", [])
+                if not isinstance(data, list):
+                    logger.debug(f"Tool {tool_name} returned non-list data: {type(data)}")
+                    continue
+                for chunk in data:
+                    if not isinstance(chunk, dict):
+                        logger.debug(f"Skipping non-dict chunk from {tool_name}: {type(chunk)}")
+                        continue
+                    chunk_id = chunk.get("chunk_id")
+                    if not chunk_id:
+                        logger.debug(f"Skipping chunk without chunk_id from {tool_name}")
+                        continue
+                    if chunk_id not in all_chunk_ids:
+                        all_chunk_ids.append(chunk_id)
+                        all_chunks_data.append(chunk)
 
-                    # Also keep breadcrumb citations for context (backwards compatibility)
-                    citations = tool_result.get("citations", [])
-                    if isinstance(citations, list):
-                        all_citations.extend(citations)
+                # Also keep breadcrumb citations for context (backwards compatibility)
+                citations = tool_result.get("citations", [])
+                if isinstance(citations, list):
+                    all_citations.extend(citations)
 
             logger.info(
                 f"Extracted {len(all_chunk_ids)} unique chunk_ids and {len(all_citations)} "
