@@ -15,6 +15,7 @@ Replaces the old single-agent CLI (src/agent/cli.py).
 import logging
 import asyncio
 import json
+import os
 from typing import Optional, Dict, Any, AsyncGenerator, List
 from pathlib import Path
 from dotenv import load_dotenv
@@ -331,10 +332,12 @@ class MultiAgentRunner:
                         from datetime import datetime
 
                         neo4j_cfg = self.config.get("neo4j", {})
+                        # SSOT: Environment variables take precedence over config.json
+                        # (passwords should be in .env, not config.json)
                         neo4j_config = Neo4jConfig(
-                            uri=neo4j_cfg.get("uri", "bolt://localhost:7687"),
-                            username=neo4j_cfg.get("username", "neo4j"),
-                            password=neo4j_cfg.get("password", ""),
+                            uri=os.getenv("NEO4J_URI", neo4j_cfg.get("uri", "bolt://localhost:7687")),
+                            username=os.getenv("NEO4J_USERNAME", neo4j_cfg.get("username", "neo4j")),
+                            password=os.getenv("NEO4J_PASSWORD", neo4j_cfg.get("password", "")),
                             database=neo4j_cfg.get("database", "neo4j"),
                         )
 
@@ -533,6 +536,70 @@ class MultiAgentRunner:
             enable_prompt_caching=config.get("enable_prompt_caching", True),
             api_key=self.config.get("api_keys", {}).get("anthropic_api_key", ""),
         )
+
+    def get_tool_health(self) -> Dict[str, Any]:
+        """
+        Get health status of all registered tools.
+
+        Called before each query to verify tool availability and report
+        any issues to the user upfront.
+
+        Returns:
+            Dict with tool health information:
+            - healthy: bool - True if all critical tools are available
+            - available_tools: List[str] - Names of available tools
+            - unavailable_tools: Dict[str, str] - Tool names and reasons
+            - degraded_tools: List[str] - Tools that are available but degraded
+            - summary: str - Human-readable summary
+        """
+        try:
+            from src.agent.tools import get_registry
+
+            registry = get_registry()
+            available = list(registry._tools.keys())
+            unavailable = registry.get_unavailable_tools()
+
+            # Critical tools that must be available for core functionality
+            critical_tools = ["search", "expand_context", "get_document_info"]
+            optional_tools = ["graphiti_search", "section_search", "browse_sections"]
+
+            # Check critical tool availability
+            missing_critical = [t for t in critical_tools if t not in available]
+            missing_optional = [t for t in optional_tools if t not in available or t in unavailable]
+
+            # Build summary
+            if missing_critical:
+                summary = f"⚠️ Critical tools unavailable: {', '.join(missing_critical)}. Search may not work."
+                healthy = False
+            elif missing_optional:
+                summary = f"ℹ️ Optional tools unavailable: {', '.join(missing_optional)}. Some features limited."
+                healthy = True  # Still healthy, just degraded
+            else:
+                summary = f"✓ All {len(available)} tools healthy"
+                healthy = True
+
+            return {
+                "healthy": healthy,
+                "available_tools": available,
+                "unavailable_tools": unavailable,
+                "degraded_tools": missing_optional,
+                "critical_missing": missing_critical,
+                "summary": summary,
+                "total_available": len(available),
+                "total_unavailable": len(unavailable),
+            }
+        except Exception as e:
+            logger.error(f"Tool health check failed: {e}", exc_info=True)
+            return {
+                "healthy": False,
+                "available_tools": [],
+                "unavailable_tools": {"unknown": str(e)},
+                "degraded_tools": [],
+                "critical_missing": ["unknown"],
+                "summary": f"⚠️ Tool health check failed: {str(e)}",
+                "total_available": 0,
+                "total_unavailable": 1,
+            }
 
     async def run_query(
         self,

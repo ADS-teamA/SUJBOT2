@@ -218,6 +218,17 @@ class AgentAdapter:
             })
             return False
 
+    def get_tool_health(self) -> Dict[str, Any]:
+        """
+        Get health status of all RAG tools.
+
+        Called before each query to verify tool availability.
+
+        Returns:
+            Dict with tool health status
+        """
+        return self.runner.get_tool_health()
+
     async def stream_response(
         self,
         query: str,
@@ -326,6 +337,29 @@ class AgentAdapter:
             )
 
         try:
+            # Run tool health check before each query
+            tool_health = runner_to_use.get_tool_health()
+
+            # Always emit tool health status as first event
+            yield {
+                "event": "tool_health",
+                "data": {
+                    "healthy": tool_health["healthy"],
+                    "available_count": tool_health["total_available"],
+                    "unavailable_count": tool_health["total_unavailable"],
+                    "unavailable_tools": tool_health["unavailable_tools"],
+                    "degraded_tools": tool_health["degraded_tools"],
+                    "summary": tool_health["summary"]
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Log tool health for debugging
+            if not tool_health["healthy"]:
+                logger.warning(f"Tool health check: {tool_health['summary']}")
+            else:
+                logger.info(f"Tool health check: {tool_health['summary']}")
+
             # Emit warning if variant fallback occurred
             if variant_fallback_warning:
                 yield {

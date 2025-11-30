@@ -867,22 +867,60 @@ class BaseAgent(ABC):
                     "trajectory_metrics": trajectory_metrics.to_dict()
                 }
 
-        # Max iterations reached
+        # Max iterations reached - compile partial results instead of generic error
         self.logger.warning(
-            f"Max iterations ({max_iterations}) reached, forcing completion "
+            f"Max iterations ({max_iterations}) reached, compiling partial results "
             f"(total tool cost: ${total_tool_cost:.6f})"
         )
 
+        # Extract all chunk_ids found during tool calls
+        found_chunk_ids = []
+        found_chunks_summary = []
+        for call in tool_call_history:
+            tool_name = call.get("tool", "unknown")
+            result = call.get("result", {})
+            if not isinstance(result, dict):
+                self.logger.debug(f"Partial results: skipping non-dict result from {tool_name}")
+                continue
+            data = result.get("data", [])
+            if not isinstance(data, list):
+                self.logger.debug(f"Partial results: non-list data from {tool_name}: {type(data)}")
+                continue
+            for chunk in data:
+                if not isinstance(chunk, dict):
+                    self.logger.debug(f"Partial results: skipping non-dict chunk from {tool_name}")
+                    continue
+                chunk_id = chunk.get("chunk_id")
+                if not chunk_id:
+                    continue
+                content = chunk.get("content", "")[:150]
+                if chunk_id not in found_chunk_ids:
+                    found_chunk_ids.append(chunk_id)
+                    found_chunks_summary.append(f"chunk_id: {chunk_id}, text: {content}...")
+
+        # Build partial answer with found chunks
+        if found_chunk_ids:
+            partial_answer = (
+                f"**PARTIAL OUTPUT (max iterations reached):**\n"
+                f"Found {len(found_chunk_ids)} relevant chunks during search:\n\n"
+                + "\n".join(found_chunks_summary[:10])  # Limit to 10 chunks
+            )
+        else:
+            partial_answer = (
+                "Analysis incomplete - maximum reasoning steps reached. "
+                "No relevant chunks found. Please rephrase your query for a more focused response."
+            )
+
         # Finalize trajectory for max iterations case
         trajectory.total_iterations = max_iterations
-        trajectory.finalize("Analysis incomplete - maximum reasoning steps reached.")
+        trajectory.finalize(partial_answer)
         trajectory_metrics = trajectory.compute_metrics()
 
         return {
-            "final_answer": "Analysis incomplete - maximum reasoning steps reached. Please rephrase your query for a more focused response.",
+            "final_answer": partial_answer,
             "tool_calls": tool_call_history,
             "iterations": max_iterations,
-            "reasoning": "Max iterations reached",
+            "reasoning": f"Max iterations reached, compiled {len(found_chunk_ids)} partial results",
             "total_tool_cost_usd": total_tool_cost,
             "trajectory": trajectory.to_dict(),
             "trajectory_metrics": trajectory_metrics.to_dict()

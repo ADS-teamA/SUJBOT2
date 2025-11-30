@@ -387,8 +387,26 @@ export function useChat() {
           messageHistory,   // Pass conversation history for context
           abortControllerRef.current.signal  // Allow cancellation on page refresh
         )) {
+          // Handle tool health check (first event)
+          if (event.event === 'tool_health') {
+            // Log tool health status (visible in browser console)
+            if (!event.data.healthy) {
+              console.warn('Tool health warning:', event.data.summary);
+            } else {
+              console.info('Tool health:', event.data.summary);
+            }
+            // Store tool health in message metadata for debugging
+            if (currentMessageRef.current) {
+              currentMessageRef.current.toolHealth = {
+                healthy: event.data.healthy,
+                summary: event.data.summary,
+                unavailableTools: event.data.unavailable_tools,
+                degradedTools: event.data.degraded_tools,
+              };
+            }
+          }
           // Handle agent progress events
-          if (event.event === 'agent_start') {
+          else if (event.event === 'agent_start') {
             if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
               // Mark previous agent as completed
               if (currentMessageRef.current.agentProgress.currentAgent) {

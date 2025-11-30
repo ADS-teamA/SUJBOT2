@@ -327,7 +327,7 @@ class GraphitiSearchTool(BaseTool):
                 valid_after_dt = self._parse_datetime(valid_after)
                 valid_before_dt = self._parse_datetime(valid_before)
             except ValueError as e:
-                return ToolResult(success=False, error=str(e))
+                return ToolResult(success=False, data=None, error=str(e))
 
             # Execute search based on mode
             if mode == "semantic":
@@ -368,6 +368,7 @@ class GraphitiSearchTool(BaseTool):
                 if not target_entity:
                     return ToolResult(
                         success=False,
+                        data=None,
                         error="path_finder mode requires target_entity parameter",
                     )
                 result = await self._path_finder(
@@ -379,6 +380,7 @@ class GraphitiSearchTool(BaseTool):
             else:
                 return ToolResult(
                     success=False,
+                    data=None,
                     error=f"Unknown search mode: {mode}",
                 )
 
@@ -386,6 +388,7 @@ class GraphitiSearchTool(BaseTool):
             if result.get("error"):
                 return ToolResult(
                     success=False,
+                    data=None,
                     error=result["error"],
                 )
 
@@ -453,6 +456,7 @@ class GraphitiSearchTool(BaseTool):
             logger.warning(f"Graphiti search connection error for query '{query}': {e}")
             return ToolResult(
                 success=False,
+                data=None,
                 error=(
                     f"Knowledge graph search unavailable: {str(e)}. "
                     "Verify Neo4j is running (docker compose up neo4j) and "
@@ -464,6 +468,7 @@ class GraphitiSearchTool(BaseTool):
             logger.error(f"Unexpected Graphiti search error: {e}", exc_info=True)
             return ToolResult(
                 success=False,
+                data=None,
                 error=f"Internal error in Graphiti search: {str(e)}",
             )
 
