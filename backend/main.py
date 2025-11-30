@@ -448,6 +448,7 @@ async def chat_stream(
     Stream chat response using Server-Sent Events (SSE).
 
     Events:
+    - tool_health: Tool availability status (sent FIRST, before any processing)
     - text_delta: Streaming text chunks from agent response
     - tool_call: Tool execution started (streamed immediately when detected)
     - tool_calls_summary: Summary of all tool calls with results (sent after completion)

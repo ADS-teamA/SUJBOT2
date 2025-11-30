@@ -13,6 +13,13 @@ export interface AgentProgress {
   }>;
 }
 
+export interface ToolHealth {
+  healthy: boolean;
+  summary: string;
+  unavailableTools?: Record<string, string>;  // tool_name -> reason
+  degradedTools?: string[];
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -21,6 +28,7 @@ export interface Message {
   toolCalls?: ToolCall[];
   cost?: CostInfo;
   agentProgress?: AgentProgress;
+  toolHealth?: ToolHealth;  // Tool availability status at query time
 }
 
 export interface ToolCall {
@@ -75,7 +83,7 @@ export interface Model {
 }
 
 export interface SSEEvent {
-  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress' | 'title_update';
+  event: 'tool_health' | 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress' | 'title_update';
   data: any;
 }
 

@@ -96,22 +96,42 @@ class ExtractorAgent(BaseAgent):
             tool_calls = result.get("tool_calls", [])
             agent_cost = result.get("total_tool_cost_usd", 0.0)
 
-            # Extract citations from tool results (CRITICAL for report generation)
-            all_citations = []
+            # Extract chunk_ids from tool results (CRITICAL for report generation)
+            # Tool results contain data=[{chunk_id: ..., content: ...}, ...]
+            all_chunk_ids = []
+            all_citations = []  # Keep breadcrumb citations for context
+            all_chunks_data = []  # Store full chunk data for downstream agents
+
             for tool_call in tool_calls:
                 tool_result = tool_call.get("result", {})
-                if isinstance(tool_result, dict) and "citations" in tool_result:
-                    citations = tool_result["citations"]
+                if isinstance(tool_result, dict):
+                    # Extract chunk_ids from data field (list of chunk dicts)
+                    data = tool_result.get("data", [])
+                    if isinstance(data, list):
+                        for chunk in data:
+                            if isinstance(chunk, dict):
+                                chunk_id = chunk.get("chunk_id")
+                                if chunk_id and chunk_id not in all_chunk_ids:
+                                    all_chunk_ids.append(chunk_id)
+                                    all_chunks_data.append(chunk)
+
+                    # Also keep breadcrumb citations for context (backwards compatibility)
+                    citations = tool_result.get("citations", [])
                     if isinstance(citations, list):
                         all_citations.extend(citations)
 
-            logger.info(f"Extracted {len(all_citations)} citations from {len(tool_calls)} tool calls")
+            logger.info(
+                f"Extracted {len(all_chunk_ids)} unique chunk_ids and {len(all_citations)} "
+                f"breadcrumb citations from {len(tool_calls)} tool calls"
+            )
 
             # Store extraction output WITH CITATIONS
             extraction_output = {
                 "analysis": final_answer,
                 "tool_calls_made": [t["tool"] for t in tool_calls],
-                "citations": all_citations,  # ADD CITATIONS for downstream agents
+                "chunk_ids": all_chunk_ids,  # PRIMARY: for \cite{chunk_id} format
+                "chunks_data": all_chunks_data,  # Full chunk data for synthesis
+                "citations": all_citations,  # SECONDARY: breadcrumb citations for context
                 "iterations": result.get("iterations", 0),
                 "retrieval_method": "autonomous_llm_driven",
                 "total_tool_cost_usd": agent_cost

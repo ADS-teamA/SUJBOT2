@@ -609,6 +609,22 @@ Ensure language matching and proper citations."""
 
             final_answer = response.text
 
+            # Validate citations in final answer
+            available_chunk_ids = self._extract_available_chunk_ids(agent_outputs)
+            citation_validation = self._validate_citations_in_answer(final_answer, available_chunk_ids)
+
+            if not citation_validation["valid"]:
+                if citation_validation["invalid_citations"]:
+                    logger.warning(
+                        f"Synthesis produced invalid citations: {citation_validation['invalid_citations']}. "
+                        f"These will be visible to user but reference non-existent chunks."
+                    )
+                if citation_validation["missing_citations"]:
+                    logger.warning(
+                        "Synthesis produced answer without citations despite available chunks. "
+                        "User may not see source references."
+                    )
+
             # Check if orchestrator requested iteration (JSON response)
             needs_iteration = False
             next_agents = []
@@ -663,7 +679,8 @@ Ensure language matching and proper citations."""
                 agent_outputs["orchestrator"] = {}
             agent_outputs["orchestrator"]["synthesis"] = {
                 "final_answer": final_answer,
-                "total_cost_usd": total_cost_usd
+                "total_cost_usd": total_cost_usd,
+                "citation_validation": citation_validation  # Track citation quality
             }
 
             # Return ONLY changed keys (partial update) to avoid LangGraph state conflicts
@@ -746,6 +763,14 @@ Ensure language matching and proper citations."""
 
         agent_outputs = state.get("agent_outputs", {})
         context_parts = []
+
+        # Extract available chunk_ids from extractor for citation validation
+        available_chunk_ids = self._extract_available_chunk_ids(agent_outputs)
+        if available_chunk_ids:
+            context_parts.append("### AVAILABLE CITATIONS (use ONLY these chunk_ids):")
+            context_parts.append(", ".join(available_chunk_ids))
+            context_parts.append("")
+            logger.debug(f"Providing {len(available_chunk_ids)} chunk_ids for citation validation")
 
         # Order agents by execution sequence (if available)
         agent_sequence = state.get("agent_sequence", [])
@@ -916,3 +941,95 @@ Ensure language matching and proper citations."""
 
     # Removed rule-based fallback methods (get_agent_capabilities, suggest_agents_for_query)
     # All routing decisions are now made autonomously by the LLM orchestrator
+
+    def _extract_available_chunk_ids(self, agent_outputs: Dict[str, Any]) -> List[str]:
+        """
+        Extract available chunk_ids from extractor output for citation validation.
+
+        This ensures orchestrator can only cite chunks that were actually retrieved.
+        Prevents hallucinated citations.
+
+        Args:
+            agent_outputs: All agent outputs from workflow
+
+        Returns:
+            List of valid chunk_ids from extractor
+        """
+        chunk_ids = []
+
+        extractor_output = agent_outputs.get("extractor", {})
+        if not extractor_output:
+            return chunk_ids
+
+        # Primary source: chunk_ids list (added in extractor.py fix)
+        if "chunk_ids" in extractor_output:
+            ids = extractor_output["chunk_ids"]
+            if isinstance(ids, list):
+                chunk_ids.extend(ids)
+                logger.debug(f"Found {len(ids)} chunk_ids from extractor.chunk_ids")
+
+        # Fallback: extract from chunks_data if chunk_ids not populated
+        if not chunk_ids and "chunks_data" in extractor_output:
+            chunks_data = extractor_output["chunks_data"]
+            if isinstance(chunks_data, list):
+                for chunk in chunks_data:
+                    if isinstance(chunk, dict) and "chunk_id" in chunk:
+                        chunk_id = chunk["chunk_id"]
+                        if chunk_id and chunk_id not in chunk_ids:
+                            chunk_ids.append(chunk_id)
+                logger.debug(f"Found {len(chunk_ids)} chunk_ids from extractor.chunks_data")
+
+        return chunk_ids
+
+    def _validate_citations_in_answer(
+        self, answer: str, available_chunk_ids: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Validate that citations in the answer use only available chunk_ids.
+
+        Args:
+            answer: The synthesized final answer
+            available_chunk_ids: List of valid chunk_ids from extractor
+
+        Returns:
+            Dict with validation results:
+                - valid: bool - all citations are valid
+                - used_citations: List[str] - citations found in answer
+                - invalid_citations: List[str] - citations not in available list
+                - missing_citations: bool - answer has no citations but should
+        """
+        # Extract \cite{...} patterns from answer
+        cite_pattern = re.compile(r'\\cite\{([^}]+)\}')
+        used_citations = cite_pattern.findall(answer)
+
+        # Check for invalid citations (not in available list)
+        available_set = set(available_chunk_ids)
+        invalid_citations = [c for c in used_citations if c not in available_set]
+
+        # Check if answer should have citations but doesn't
+        # Heuristic: if there's substantive content and extractor found chunks, expect citations
+        has_substantive_content = len(answer) > 200
+        should_have_citations = has_substantive_content and len(available_chunk_ids) > 0
+        missing_citations = should_have_citations and len(used_citations) == 0
+
+        is_valid = len(invalid_citations) == 0 and not missing_citations
+
+        if invalid_citations:
+            logger.warning(
+                f"Citation validation: {len(invalid_citations)} invalid citations found: "
+                f"{invalid_citations[:5]}{'...' if len(invalid_citations) > 5 else ''}"
+            )
+
+        if missing_citations:
+            logger.warning(
+                f"Citation validation: Answer has {len(answer)} chars but no citations. "
+                f"Available chunk_ids: {len(available_chunk_ids)}"
+            )
+
+        return {
+            "valid": is_valid,
+            "used_citations": used_citations,
+            "invalid_citations": invalid_citations,
+            "missing_citations": missing_citations,
+            "available_count": len(available_chunk_ids)
+        }
