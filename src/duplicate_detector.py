@@ -2,7 +2,7 @@
 Document duplicate detection using semantic similarity.
 
 Detects semantically similar documents before indexing to prevent duplicates
-in BM25, FAISS, and knowledge graph stores.
+in PostgreSQL vector store and knowledge graph.
 
 Features:
 - Fast first-page text extraction (PyMuPDF, 50-200ms)
@@ -15,7 +15,7 @@ Usage:
     from src.duplicate_detector import DuplicateDetector, DuplicateDetectionConfig
 
     config = DuplicateDetectionConfig(threshold=0.98)
-    detector = DuplicateDetector(config, vector_store_path="vector_db")
+    detector = DuplicateDetector(config, connection_string="postgresql://...")
 
     # Check if document is duplicate
     is_duplicate, similarity, match_doc_id = detector.check_duplicate(
@@ -28,6 +28,7 @@ Usage:
 
 import logging
 import hashlib
+import os
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 from dataclasses import dataclass
@@ -84,19 +85,19 @@ class DuplicateDetector:
     def __init__(
         self,
         config: DuplicateDetectionConfig,
-        vector_store_path: Optional[str] = None,
+        connection_string: Optional[str] = None,
     ):
         """
         Initialize duplicate detector.
 
         Args:
             config: Duplicate detection configuration
-            vector_store_path: Path to existing vector store (for lazy loading)
+            connection_string: PostgreSQL connection string (from DATABASE_URL env if not provided)
         """
         self.config = config
         self.config.validate()
 
-        self.vector_store_path = vector_store_path
+        self.connection_string = connection_string or os.environ.get("DATABASE_URL")
 
         # Lazy-loaded components
         self._embedder = None
@@ -220,7 +221,8 @@ class DuplicateDetector:
             from .embedding_generator import EmbeddingGenerator
             from .config import EmbeddingConfig
 
-            config = EmbeddingConfig.from_env()
+            # EmbeddingConfig auto-loads from config.json via __post_init__
+            config = EmbeddingConfig()
             self._embedder = EmbeddingGenerator(config)
 
             logger.info("Loaded EmbeddingGenerator for duplicate detection")
@@ -228,15 +230,21 @@ class DuplicateDetector:
         return self._embedder
 
     def _get_vector_store(self):
-        """Lazy load vector store."""
-        if self._vector_store is None and self.vector_store_path:
-            from .hybrid_search import HybridVectorStore
+        """Lazy load PostgreSQL vector store."""
+        if self._vector_store is None and self.connection_string:
+            import asyncio
+            from .storage import PostgresVectorStoreAdapter
 
             try:
-                self._vector_store = HybridVectorStore.load(self.vector_store_path)
-                logger.info(f"Loaded vector store from {self.vector_store_path}")
-            except (FileNotFoundError, ValueError) as e:
-                logger.debug(f"Vector store not available at {self.vector_store_path}: {e}")
+                self._vector_store = PostgresVectorStoreAdapter(
+                    connection_string=self.connection_string,
+                    pool_size=5,  # Small pool for duplicate detection
+                )
+                # Initialize the connection pool
+                asyncio.run(self._vector_store.initialize())
+                logger.info("Loaded PostgreSQL vector store for duplicate detection")
+            except Exception as e:
+                logger.debug(f"Vector store not available: {e}")
                 return None
 
         return self._vector_store
@@ -269,9 +277,7 @@ class DuplicateDetector:
 
         # Search in Layer 1 (document-level embeddings)
         # Use k=5 to check multiple candidates
-        # Access underlying FAISS store from HybridVectorStore
-        faiss_store = getattr(vector_store, 'faiss_store', vector_store)
-        results = faiss_store.search_layer1(
+        results = vector_store.search_layer1(
             query_embedding=embedding,
             k=5,
         )
@@ -284,7 +290,6 @@ class DuplicateDetector:
         best_similarity = 0.0
 
         for result in results:
-            # FAISS returns flat structure with document_id at top level
             doc_id = result.get("document_id")
             similarity = result.get("score", 0.0)
 

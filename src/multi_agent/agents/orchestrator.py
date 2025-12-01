@@ -20,10 +20,11 @@ from typing import Any, Dict, List, Optional
 import re
 
 from ..core.agent_base import BaseAgent
-from ..core.state import QueryType, MultiAgentState
+from ..core.agent_initializer import initialize_agent
 from ..core.agent_registry import register_agent
 from ..core.event_bus import EventType
-from ..prompts.loader import get_prompt_loader
+from ..core.state import QueryType, MultiAgentState
+from src.agent.providers.factory import detect_provider_from_model
 
 logger = logging.getLogger(__name__)
 
@@ -45,33 +46,17 @@ class OrchestratorAgent(BaseAgent):
         """Initialize orchestrator with config."""
         super().__init__(config)
 
-        # Initialize provider (auto-detects from model name: claude/gpt/gemini)
-        # Provider factory loads API keys from environment variables
-        try:
-            from src.agent.providers.factory import create_provider
-
-            # Provider factory auto-detects provider from model name
-            # and loads appropriate API key from environment
-            self.provider = create_provider(model=config.model)
-            logger.info(f"Initialized provider for model: {config.model}")
-        except Exception as e:
-            logger.error(f"Failed to create provider: {e}")
-            raise ValueError(
-                f"Failed to initialize LLM provider for model {config.model}. "
-                f"Ensure API keys are configured in environment and model name is valid."
-            ) from e
-
-        # Load system prompt
-        prompt_loader = get_prompt_loader()
-        self.system_prompt = prompt_loader.get_prompt("orchestrator")
+        # Initialize common components (provider, prompts, tools)
+        components = initialize_agent(config, "orchestrator")
+        self.provider = components.provider
+        self.system_prompt = components.system_prompt
 
         # Routing configuration
         self.complexity_threshold_low = 30
         self.complexity_threshold_high = 70
 
         # Initialize orchestrator tools using registry (tier1 tools)
-        # Orchestrator uses same tools as agents for consistency
-        from src.agent.tools.registry import get_registry
+        from src.agent.tools import get_registry
 
         self.tool_registry = get_registry()
 
@@ -143,22 +128,47 @@ class OrchestratorAgent(BaseAgent):
         """
         PHASE 1: Route query to appropriate agents.
 
+        Uses unified LLM analysis for:
+        - Follow-up detection and query rewriting
+        - Complexity scoring
+        - Vagueness scoring
+        - Query type classification
+
         Args:
             state: Current workflow state with query
 
         Returns:
-            Updated state with routing decision
+            Updated state with routing decision and unified analysis
         """
         query = state.get("query", "")
+        conversation_history = state.get("conversation_history", [])
+        original_query = query  # Store original for logging
 
         try:
-            # Call LLM for complexity analysis and routing
-            routing_decision = await self._analyze_and_route(query)
+            # UNIFIED: Single LLM call handles ALL analysis (follow-up, complexity, vagueness, type)
+            # The orchestrator system prompt now includes UNIFIED QUERY ANALYSIS section
+            routing_decision = await self._analyze_and_route(query, conversation_history)
+
+            # Extract unified analysis from routing decision
+            analysis = routing_decision.get("analysis", {})
+
+            # Handle follow-up rewrite if LLM detected it
+            if analysis.get("is_follow_up") and analysis.get("follow_up_rewrite"):
+                rewritten = analysis["follow_up_rewrite"]
+                if rewritten and rewritten != query and len(rewritten) > 10:
+                    logger.info(f"LLM detected follow-up, rewritten: '{rewritten[:80]}...'")
+                    # Update query in state so all downstream agents use the rewritten version
+                    state["query"] = rewritten
+                    state["original_query"] = original_query
+                    query = rewritten
 
             # Update state with routing decision
             state["complexity_score"] = routing_decision["complexity_score"]
             state["query_type"] = routing_decision["query_type"]
             state["agent_sequence"] = routing_decision["agent_sequence"]
+
+            # Store unified analysis for downstream use (HITL quality detector, etc.)
+            state["unified_analysis"] = analysis
 
             # If orchestrator provided final_answer directly (for greetings/simple queries),
             # store it in state so runner can return it without building workflow
@@ -166,20 +176,24 @@ class OrchestratorAgent(BaseAgent):
                 state["final_answer"] = routing_decision["final_answer"]
                 logger.info("Orchestrator provided direct answer without agents")
 
-            # Track orchestrator output
+            # Track orchestrator output (include unified analysis)
             agent_outputs = state.get("agent_outputs", {})
             agent_outputs["orchestrator"] = {
                 "complexity_score": routing_decision["complexity_score"],
                 "query_type": routing_decision["query_type"],
                 "agent_sequence": routing_decision["agent_sequence"],
                 "reasoning": routing_decision.get("reasoning", ""),
-                "final_answer": routing_decision.get("final_answer")
+                "final_answer": routing_decision.get("final_answer"),
+                "analysis": analysis  # Include unified analysis in output
             }
 
+            # Log unified analysis results
             logger.info(
                 f"Routing decision: complexity={routing_decision['complexity_score']}, "
                 f"type={routing_decision['query_type']}, "
-                f"sequence={routing_decision['agent_sequence']}"
+                f"sequence={routing_decision['agent_sequence']}, "
+                f"is_follow_up={analysis.get('is_follow_up', False)}, "
+                f"vagueness={analysis.get('vagueness_score', 'N/A')}"
             )
 
             # Return ONLY changed keys (partial update) to avoid LangGraph state conflicts
@@ -187,8 +201,14 @@ class OrchestratorAgent(BaseAgent):
                 "complexity_score": routing_decision["complexity_score"],
                 "query_type": routing_decision["query_type"],
                 "agent_sequence": routing_decision["agent_sequence"],
-                "agent_outputs": agent_outputs
+                "agent_outputs": agent_outputs,
+                "unified_analysis": analysis  # Include in state update
             }
+
+            # Add query update if it was rewritten
+            if state.get("original_query"):
+                update["query"] = state["query"]
+                update["original_query"] = state["original_query"]
 
             # Add final_answer if orchestrator provided direct response (no agents)
             if "final_answer" in routing_decision and routing_decision["final_answer"]:
@@ -228,12 +248,20 @@ class OrchestratorAgent(BaseAgent):
                 )
             }
 
-    async def _analyze_and_route(self, query: str) -> Dict[str, Any]:
+    # NOTE: _rewrite_query_with_context has been REMOVED
+    # Follow-up detection and query rewriting is now handled by unified analysis
+    # in the orchestrator system prompt. The LLM returns analysis.is_follow_up
+    # and analysis.follow_up_rewrite directly in the routing response.
+
+    async def _analyze_and_route(
+        self, query: str, conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
         """
         Use LLM to analyze query complexity and determine routing.
 
         Args:
             query: User query
+            conversation_history: Previous messages for context
 
         Returns:
             Dict with:
@@ -242,8 +270,29 @@ class OrchestratorAgent(BaseAgent):
                 - agent_sequence (List[str])
                 - reasoning (str)
         """
-        # Prepare analysis prompt
-        user_message = f"""Analyze this query and provide routing decision:
+        # Build conversation context if available
+        history_context = ""
+        if conversation_history:
+            history_lines = []
+            for msg in conversation_history[-10:]:  # Last 10 messages max
+                role = msg.get("role", "unknown").upper()
+                content = msg.get("content", "")[:500]  # Truncate long messages
+                history_lines.append(f"{role}: {content}")
+            history_context = "\n".join(history_lines)
+
+        # Prepare analysis prompt with conversation context
+        if history_context:
+            user_message = f"""Analyze this query and provide routing decision:
+
+CONVERSATION HISTORY (for context):
+{history_context}
+
+CURRENT QUERY: {query}
+
+Use the conversation history to understand follow-up questions and resolve references.
+Provide your analysis in the exact JSON format specified in the system prompt."""
+        else:
+            user_message = f"""Analyze this query and provide routing decision:
 
 Query: {query}
 
@@ -304,15 +353,15 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
                     cache_read_tokens = usage.get('cache_read_input_tokens', 0)
                     cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
 
-                    # Determine provider from model name
-                    if 'claude' in self.config.model.lower():
+                    # Use SSOT provider detection
+                    try:
+                        provider = detect_provider_from_model(self.config.model)
+                    except ValueError as e:
+                        logger.warning(
+                            f"Could not detect provider for model '{self.config.model}': {e}. "
+                            f"Falling back to 'anthropic'. Cost tracking may be inaccurate."
+                        )
                         provider = 'anthropic'
-                    elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
-                        provider = 'openai'
-                    elif 'gemini' in self.config.model.lower():
-                        provider = 'google'
-                    else:
-                        provider = 'anthropic'  # Default
 
                     tracker.track_llm(
                         provider=provider,
@@ -453,6 +502,7 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
         query = state.get("query", "")
         agent_outputs = state.get("agent_outputs", {})
         complexity_score = state.get("complexity_score", 50)
+        conversation_history = state.get("conversation_history", [])
 
         logger.info(f"Synthesizing final answer from {len(agent_outputs)} agent outputs...")
 
@@ -460,8 +510,34 @@ Provide your analysis in the exact JSON format specified in the system prompt.""
             # Build synthesis context from agent outputs
             synthesis_context = self._build_synthesis_context(state)
 
-            # Prepare synthesis prompt
-            user_message = f"""Generate final answer for this query using agent outputs.
+            # Build conversation context if available
+            history_context = ""
+            if conversation_history:
+                history_lines = []
+                for msg in conversation_history[-10:]:  # Last 10 messages max
+                    role = msg.get("role", "unknown").upper()
+                    content = msg.get("content", "")[:500]  # Truncate long messages
+                    history_lines.append(f"{role}: {content}")
+                history_context = "\n".join(history_lines)
+
+            # Prepare synthesis prompt with optional conversation context
+            if history_context:
+                user_message = f"""Generate final answer for this query using agent outputs.
+
+CONVERSATION HISTORY (for context):
+{history_context}
+
+CURRENT QUERY: {query}
+Complexity Score: {complexity_score}
+
+Agent Outputs:
+{synthesis_context}
+
+Use the conversation history to maintain continuity and reference previous topics if relevant.
+Generate final answer following the synthesis instructions in your system prompt.
+Ensure language matching and proper citations."""
+            else:
+                user_message = f"""Generate final answer for this query using agent outputs.
 
 Original Query: {query}
 Complexity Score: {complexity_score}
@@ -509,15 +585,15 @@ Ensure language matching and proper citations."""
                 cache_read_tokens = usage.get('cache_read_input_tokens', 0)
                 cache_creation_tokens = usage.get('cache_creation_input_tokens', 0)
 
-                # Determine provider from model name
-                if 'claude' in self.config.model.lower():
+                # Use SSOT provider detection
+                try:
+                    provider = detect_provider_from_model(self.config.model)
+                except ValueError as e:
+                    logger.warning(
+                        f"Could not detect provider for model '{self.config.model}': {e}. "
+                        f"Falling back to 'anthropic'. Cost tracking may be inaccurate."
+                    )
                     provider = 'anthropic'
-                elif 'gpt' in self.config.model.lower() or 'o1' in self.config.model.lower() or 'o3' in self.config.model.lower() or 'o4' in self.config.model.lower():
-                    provider = 'openai'
-                elif 'gemini' in self.config.model.lower():
-                    provider = 'google'
-                else:
-                    provider = 'anthropic'  # Default
 
                 tracker.track_llm(
                     provider=provider,
@@ -533,11 +609,39 @@ Ensure language matching and proper citations."""
 
             final_answer = response.text
 
+            # Validate citations in final answer
+            available_chunk_ids = self._extract_available_chunk_ids(agent_outputs)
+            citation_validation = self._validate_citations_in_answer(final_answer, available_chunk_ids)
+
+            if not citation_validation["valid"]:
+                if citation_validation["invalid_citations"]:
+                    # Strip invalid citations to prevent user confusion
+                    invalid_set = set(citation_validation["invalid_citations"])
+                    for invalid_cite in invalid_set:
+                        # Remove \cite{invalid_id} patterns
+                        final_answer = re.sub(
+                            rf'\\cite\{{{re.escape(invalid_cite)}\}}',
+                            '',
+                            final_answer
+                        )
+                    logger.warning(
+                        f"Stripped {len(invalid_set)} invalid citations from answer: "
+                        f"{list(invalid_set)[:5]}{'...' if len(invalid_set) > 5 else ''}"
+                    )
+                if citation_validation["missing_citations"]:
+                    logger.warning(
+                        "Synthesis produced answer without citations despite available chunks. "
+                        "User may not see source references."
+                    )
+
             # Check if orchestrator requested iteration (JSON response)
             needs_iteration = False
             next_agents = []
             iteration_reason = ""
             partial_answer = ""
+
+            # Get complexity score to check if iteration is allowed
+            complexity_score = state.get("complexity_score", 50)
 
             try:
                 # Try parsing response as JSON (iteration request)
@@ -545,18 +649,32 @@ Ensure language matching and proper citations."""
                 iteration_request = json.loads(final_answer.strip())
 
                 if iteration_request.get("needs_iteration"):
-                    needs_iteration = True
-                    next_agents = iteration_request.get("next_agents", [])
-                    iteration_reason = iteration_request.get("iteration_reason", "")
-                    partial_answer = iteration_request.get("partial_answer", "")
+                    # SAFEGUARD: Block iteration for simple queries (complexity < 40)
+                    # This prevents unnecessary double execution of agents
+                    if complexity_score < 40:
+                        logger.warning(
+                            f"Iteration BLOCKED for simple query (complexity={complexity_score}). "
+                            f"Requested agents: {iteration_request.get('next_agents', [])}. "
+                            f"Using partial answer instead."
+                        )
+                        # Use partial answer as final
+                        partial_answer = iteration_request.get("partial_answer", "")
+                        if partial_answer:
+                            final_answer = partial_answer
+                        # Don't set needs_iteration = True
+                    else:
+                        needs_iteration = True
+                        next_agents = iteration_request.get("next_agents", [])
+                        iteration_reason = iteration_request.get("iteration_reason", "")
+                        partial_answer = iteration_request.get("partial_answer", "")
 
-                    logger.info(
-                        f"Orchestrator requested iteration: {len(next_agents)} agents "
-                        f"({', '.join(next_agents)}) - Reason: {iteration_reason}"
-                    )
+                        logger.info(
+                            f"Orchestrator requested iteration: {len(next_agents)} agents "
+                            f"({', '.join(next_agents)}) - Reason: {iteration_reason}"
+                        )
 
-                    # Replace final_answer with partial answer for this iteration
-                    final_answer = partial_answer
+                        # Replace final_answer with partial answer for this iteration
+                        final_answer = partial_answer
             except (json.JSONDecodeError, ValueError):
                 # Not JSON - normal final answer
                 pass
@@ -570,7 +688,8 @@ Ensure language matching and proper citations."""
                 agent_outputs["orchestrator"] = {}
             agent_outputs["orchestrator"]["synthesis"] = {
                 "final_answer": final_answer,
-                "total_cost_usd": total_cost_usd
+                "total_cost_usd": total_cost_usd,
+                "citation_validation": citation_validation  # Track citation quality
             }
 
             # Return ONLY changed keys (partial update) to avoid LangGraph state conflicts
@@ -628,93 +747,72 @@ Ensure language matching and proper citations."""
                 )
             }
 
-    def _build_synthesis_context(self, state: Dict[str, Any]) -> str:
+    # Debug/metadata fields to exclude from synthesis context (token optimization)
+    _EXCLUDE_FIELDS = {
+        "iterations", "retrieval_method", "total_tool_cost_usd",
+        "tool_calls_made", "chunks", "expanded_results", "_internal"
+    }
+
+    def _build_synthesis_context(self, state: Dict[str, Any], compress: bool = False) -> str:
         """
         Build synthesis context from agent outputs.
 
+        Token-optimized: Filters debug/metadata fields and uses compact JSON.
+        Expected savings: ~25-30% compared to full JSON dumps (or ~60-70% with compression).
+
         Args:
             state: Current workflow state
+            compress: If True, use aggressive compression for downstream agents
+                     (~100-200 tokens per agent instead of ~500-1000)
 
         Returns:
-            Formatted string with agent outputs
+            Formatted string with agent outputs (compact JSON, no indent)
         """
+        from ..core.agent_base import BaseAgent
+
         agent_outputs = state.get("agent_outputs", {})
         context_parts = []
 
+        # Extract available chunk_ids from extractor for citation validation
+        available_chunk_ids = self._extract_available_chunk_ids(agent_outputs)
+        if available_chunk_ids:
+            context_parts.append("### AVAILABLE CITATIONS (use ONLY these chunk_ids):")
+            context_parts.append(", ".join(available_chunk_ids))
+            context_parts.append("")
+            logger.debug(f"Providing {len(available_chunk_ids)} chunk_ids for citation validation")
+
         # Order agents by execution sequence (if available)
         agent_sequence = state.get("agent_sequence", [])
+
+        def filter_output(output: dict) -> dict:
+            """Keep all content fields, exclude only debug/metadata."""
+            return {k: v for k, v in output.items() if k not in self._EXCLUDE_FIELDS}
+
+        def process_output(output: dict) -> dict:
+            """Process output based on compression setting."""
+            if compress:
+                return BaseAgent.compress_output_for_downstream(output)
+            return filter_output(output)
 
         # Add outputs in sequence order
         for agent_name in agent_sequence:
             if agent_name in agent_outputs and agent_name != "orchestrator":
                 output = agent_outputs[agent_name]
+                processed = process_output(output)
                 context_parts.append(f"### {agent_name.upper()} OUTPUT:")
-                context_parts.append(json.dumps(output, indent=2, ensure_ascii=False))
+                # Compact JSON: no indent, minimal separators
+                context_parts.append(json.dumps(processed, ensure_ascii=False, separators=(',', ':')))
                 context_parts.append("")
 
         # Add any remaining outputs not in sequence
         for agent_name, output in agent_outputs.items():
             if agent_name != "orchestrator" and agent_name not in agent_sequence:
+                processed = process_output(output)
                 context_parts.append(f"### {agent_name.upper()} OUTPUT:")
-                context_parts.append(json.dumps(output, indent=2, ensure_ascii=False))
+                context_parts.append(json.dumps(processed, ensure_ascii=False, separators=(',', ':')))
                 context_parts.append("")
 
         return "\n".join(context_parts)
-
-    def _format_cost_summary(self, total_cost: float, agent_outputs: dict) -> str:
-        """
-        [DEPRECATED] Format cost summary for display to user.
-
-        This method is no longer used. Cost information is now emitted via SSE events
-        and displayed in frontend metadata section (not in message content).
-
-        See:
-        - backend/agent_adapter.py: SSE cost_summary event emission
-        - frontend/src/components/chat/ChatMessage.tsx: Cost metadata display
-
-        Args:
-            total_cost: Total workflow cost in USD
-            agent_outputs: Dict mapping agent names to outputs
-
-        Returns:
-            Formatted markdown cost summary
-        """
-        lines = [
-            "---",
-            "## 💰 API Cost Summary",
-            f"**Total Workflow Cost:** ${total_cost:.6f}",
-            ""
-        ]
-
-        # Per-agent breakdown (if available)
-        agent_costs = {}
-        for agent_name, output in agent_outputs.items():
-            if isinstance(output, dict) and "total_tool_cost_usd" in output:
-                agent_cost = output["total_tool_cost_usd"]
-                if agent_cost > 0:
-                    agent_costs[agent_name] = agent_cost
-
-        if agent_costs:
-            lines.append("**Per-Agent Breakdown:**")
-            # Sort by cost descending
-            sorted_agents = sorted(agent_costs.items(), key=lambda x: x[1], reverse=True)
-            for agent_name, cost in sorted_agents:
-                lines.append(f"- {agent_name}: ${cost:.6f}")
-            lines.append("")
-
-        # Cost interpretation
-        if total_cost < 0.01:
-            lines.append("_Cost: Minimal (< $0.01)_")
-        elif total_cost < 0.05:
-            lines.append("_Cost: Low ($0.01 - $0.05)_")
-        elif total_cost < 0.20:
-            lines.append("_Cost: Moderate ($0.05 - $0.20)_")
-        else:
-            lines.append("_Cost: High (> $0.20)_")
-
-        lines.append("---")
-
-        return "\n".join(lines)
 
     def _parse_routing_response(self, response_text: str) -> Dict[str, Any]:
         """
@@ -783,13 +881,55 @@ Ensure language matching and proper citations."""
                 "(for direct responses without agent pipeline)"
             )
 
-        # Validate query type
+        # Validate and normalize query type
         valid_types = ["simple_search", "cross_doc", "compliance", "risk", "synthesis", "reporting", "unknown"]
         query_type = decision["query_type"]
         if query_type not in valid_types:
             logger.warning(
-                f"Unknown query_type: {query_type}, expected one of {valid_types}"
+                f"Invalid query_type '{query_type}' from LLM, converting to 'unknown'. "
+                f"Expected one of {valid_types}"
             )
+            # Normalize invalid query_type to 'unknown' (defensive programming)
+            # This handles LLM returning values like 'greeting' which aren't in QueryType enum
+            decision["query_type"] = "unknown"
+
+        # Validate unified analysis structure if present (graceful handling)
+        if "analysis" in decision:
+            analysis = decision["analysis"]
+
+            # Validate vagueness_score range and clamp if needed
+            if "vagueness_score" in analysis:
+                score = analysis["vagueness_score"]
+                if not isinstance(score, (int, float)):
+                    logger.warning(f"Invalid vagueness_score type: {type(score)}, setting to 0.5")
+                    analysis["vagueness_score"] = 0.5
+                elif score < 0.0 or score > 1.0:
+                    logger.warning(f"vagueness_score {score} out of range, clamping to [0,1]")
+                    analysis["vagueness_score"] = max(0.0, min(1.0, float(score)))
+
+            # Ensure boolean fields are actually booleans
+            for bool_field in ["is_follow_up", "needs_clarification"]:
+                if bool_field in analysis and not isinstance(analysis[bool_field], bool):
+                    analysis[bool_field] = bool(analysis[bool_field])
+
+            # Validate semantic_type if present
+            valid_semantic_types = [
+                "greeting", "specific_factual", "comparative",
+                "procedural", "analytical", "compliance_check"
+            ]
+            if "semantic_type" in analysis and analysis["semantic_type"] not in valid_semantic_types:
+                logger.warning(f"Invalid semantic_type '{analysis['semantic_type']}', defaulting to 'specific_factual'")
+                analysis["semantic_type"] = "specific_factual"
+        else:
+            # If LLM didn't return analysis, create empty default (backwards compatibility)
+            decision["analysis"] = {
+                "is_follow_up": False,
+                "follow_up_rewrite": None,
+                "vagueness_score": 0.5,
+                "needs_clarification": False,
+                "semantic_type": "specific_factual"
+            }
+            logger.debug("LLM didn't return analysis field, using defaults")
 
     def get_workflow_pattern(self, complexity_score: int) -> str:
         """
@@ -810,3 +950,95 @@ Ensure language matching and proper citations."""
 
     # Removed rule-based fallback methods (get_agent_capabilities, suggest_agents_for_query)
     # All routing decisions are now made autonomously by the LLM orchestrator
+
+    def _extract_available_chunk_ids(self, agent_outputs: Dict[str, Any]) -> List[str]:
+        """
+        Extract available chunk_ids from extractor output for citation validation.
+
+        This ensures orchestrator can only cite chunks that were actually retrieved.
+        Prevents hallucinated citations.
+
+        Args:
+            agent_outputs: All agent outputs from workflow
+
+        Returns:
+            List of valid chunk_ids from extractor
+        """
+        chunk_ids = []
+
+        extractor_output = agent_outputs.get("extractor", {})
+        if not extractor_output:
+            return chunk_ids
+
+        # Primary source: chunk_ids list (added in extractor.py fix)
+        if "chunk_ids" in extractor_output:
+            ids = extractor_output["chunk_ids"]
+            if isinstance(ids, list):
+                chunk_ids.extend(ids)
+                logger.debug(f"Found {len(ids)} chunk_ids from extractor.chunk_ids")
+
+        # Fallback: extract from chunks_data if chunk_ids not populated
+        if not chunk_ids and "chunks_data" in extractor_output:
+            chunks_data = extractor_output["chunks_data"]
+            if isinstance(chunks_data, list):
+                for chunk in chunks_data:
+                    if isinstance(chunk, dict) and "chunk_id" in chunk:
+                        chunk_id = chunk["chunk_id"]
+                        if chunk_id and chunk_id not in chunk_ids:
+                            chunk_ids.append(chunk_id)
+                logger.debug(f"Found {len(chunk_ids)} chunk_ids from extractor.chunks_data")
+
+        return chunk_ids
+
+    def _validate_citations_in_answer(
+        self, answer: str, available_chunk_ids: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Validate that citations in the answer use only available chunk_ids.
+
+        Args:
+            answer: The synthesized final answer
+            available_chunk_ids: List of valid chunk_ids from extractor
+
+        Returns:
+            Dict with validation results:
+                - valid: bool - all citations are valid
+                - used_citations: List[str] - citations found in answer
+                - invalid_citations: List[str] - citations not in available list
+                - missing_citations: bool - answer has no citations but should
+        """
+        # Extract \cite{...} patterns from answer
+        cite_pattern = re.compile(r'\\cite\{([^}]+)\}')
+        used_citations = cite_pattern.findall(answer)
+
+        # Check for invalid citations (not in available list)
+        available_set = set(available_chunk_ids)
+        invalid_citations = [c for c in used_citations if c not in available_set]
+
+        # Check if answer should have citations but doesn't
+        # Heuristic: if there's substantive content and extractor found chunks, expect citations
+        has_substantive_content = len(answer) > 200
+        should_have_citations = has_substantive_content and len(available_chunk_ids) > 0
+        missing_citations = should_have_citations and len(used_citations) == 0
+
+        is_valid = len(invalid_citations) == 0 and not missing_citations
+
+        if invalid_citations:
+            logger.warning(
+                f"Citation validation: {len(invalid_citations)} invalid citations found: "
+                f"{invalid_citations[:5]}{'...' if len(invalid_citations) > 5 else ''}"
+            )
+
+        if missing_citations:
+            logger.warning(
+                f"Citation validation: Answer has {len(answer)} chars but no citations. "
+                f"Available chunk_ids: {len(available_chunk_ids)}"
+            )
+
+        return {
+            "valid": is_valid,
+            "used_citations": used_citations,
+            "invalid_citations": invalid_citations,
+            "missing_citations": missing_citations,
+            "available_count": len(available_chunk_ids)
+        }

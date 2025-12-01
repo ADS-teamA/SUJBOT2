@@ -137,6 +137,127 @@ class ToolExecution(BaseModel):
     error: Optional[str] = None
     result_summary: str             # First 200 chars of result
 
+    # Hallucination detection fields (added for evaluation)
+    was_hallucinated: bool = False  # True if tool doesn't exist
+    validation_error: Optional[str] = None  # Input validation error
+
+
+class ToolStats(BaseModel):
+    """Statistics for a single tool."""
+    tool_name: str
+    call_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    hallucination_count: int = 0  # Tool didn't exist
+    validation_error_count: int = 0  # Invalid arguments
+    total_duration_ms: float = 0.0
+    avg_duration_ms: float = 0.0
+
+    def success_rate(self) -> float:
+        """Calculate success rate (0.0 to 1.0)."""
+        if self.call_count == 0:
+            return 1.0
+        return self.success_count / self.call_count
+
+
+class ToolUsageMetrics(BaseModel):
+    """
+    Aggregated tool usage metrics for evaluation.
+
+    Tracks hallucination rate, success rates, and per-tool statistics.
+    Used by LLM-as-Judge and LangSmith feedback submission.
+    """
+    total_calls: int = 0
+    successful_calls: int = 0
+    failed_calls: int = 0
+    hallucinated_calls: int = 0  # Tool name doesn't exist in registry
+    validation_errors: int = 0   # Tool exists but input invalid
+
+    # Per-tool breakdown
+    tool_stats: Dict[str, ToolStats] = Field(default_factory=dict)
+
+    # Timing
+    total_duration_ms: float = 0.0
+    avg_duration_ms: float = 0.0
+
+    def hallucination_rate(self) -> float:
+        """
+        Calculate hallucination rate (0.0 to 1.0).
+
+        Hallucination = LLM called a tool that doesn't exist.
+        This is a critical metric for agent quality evaluation.
+        """
+        if self.total_calls == 0:
+            return 0.0
+        return self.hallucinated_calls / self.total_calls
+
+    def success_rate(self) -> float:
+        """Calculate overall success rate (0.0 to 1.0)."""
+        if self.total_calls == 0:
+            return 1.0
+        return self.successful_calls / self.total_calls
+
+    def error_rate(self) -> float:
+        """Calculate error rate including hallucinations and validation errors."""
+        if self.total_calls == 0:
+            return 0.0
+        return (self.hallucinated_calls + self.validation_errors + self.failed_calls) / self.total_calls
+
+    def record_execution(self, execution: "ToolExecution") -> None:
+        """
+        Record a tool execution and update metrics.
+
+        Args:
+            execution: ToolExecution record to add
+        """
+        self.total_calls += 1
+        self.total_duration_ms += execution.duration_ms
+
+        if execution.was_hallucinated:
+            self.hallucinated_calls += 1
+        elif execution.validation_error:
+            self.validation_errors += 1
+        elif execution.success:
+            self.successful_calls += 1
+        else:
+            self.failed_calls += 1
+
+        # Update per-tool stats
+        tool_name = execution.tool_name
+        if tool_name not in self.tool_stats:
+            self.tool_stats[tool_name] = ToolStats(tool_name=tool_name)
+
+        stats = self.tool_stats[tool_name]
+        stats.call_count += 1
+        stats.total_duration_ms += execution.duration_ms
+
+        if execution.was_hallucinated:
+            stats.hallucination_count += 1
+        elif execution.validation_error:
+            stats.validation_error_count += 1
+        elif execution.success:
+            stats.success_count += 1
+        else:
+            stats.failure_count += 1
+
+        stats.avg_duration_ms = stats.total_duration_ms / stats.call_count
+
+        # Update overall average
+        self.avg_duration_ms = self.total_duration_ms / self.total_calls
+
+    def to_feedback_dict(self) -> Dict[str, float]:
+        """
+        Convert metrics to LangSmith feedback format.
+
+        Returns:
+            Dict mapping feedback keys to scores (0.0 to 1.0)
+        """
+        return {
+            "tool_success_rate": self.success_rate(),
+            "tool_hallucination_rate": self.hallucination_rate(),
+            "tool_error_rate": self.error_rate(),
+        }
+
 
 class AgentState(BaseModel):
     """
@@ -196,6 +317,12 @@ class MultiAgentState(BaseModel):
     agent_outputs: Annotated[Dict[str, Any], merge_dicts] = Field(default_factory=dict)
     tool_executions: Annotated[List[ToolExecution], operator.add] = Field(default_factory=list)
 
+    # === EVALUATION METRICS ===
+    tool_usage_metrics: Annotated[Optional[ToolUsageMetrics], keep_first] = Field(
+        default=None,
+        description="Aggregated tool usage metrics for evaluation"
+    )
+
     # === RETRIEVAL ===
     documents: Annotated[List[DocumentMetadata], operator.add] = Field(default_factory=list)
     retrieved_text: Annotated[str, operator.add] = ""  # Concatenate text from multiple agents
@@ -232,6 +359,23 @@ class MultiAgentState(BaseModel):
     enriched_query: Annotated[Optional[str], keep_first] = None
     clarification_round: Annotated[int, take_max] = 0  # Track multi-round clarifications
     awaiting_user_input: Annotated[bool, operator.or_] = False  # Signal frontend to pause
+
+    # === CONVERSATION HISTORY (for multi-turn context) ===
+    # List of previous messages for conversational context
+    # Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
+    conversation_history: Annotated[List[Dict[str, str]], keep_first] = Field(default_factory=list)
+
+    # === UNIFIED QUERY ANALYSIS (from orchestrator routing) ===
+    # Contains LLM-based analysis results from orchestrator's unified prompt:
+    # - is_follow_up: bool - whether query references conversation history
+    # - follow_up_rewrite: str | None - rewritten standalone query if follow-up
+    # - vagueness_score: float (0.0-1.0) - query specificity (0=specific, 1=vague)
+    # - needs_clarification: bool - whether HITL clarification is needed
+    # - semantic_type: str - query intent classification
+    unified_analysis: Annotated[Optional[Dict[str, Any]], keep_first] = Field(
+        default=None,
+        description="Unified query analysis from orchestrator (follow-up, vagueness, semantic type)"
+    )
 
     # === INTERNAL INFRASTRUCTURE (excluded from serialization) ===
     # EventBus for real-time progress streaming (NOT persisted to checkpoints)

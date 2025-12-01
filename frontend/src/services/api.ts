@@ -89,11 +89,16 @@ export class ApiService {
 
   /**
    * Get current user profile (validates JWT cookie)
+   * @param externalSignal - Optional AbortSignal for cancellation (e.g., component unmount)
    */
-  async getCurrentUser(): Promise<UserProfile> {
+  async getCurrentUser(externalSignal?: AbortSignal): Promise<UserProfile> {
     // Add timeout to prevent infinite loading state if backend is unreachable
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+    // If external signal aborts, abort our controller too
+    const abortHandler = () => controller.abort();
+    externalSignal?.addEventListener('abort', abortHandler);
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -110,16 +115,24 @@ export class ApiService {
       return await response.json();
     } finally {
       clearTimeout(timeoutId);
+      externalSignal?.removeEventListener('abort', abortHandler);
     }
   }
 
   /**
    * Stream chat response using Server-Sent Events (SSE)
+   * @param message - Current user message
+   * @param conversationId - Optional conversation ID
+   * @param skipSaveUserMessage - Skip saving user message (for regenerate)
+   * @param messageHistory - Optional last N messages for conversation context
+   * @param abortSignal - Optional AbortSignal for cancellation (e.g., on page refresh)
    */
   async *streamChat(
     message: string,
     conversationId?: string,
-    skipSaveUserMessage?: boolean
+    skipSaveUserMessage?: boolean,
+    messageHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    abortSignal?: AbortSignal
   ): AsyncGenerator<SSEEvent, void, unknown> {
     let response;
     try {
@@ -131,9 +144,16 @@ export class ApiService {
           message,
           conversation_id: conversationId,
           skip_save_user_message: skipSaveUserMessage || false,
+          messages: messageHistory,  // Conversation history for context
         }),
+        signal: abortSignal,  // Allow cancellation on page refresh/unmount
       });
     } catch (error) {
+      // Check if this was an intentional abort (page refresh, navigation)
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('📡 API: Stream aborted by client (page refresh or navigation)');
+        return;  // Clean exit, no error event needed
+      }
       console.error('❌ API: Fetch failed:', error);
       // Yield error event to surface network failure to UI
       yield {
@@ -186,7 +206,27 @@ export class ApiService {
 
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        // Check if abort was requested before reading
+        if (abortSignal?.aborted) {
+          console.log('📡 API: Stream aborted before read');
+          break;
+        }
+
+        let done: boolean;
+        let value: Uint8Array | undefined;
+
+        try {
+          const result = await reader.read();
+          done = result.done;
+          value = result.value;
+        } catch (readError) {
+          // Check if read failed due to abort
+          if (readError instanceof Error && readError.name === 'AbortError') {
+            console.log('📡 API: Stream read aborted (page refresh or navigation)');
+            break;  // Clean exit
+          }
+          throw readError;  // Re-throw other errors
+        }
 
         // Check for timeout (cancels reader, so next read may be done or throw)
         if (timedOut) {
@@ -505,6 +545,7 @@ export class ApiService {
     return conversations.map((conv: any) => ({
       id: conv.id,
       title: conv.title,
+      messageCount: conv.message_count ?? 0,  // Real count from database
       messages: conv.messages || [],  // Backend now includes empty messages array
       createdAt: conv.created_at,
       updatedAt: conv.updated_at,
@@ -533,6 +574,7 @@ export class ApiService {
     return {
       id: data.id,
       title: data.title,
+      messageCount: data.message_count ?? 0,  // New conversation starts with 0 messages
       messages: data.messages || [],  // Backend now includes empty messages array
       createdAt: data.created_at,
       updatedAt: data.updated_at,
@@ -602,7 +644,7 @@ export class ApiService {
                 call_count: typeof agent.call_count === 'number' ? agent.call_count : 0,
                 response_time_ms: typeof agent.response_time_ms === 'number' ? agent.response_time_ms : 0,
               };
-            }).filter((agent): agent is AgentCostBreakdown => agent !== null);
+            }).filter((agent: AgentCostBreakdown | null): agent is AgentCostBreakdown => agent !== null);
           }
         }
 

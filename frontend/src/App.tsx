@@ -2,17 +2,18 @@
  * Main App Component
  *
  * Wires together:
- * - Header (with model selector, theme toggle, and sidebar toggle)
+ * - Header (with model selector and sidebar toggle)
  * - ResponsiveSidebar (conversation history with collapsible behavior)
  * - ChatContainer (messages and input)
  *
  * Uses custom hooks:
  * - useChat: Manages conversation state and SSE streaming
- * - useTheme: Manages dark/light mode
+ * - useTheme: Applies light theme
  */
 
 import { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Header } from './components/header/Header';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { ResponsiveSidebar } from './components/layout/ResponsiveSidebar';
@@ -26,6 +27,9 @@ import { apiService } from './services/api';
 import './index.css';
 
 function App() {
+  // Translations
+  const { t } = useTranslation();
+
   // Authentication
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -39,14 +43,16 @@ function App() {
     createConversation,
     selectConversation,
     deleteConversation,
+    renameConversation,
     sendMessage,
     editMessage,
     regenerateMessage,
     submitClarification,
     cancelClarification,
+    cancelStreaming,
   } = useChat();
 
-  const { theme, toggleTheme } = useTheme();
+  useTheme(); // Apply light theme
 
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -78,7 +84,7 @@ function App() {
       )}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-900 dark:border-accent-100 mx-auto mb-4"></div>
-          <p className="text-accent-600 dark:text-accent-400">Verifying session...</p>
+          <p className="text-accent-600 dark:text-accent-400">{t('common.verifyingSession')}</p>
         </div>
       </div>
     );
@@ -97,8 +103,6 @@ function App() {
     )}>
       {/* Header */}
       <Header
-        theme={theme}
-        onToggleTheme={toggleTheme}
         onToggleSidebar={toggleSidebar}
         sidebarOpen={sidebarOpen}
       />
@@ -115,11 +119,10 @@ function App() {
             <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <div className="font-semibold text-sm mb-1">
-                Running in Degraded Mode
+                {t('degradedMode.title')}
               </div>
               <div className="text-xs opacity-90">
-                Some features are unavailable: {degradedComponents.map(d => d.component).join(', ')}.
-                {' '}Search quality may be reduced without reranking. Knowledge graph features are disabled.
+                {t('degradedMode.description', { components: degradedComponents.map(d => d.component).join(', ') })}
               </div>
             </div>
           </div>
@@ -136,6 +139,7 @@ function App() {
             onSelectConversation={selectConversation}
             onNewConversation={createConversation}
             onDeleteConversation={deleteConversation}
+            onRenameConversation={renameConversation}
           />
         </ResponsiveSidebar>
 
@@ -146,6 +150,7 @@ function App() {
           onSendMessage={sendMessage}
           onEditMessage={editMessage}
           onRegenerateMessage={regenerateMessage}
+          onCancelStreaming={cancelStreaming}
           clarificationData={clarificationData}
           awaitingClarification={awaitingClarification}
           onSubmitClarification={submitClarification}

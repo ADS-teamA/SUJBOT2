@@ -243,11 +243,11 @@ button:hover, a:hover {
 @keyframes fadeInScale {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.95);
+    transform: scale(0.95);
   }
   100% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
   }
 }
 
@@ -295,4 +295,69 @@ button:hover, a:hover {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* react-pdf text layer styles */
+.react-pdf__Page__textContent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1;
+  pointer-events: all;
+}
+
+.react-pdf__Page__textContent span,
+.react-pdf__Page__textContent br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  transform-origin: 0% 0%;
+}
+
+.react-pdf__Page__textContent span::selection {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* react-pdf annotation layer styles */
+.react-pdf__Page__annotations {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.react-pdf__Page__annotations a {
+  pointer-events: auto;
+}
+
+.react-pdf__Page__annotations section {
+  position: absolute;
+}
+
+/* ============================================================================
+ * Chunk highlight styles for citation viewer
+ * When user clicks a citation, the referenced chunk text is highlighted
+ * ============================================================================ */
+
+.react-pdf__Page__textContent mark.chunk-highlight {
+  background-color: rgba(250, 204, 21, 0.5); /* yellow-400 with opacity */
+  color: transparent; /* Keep text invisible, only show highlight overlay */
+  border-radius: 2px;
+  padding: 1px 0;
+}
+
+/* Dark mode: slightly brighter highlight for better visibility */
+.dark .react-pdf__Page__textContent mark.chunk-highlight {
+  background-color: rgba(250, 204, 21, 0.4);
+}
+
+/* Hover effect to indicate it's highlighted */
+.react-pdf__Page__textContent mark.chunk-highlight:hover {
+  background-color: rgba(250, 204, 21, 0.7);
 }

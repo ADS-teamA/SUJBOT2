@@ -18,6 +18,7 @@ import logging
 from typing import Any, Dict, Iterator, List
 
 import anthropic
+from langsmith.wrappers import wrap_anthropic
 
 from .base import BaseProvider, ProviderResponse
 
@@ -52,7 +53,7 @@ class AnthropicProvider(BaseProvider):
         if not any(pattern in model.lower() for pattern in ["claude", "haiku", "sonnet"]):
             raise ValueError(f"Invalid Claude model: {model}")
 
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._client = wrap_anthropic(anthropic.Anthropic(api_key=api_key))
         self.model = model
 
         logger.info(f"AnthropicProvider initialized: model={model}")

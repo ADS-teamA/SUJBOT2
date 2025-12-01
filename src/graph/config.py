@@ -354,7 +354,13 @@ class GraphStorageConfig:
 @dataclass
 class KnowledgeGraphConfig:
     """
-    Complete configuration for Knowledge Graph pipeline.
+    Complete configuration for Knowledge Graph pipeline (internal use).
+
+    NOTE: This is the INTERNAL configuration class used by the KG pipeline.
+    For JSON config file validation, see src/config_schema.py::KnowledgeGraphConfig.
+    The two classes serve different purposes:
+    - config_schema.py: Validates user-provided config.json (flat structure)
+    - This class: Rich internal representation with nested sub-configs
 
     Usage:
         # Default configuration
@@ -393,6 +399,7 @@ class KnowledgeGraphConfig:
     enable_semantic_entity_dedup: bool = False  # Merge near-duplicates using embeddings
 
     # Performance settings
+    batch_size: int = 10  # Chunks per Graphiti batch (parallel processing)
     max_retries: int = 3  # Retry failed extractions
     retry_delay: float = 1.0  # seconds
     timeout: int = 300  # seconds per extraction batch
@@ -400,6 +407,17 @@ class KnowledgeGraphConfig:
     # Logging
     verbose: bool = True
     log_path: Optional[str] = "./logs/kg_extraction.log"
+
+    def __post_init__(self):
+        """Validate configuration on construction."""
+        if self.batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.max_retries < 0:
+            raise ValueError(f"max_retries must be >= 0, got {self.max_retries}")
+        if self.retry_delay < 0:
+            raise ValueError(f"retry_delay must be >= 0, got {self.retry_delay}")
+        if self.timeout < 1:
+            raise ValueError(f"timeout must be >= 1, got {self.timeout}")
 
     @classmethod
     def from_env(cls) -> "KnowledgeGraphConfig":

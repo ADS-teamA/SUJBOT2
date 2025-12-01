@@ -30,6 +30,10 @@ class ChatRequest(BaseModel):
         False,
         description="Skip saving user message to database (for regenerate where message already exists)",
     )
+    messages: Optional[List[ChatMessage]] = Field(
+        None,
+        description="Conversation history for context (last N messages)",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -66,3 +70,20 @@ class ClarificationRequest(BaseModel):
         max_length=10000,
         description="User's free-form clarification response",
     )
+
+
+class AgentVariantRequest(BaseModel):
+    """Request to update agent variant preference."""
+
+    variant: Literal["premium", "cheap", "local"] = Field(
+        ...,
+        description="Agent variant: 'premium' (Opus+Sonnet), 'cheap' (Haiku), or 'local' (Llama 3.1 70B)"
+    )
+
+
+class AgentVariantResponse(BaseModel):
+    """Response with agent variant information."""
+
+    variant: Literal["premium", "cheap", "local"] = Field(..., description="Current variant")
+    display_name: str = Field(..., description="Human-readable variant name")
+    model: str = Field(..., description="Default model identifier for this variant")

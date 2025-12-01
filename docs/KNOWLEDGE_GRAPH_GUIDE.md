@@ -1,9 +1,9 @@
 # Knowledge Graph System - Complete Guide
 
-**Version:** 2025-10-31
-**Status:** PHASE 5A COMPLETE ✅ (Entity/Relationship Extraction + Neo4j Storage)
+**Version:** 2025-11-26
+**Status:** GRAPHITI TEMPORAL KG ✅ (Replaced legacy Gemini KG Extractor)
 
-This document explains how MY_SUJBOT's knowledge graph system works and how to enhance it for legal compliance checking (regulations + clauses).
+This document explains SUJBOT2's temporal knowledge graph system powered by **Graphiti** for entity extraction and relationship management with temporal awareness.
 
 ---
 
@@ -25,21 +25,30 @@ This document explains how MY_SUJBOT's knowledge graph system works and how to e
 
 ### What is the Knowledge Graph?
 
-The Knowledge Graph (KG) is **Phase 5A** of the indexing pipeline. It extracts structured information (entities and relationships) from legal documents and stores them in Neo4j for graph-based retrieval.
+The Knowledge Graph (KG) uses **Graphiti** - a temporal knowledge graph framework that automatically extracts entities and relationships from documents with temporal awareness. Unlike static KGs, Graphiti tracks how facts evolve over time.
 
 ```
-INDEXING PIPELINE (Phase 1-6):
+INDEXING PIPELINE (Phase 1-7):
 ┌────────────────────────────────────────────────────┐
-│ Phase 1: Docling Extraction (Hierarchy)           │
+│ Phase 1: Docling/Gemini Extraction (Hierarchy)    │
 │ Phase 2: Summary Generation                       │
 │ Phase 3: Multi-Layer Chunking (SAC)               │
-│ Phase 4: FAISS Vector Store                       │
-│ Phase 5A: Knowledge Graph ← YOU ARE HERE          │
-│ Phase 5B: Hybrid Search (BM25 + FAISS)            │
-│ Phase 5C: Reranking (Cross-encoder)               │
-│ Phase 6: Context Assembly                         │
+│ Phase 4: Vector Store (PostgreSQL pgvector)       │
+│ Phase 5: Graphiti Temporal KG (Neo4j + Postgres)  │
+│ Phase 6: Hybrid Search (BM25 + Dense + RRF)       │
+│ Phase 7: Context Assembly & Reranking             │
 └────────────────────────────────────────────────────┘
 ```
+
+### Graphiti vs Legacy KG Extractor
+
+| Feature | Legacy (Gemini KG) | Graphiti |
+|---------|-------------------|----------|
+| **Temporal awareness** | ❌ Static | ✅ Tracks fact validity over time |
+| **Entity resolution** | Manual | ✅ Automatic deduplication |
+| **Relationship evolution** | ❌ None | ✅ Tracks relationship changes |
+| **Schema** | Fixed 9 types | ✅ Dynamic, extensible |
+| **Storage** | Neo4j only | ✅ Neo4j + PostgreSQL hybrid |
 
 ### Why Knowledge Graphs for Legal Documents?
 

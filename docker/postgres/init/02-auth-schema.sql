@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS auth.users (
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_login_at TIMESTAMP WITH TIME ZONE
+    last_login_at TIMESTAMP WITH TIME ZONE,
+
+    -- Agent variant preference (premium=Opus+Sonnet, cheap=Haiku, local=Llama)
+    agent_variant VARCHAR(20) DEFAULT 'cheap' CHECK (agent_variant IN ('premium', 'cheap', 'local'))
 );
 
 -- Indexes for fast lookups
@@ -58,6 +61,9 @@ CREATE TABLE IF NOT EXISTS auth.conversations (
 
     -- Metadata
     title VARCHAR(500),
+
+    -- Title generation state (prevents race conditions across workers)
+    is_title_generating BOOLEAN NOT NULL DEFAULT false,
 
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

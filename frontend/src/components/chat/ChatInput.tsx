@@ -1,17 +1,21 @@
 /**
- * ChatInput Component - Message input textarea with send button
+ * ChatInput Component - Message input textarea with send/stop button
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
-  disabled: boolean;
+  onCancel?: () => void;  // Cancel streaming
+  isStreaming: boolean;   // Whether currently streaming
+  disabled: boolean;      // Disabled for other reasons (not streaming)
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInputProps) {
+  const { t } = useTranslation();
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -30,9 +34,15 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (message.trim() && !disabled && !isMessageTooLong) {
+    if (message.trim() && !disabled && !isStreaming && !isMessageTooLong) {
       onSend(message.trim());
       setMessage('');
+    }
+  };
+
+  const handleCancel = () => {
+    if (isStreaming && onCancel) {
+      onCancel();
     }
   };
 
@@ -63,8 +73,8 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about legal or technical documents..."
-            disabled={disabled}
+            placeholder={t('chat.placeholder')}
+            disabled={disabled || isStreaming}
             className={cn(
               'flex-1 resize-none px-4 py-3',
               'bg-transparent',
@@ -76,35 +86,54 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             )}
             rows={1}
           />
-          <button
-            type="submit"
-            disabled={disabled || !message.trim() || isMessageTooLong}
-            className={cn(
-              'flex-shrink-0',
-              'w-10 h-10 rounded-xl',
-              'bg-accent-900 dark:bg-accent-100',
-              'text-accent-50 dark:text-accent-900',
-              'hover:bg-accent-800 dark:hover:bg-accent-200',
-              'hover:scale-105 active:scale-95',
-              'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100',
-              'transition-all duration-200',
-              'flex items-center justify-center',
-              'shadow-md hover:shadow-lg'
-            )}
-            title={
-              disabled
-                ? 'Processing...'
-                : isMessageTooLong
-                ? `Message too long (${message.length.toLocaleString()}/${MAX_MESSAGE_LENGTH.toLocaleString()} chars)`
-                : 'Send message'
-            }
-          >
-            {disabled ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
+          {isStreaming ? (
+            /* Stop button - shown during streaming */
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={cn(
+                'flex-shrink-0',
+                'w-10 h-10 rounded-xl',
+                'bg-red-600 dark:bg-red-500',
+                'text-white',
+                'hover:bg-red-700 dark:hover:bg-red-600',
+                'hover:scale-105 active:scale-95',
+                'transition-all duration-200',
+                'flex items-center justify-center',
+                'shadow-md hover:shadow-lg'
+              )}
+              title={t('chat.stop')}
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            /* Send button - shown when not streaming */
+            <button
+              type="submit"
+              disabled={disabled || !message.trim() || isMessageTooLong}
+              className={cn(
+                'flex-shrink-0',
+                'w-10 h-10 rounded-xl',
+                'bg-accent-900 dark:bg-accent-100',
+                'text-accent-50 dark:text-accent-900',
+                'hover:bg-accent-800 dark:hover:bg-accent-200',
+                'hover:scale-105 active:scale-95',
+                'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100',
+                'transition-all duration-200',
+                'flex items-center justify-center',
+                'shadow-md hover:shadow-lg'
+              )}
+              title={
+                disabled
+                  ? t('chat.processing')
+                  : isMessageTooLong
+                  ? `${t('chat.messageTooLong')} (${message.length.toLocaleString()}/${MAX_MESSAGE_LENGTH.toLocaleString()})`
+                  : t('chat.placeholder')
+              }
+            >
               <Send size={18} />
-            )}
-          </button>
+            </button>
+          )}
         </div>
         {message.length > 0 && (
           <div
@@ -117,9 +146,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             )}
           >
             {isMessageTooLong && (
-              <span className="mr-2">⚠️ Message too long -</span>
+              <span className="mr-2">⚠️ {t('chat.messageTooLong')} -</span>
             )}
-            {message.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()} characters
+            {message.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()} {t('chat.characters')}
           </div>
         )}
       </div>

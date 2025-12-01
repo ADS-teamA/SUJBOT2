@@ -4,29 +4,74 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { Message, Conversation, ToolCall, ClarificationData } from '../types';
 
+// UUID validation regex for conversation IDs
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate and extract conversation ID from URL parameter
+ */
+function getValidConversationIdFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const urlConversationId = params.get('c');
+  // Only accept valid UUID format to prevent invalid state
+  if (urlConversationId && UUID_REGEX.test(urlConversationId)) {
+    return urlConversationId;
+  }
+  return null;
+}
+
 export function useChat() {
+  const { isAuthenticated } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  // Initialize currentConversationId from localStorage to persist across page refreshes
+  // Current conversation ID - initialized from URL query param for refresh persistence
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(
-    () => localStorage.getItem('currentConversationId')
+    getValidConversationIdFromUrl
   );
   const [isStreaming, setIsStreaming] = useState(false);
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
 
-  // Persist currentConversationId to localStorage when it changes
+  // Sync URL with current conversation ID (for refresh persistence and shareable links)
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
     if (currentConversationId) {
-      localStorage.setItem('currentConversationId', currentConversationId);
+      url.searchParams.set('c', currentConversationId);
     } else {
-      localStorage.removeItem('currentConversationId');
+      url.searchParams.delete('c');
     }
+
+    // Update URL without page reload (replaceState to avoid history spam)
+    window.history.replaceState({}, '', url.toString());
   }, [currentConversationId]);
 
-  // Load conversations from server on mount
+  // Handle browser back/forward navigation
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      // Use same validation as initial load
+      setCurrentConversationId(getValidConversationIdFromUrl());
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Load conversations from server when user is authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Clear conversations on logout
+      setConversations([]);
+      setCurrentConversationId(null);
+      return;
+    }
+
     const loadConversations = async () => {
       try {
         const serverConversations = await apiService.getConversations();
@@ -38,15 +83,15 @@ export function useChat() {
     };
 
     loadConversations();
-  }, []); // Run once on mount
+  }, [isAuthenticated]); // Re-run when auth state changes (login/logout)
 
-  // Validate that saved conversation ID still exists after loading conversations
+  // Validate that current conversation still exists after loading conversations
   useEffect(() => {
     if (currentConversationId && conversations.length > 0) {
       const conversationExists = conversations.some(c => c.id === currentConversationId);
       if (!conversationExists) {
-        // Saved conversation was deleted, clear it
-        console.log('Saved conversation no longer exists, clearing currentConversationId');
+        // Current conversation was deleted, clear it
+        console.log('Current conversation no longer exists, clearing currentConversationId');
         setCurrentConversationId(null);
       }
     }
@@ -55,6 +100,37 @@ export function useChat() {
   // Refs for managing streaming state
   const currentMessageRef = useRef<Message | null>(null);
   const currentToolCallsRef = useRef<Map<string, ToolCall>>(new Map());
+
+  // AbortController for cancelling streaming on page refresh/navigation
+  // This ensures backend doesn't continue processing when user leaves the page
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Warn user and cancel streaming on page unload (refresh, close, navigation)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only show warning if actively streaming
+      if (abortControllerRef.current) {
+        // Standard way to show browser's "Leave page?" dialog
+        e.preventDefault();
+        // For older browsers (Chrome < 119)
+        e.returnValue = '';
+
+        console.log('🔄 useChat: Aborting stream due to page unload');
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Also cleanup on hook unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   // Ref pattern to avoid stale closures in async callbacks
   //
@@ -76,7 +152,7 @@ export function useChat() {
 
   /**
    * Clean invalid/incomplete messages from conversation
-   * Prevents corrupted data in localStorage
+   * Prevents corrupted data in database
    */
   const cleanMessages = useCallback((messages: Message[]): Message[] => {
     return messages.filter(msg =>
@@ -95,6 +171,7 @@ export function useChat() {
 
   /**
    * Create a new conversation
+   * Uses pushState for browser history (back/forward navigation)
    */
   const createConversation = useCallback(async () => {
     try {
@@ -105,6 +182,11 @@ export function useChat() {
       setConversations((prev) => [...prev, newConversation]);
       setCurrentConversationId(newConversation.id);
 
+      // Add to browser history for back/forward navigation
+      const url = new URL(window.location.href);
+      url.searchParams.set('c', newConversation.id);
+      window.history.pushState({}, '', url.toString());
+
       return newConversation;
     } catch (error) {
       console.error('Failed to create conversation:', error);
@@ -114,10 +196,20 @@ export function useChat() {
 
   /**
    * Select a conversation
+   * Uses pushState for browser history (back/forward navigation)
    */
   const selectConversation = useCallback((id: string) => {
+    // Only update if different conversation
+    if (id === currentConversationId) return;
+
+    // Update state
     setCurrentConversationId(id);
-  }, []);
+
+    // Add to browser history for back/forward navigation
+    const url = new URL(window.location.href);
+    url.searchParams.set('c', id);
+    window.history.pushState({}, '', url.toString());
+  }, [currentConversationId]);
 
   /**
    * Load messages when conversation is selected
@@ -125,6 +217,14 @@ export function useChat() {
    */
   useEffect(() => {
     if (!currentConversationId) return;
+
+    // Wait for conversations to load before fetching messages
+    // This prevents unnecessary API calls for invalid/deleted conversation IDs
+    if (conversations.length === 0 && isAuthenticated) return;
+
+    // Verify conversation exists before loading messages
+    const conversationExists = conversations.some(c => c.id === currentConversationId);
+    if (!conversationExists && conversations.length > 0) return;
 
     const loadMessages = async () => {
       try {
@@ -143,7 +243,7 @@ export function useChat() {
     };
 
     loadMessages();
-  }, [currentConversationId]);
+  }, [currentConversationId, conversations.length, isAuthenticated]);
 
   /**
    * Delete a conversation
@@ -213,7 +313,7 @@ export function useChat() {
           ...conversation,
           messages: [...conversation.messages, userMessage],
           updatedAt: new Date().toISOString(),
-          title: conversation.messages.length === 0 ? content.slice(0, 50) : conversation.title,
+          title: conversation.title,  // Let backend generate LLM title
         };
       } else {
         // Regenerate/edit mode - use conversation as-is
@@ -257,15 +357,56 @@ export function useChat() {
 
       setIsStreaming(true);
 
+      // Create new AbortController for this stream
+      // Abort any previous stream first (shouldn't happen but defensive)
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       try {
-        // Stream response from backend
+        // Prepare message history for context (last 10 pairs = 20 messages)
+        // Exclude the current user message if we just added it to avoid duplication
+        const existingMessages = addUserMessage
+          ? updatedConversation.messages.slice(0, -1)  // Exclude just-added user message
+          : updatedConversation.messages;
+        const historyLimit = 20; // Last 10 user+assistant pairs
+        const messageHistory = existingMessages
+          .slice(-historyLimit)
+          .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+          .map(msg => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content
+          }));
+
+        // Stream response from backend with abort signal for page refresh handling
         for await (const event of apiService.streamChat(
           content,
           conversation.id,
-          !addUserMessage  // Skip saving user message when regenerating/editing (already exists)
+          !addUserMessage,  // Skip saving user message when regenerating/editing (already exists)
+          messageHistory,   // Pass conversation history for context
+          abortControllerRef.current.signal  // Allow cancellation on page refresh
         )) {
+          // Handle tool health check (first event)
+          if (event.event === 'tool_health') {
+            // Log tool health status (visible in browser console)
+            if (!event.data.healthy) {
+              console.warn('Tool health warning:', event.data.summary);
+            } else {
+              console.info('Tool health:', event.data.summary);
+            }
+            // Store tool health in message metadata for debugging
+            if (currentMessageRef.current) {
+              currentMessageRef.current.toolHealth = {
+                healthy: event.data.healthy,
+                summary: event.data.summary,
+                unavailableTools: event.data.unavailable_tools,
+                degradedTools: event.data.degraded_tools,
+              };
+            }
+          }
           // Handle agent progress events
-          if (event.event === 'agent_start') {
+          else if (event.event === 'agent_start') {
             if (currentMessageRef.current && currentMessageRef.current.agentProgress) {
               // Mark previous agent as completed
               if (currentMessageRef.current.agentProgress.currentAgent) {
@@ -509,6 +650,16 @@ export function useChat() {
 
             // Don't emit "done" - workflow is paused
             return;
+          } else if (event.event === 'title_update') {
+            // Title was generated by LLM for new conversation
+            const newTitle = event.data?.title;
+            if (newTitle) {
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.id === updatedConversation.id ? { ...c, title: newTitle } : c
+                )
+              );
+            }
           } else if (event.event === 'done') {
             // Stream completed
             break;
@@ -549,24 +700,37 @@ export function useChat() {
                 msg.content !== undefined
               );
 
-              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
+              // Sync messageCount with actual messages length
+              const finalConv = {
+                ...c,
+                messages: cleanedMessages,
+                messageCount: cleanedMessages.length,
+                updatedAt: new Date().toISOString()
+              };
 
               return finalConv;
             })
           );
         }
       } catch (error) {
-        console.error('❌ Error during streaming:', error);
-        console.error('Error stack:', (error as Error).stack);
+        // Check if this was an intentional abort (page refresh)
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('🔄 useChat: Stream aborted (page refresh or navigation)');
+          // Don't show error to user - this is expected behavior
+        } else {
+          console.error('❌ Error during streaming:', error);
+          console.error('Error stack:', (error as Error).stack);
 
-        // Add error message
-        if (currentMessageRef.current) {
-          currentMessageRef.current.content += `\n\n[Error: ${(error as Error).message}]`;
+          // Add error message
+          if (currentMessageRef.current) {
+            currentMessageRef.current.content += `\n\n[Error: ${(error as Error).message}]`;
+          }
         }
       } finally {
         setIsStreaming(false);
         currentMessageRef.current = null;
         currentToolCallsRef.current = new Map();
+        abortControllerRef.current = null;  // Cleanup abort controller
       }
     },
     [isStreaming, createConversation, currentConversationId, conversations]
@@ -835,7 +999,13 @@ export function useChat() {
               }
 
               const cleanedMessages = cleanMessages(messages);
-              const finalConv = { ...c, messages: cleanedMessages, updatedAt: new Date().toISOString() };
+              // Sync messageCount with actual messages length
+              const finalConv = {
+                ...c,
+                messages: cleanedMessages,
+                messageCount: cleanedMessages.length,
+                updatedAt: new Date().toISOString()
+              };
 
               return finalConv;
             })
@@ -867,6 +1037,36 @@ export function useChat() {
 
     // Optionally: Could show a message to the user that clarification was skipped
   }, []);
+
+  /**
+   * Rename a conversation
+   * @param id - Conversation ID
+   * @param newTitle - New title for the conversation
+   */
+  const renameConversation = useCallback(
+    async (id: string, newTitle: string) => {
+      if (!newTitle.trim()) {
+        console.warn('Cannot rename conversation to empty title');
+        return;
+      }
+
+      try {
+        // Update on server
+        await apiService.updateConversationTitle(id, newTitle.trim());
+
+        // Update local state
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c
+          )
+        );
+      } catch (error) {
+        console.error('Failed to rename conversation:', error);
+        // Don't throw - UI should handle gracefully
+      }
+    },
+    []
+  );
 
   /**
    * Delete a message from the current conversation
@@ -907,6 +1107,23 @@ export function useChat() {
     [currentConversationId]
   );
 
+  /**
+   * Cancel ongoing streaming
+   * Aborts the current stream and cleans up state
+   */
+  const cancelStreaming = useCallback(() => {
+    if (abortControllerRef.current) {
+      console.log('🛑 useChat: User cancelled streaming');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+
+      // Clean up streaming state
+      setIsStreaming(false);
+      currentMessageRef.current = null;
+      currentToolCallsRef.current = new Map();
+    }
+  }, []);
+
   return {
     conversations,
     currentConversation,
@@ -916,11 +1133,13 @@ export function useChat() {
     createConversation,
     selectConversation,
     deleteConversation,
+    renameConversation,
     sendMessage,
     editMessage,
     regenerateMessage,
     deleteMessage,
     submitClarification,
     cancelClarification,
+    cancelStreaming,
   };
 }

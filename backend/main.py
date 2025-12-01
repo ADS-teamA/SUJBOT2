@@ -40,9 +40,15 @@ from backend.middleware.rate_limit import RateLimitMiddleware
 from backend.middleware.security_headers import SecurityHeadersMiddleware
 from backend.routes.auth import router as auth_router, set_dependencies
 from backend.routes.conversations import router as conversations_router, set_postgres_adapter, get_postgres_adapter
+from backend.routes.citations import router as citations_router
+from backend.routes.documents import router as documents_router
+from backend.routes.settings import router as settings_router
 
 # Import PostgreSQL adapter for user/conversation storage
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
+
+# Import title generator service
+from backend.services.title_generator import title_generator
 
 # Configure logging
 logging.basicConfig(
@@ -247,6 +253,15 @@ app.include_router(auth_router)
 # Register conversation routes (/conversations, /conversations/{id}/messages, etc.)
 app.include_router(conversations_router)
 
+# Register citation routes (/citations/{chunk_id}, /citations/batch)
+app.include_router(citations_router)
+
+# Register document routes (/documents/{document_id}/pdf)
+app.include_router(documents_router)
+
+# Register settings routes (/api/settings/agent-variant)
+app.include_router(settings_router)
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -313,6 +328,116 @@ async def get_models(user: Dict = Depends(get_current_user)):
     )
 
 
+def _create_fallback_title(user_message: str, max_length: int = 50) -> str:
+    """
+    Create fallback title from user message when LLM generation fails.
+
+    Truncates at word boundary if possible, adds ellipsis if truncated.
+    """
+    message = user_message.strip()
+    if len(message) <= max_length:
+        return message
+
+    # Try to truncate at word boundary
+    truncated = message[:max_length].rsplit(' ', 1)[0]
+    if len(truncated) < max_length // 2:
+        # Word boundary too far back, just truncate
+        truncated = message[:max_length - 3]
+
+    return truncated + "..."
+
+
+async def _maybe_generate_title(
+    conversation_id: str,
+    user_message: str,
+    adapter: PostgreSQLStorageAdapter
+) -> Optional[str]:
+    """
+    Generate title for new conversation with DB lock (multi-worker safe).
+
+    Returns generated title if successful, fallback title if LLM fails, None if not first message.
+    Only generates if this is the first message and no other worker is generating.
+
+    Fallback behavior: If LLM title generation fails, uses truncated user message as title.
+    This ensures conversations never remain with "New Conversation" after first message.
+    """
+    title = None
+
+    try:
+        async with adapter.pool.acquire() as conn:
+            # Atomically check conditions and set lock
+            # Only proceed if: is_title_generating=false AND message_count <= 1
+            # (message_count=1 because user message was just saved)
+            result = await conn.fetchrow(
+                """
+                UPDATE auth.conversations
+                SET is_title_generating = true
+                WHERE id = $1
+                  AND is_title_generating = false
+                  AND (SELECT COUNT(*) FROM auth.messages WHERE conversation_id = $1) <= 1
+                RETURNING id
+                """,
+                conversation_id
+            )
+
+            if not result:
+                # Either already generating, or not first message
+                logger.debug(f"Skipping title generation for {conversation_id}: not first message or already generating")
+                return None
+
+        logger.debug(f"Acquired title generation lock for {conversation_id}")
+
+        # Generate title via LLM (outside the DB connection to avoid blocking)
+        title = await title_generator.generate_title(user_message)
+
+        if not title:
+            # LLM failed - use fallback
+            title = _create_fallback_title(user_message)
+            logger.info(f"LLM title generation failed for {conversation_id}, using fallback: {title}")
+
+        # Update title and release lock
+        async with adapter.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE auth.conversations
+                SET title = $1, is_title_generating = false, updated_at = NOW()
+                WHERE id = $2
+                """,
+                title, conversation_id
+            )
+        logger.info(f"Saved title for {conversation_id}: {title}")
+        return title
+
+    except asyncio.TimeoutError as e:
+        logger.warning(f"Title generation timed out for {conversation_id}: {e}")
+    except ConnectionError as e:
+        logger.warning(f"Connection error during title generation for {conversation_id}: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error in title generation for {conversation_id}: {e}", exc_info=True)
+
+    # On any error, try to save fallback title and release lock
+    try:
+        fallback_title = _create_fallback_title(user_message)
+        async with adapter.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE auth.conversations
+                SET title = $1, is_title_generating = false, updated_at = NOW()
+                WHERE id = $2
+                """,
+                fallback_title, conversation_id
+            )
+        logger.info(f"Saved fallback title after error for {conversation_id}: {fallback_title}")
+        return fallback_title
+    except Exception as lock_error:
+        # Log lock release failure - could leave orphaned lock
+        logger.error(
+            f"Failed to save fallback title and release lock for {conversation_id}: {lock_error}. "
+            "This conversation may have orphaned is_title_generating=true flag."
+        )
+    return title  # Return whatever we generated (may be None)
+
+
 @app.post("/chat/stream")
 async def chat_stream(
     request: ChatRequest,
@@ -323,6 +448,7 @@ async def chat_stream(
     Stream chat response using Server-Sent Events (SSE).
 
     Events:
+    - tool_health: Tool availability status (sent FIRST, before any processing)
     - text_delta: Streaming text chunks from agent response
     - tool_call: Tool execution started (streamed immediately when detected)
     - tool_calls_summary: Summary of all tool calls with results (sent after completion)
@@ -364,6 +490,7 @@ async def chat_stream(
 
     # Save user message to database immediately (before streaming)
     # Skip if regenerating (message already exists in database)
+    generated_title = None
     if request.conversation_id and not request.skip_save_user_message:
         try:
             await adapter.append_message(
@@ -373,6 +500,14 @@ async def chat_stream(
                 metadata=None
             )
             logger.debug(f"Saved user message to conversation {request.conversation_id}")
+
+            # Generate title for new conversations (first message)
+            # This is done before streaming starts so title_update is the first event
+            generated_title = await _maybe_generate_title(
+                conversation_id=request.conversation_id,
+                user_message=request.message,
+                adapter=adapter
+            )
         except Exception as e:
             logger.error(f"Failed to save user message: {e}", exc_info=True)
             # Don't block streaming if database save fails - continue gracefully
@@ -380,14 +515,31 @@ async def chat_stream(
 
     async def event_generator():
         """Generate SSE events from agent stream and collect response for database storage."""
+        # Emit title_update as first event if title was generated
+        if generated_title:
+            yield {
+                "event": "title_update",
+                "data": json.dumps({"title": generated_title}, ensure_ascii=False)
+            }
+
         # Collect assistant response for database storage
         collected_response = ""
         collected_metadata = {}
 
         try:
+            # Convert messages to list of dicts for agent
+            message_history = None
+            if request.messages:
+                message_history = [
+                    {"role": msg.role, "content": msg.content}
+                    for msg in request.messages
+                ]
+
             async for event in agent_adapter.stream_response(
                 query=request.message,
-                conversation_id=request.conversation_id
+                conversation_id=request.conversation_id,
+                user_id=user["id"],
+                messages=message_history
             ):
                 # Format as SSE event
                 event_type = event["event"]
@@ -445,8 +597,33 @@ async def chat_stream(
                     # Don't crash stream if database save fails - message was already sent to client
 
         except asyncio.CancelledError:
-            # Client disconnected - this is normal, don't log as error
-            logger.info("Stream cancelled by client")
+            # Client disconnected (page refresh, navigation, tab close)
+            # Save partial response to database so user doesn't lose progress
+            if request.conversation_id and collected_response:
+                try:
+                    # Mark response as interrupted so user knows it's incomplete
+                    partial_response = collected_response + "\n\n---\n*[Response interrupted - page was refreshed]*"
+                    await adapter.append_message(
+                        conversation_id=request.conversation_id,
+                        role="assistant",
+                        content=partial_response,
+                        metadata={
+                            **(collected_metadata if collected_metadata else {}),
+                            "interrupted": True,
+                            "interrupt_reason": "client_disconnect"
+                        }
+                    )
+                    logger.info(
+                        f"Saved partial response ({len(collected_response)} chars) "
+                        f"for conversation {request.conversation_id} after client disconnect"
+                    )
+                except Exception as save_error:
+                    logger.warning(
+                        f"Failed to save partial response on client disconnect: {save_error}"
+                    )
+            else:
+                logger.info("Stream cancelled by client (no partial response to save)")
+
             # Re-raise to properly close ASGI response stream
             # CRITICAL: ASGI spec requires CancelledError to propagate for clean shutdown
             raise

@@ -5,19 +5,15 @@ Implements entity extraction, relationship extraction, and graph construction
 for creating knowledge graphs from legal documents (GRI standards, contracts, regulations).
 
 Architecture:
-- Entity Extraction: LLM-based extraction of legal entities (Standards, Organizations, Dates, etc.)
-- Relationship Extraction: LLM-based extraction of semantic relationships
-- Graph Construction: Neo4j or SimpleGraphStore backend
+- Graphiti: Temporal KG extraction with GPT-4o-mini (primary)
+- Graph Construction: Neo4j backend with Graphiti indices
 - Integration: Seamless integration with PHASE 1-4 RAG pipeline
 
 Usage:
-    from src.graph import KnowledgeGraphPipeline, KnowledgeGraphConfig
+    from src.graph import GraphitiExtractor, GraphitiExtractionResult
 
-    config = KnowledgeGraphConfig()
-    kg_pipeline = KnowledgeGraphPipeline(config)
-
-    # Build graph from phase3 chunks
-    graph = kg_pipeline.build_from_chunks(chunks)
+    extractor = GraphitiExtractor()
+    result = await extractor.extract_from_phase3(phase3_path)
 """
 
 from .models import Entity, EntityType, Relationship, RelationshipType, KnowledgeGraph
@@ -29,13 +25,20 @@ from .config import (
     GraphBackend,
     Neo4jConfig,
 )
-from .entity_extractor import EntityExtractor
-from .relationship_extractor import RelationshipExtractor
 from .graph_builder import GraphBuilder, Neo4jGraphBuilder, SimpleGraphBuilder
-from .kg_pipeline import KnowledgeGraphPipeline
 from .unified_kg_manager import UnifiedKnowledgeGraphManager
 from .cross_doc_detector import CrossDocumentRelationshipDetector
 from .deduplicator import EntityDeduplicator
+
+# Graphiti-based extraction (primary)
+from .graphiti_extractor import (
+    GraphitiExtractor,
+    GraphitiExtractionResult,
+    ExtractedEntity,
+    ExtractedRelationship,
+    ChunkExtractionResult,
+)
+from .graphiti_types import GraphitiEntityType, get_all_entity_types
 
 # Neo4j integration
 from .exceptions import (
@@ -62,15 +65,18 @@ __all__ = [
     "GraphStorageConfig",
     "GraphBackend",
     "Neo4jConfig",
-    # Extractors
-    "EntityExtractor",
-    "RelationshipExtractor",
+    # Graphiti Extractor (primary)
+    "GraphitiExtractor",
+    "GraphitiExtractionResult",
+    "ExtractedEntity",
+    "ExtractedRelationship",
+    "ChunkExtractionResult",
+    "GraphitiEntityType",
+    "get_all_entity_types",
     # Builders
     "GraphBuilder",
     "Neo4jGraphBuilder",
     "SimpleGraphBuilder",
-    # Pipeline
-    "KnowledgeGraphPipeline",
     # Unified KG (Phase 5: Cross-Document)
     "UnifiedKnowledgeGraphManager",
     "CrossDocumentRelationshipDetector",

@@ -13,6 +13,13 @@ export interface AgentProgress {
   }>;
 }
 
+export interface ToolHealth {
+  healthy: boolean;
+  summary: string;
+  unavailableTools?: Record<string, string>;  // tool_name -> reason
+  degradedTools?: string[];
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -21,6 +28,7 @@ export interface Message {
   toolCalls?: ToolCall[];
   cost?: CostInfo;
   agentProgress?: AgentProgress;
+  toolHealth?: ToolHealth;  // Tool availability status at query time
 }
 
 export interface ToolCall {
@@ -60,6 +68,7 @@ export interface CostInfo {
 export interface Conversation {
   id: string;
   title: string;
+  messageCount: number;  // Real message count from database (not messages.length which is lazy-loaded)
   messages: Message[];
   createdAt: string;  // ISO 8601 format for JSON serialization safety
   updatedAt: string;  // ISO 8601 format for JSON serialization safety
@@ -74,7 +83,7 @@ export interface Model {
 }
 
 export interface SSEEvent {
-  event: 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress';
+  event: 'tool_health' | 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress' | 'title_update';
   data: any;
 }
 
@@ -107,4 +116,43 @@ export interface HealthStatus {
     component: string;
     error: string;
   }>;
+}
+
+// ============================================================================
+// Citation System Types
+// ============================================================================
+
+export interface CitationMetadata {
+  chunkId: string;
+  documentId: string;
+  documentName: string;
+  sectionTitle: string | null;
+  sectionPath: string | null;
+  hierarchicalPath: string | null;
+  pageNumber: number | null;
+  pdfAvailable: boolean;
+  content: string | null;  // Chunk text content for PDF highlighting
+}
+
+export interface CitationContextValue {
+  /** Cache of fetched citation metadata */
+  citationCache: Map<string, CitationMetadata>;
+  /** Currently active PDF viewer state */
+  activePdf: {
+    documentId: string;
+    page: number;
+    chunkId?: string;
+  } | null;
+  /** Open PDF viewer modal */
+  openPdf: (documentId: string, page?: number, chunkId?: string) => void;
+  /** Close PDF viewer modal */
+  closePdf: () => void;
+  /** Fetch and cache metadata for chunk IDs */
+  fetchCitationMetadata: (chunkIds: string[]) => Promise<void>;
+  /** Set of chunk IDs currently being loaded (per-citation loading state) */
+  loadingIds: Set<string>;
+  /** Error message if fetch failed */
+  error: string | null;
+  /** Clear error state */
+  clearError: () => void;
 }

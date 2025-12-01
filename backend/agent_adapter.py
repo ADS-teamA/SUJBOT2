@@ -9,15 +9,25 @@ This adapter:
 """
 
 import asyncio
+import copy
 import json
 import logging
+import os
 import re
 from pathlib import Path
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any, List, Optional
 
 from src.multi_agent.runner import MultiAgentRunner
 from src.agent.config import AgentConfig
 from src.cost_tracker import get_global_tracker, reset_global_tracker
+from backend.constants import (
+    VARIANT_CONFIG,
+    DEFAULT_VARIANT,
+    OPUS_TIER_AGENTS,
+    get_agent_model,
+    get_variant_model,
+    is_valid_variant,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +112,7 @@ class AgentAdapter:
                 "anthropic_api_key": self.config.anthropic_api_key,
                 "openai_api_key": self.config.openai_api_key,
                 "google_api_key": self.config.google_api_key,
+                "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
             },
             "vector_store_path": str(self.config.vector_store_path),
             "models": full_config.get("models", {}),  # Add models section for embedding config
@@ -130,6 +141,50 @@ class AgentAdapter:
             f"AgentAdapter initialized with multi-agent system: "
             f"model={self.current_model}, vector_store={self.config.vector_store_path}"
         )
+
+    def _apply_variant_overrides(self, variant: str, multi_agent_config: dict) -> dict:
+        """
+        Apply variant-specific per-agent model overrides to multi-agent configuration.
+
+        In Premium mode, OPUS_TIER_AGENTS (orchestrator, compliance, extractor,
+        requirement_extractor, gap_synthesizer) use Opus 4.5, while other agents
+        use Sonnet 4.5. In Cheap/Local modes, all agents use the same model.
+
+        Args:
+            variant: Agent variant ('premium', 'cheap', or 'local')
+            multi_agent_config: Original multi_agent config from config.json
+
+        Returns:
+            Modified config with per-agent variant models applied
+        """
+        if not is_valid_variant(variant):
+            logger.warning(f"Unknown variant '{variant}', using config defaults")
+            return multi_agent_config
+
+        # Deep copy to avoid modifying original
+        config = copy.deepcopy(multi_agent_config)
+
+        # Override orchestrator model (using per-agent lookup)
+        if "orchestrator" in config:
+            model = get_agent_model(variant, "orchestrator")
+            config["orchestrator"]["model"] = model
+            logger.debug(f"Orchestrator model: {model}")
+
+        # Override each agent's model individually
+        if "agents" in config:
+            for agent_name in config["agents"]:
+                model = get_agent_model(variant, agent_name)
+                config["agents"][agent_name]["model"] = model
+                logger.debug(f"Agent {agent_name} model: {model}")
+
+        # Log summary
+        variant_config = VARIANT_CONFIG[variant]
+        logger.info(
+            f"Applied variant '{variant}' ({variant_config['display_name']}): "
+            f"opus_tier={variant_config['opus_model']}, "
+            f"standard_tier={variant_config['default_model']}"
+        )
+        return config
 
     async def initialize(self) -> bool:
         """
@@ -163,10 +218,23 @@ class AgentAdapter:
             })
             return False
 
+    def get_tool_health(self) -> Dict[str, Any]:
+        """
+        Get health status of all RAG tools.
+
+        Called before each query to verify tool availability.
+
+        Returns:
+            Dict with tool health status
+        """
+        return self.runner.get_tool_health()
+
     async def stream_response(
         self,
         query: str,
-        conversation_id: Optional[str] = None
+        conversation_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        messages: Optional[List[Dict[str, str]]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream agent response as SSE-compatible events.
@@ -193,6 +261,7 @@ class AgentAdapter:
         Args:
             query: User query
             conversation_id: Optional conversation ID for context (not used in multi-agent)
+            user_id: User ID for loading agent variant preference
 
         Yields:
             Dict containing event type and data
@@ -201,7 +270,107 @@ class AgentAdapter:
         reset_global_tracker()
         tracker = get_global_tracker()
 
+        # Load user's variant and create runner with variant-specific config
+        variant = "premium"  # default
+        runner_to_use = self.runner  # default to existing runner
+
+        if user_id:
+            try:
+                from backend.routes.auth import get_auth_queries
+                queries = get_auth_queries()
+                variant = await queries.get_agent_variant(user_id)
+                logger.info(f"User {user_id} variant: {variant}")
+
+                # Create runner with variant-specific models for ALL variants
+                # (including premium - OPUS_TIER_AGENTS need Opus model override)
+                # Load config and apply variant overrides
+                project_root = Path(__file__).parent.parent
+                config_path = project_root / "config.json"
+
+                with open(config_path) as f:
+                    full_config = json.load(f)
+                    multi_agent_config = full_config.get("multi_agent", {})
+
+                # Apply variant overrides
+                multi_agent_config = self._apply_variant_overrides(variant, multi_agent_config)
+
+                # Build runner config with variant models
+                runner_config = {
+                    "api_keys": {
+                        "anthropic_api_key": self.config.anthropic_api_key,
+                        "openai_api_key": self.config.openai_api_key,
+                        "google_api_key": self.config.google_api_key,
+                        "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
+                    },
+                    "vector_store_path": str(self.config.vector_store_path),
+                    "models": full_config.get("models", {}),
+                    "storage": full_config.get("storage", {}),
+                    "agent_tools": full_config.get("agent_tools", {}),
+                    "knowledge_graph": full_config.get("knowledge_graph", {}),
+                    "neo4j": full_config.get("neo4j", {}),
+                    "multi_agent": multi_agent_config,
+                }
+
+                # Create fresh runner with variant config
+                new_runner = MultiAgentRunner(runner_config)
+                await new_runner.initialize()
+                runner_to_use = new_runner  # Only assign after successful init
+                logger.info(f"Created fresh runner with variant '{variant}'")
+
+            except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
+                # Config file issues - log as warning and fall back
+                logger.warning(f"Config error loading variant for user {user_id}: {e}")
+                runner_to_use = self.runner
+                # Will emit warning below
+            except Exception as e:
+                # Unexpected error - log as error for investigation
+                logger.error(f"Unexpected error loading variant for user {user_id}: {e}", exc_info=True)
+                runner_to_use = self.runner
+                # Will emit warning below
+
+        # Track if we fell back to default for warning emission
+        variant_fallback_warning = None
+        if user_id and variant != DEFAULT_VARIANT and runner_to_use == self.runner:
+            variant_fallback_warning = (
+                f"Could not apply '{variant}' variant preference. "
+                f"Using default '{DEFAULT_VARIANT}' variant instead."
+            )
+
         try:
+            # Run tool health check before each query
+            tool_health = runner_to_use.get_tool_health()
+
+            # Always emit tool health status as first event
+            yield {
+                "event": "tool_health",
+                "data": {
+                    "healthy": tool_health["healthy"],
+                    "available_count": tool_health["total_available"],
+                    "unavailable_count": tool_health["total_unavailable"],
+                    "unavailable_tools": tool_health["unavailable_tools"],
+                    "degraded_tools": tool_health["degraded_tools"],
+                    "summary": tool_health["summary"]
+                }
+            }
+            await asyncio.sleep(0)
+
+            # Log tool health for debugging
+            if not tool_health["healthy"]:
+                logger.warning(f"Tool health check: {tool_health['summary']}")
+            else:
+                logger.info(f"Tool health check: {tool_health['summary']}")
+
+            # Emit warning if variant fallback occurred
+            if variant_fallback_warning:
+                yield {
+                    "event": "warning",
+                    "data": {
+                        "message": variant_fallback_warning,
+                        "type": "variant_fallback"
+                    }
+                }
+                await asyncio.sleep(0)
+
             # Emit start event
             yield {
                 "event": "progress",
@@ -214,10 +383,16 @@ class AgentAdapter:
 
             # Execute multi-agent workflow with progress streaming
             logger.info("Starting multi-agent query execution with streaming...")
+            if messages:
+                logger.info(f"Including {len(messages)} messages of conversation history")
 
-            # Stream progress events from runner
+            # Stream progress events from runner (use variant-specific runner if applicable)
             result = None
-            async for event in self.runner.run_query(query, stream_progress=True):
+            async for event in runner_to_use.run_query(
+                query,
+                stream_progress=True,
+                conversation_history=messages or []
+            ):
                 if event.get("type") == "agent_start":
                     # Agent start event (new format from runner.py)
                     agent_name = event.get("agent", "unknown")
@@ -632,7 +807,6 @@ class AgentAdapter:
                     await asyncio.sleep(0.05)
 
             # Emit cost summary event with per-agent breakdown
-            tracker = get_global_tracker()
             total_cost_usd = tracker.get_total_cost()
             agent_breakdown = tracker.get_agent_breakdown()
 
@@ -675,9 +849,9 @@ class AgentAdapter:
         except Exception as e:
             # Capture execution context for debugging
             context = {
-                "query": query[:200] if query else "N/A",
-                "conversation_id": conversation_id,
-                "error_phase": "simple_mode_execution"
+                "thread_id": thread_id,
+                "user_response": user_response[:200] if user_response else "N/A",
+                "error_phase": "clarification_resume"
             }
 
             logger.error(

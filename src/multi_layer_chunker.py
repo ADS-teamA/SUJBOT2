@@ -25,6 +25,13 @@ from dataclasses import dataclass
 # Token-aware chunking (no Docling dependency)
 import tiktoken
 
+# HuggingFace tokenizer support for Qwen and other models
+try:
+    from transformers import AutoTokenizer
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
+
 # Import contextual retrieval
 try:
     from .contextual_retrieval import ContextualRetrieval
@@ -65,6 +72,24 @@ class ChunkMetadata:
     cluster_label: Optional[str] = None  # Human-readable cluster topic
     cluster_confidence: Optional[float] = None  # Distance to cluster centroid (0-1, lower is better)
 
+    # Document labeling (PHASE 3.5 extension)
+    # Categories (propagated from document)
+    category: Optional[str] = None  # Primary document category
+    subcategory: Optional[str] = None  # Subcategory
+    secondary_categories: Optional[List[str]] = None  # Secondary categories
+    category_confidence: Optional[float] = None  # Classification confidence
+
+    # Keywords (propagated from section)
+    keywords: Optional[List[str]] = None  # Extracted keywords (5-10)
+    key_phrases: Optional[List[str]] = None  # Multi-word key phrases (3-5)
+
+    # Synthetic questions (per-chunk, HyDE boost)
+    questions: Optional[List[str]] = None  # Questions this chunk answers (3-5)
+    hyde_text: Optional[str] = None  # Combined questions for embedding
+
+    # Labeling metadata
+    labels_source: Optional[str] = None  # "generated" | "propagated"
+
 
 @dataclass
 class Chunk:
@@ -82,10 +107,54 @@ class Chunk:
     metadata: ChunkMetadata
 
     def to_dict(self) -> Dict:
+        # Build breadcrumb for embedding text
+        # Format: [Document Title > Section Path > Section Title]
+        breadcrumb_parts = []
+
+        # 1. Add document title/id first (ALWAYS include document context)
+        if self.metadata.title:
+            breadcrumb_parts.append(self.metadata.title)
+        elif self.metadata.document_id:
+            breadcrumb_parts.append(self.metadata.document_id)
+
+        # 2. Add section path (hierarchical structure)
+        if self.metadata.section_path:
+            breadcrumb_parts.append(self.metadata.section_path)
+
+        # 3. Add section title only if different from path (avoid duplication)
+        if (
+            self.metadata.section_title
+            and self.metadata.section_title != self.metadata.section_path
+            and self.metadata.section_title not in (self.metadata.section_path or "")
+        ):
+            breadcrumb_parts.append(self.metadata.section_title)
+
+        # Construct embedding text: [breadcrumb]\n\ncontext\n\nraw_content
+        # - breadcrumb: document + hierarchical path for structure awareness
+        # - context: SAC summary for semantic context (first part before \n\n)
+        # - raw_content: actual text for retrieval
+        if breadcrumb_parts:
+            breadcrumb = " > ".join(breadcrumb_parts)
+            # Check if content contains context prefix (SAC augmentation)
+            if self.content != self.raw_content and "\n\n" in self.content:
+                # Content has SAC prefix - extract it (first part, not last!)
+                context_part = self.content.split("\n\n", 1)[0]
+                embedding_text = f"[{breadcrumb}]\n\n{context_part}\n\n{self.raw_content}"
+            else:
+                # No SAC prefix - use raw_content directly
+                embedding_text = f"[{breadcrumb}]\n\n{self.raw_content}"
+        else:
+            if self.content != self.raw_content and "\n\n" in self.content:
+                context_part = self.content.split("\n\n", 1)[0]
+                embedding_text = f"{context_part}\n\n{self.raw_content}"
+            else:
+                embedding_text = self.raw_content
+
         return {
             "chunk_id": self.chunk_id,
-            "content": self.content,
+            "context": self.content,  # SAC-augmented content
             "raw_content": self.raw_content,
+            "embedding_text": embedding_text,  # [breadcrumb]\n\ncontext\n\nraw_content
             "metadata": {
                 "chunk_id": self.metadata.chunk_id,
                 "layer": self.metadata.layer,
@@ -133,6 +202,10 @@ class MultiLayerChunker:
         # Extract params for convenience
         self.enable_contextual = self.config.enable_contextual
 
+        # Initialize tokenizer based on model type
+        # Qwen, BGE, and other HuggingFace models need transformers tokenizer
+        self._init_tokenizer()
+
         # Initialize contextual retrieval if enabled
         self.context_generator = None
         if self.enable_contextual:
@@ -151,8 +224,72 @@ class MultiLayerChunker:
         logger.info(
             f"MultiLayerChunker initialized: "
             f"max_tokens={self.config.max_tokens}, tokenizer={self.config.tokenizer_model}, "
-            f"mode={chunking_mode}"
+            f"tokenizer_type={self.tokenizer_type}, mode={chunking_mode}"
         )
+
+    def _init_tokenizer(self) -> None:
+        """
+        Initialize tokenizer based on model type.
+
+        HuggingFace models (Qwen, BGE, etc.) use transformers AutoTokenizer.
+        OpenAI models use tiktoken.
+        """
+        model_name = self.config.tokenizer_model.lower()
+
+        # Check if it's a HuggingFace model (contains / or known prefixes)
+        is_huggingface_model = (
+            "/" in self.config.tokenizer_model  # e.g., "Qwen/Qwen3-Embedding-8B"
+            or model_name.startswith(("qwen", "bge", "e5", "sentence-transformers"))
+        )
+
+        if is_huggingface_model:
+            if not HAS_TRANSFORMERS:
+                raise ImportError(
+                    f"transformers package required for HuggingFace tokenizer '{self.config.tokenizer_model}'. "
+                    "Install with: pip install transformers"
+                )
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self.config.tokenizer_model,
+                    trust_remote_code=True  # Required for Qwen models
+                )
+                self.tokenizer_type = "huggingface"
+                logger.info(f"Using HuggingFace tokenizer for: {self.config.tokenizer_model}")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load HuggingFace tokenizer '{self.config.tokenizer_model}': {e}. "
+                    "Falling back to tiktoken cl100k_base."
+                )
+                self.tokenizer = tiktoken.get_encoding("cl100k_base")
+                self.tokenizer_type = "tiktoken"
+        else:
+            # OpenAI models use tiktoken
+            try:
+                self.tokenizer = tiktoken.encoding_for_model(self.config.tokenizer_model)
+                self.tokenizer_type = "tiktoken"
+                logger.info(f"Using tiktoken tokenizer for: {self.config.tokenizer_model}")
+            except KeyError:
+                # Fallback for unknown models
+                logger.warning(
+                    f"Unknown model '{self.config.tokenizer_model}' for tiktoken. "
+                    "Using cl100k_base encoding."
+                )
+                self.tokenizer = tiktoken.get_encoding("cl100k_base")
+                self.tokenizer_type = "tiktoken"
+
+    def _encode_tokens(self, text: str) -> List[int]:
+        """Encode text to tokens using the initialized tokenizer."""
+        if self.tokenizer_type == "huggingface":
+            return self.tokenizer.encode(text, add_special_tokens=False)
+        else:
+            return self.tokenizer.encode(text)
+
+    def _decode_tokens(self, tokens: List[int]) -> str:
+        """Decode tokens back to text using the initialized tokenizer."""
+        if self.tokenizer_type == "huggingface":
+            return self.tokenizer.decode(tokens, skip_special_tokens=True)
+        else:
+            return self.tokenizer.decode(tokens)
 
     def chunk_document(self, extracted_doc) -> Dict[str, List[Chunk]]:
         """
@@ -295,11 +432,21 @@ class MultiLayerChunker:
         for section in extracted_doc.sections:
             # Use section summary if available, else section content
             content = section.summary or section.content
+            raw_content = section.content
+
+            # Skip completely empty sections (no content AND no summary)
+            if not raw_content.strip() and not content.strip():
+                continue
+
+            # If section has no direct content but has summary, use fallback text
+            # This happens for structural headers that only contain child sections
+            if not raw_content.strip() and content.strip():
+                raw_content = f"[Sekce: {section.title or section.path}]"
 
             chunk = Chunk(
                 chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
                 content=content,
-                raw_content=section.content,  # Always use raw content
+                raw_content=raw_content,
                 metadata=ChunkMetadata(
                     chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
                     layer=2,
@@ -320,10 +467,48 @@ class MultiLayerChunker:
 
         return chunks
 
+    def _split_sentences(self, text: str) -> List[str]:
+        """
+        Split text into sentences using NLTK.
+
+        Supports Czech and English with automatic fallback.
+
+        Args:
+            text: Text to split into sentences
+
+        Returns:
+            List of sentences
+        """
+        try:
+            import nltk
+            # Ensure punkt tokenizer is available
+            try:
+                nltk.data.find('tokenizers/punkt_tab')
+            except LookupError:
+                nltk.download('punkt_tab', quiet=True)
+
+            # Try Czech first (primary language for legal docs)
+            try:
+                return nltk.sent_tokenize(text, language='czech')
+            except LookupError:
+                # Fallback to English if Czech not available
+                return nltk.sent_tokenize(text, language='english')
+        except ImportError:
+            # Fallback to simple regex-based splitting if NLTK not available
+            import re
+            # Split on sentence-ending punctuation followed by space and capital letter
+            sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ])', text)
+            return [s.strip() for s in sentences if s.strip()]
+
     def _token_aware_split(self, text: str, max_tokens: int = 512) -> List[str]:
         """
-        Split text into token-aware chunks using tiktoken directly.
+        Split text into token-aware chunks with sentence-aware boundaries.
 
+        IMPROVED: Splits on sentence boundaries first, then groups sentences
+        into chunks respecting max_tokens. This prevents splitting sentences
+        in the middle, improving semantic coherence.
+
+        Supports both tiktoken (OpenAI) and HuggingFace tokenizers.
         Uses max_tokens=512 (≈ 500 chars for CS/EN text).
         Preserves LegalBench-RAG research constraint.
 
@@ -337,18 +522,52 @@ class MultiLayerChunker:
         if not text.strip():
             return []
 
-        # Get tiktoken encoding
-        encoding = tiktoken.encoding_for_model(self.config.tokenizer_model)
+        # Step 1: Split into sentences (respects language structure)
+        sentences = self._split_sentences(text)
 
-        # Encode text to tokens
-        tokens = encoding.encode(text)
+        if not sentences:
+            return []
 
-        # Split into chunks of max_tokens
+        # Step 2: Group sentences into chunks respecting max_tokens
         chunks = []
-        for i in range(0, len(tokens), max_tokens):
-            chunk_tokens = tokens[i:i + max_tokens]
-            chunk_text = encoding.decode(chunk_tokens)
-            chunks.append(chunk_text)
+        current_chunk_sentences = []
+        current_tokens = 0
+
+        for sentence in sentences:
+            sentence_tokens = len(self._encode_tokens(sentence))
+
+            # Handle case where single sentence exceeds max_tokens
+            if sentence_tokens > max_tokens:
+                # Flush current chunk first
+                if current_chunk_sentences:
+                    chunks.append(" ".join(current_chunk_sentences))
+                    current_chunk_sentences = []
+                    current_tokens = 0
+
+                # Split long sentence by tokens (fallback to old method)
+                sentence_tokens_list = self._encode_tokens(sentence)
+                for i in range(0, len(sentence_tokens_list), max_tokens):
+                    chunk_tokens = sentence_tokens_list[i:i + max_tokens]
+                    chunk_text = self._decode_tokens(chunk_tokens)
+                    chunks.append(chunk_text)
+                continue
+
+            # Check if adding this sentence would exceed max_tokens
+            if current_tokens + sentence_tokens > max_tokens:
+                # Flush current chunk
+                if current_chunk_sentences:
+                    chunks.append(" ".join(current_chunk_sentences))
+                # Start new chunk with current sentence
+                current_chunk_sentences = [sentence]
+                current_tokens = sentence_tokens
+            else:
+                # Add sentence to current chunk
+                current_chunk_sentences.append(sentence)
+                current_tokens += sentence_tokens
+
+        # Don't forget the last chunk
+        if current_chunk_sentences:
+            chunks.append(" ".join(current_chunk_sentences))
 
         return chunks
 

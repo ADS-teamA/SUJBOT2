@@ -451,8 +451,41 @@ class GraphEnhancedRetriever:
 
         logger.info(f"Multi-hop expansion: {len(related_chunk_ids)} related chunks")
 
-        # TODO: Retrieve and score these chunks
-        # For now, just log for implementation completeness
+        # Boost existing chunks that appear in multi-hop related set
+        if related_chunk_ids:
+            # Get current result chunk_ids to track which chunks get boosted
+            existing_ids = {r.get("chunk_id") for r in results.get("layer3", [])}
+            boosted_count = 0
+
+            # Apply multi-hop boost to chunks that appear in related entities
+            for chunk in results.get("layer3", []):
+                chunk_id = chunk.get("chunk_id")
+                if chunk_id in related_chunk_ids:
+                    # Boost this chunk as multi-hop related
+                    multi_hop_boost = self.config.graph_weight * 0.5
+                    chunk["multi_hop_boost"] = multi_hop_boost
+                    base_score = chunk.get("boosted_score", chunk.get("rrf_score", chunk.get("score", 0)))
+                    chunk["boosted_score"] = base_score + multi_hop_boost
+                    boosted_count += 1
+                    logger.debug(f"Multi-hop boost applied to {chunk_id}: +{multi_hop_boost:.3f}")
+
+            # Re-sort layer3 by boosted score
+            if boosted_count > 0:
+                results["layer3"] = sorted(
+                    results["layer3"],
+                    key=lambda x: x.get("boosted_score", x.get("score", 0)),
+                    reverse=True
+                )
+
+            # Log new chunks found via multi-hop that aren't in current results
+            new_chunk_ids = related_chunk_ids - existing_ids
+            if new_chunk_ids:
+                logger.info(
+                    f"Multi-hop: {boosted_count} chunks boosted, "
+                    f"{len(new_chunk_ids)} additional related chunks identified (not in top-k)"
+                )
+            else:
+                logger.info(f"Multi-hop: {boosted_count} chunks boosted")
 
         return results
 

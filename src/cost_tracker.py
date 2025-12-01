@@ -61,10 +61,12 @@ PRICING = {
         "sonnet": {"input": 3.00, "output": 15.00},
         "claude-sonnet-4": {"input": 3.00, "output": 15.00},
         "claude-sonnet-3-5": {"input": 3.00, "output": 15.00},
-        # Opus models
+        # Opus models (Opus 4.5 = $5/$25, older Opus 4/4.1 = $15/$75)
+        "claude-opus-4-5-20251101": {"input": 5.00, "output": 25.00},
+        "claude-opus-4-5": {"input": 5.00, "output": 25.00},
         "claude-opus-4": {"input": 15.00, "output": 75.00},
         "claude-opus-4-1": {"input": 15.00, "output": 75.00},
-        "opus": {"input": 15.00, "output": 75.00},
+        "opus": {"input": 5.00, "output": 25.00},  # Default to latest Opus 4.5
     },
     # OpenAI models (per 1M tokens)
     "openai": {
@@ -110,6 +112,26 @@ PRICING = {
         "gemini": {"input": 0.30, "output": 2.50},
         "gemini-flash": {"input": 0.30, "output": 2.50},
         "gemini-pro": {"input": 1.25, "output": 10.00},
+    },
+    # DeepInfra models (per 1M tokens)
+    # Source: https://deepinfra.com/pricing
+    "deepinfra": {
+        # LLM models
+        "Qwen/Qwen2.5-72B-Instruct": {"input": 0.35, "output": 0.40},
+        "Qwen/Qwen2.5-7B-Instruct": {"input": 0.06, "output": 0.06},
+        "qwen-72b": {"input": 0.35, "output": 0.40},
+        "qwen-7b": {"input": 0.06, "output": 0.06},
+        # Llama models
+        "meta-llama/Meta-Llama-3.1-70B-Instruct": {"input": 0.35, "output": 0.40},
+        "meta-llama/Meta-Llama-3.1-8B-Instruct": {"input": 0.06, "output": 0.06},
+        "llama-70b": {"input": 0.35, "output": 0.40},
+        # Embedding models
+        "Qwen/Qwen3-Embedding-8B": {"input": 0.03, "output": 0.0},
+        "qwen3-embedding-8b": {"input": 0.03, "output": 0.0},
+        "BAAI/bge-m3": {"input": 0.01, "output": 0.0},
+        "bge-m3": {"input": 0.01, "output": 0.0},
+        "BAAI/bge-large-en-v1.5": {"input": 0.01, "output": 0.0},
+        "intfloat/e5-large-v2": {"input": 0.01, "output": 0.0},
     },
     # Local models (free)
     "huggingface": {

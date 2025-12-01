@@ -15,7 +15,8 @@ Replaces the old single-agent CLI (src/agent/cli.py).
 import logging
 import asyncio
 import json
-from typing import Optional, Dict, Any, AsyncGenerator
+import os
+from typing import Optional, Dict, Any, AsyncGenerator, List
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -123,9 +124,14 @@ class MultiAgentRunner:
                 logger.info("HITL clarification system disabled")
 
             # 7. Initialize workflow builder (with HITL components if enabled)
+            # IMPORTANT: Use async checkpointer for astream() compatibility
+            async_checkpointer = None
+            if self.checkpointer:
+                async_checkpointer = await self.checkpointer.get_async_saver()
+
             self.workflow_builder = WorkflowBuilder(
                 agent_registry=self.agent_registry,
-                checkpointer=self.checkpointer.get_saver() if self.checkpointer else None,
+                checkpointer=async_checkpointer,
                 hitl_config=self.hitl_config,
                 quality_detector=self.quality_detector,
                 clarification_generator=self.clarification_generator,
@@ -146,7 +152,7 @@ class MultiAgentRunner:
 
             error_msg = (
                 f"[{error_id}] Failed to initialize multi-agent system: {type(e).__name__}: {e}. "
-                f"Check: (1) API keys are valid in config.json, (2) PostgreSQL is running (if checkpointing enabled), "
+                f"Check: (1) API keys are set in .env file (ANTHROPIC_API_KEY or OPENAI_API_KEY), (2) PostgreSQL is running (if checkpointing enabled), "
                 f"(3) all agent configs are present, (4) dependencies are installed."
             )
 
@@ -210,11 +216,10 @@ class MultiAgentRunner:
 
     async def _initialize_tools(self) -> None:
         """Initialize tool registry with RAG components."""
-        from ..agent.tools.registry import get_registry
+        from ..agent.tools import get_registry
         # Tool modules are auto-imported via tools/__init__.py
         from ..storage import load_vector_store_adapter
         from ..embedding_generator import EmbeddingGenerator
-        from ..reranker import CrossEncoderReranker
         from ..agent.config import ToolConfig
         from ..graph_retrieval import GraphEnhancedRetriever, GraphRetrievalConfig
         from ..agent.providers.factory import create_provider
@@ -309,20 +314,9 @@ class MultiAgentRunner:
             embedder = EmbeddingGenerator(embedding_config)
             logger.info(f"Embedder initialized: {model_provider}/{model_name}")
 
-            # Initialize reranker (conditional on config - check agent_tools.enable_reranking)
-            agent_tools_config_temp = self.config.get("agent_tools", {})
-            enable_reranking = agent_tools_config_temp.get("enable_reranking", True)
-
-            reranker = None
-            if enable_reranking:
-                try:
-                    reranker = CrossEncoderReranker()
-                    logger.info("Reranker initialized (enable_reranking=True)")
-                except Exception as e:
-                    logger.warning(f"Reranker unavailable: {e}. Tools will use base retrieval.")
-                    reranker = None
-            else:
-                logger.info("Reranking DISABLED in config (enable_reranking=False)")
+            # Reranker removed - HyDE + Expansion Fusion pipeline doesn't use reranking
+            # See CLAUDE.md: "Cohere performs WORSE on legal docs"
+            logger.info("Reranking DISABLED (HyDE + Expansion Fusion pipeline)")
 
             # Knowledge graph (optional) - supports both Neo4j and JSON backends
             knowledge_graph = None
@@ -339,10 +333,12 @@ class MultiAgentRunner:
                         from datetime import datetime
 
                         neo4j_cfg = self.config.get("neo4j", {})
+                        # SSOT: Environment variables take precedence over config.json
+                        # (passwords should be in .env, not config.json)
                         neo4j_config = Neo4jConfig(
-                            uri=neo4j_cfg.get("uri", "bolt://localhost:7687"),
-                            username=neo4j_cfg.get("username", "neo4j"),
-                            password=neo4j_cfg.get("password", ""),
+                            uri=os.getenv("NEO4J_URI", neo4j_cfg.get("uri", "bolt://localhost:7687")),
+                            username=os.getenv("NEO4J_USERNAME", neo4j_cfg.get("username", "neo4j")),
+                            password=os.getenv("NEO4J_PASSWORD", neo4j_cfg.get("password", "")),
                             database=neo4j_cfg.get("database", "neo4j"),
                         )
 
@@ -443,38 +439,38 @@ class MultiAgentRunner:
                 lazy_load_graph=agent_tools_config.get("lazy_load_graph", True),
                 cache_embeddings=agent_tools_config.get("cache_embeddings", True),
                 hyde_num_hypotheses=agent_tools_config.get("hyde_num_hypotheses", 3),
-                query_expansion_provider=agent_tools_config.get(
-                    "query_expansion_provider", "openai"
-                ),
+                query_expansion_provider=agent_tools_config.get("query_expansion_provider", "openai"),
                 query_expansion_model=agent_tools_config.get("query_expansion_model", "gpt-4o-mini"),
             )
 
-            # Instantiate graph retriever if KG + boost enabled
+            # Initialize graph-enhanced retriever (optional)
             graph_retriever = None
-            if (
-                knowledge_graph
-                and vector_store
-                and tool_config.enable_graph_boost
-                and len(knowledge_graph.entities) > 0
-            ):
+            graph_retrieval_config = self.config.get("graph_retrieval", {})
+            if graph_retrieval_config.get("enable_graph_boost", False) and knowledge_graph:
                 try:
-                    graph_retriever_config = GraphRetrievalConfig(
-                        enable_graph_boost=True,
-                        graph_boost_weight=tool_config.graph_boost_weight,
-                        enable_multi_hop=agent_tools_config.get("enable_graph_multi_hop", False),
-                        max_hop_depth=agent_tools_config.get("graph_max_hop_depth", 2),
+                    from ..graph_retrieval import GraphEnhancedRetriever, GraphRetrievalConfig
+
+                    gr_config = GraphRetrievalConfig(
+                        enable_graph_boost=graph_retrieval_config.get("enable_graph_boost", True),
+                        graph_boost_weight=graph_retrieval_config.get("graph_boost_weight", 0.3),
+                        enable_entity_extraction=graph_retrieval_config.get("enable_entity_extraction", True),
+                        enable_multi_hop=graph_retrieval_config.get("enable_multi_hop", False),
+                        max_hop_depth=graph_retrieval_config.get("max_hop_depth", 2),
+                        fusion_mode=graph_retrieval_config.get("fusion_mode", "weighted"),
                     )
+
                     graph_retriever = GraphEnhancedRetriever(
                         vector_store=vector_store,
                         knowledge_graph=knowledge_graph,
-                        config=graph_retriever_config,
+                        config=gr_config,
                     )
                     logger.info(
-                        "GraphEnhancedRetriever initialized "
-                        f"(boost_weight={graph_retriever_config.graph_boost_weight})"
+                        f"Graph-enhanced retriever initialized: "
+                        f"multi_hop={gr_config.enable_multi_hop}, "
+                        f"boost_weight={gr_config.graph_boost_weight}"
                     )
                 except Exception as e:
-                    logger.warning(f"Graph retriever unavailable: {e}. Continuing without boost.")
+                    logger.warning(f"Failed to initialize graph-enhanced retriever: {e}")
 
             # Initialize tools in registry
             registry = get_registry()
@@ -482,12 +478,12 @@ class MultiAgentRunner:
             registry.initialize_tools(
                 vector_store=vector_store,
                 embedder=embedder,
-                reranker=reranker,
+                reranker=None,  # Reranker removed - HyDE + Expansion Fusion pipeline
                 graph_retriever=graph_retriever,
                 knowledge_graph=knowledge_graph,
                 context_assembler=context_assembler,
                 llm_provider=self.llm_provider,
-                config=tool_config,
+                config=tool_config,  # Use the full config from above, not minimal config
             )
 
             # Log results
@@ -542,13 +538,84 @@ class MultiAgentRunner:
             api_key=self.config.get("api_keys", {}).get("anthropic_api_key", ""),
         )
 
-    async def run_query(self, query: str, stream_progress: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
+    def get_tool_health(self) -> Dict[str, Any]:
+        """
+        Get health status of all registered tools.
+
+        Called before each query to verify tool availability and report
+        any issues to the user upfront.
+
+        Returns:
+            Dict with tool health information:
+            - healthy: bool - True if all critical tools are available
+            - available_tools: List[str] - Names of available tools
+            - unavailable_tools: Dict[str, str] - Tool names and reasons
+            - degraded_tools: List[str] - Tools that are available but degraded
+            - summary: str - Human-readable summary
+        """
+        try:
+            from src.agent.tools import get_registry
+
+            registry = get_registry()
+            available = list(registry._tools.keys())
+            unavailable = registry.get_unavailable_tools()
+
+            # Critical tools that must be available for core functionality
+            critical_tools = ["search", "expand_context", "get_document_info"]
+            optional_tools = ["graphiti_search", "section_search", "browse_sections"]
+
+            # Check critical tool availability
+            missing_critical = [t for t in critical_tools if t not in available]
+            missing_optional = [t for t in optional_tools if t not in available or t in unavailable]
+
+            # Build summary
+            if missing_critical:
+                summary = f"⚠️ Critical tools unavailable: {', '.join(missing_critical)}. Search may not work."
+                healthy = False
+            elif missing_optional:
+                summary = f"ℹ️ Optional tools unavailable: {', '.join(missing_optional)}. Some features limited."
+                healthy = True  # Still healthy, just degraded
+            else:
+                summary = f"✓ All {len(available)} tools healthy"
+                healthy = True
+
+            return {
+                "healthy": healthy,
+                "available_tools": available,
+                "unavailable_tools": unavailable,
+                "degraded_tools": missing_optional,
+                "critical_missing": missing_critical,
+                "summary": summary,
+                "total_available": len(available),
+                "total_unavailable": len(unavailable),
+            }
+        except Exception as e:
+            logger.error(f"Tool health check failed: {e}", exc_info=True)
+            return {
+                "healthy": False,
+                "available_tools": [],
+                "unavailable_tools": {"unknown": str(e)},
+                "degraded_tools": [],
+                "critical_missing": ["unknown"],
+                "summary": f"⚠️ Tool health check failed: {str(e)}",
+                "total_available": 0,
+                "total_unavailable": 1,
+            }
+
+    async def run_query(
+        self,
+        query: str,
+        stream_progress: bool = False,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Run query through multi-agent system.
 
         Args:
             query: User query
             stream_progress: If True, yields intermediate progress updates
+            conversation_history: Optional list of previous messages for context
+                Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
 
         Yields:
             Dict events with type 'progress', 'tool_call', or 'final'.
@@ -559,7 +626,7 @@ class MultiAgentRunner:
         # Create thread ID
         thread_id = self.state_manager.create_thread_id()
 
-        # Initialize state
+        # Initialize state with conversation history for context
         state = MultiAgentState(
             query=query,
             execution_phase=ExecutionPhase.ROUTING,
@@ -570,6 +637,7 @@ class MultiAgentRunner:
             citations=[],
             total_cost_cents=0.0,
             errors=[],
+            conversation_history=conversation_history or [],
         )
 
         try:
@@ -690,17 +758,24 @@ class MultiAgentRunner:
             logger.info("Step 3: Executing workflow with streaming...")
             state.execution_phase = ExecutionPhase.AGENT_EXECUTION
 
-            # Re-inject EventBus into state dict for workflow execution
-            # Note: MultiAgentState has field named "event_bus" (without underscore)
-            # to comply with Pydantic V2 (no leading underscores allowed)
+            # Convert state to dict for workflow
+            # NOTE: Do NOT include event_bus in state - it's not serializable and breaks checkpointing
+            # Pass event_bus through config["configurable"] instead
             state_dict = state.model_dump()
-            state_dict["event_bus"] = event_bus
+            # Ensure event_bus is NOT in state_dict (Pydantic exclude=True should handle this, but be explicit)
+            state_dict.pop("event_bus", None)
 
             # DEBUG: Verify query is in state_dict
             logger.info(f"State dict query before workflow: {state_dict.get('query', 'MISSING')}")
 
             # Run workflow with streaming to get intermediate state updates
-            config = {"configurable": {"thread_id": thread_id}}
+            # Pass event_bus through config (not state) to avoid serialization issues
+            config = {
+                "configurable": {
+                    "thread_id": thread_id,
+                    "event_bus": event_bus,  # Pass through config, not state
+                }
+            }
             final_result = None
 
             if self.langsmith and self.langsmith.is_enabled():
@@ -776,7 +851,12 @@ class MultiAgentRunner:
             # Step 4: Extract final answer
             final_answer = result.get("final_answer", "No answer generated")
 
-            logger.info("Query execution completed successfully")
+            # Log synthesis mode (lightweight vs full)
+            synthesis_mode = result.get("synthesis_mode", "full")
+            if synthesis_mode == "lightweight":
+                logger.info("Query execution completed with LIGHTWEIGHT synthesis (single-agent bypass)")
+            else:
+                logger.info("Query execution completed with full orchestrator synthesis")
 
             # Get accurate cost from CostTracker (model-specific pricing)
             from src.cost_tracker import get_global_tracker
@@ -795,6 +875,7 @@ class MultiAgentRunner:
                 "citations": result.get("citations", []),
                 "total_cost_cents": total_cost_cents,
                 "errors": result.get("errors", []),
+                "synthesis_mode": synthesis_mode,  # For metrics: "lightweight" or "full"
             }
 
             # Always yield final result (function is now always a generator)
@@ -990,7 +1071,7 @@ class MultiAgentRunner:
             }
 
     def shutdown(self) -> None:
-        """Shutdown and cleanup resources."""
+        """Shutdown and cleanup resources (sync only, use shutdown_async for full cleanup)."""
         logger.info("Shutting down multi-agent system...")
 
         if self.checkpointer:
@@ -1000,6 +1081,19 @@ class MultiAgentRunner:
             self.langsmith.disable()
 
         logger.info("Multi-agent system shut down")
+
+    async def shutdown_async(self) -> None:
+        """Async shutdown - closes both sync and async resources."""
+        logger.info("Shutting down multi-agent system (async)...")
+
+        if self.checkpointer:
+            await self.checkpointer.aclose()  # Close async pool first
+            self.checkpointer.close()  # Then sync connection
+
+        if self.langsmith:
+            self.langsmith.disable()
+
+        logger.info("Multi-agent system shut down (async)")
 
 
 async def main():

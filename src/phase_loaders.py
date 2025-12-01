@@ -235,10 +235,11 @@ class PhaseLoaders:
                 meta = chunk_data["metadata"]
 
                 # Validate chunk required fields
-                chunk_required = ["chunk_id", "content", "raw_content"]
-                chunk_missing = [f for f in chunk_required if f not in chunk_data]
-                if chunk_missing:
-                    raise KeyError(f"missing fields: {chunk_missing}")
+                # New format uses: raw_content, context, embedding_text (no 'content' field)
+                if "chunk_id" not in chunk_data:
+                    raise KeyError("missing 'chunk_id' field")
+                if "raw_content" not in chunk_data:
+                    raise KeyError("missing 'raw_content' field")
 
                 # Validate metadata required fields
                 meta_required = ["chunk_id", "layer", "document_id"]
@@ -246,9 +247,13 @@ class PhaseLoaders:
                 if meta_missing:
                     raise KeyError(f"metadata missing fields: {meta_missing}")
 
+                # New format: use embedding_text as content (text used for retrieval)
+                # embedding_text = context-enriched text for embedding/search
+                content = chunk_data.get("embedding_text") or chunk_data["raw_content"]
+
                 return Chunk(
                     chunk_id=chunk_data["chunk_id"],
-                    content=chunk_data["content"],
+                    content=content,
                     raw_content=chunk_data["raw_content"],
                     metadata=ChunkMetadata(
                         chunk_id=meta["chunk_id"],

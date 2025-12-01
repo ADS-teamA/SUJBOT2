@@ -1,11 +1,18 @@
 """
 RAG Tools
 
-11 specialized tools for retrieval and analysis.
+14 specialized tools for retrieval and analysis.
 All tools are registered automatically via @register_tool decorator.
+
+Tools include:
+- Basic retrieval (5): search, get_document_info, get_document_list, etc.
+- Advanced retrieval (5): graphiti_search, multi_doc_synthesizer, etc.
+- Section-level (2): section_search, browse_sections (Layer 2 utilization)
+- Analysis (2): get_stats, definition_aligner
 """
 
 import logging
+import importlib
 
 from ._base import BaseTool, ToolInput, ToolResult
 from ._registry import ToolRegistry, get_registry
@@ -21,25 +28,40 @@ _failed_imports = []
 def _safe_import(module_name: str):
     """Import a tool module with error handling."""
     try:
-        return __import__(f".{module_name}", globals(), locals(), ["*"], 1)
+        return importlib.import_module(f".{module_name}", package=__name__)
+    except ImportError as e:
+        # Expected: missing optional dependency - log at warning level
+        logger.warning(f"Tool module '{module_name}' unavailable (missing dependency): {e}")
+        _failed_imports.append((module_name, str(e)))
+        return None
+    except (SyntaxError, NameError, AttributeError) as e:
+        # Code bugs should be fixed, not silently ignored
+        logger.error(f"Code error in tool module '{module_name}': {e}", exc_info=True)
+        raise
     except Exception as e:
-        logger.error(f"Failed to import tool module '{module_name}': {e}", exc_info=True)
+        # Unexpected errors - log with traceback but don't crash
+        logger.error(f"Unexpected error importing '{module_name}': {e}", exc_info=True)
         _failed_imports.append((module_name, str(e)))
         return None
 
 
-# Basic retrieval tools (4)
+# Basic retrieval tools (5)
 _safe_import("get_tool_help")
 _safe_import("search")
 _safe_import("list_available_tools")
-_safe_import("get_document_info")  # Now includes document list functionality
+_safe_import("get_document_info")  # Document metadata and summaries
+_safe_import("get_document_list")  # List all documents for orchestrator routing
 
 # Advanced retrieval tools (5)
-_safe_import("graph_search")
+_safe_import("graphiti_search")  # Temporal knowledge graph search (replaces graph_search)
 _safe_import("multi_doc_synthesizer")
 _safe_import("expand_context")
 _safe_import("browse_entities")
 _safe_import("cluster_search")
+
+# Section-level tools (Layer 2 utilization) - NEW
+_safe_import("section_search")   # Section-level search with HyDE fusion
+_safe_import("browse_sections")  # Hierarchical section navigation
 
 # Analysis tools (2)
 _safe_import("get_stats")

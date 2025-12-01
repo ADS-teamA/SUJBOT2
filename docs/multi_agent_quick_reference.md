@@ -59,12 +59,15 @@ Query → Orchestrator (complexity analysis)
 
 ## Key Files & Locations
 
-| File | Purpose | Key Class |
+| File | Purpose | Key Class/Function |
 |------|---------|-----------|
 | `src/multi_agent/runner.py` | Main entry point | `MultiAgentRunner` |
 | `src/multi_agent/core/state.py` | State schema | `MultiAgentState` |
 | `src/multi_agent/core/agent_base.py` | Base agent class | `BaseAgent` |
+| `src/multi_agent/core/agent_initializer.py` | **SSOT** agent init | `initialize_agent()` |
 | `src/multi_agent/core/agent_registry.py` | Agent registry | `AgentRegistry` |
+| `src/exceptions.py` | Typed exceptions | `SujbotError`, `APIKeyError` |
+| `src/utils/cache.py` | Cache abstractions | `LRUCache`, `TTLCache` |
 | `src/multi_agent/agents/orchestrator.py` | Routing logic | `OrchestratorAgent` |
 | `src/multi_agent/agents/extractor.py` | Document retrieval | `ExtractorAgent` |
 | `src/multi_agent/agents/classifier.py` | Content categorization | `ClassifierAgent` |
@@ -116,15 +119,24 @@ state.execution_phase = ExecutionPhase.COMPLETE
 
 1. Create file `src/multi_agent/agents/my_agent.py`:
 ```python
+from typing import Any, Dict
 from ..core.agent_base import BaseAgent
+from ..core.agent_initializer import initialize_agent  # SSOT
 from ..core.agent_registry import register_agent
 
 @register_agent("my_agent")
 class MyAgent(BaseAgent):
+    def __init__(self, config, vector_store=None, agent_registry=None):
+        super().__init__(config)
+        # Use SSOT initialization (handles provider, prompts, tools)
+        components = initialize_agent(config, "my_agent")
+        self.provider = components.provider
+        self.system_prompt = components.system_prompt
+        self.tool_adapter = components.tool_adapter
+
     async def execute_impl(self, state: Dict[str, Any]) -> Dict[str, Any]:
         # Your logic here
-        state["agent_outputs"]["my_agent"] = {...}
-        return state
+        return self.update_state_output(state, {"result": "..."})  # SSOT helper
 ```
 
 2. Create prompt file `prompts/agents/my_agent.txt`:

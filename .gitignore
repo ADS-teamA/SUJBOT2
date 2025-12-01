@@ -84,4 +84,9 @@ data_legacy/
 *.bak
 *.backup
 config.json
+results_all/
 
+# Generated data folders
+benchmarks/
+clean_text/
+vector_db/

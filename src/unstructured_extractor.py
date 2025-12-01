@@ -118,6 +118,25 @@ class DocumentSection:
     # PHASE 2: Summaries
     summary: Optional[str] = None  # 150-char generic summary
 
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        # Validate character range consistency
+        if self.char_end < self.char_start:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': char_end ({self.char_end}) "
+                f"< char_start ({self.char_start})"
+            )
+        # Validate depth (must be >= 1 for all sections)
+        if self.depth < 1:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': depth ({self.depth}) must be >= 1"
+            )
+        # Validate level (must be >= 0)
+        if self.level < 0:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': level ({self.level}) must be >= 0"
+            )
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
@@ -210,6 +229,33 @@ class ExtractedDocument:
     extraction_method: str = "unstructured_detectron2"
     config: Optional[Dict] = None
 
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        # Validate num_sections matches actual sections list
+        if self.num_sections != len(self.sections):
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': num_sections ({self.num_sections}) "
+                f"!= len(sections) ({len(self.sections)})"
+            )
+        # Validate num_tables matches actual tables list
+        if self.num_tables != len(self.tables):
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': num_tables ({self.num_tables}) "
+                f"!= len(tables) ({len(self.tables)})"
+            )
+        # Validate hierarchy_depth is positive if sections exist
+        if self.sections and self.hierarchy_depth < 1:
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': hierarchy_depth ({self.hierarchy_depth}) "
+                f"must be >= 1 when sections exist"
+            )
+        # Validate total_chars is non-negative
+        if self.total_chars < 0:
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': total_chars ({self.total_chars}) "
+                f"must be >= 0"
+            )
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
@@ -243,9 +289,16 @@ class ExtractedDocument:
 
 @dataclass
 class ExtractionConfig:
-    """Configuration for Unstructured extraction."""
+    """Configuration for document extraction (Unstructured or Gemini)."""
 
-    # Model configuration
+    # Backend selection: "auto" checks GOOGLE_API_KEY, falls back to unstructured
+    extraction_backend: str = "auto"  # "gemini", "unstructured", "auto"
+    gemini_model: str = "gemini-2.5-flash"  # Gemini model to use
+    gemini_fallback_to_unstructured: bool = True  # Fall back to Unstructured on Gemini failure
+    gemini_max_output_tokens: int = 65536  # Max output tokens for Gemini
+    gemini_file_size_threshold_mb: float = 10.0  # File size threshold for chunked extraction
+
+    # Unstructured model configuration
     strategy: str = "hi_res"  # "hi_res", "fast", "ocr_only"
     model: str = "detectron2_mask_rcnn"  # "detectron2_mask_rcnn" (most accurate), "yolox" (faster)
 
@@ -334,6 +387,13 @@ class ExtractionConfig:
             )
 
         return cls(
+            # Backend selection
+            extraction_backend=os.getenv("EXTRACTION_BACKEND", "gemini"),
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            gemini_fallback_to_unstructured=get_bool_env("GEMINI_FALLBACK_TO_UNSTRUCTURED", True),
+            gemini_max_output_tokens=get_int_env("GEMINI_MAX_OUTPUT_TOKENS", 65536),
+            gemini_file_size_threshold_mb=get_float_env("GEMINI_FILE_SIZE_THRESHOLD_MB", 10.0),
+            # Unstructured settings
             strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
             model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),
             languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),

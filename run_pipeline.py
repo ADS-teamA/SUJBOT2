@@ -73,6 +73,13 @@ logger = logging.getLogger(__name__)
 from src.indexing_pipeline import IndexingPipeline, IndexingConfig
 from src.cost_tracker import get_global_tracker, reset_global_tracker
 
+# LlamaIndex wrapper with state persistence and entity labeling (optional)
+try:
+    from src.indexing import SujbotIngestionPipeline
+    LLAMAINDEX_WRAPPER_AVAILABLE = True
+except ImportError:
+    LLAMAINDEX_WRAPPER_AVAILABLE = False
+
 
 def print_header(text: str):
     """Print formatted header."""
@@ -116,7 +123,13 @@ def get_supported_documents(directory: Path) -> list:
     return documents
 
 
-def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_target: Path = None, storage_backend: str = None):
+def run_complete_pipeline(
+    input_path: Path,
+    output_base: Path = None,
+    merge_target: Path = None,
+    storage_backend: str = None,
+    use_wrapper: bool = None,
+):
     """
     Run complete SOTA 2025 RAG pipeline.
 
@@ -127,12 +140,14 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
     - Hybrid search (BM25 + Dense + RRF)
     - Knowledge graph extraction
     - Automatic merge with existing vector store
+    - Entity labeling (when using LlamaIndex wrapper)
 
     Args:
         input_path: Path to document file or directory
         output_base: Base output directory (default: output/)
         merge_target: Path to existing vector store to merge into (e.g., vector_db/)
         storage_backend: Storage backend override ('faiss' or 'postgresql', default: from config.json)
+        use_wrapper: Use LlamaIndex wrapper for state persistence and entity labeling
     """
     input_path = Path(input_path)
 
@@ -161,7 +176,7 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
             print(f"PROCESSING [{i}/{len(documents)}]: {document_path.name}")
             print("=" * 80)
             print()
-            run_single_document(document_path, output_base, merge_target, storage_backend)
+            run_single_document(document_path, output_base, merge_target, storage_backend, use_wrapper)
 
         print_header("BATCH PROCESSING COMPLETE")
         print_success(f"Processed {len(documents)} documents")
@@ -169,10 +184,16 @@ def run_complete_pipeline(input_path: Path, output_base: Path = None, merge_targ
         return
 
     # Single document processing
-    run_single_document(input_path, output_base, merge_target, storage_backend)
+    run_single_document(input_path, output_base, merge_target, storage_backend, use_wrapper)
 
 
-def run_single_document(document_path: Path, output_base: Path = None, merge_target: Path = None, storage_backend: str = None):
+def run_single_document(
+    document_path: Path,
+    output_base: Path = None,
+    merge_target: Path = None,
+    storage_backend: str = None,
+    use_wrapper: bool = None,
+):
     """
     Process single document through complete SOTA 2025 pipeline.
 
@@ -181,6 +202,7 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
         output_base: Base output directory (default: output/)
         merge_target: Path to existing vector store to merge into (e.g., vector_db/)
         storage_backend: Storage backend override ('faiss' or 'postgresql', default: from config.json)
+        use_wrapper: Use LlamaIndex wrapper for state persistence and entity labeling
     """
     document_path = Path(document_path)
 
@@ -214,18 +236,46 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
 
     config = IndexingConfig.from_env(**config_overrides)  # Loads all settings from config.json
 
+    # Determine whether to use LlamaIndex wrapper
+    # Priority: CLI flag > config.json > default (False)
+    if use_wrapper is None:
+        # Check config.json for indexing.use_llamaindex_wrapper
+        root_config = get_config()
+        use_wrapper = getattr(root_config.indexing, 'use_llamaindex_wrapper', False)
+
     # Print active configuration
     print_info(f"LLM Model: {config.summarization_config.model}")
     print_info(f"Embedding Model: {config.embedding_config.model}")
     print_info(f"Max Tokens: {config.chunking_config.max_tokens} tokens (HybridChunker)")
     print_info(f"SAC (Contextual Retrieval): {'ON' if config.chunking_config.enable_contextual else 'OFF'}")
-    print_info(f"Hybrid Search (BM25+Dense): {'ON ✅' if config.enable_hybrid_search else 'OFF'}")
-    print_info(f"Knowledge Graph: {'ON ✅' if config.enable_knowledge_graph else 'OFF'}")
+    print_info(f"HyDE + Expansion Fusion: ON (w_hyde=0.6, w_exp=0.4)")
+    print_info(f"Knowledge Graph: {'ON' if config.enable_knowledge_graph else 'OFF'}")
     print_info(f"Storage Backend: {config.storage_backend.upper()}")
+
+    # Show wrapper/entity labeling status
+    if use_wrapper and LLAMAINDEX_WRAPPER_AVAILABLE:
+        print_info(f"LlamaIndex Wrapper: ON (state persistence + entity labeling)")
+        print_info(f"Entity Labeling: ON (Gemini 2.5 Flash)")
+    elif use_wrapper and not LLAMAINDEX_WRAPPER_AVAILABLE:
+        print_info(f"LlamaIndex Wrapper: REQUESTED but dependencies not installed")
+        use_wrapper = False
+    else:
+        print_info(f"LlamaIndex Wrapper: OFF (use --use-wrapper to enable)")
+
     print_info(f"Output: {output_dir}")
     print()
 
-    pipeline = IndexingPipeline(config)
+    # Create pipeline (wrapper or legacy)
+    if use_wrapper and LLAMAINDEX_WRAPPER_AVAILABLE:
+        root_config = get_config()
+        pipeline = SujbotIngestionPipeline(
+            config=config,
+            enable_entity_labeling=root_config.indexing.enable_entity_labeling,
+            entity_labeling_batch_size=root_config.indexing.entity_labeling_batch_size,
+            entity_labeling_model=root_config.indexing.entity_labeling_model,
+        )
+    else:
+        pipeline = IndexingPipeline(config)
 
     # Run pipeline with intermediate saves
     try:
@@ -248,11 +298,8 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
         knowledge_graph = result["knowledge_graph"]
         stats = result["stats"]
 
-        # Save PHASE 4: Vector store (FAISS + BM25 if hybrid)
-        print_info("Saving vector store...")
-        vs_path = output_dir / "phase4_vector_store"
-        vector_store.save(vs_path)
-        print_success(f"Vector store saved: {vs_path}")
+        # PHASE 4: Vector store is stored in PostgreSQL (no file save needed)
+        print_success(f"Vector store persisted in PostgreSQL database")
 
         # Save PHASE 5A: Knowledge Graph (if enabled)
         kg_path = None
@@ -261,154 +308,62 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
             knowledge_graph.save_json(str(kg_path))
             print_success(f"Knowledge graph saved: {kg_path}")
 
-        # MERGE with existing vector store (if --merge flag provided)
+        # Knowledge graph merging with --merge flag (PostgreSQL handles vector merging automatically)
         if merge_target:
             merge_target = Path(merge_target)
+            print()
+            print_info(f"Note: PostgreSQL stores vectors directly in database (no manual merging needed)")
 
-            # Try to load existing vector store, or initialize new one if empty/corrupt
-            from src.hybrid_search import HybridVectorStore
-            from src.faiss_vector_store import FAISSVectorStore
-
-            # Check if we can load existing store
-            can_load_existing = False
-            if merge_target.exists():
-                # Check if directory has ALL required vector store files
-                required_files = [
-                    "faiss_metadata.json",
-                    "faiss_arrays.pkl",
-                    "faiss_layer1.index",
-                    "faiss_layer2.index",
-                    "faiss_layer3.index",
-                    "bm25_layer1_arrays.pkl",
-                    "bm25_layer1_config.json",
-                    "bm25_layer2_arrays.pkl",
-                    "bm25_layer2_config.json",
-                    "bm25_layer3_arrays.pkl",
-                    "bm25_layer3_config.json",
-                    "hybrid_config.json",
-                ]
-                can_load_existing = all((merge_target / f).exists() for f in required_files)
-
-            if not can_load_existing:
-                # Initialize new vector store (directory doesn't exist or is empty/incomplete)
-                print()
-                print_info(f"Initializing new vector store at: {merge_target}")
-                merge_target.mkdir(parents=True, exist_ok=True)
-                # Copy new store to merge target
-                for item in vs_path.iterdir():
-                    if item.is_file():
-                        shutil.copy2(item, merge_target / item.name)
-                    elif item.is_dir():
-                        shutil.copytree(item, merge_target / item.name, dirs_exist_ok=True)
-                print_success(f"Initialized vector store at: {merge_target}")
-            else:
-                # Load and merge with existing store
-                print()
-                print_header("MERGING WITH EXISTING VECTOR STORE")
-                print_info(f"Target: {merge_target}")
-
+            # Knowledge graph merging
+            if knowledge_graph and config.enable_knowledge_graph:
                 try:
-                    print_info("Loading existing vector store...")
-                    existing_store = HybridVectorStore.load(merge_target)
-                    existing_stats_before = existing_store.get_stats()
+                    print()
+                    print_info("Merging knowledge graphs with cross-document deduplication...")
 
-                    print_info(f"Existing store: {existing_stats_before['total_vectors']} vectors, "
-                              f"{existing_stats_before['documents']} documents")
-                    print_info(f"New store: {stats['vector_store']['total_vectors']} vectors, "
-                              f"{stats['vector_store']['documents']} documents")
-
-                    # Merge vector stores with deduplication
-                    print_info("Merging FAISS indexes with deduplication...")
-                    faiss_merge_stats = existing_store.faiss_store.merge(
-                        vector_store if isinstance(vector_store, FAISSVectorStore) else vector_store.faiss_store
+                    from src.graph import (
+                        KnowledgeGraph,
+                        UnifiedKnowledgeGraphManager,
+                        CrossDocumentRelationshipDetector
                     )
 
-                    print_info("Merging BM25 indexes...")
-                    if hasattr(existing_store, 'bm25_store') and hasattr(vector_store, 'bm25_store'):
-                        existing_store.bm25_store.merge(vector_store.bm25_store)
+                    # Initialize unified KG manager (uses merge_target directory for storage)
+                    manager = UnifiedKnowledgeGraphManager(storage_dir=str(merge_target))
 
-                    # Save merged store
-                    print_info("Saving merged vector store...")
-                    existing_store.save(merge_target)
+                    # Initialize cross-document detector
+                    detector = CrossDocumentRelationshipDetector(
+                        use_llm_validation=False,  # Fast pattern-based detection
+                        confidence_threshold=0.7
+                    )
 
-                    merged_stats = existing_store.get_stats()
-                    print_success(f"Merge complete!")
-                    print_info(f"Merged store: {merged_stats['total_vectors']} vectors, "
-                              f"{merged_stats['documents']} documents")
-                    print_info(f"Added: {faiss_merge_stats['added']} vectors, "
-                              f"Skipped: {faiss_merge_stats['skipped']} duplicates")
+                    # Load or create unified KG
+                    unified_kg = manager.load_or_create()
 
-                except FileNotFoundError as e:
-                    print()
-                    print_info(f"[ERROR] Vector store files missing: {e}")
-                    logger.error(f"Vector store merge failed - files missing: {e}", exc_info=True)
-                    print_info(f"Vector store merge skipped - new store will be created instead")
-                except (PermissionError, OSError) as e:
-                    print()
-                    print_info(f"[ERROR] Cannot write to vector store: {e}")
-                    logger.error(f"Vector store merge failed - IO error: {e}", exc_info=True)
-                    print_info(f"Vector store merge skipped - keeping separate stores")
-                except (ValueError, RuntimeError) as e:
-                    # Expected errors from merge validation/corruption detection
-                    print()
-                    print_info(f"[ERROR] Vector store validation failed: {e}")
-                    logger.error(f"Vector store merge failed - validation error: {e}", exc_info=True)
-                    print_info(f"Vector store merge skipped - store may be corrupted")
-                # Removed broad Exception catch - let programming errors propagate!
+                    print_info(f"Current unified KG: {len(unified_kg.entities)} entities, "
+                              f"{len(unified_kg.relationships)} relationships")
+                    print_info(f"New document KG: {len(knowledge_graph.entities)} entities, "
+                              f"{len(knowledge_graph.relationships)} relationships")
 
-                # Knowledge graph merging
-                try:
+                    # Merge with deduplication and cross-doc detection
+                    unified_kg = manager.merge_document_graph(
+                        unified_kg=unified_kg,
+                        document_kg=knowledge_graph,
+                        document_id=doc_name,
+                        cross_doc_detector=detector
+                    )
 
-                    # Merge Knowledge Graphs with cross-document relationships
-                    if knowledge_graph and config.enable_knowledge_graph:
-                        print()
-                        print_info("Merging knowledge graphs with cross-document deduplication...")
+                    # Save unified KG + per-document backup
+                    manager.save(unified_kg, document_id=doc_name)
 
-                        from src.graph import (
-                            KnowledgeGraph,
-                            UnifiedKnowledgeGraphManager,
-                            CrossDocumentRelationshipDetector
-                        )
+                    # Get statistics
+                    doc_stats = manager.get_document_statistics(unified_kg)
 
-                        # Initialize unified KG manager (uses merge_target directory for storage)
-                        # KG files should be stored in the same directory as the vector store
-                        manager = UnifiedKnowledgeGraphManager(storage_dir=str(merge_target))
-
-                        # Initialize cross-document detector
-                        detector = CrossDocumentRelationshipDetector(
-                            use_llm_validation=False,  # Fast pattern-based detection
-                            confidence_threshold=0.7
-                        )
-
-                        # Load or create unified KG
-                        unified_kg = manager.load_or_create()
-
-                        print_info(f"Current unified KG: {len(unified_kg.entities)} entities, "
-                                  f"{len(unified_kg.relationships)} relationships")
-                        print_info(f"New document KG: {len(knowledge_graph.entities)} entities, "
-                                  f"{len(knowledge_graph.relationships)} relationships")
-
-                        # Merge with deduplication and cross-doc detection
-                        unified_kg = manager.merge_document_graph(
-                            unified_kg=unified_kg,
-                            document_kg=knowledge_graph,
-                            document_id=doc_name,
-                            cross_doc_detector=detector
-                        )
-
-                        # Save unified KG + per-document backup
-                        manager.save(unified_kg, document_id=doc_name)
-
-                        # Get statistics
-                        doc_stats = manager.get_document_statistics(unified_kg)
-
-                        print_success(f"KG merge complete with cross-document relationships!")
-                        print_info(f"Unified KG: {len(unified_kg.entities)} entities, "
-                                  f"{len(unified_kg.relationships)} relationships")
-                        print_info(f"Documents in unified KG: {doc_stats['total_documents']}")
-                        print_info(f"Cross-document entities: {doc_stats['cross_document_entities']} "
-                                  f"({doc_stats['cross_document_entity_percentage']:.1f}%)")
-                        print_info(f"Saved: {merge_target / 'unified_kg.json'}")
+                    print_success(f"KG merge complete with cross-document relationships!")
+                    print_info(f"Unified KG: {len(unified_kg.entities)} entities, "
+                              f"{len(unified_kg.relationships)} relationships")
+                    print_info(f"Documents in unified KG: {doc_stats['total_documents']}")
+                    print_info(f"Cross-document entities: {doc_stats['cross_document_entities']} "
+                              f"({doc_stats['cross_document_entity_percentage']:.1f}%)")
+                    print_info(f"Saved: {merge_target / 'unified_kg.json'}")
 
                 except FileNotFoundError as e:
                     print()
@@ -467,17 +422,12 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
         print_info(f"Total vectors:        {vs_stats['total_vectors']}")
         print_info(f"Documents indexed:    {vs_stats['documents']}")
 
-        # Hybrid search stats
-        if stats.get("hybrid_enabled"):
-            print()
-            print_info("✅ Hybrid Search: ACTIVE")
-            print_info(f"   BM25 Layer 1:      {vs_stats.get('bm25_layer1_docs', 0)} docs")
-            print_info(f"   BM25 Layer 2:      {vs_stats.get('bm25_layer2_docs', 0)} docs")
-            print_info(f"   BM25 Layer 3:      {vs_stats.get('bm25_layer3_docs', 0)} docs")
-            print_info(f"   RRF Fusion k:      {config.hybrid_fusion_k}")
-        else:
-            print()
-            print_info("[INFO]  Hybrid Search: DISABLED (dense-only retrieval)")
+        # Retrieval method info
+        print()
+        print_info("✅ Retrieval Method: HyDE + Expansion Fusion")
+        print_info(f"   HyDE weight:       0.6")
+        print_info(f"   Expansion weight:  0.4")
+        print_info(f"   Storage:           PostgreSQL pgvector")
 
         # Knowledge graph stats
         if stats.get("kg_construction_failed"):
@@ -589,12 +539,17 @@ def run_single_document(document_path: Path, output_base: Path = None, merge_tar
     print(f"  • phase1_extraction.json    - Document structure")
     print(f"  • phase2_summaries.json      - Section summaries")
     print(f"  • phase3_chunks.json         - Multi-layer chunks")
-    print(f"  • phase4_vector_store/       - FAISS + BM25 indexes")
+    if storage_backend != "postgresql":
+        print(f"  • phase4_vector_store/       - FAISS + BM25 indexes")
     if knowledge_graph:
         print(f"  • {doc_name}_kg.json         - Knowledge graph")
     print()
     print("🚀 To use with agent:")
-    print(f"  uv run python -m src.agent.cli --vector-store {vs_path}")
+    if storage_backend == "postgresql":
+        print("  uv run python -m src.agent.cli  # (uses PostgreSQL backend)")
+    else:
+        vs_path = output_dir / "phase4_vector_store"
+        print(f"  uv run python -m src.agent.cli --vector-store {vs_path}")
     print()
 
 
@@ -646,10 +601,35 @@ Examples:
         help="Storage backend for vectors (default: from config.json). Options: faiss, postgresql"
     )
 
+    parser.add_argument(
+        "--use-wrapper",
+        action="store_true",
+        default=None,
+        help="Use LlamaIndex wrapper for state persistence and entity labeling (requires Redis)"
+    )
+
+    parser.add_argument(
+        "--no-wrapper",
+        action="store_true",
+        help="Disable LlamaIndex wrapper (override config.json setting)"
+    )
+
     args = parser.parse_args()
+
+    # Handle wrapper flags
+    use_wrapper = None
+    if args.use_wrapper:
+        use_wrapper = True
+    elif args.no_wrapper:
+        use_wrapper = False
 
     input_path = Path(args.input_path)
     # Use merge target unless --no-merge is specified
     merge_target = None if args.no_merge else Path(args.merge)
 
-    run_complete_pipeline(input_path, merge_target=merge_target, storage_backend=args.backend)
+    run_complete_pipeline(
+        input_path,
+        merge_target=merge_target,
+        storage_backend=args.backend,
+        use_wrapper=use_wrapper,
+    )

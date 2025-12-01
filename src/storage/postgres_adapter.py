@@ -3,11 +3,17 @@ PostgreSQL Vector Store Adapter with pgvector
 
 New implementation using PostgreSQL + pgvector for vector similarity search.
 Replaces FAISS in-memory store with persistent database backend.
+
+Supports metadata filtering for:
+- Categories (document-level, propagated to chunks)
+- Keywords (section-level, propagated to chunks)
+- Entities (from entity labeling)
 """
 
 import asyncio
 import asyncpg
 import numpy as np
+from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, TYPE_CHECKING
 import logging
 import nest_asyncio
@@ -19,8 +25,145 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class MetadataFilter:
+    """
+    Metadata filter for vector search queries.
+
+    Supports filtering by:
+    - category: Exact match on category (from document labeling)
+    - categories: Match any of these categories
+    - keywords: Must contain ALL of these keywords (AND)
+    - keywords_any: Must contain ANY of these keywords (OR)
+    - entities: Must contain ANY of these entities
+    - entity_types: Must contain ANY of these entity types
+    - min_confidence: Minimum category confidence (0.0-1.0)
+
+    Example:
+        >>> filter = MetadataFilter(
+        ...     category="nuclear_safety",
+        ...     keywords=["dozimetrie", "radiace"],
+        ...     min_confidence=0.8
+        ... )
+        >>> results = adapter.search_layer3(query_vec, k=10, metadata_filter=filter)
+    """
+
+    # Category filtering (from document labeling)
+    category: Optional[str] = None
+    categories: Optional[List[str]] = None  # Match any
+
+    # Keyword filtering (from section labeling)
+    keywords: Optional[List[str]] = None  # Match all (AND)
+    keywords_any: Optional[List[str]] = None  # Match any (OR)
+
+    # Entity filtering (from entity labeling)
+    entities: Optional[List[str]] = None  # Match any
+    entity_types: Optional[List[str]] = None  # Match any
+
+    # Confidence threshold
+    min_confidence: Optional[float] = None
+
+    def to_sql_conditions(self, param_offset: int = 0) -> tuple[str, List[Any]]:
+        """
+        Convert filter to SQL WHERE conditions and parameters.
+
+        Uses PostgreSQL JSONB operators:
+        - ->> for text extraction
+        - @> for containment
+        - ?| for any-of array match
+        - ?& for all-of array match
+
+        Args:
+            param_offset: Starting parameter number (for $1, $2, etc.)
+
+        Returns:
+            Tuple of (SQL condition string, list of parameter values)
+        """
+        conditions = []
+        params = []
+        param_idx = param_offset + 1
+
+        # Category exact match
+        if self.category:
+            conditions.append(f"metadata->>'category' = ${param_idx}")
+            params.append(self.category)
+            param_idx += 1
+
+        # Categories any-of match
+        if self.categories:
+            # metadata->>'category' IN ('cat1', 'cat2', ...)
+            placeholders = ", ".join(f"${param_idx + i}" for i in range(len(self.categories)))
+            conditions.append(f"metadata->>'category' IN ({placeholders})")
+            params.extend(self.categories)
+            param_idx += len(self.categories)
+
+        # Keywords ALL match (AND)
+        if self.keywords:
+            # metadata->'keywords' ?& ARRAY['kw1', 'kw2']
+            conditions.append(f"metadata->'keywords' ?& ${param_idx}::text[]")
+            params.append(self.keywords)
+            param_idx += 1
+
+        # Keywords ANY match (OR)
+        if self.keywords_any:
+            # metadata->'keywords' ?| ARRAY['kw1', 'kw2']
+            conditions.append(f"metadata->'keywords' ?| ${param_idx}::text[]")
+            params.append(self.keywords_any)
+            param_idx += 1
+
+        # Entities ANY match
+        if self.entities:
+            # metadata->'entities' ?| ARRAY['entity1', 'entity2']
+            conditions.append(f"metadata->'entities' ?| ${param_idx}::text[]")
+            params.append(self.entities)
+            param_idx += 1
+
+        # Entity types ANY match
+        if self.entity_types:
+            # metadata->'entity_types' ?| ARRAY['type1', 'type2']
+            conditions.append(f"metadata->'entity_types' ?| ${param_idx}::text[]")
+            params.append(self.entity_types)
+            param_idx += 1
+
+        # Minimum confidence
+        if self.min_confidence is not None:
+            conditions.append(f"(metadata->>'category_confidence')::float >= ${param_idx}")
+            params.append(self.min_confidence)
+            param_idx += 1
+
+        return " AND ".join(conditions) if conditions else "", params
+
+    def is_empty(self) -> bool:
+        """Check if filter has any conditions."""
+        return not any([
+            self.category,
+            self.categories,
+            self.keywords,
+            self.keywords_any,
+            self.entities,
+            self.entity_types,
+            self.min_confidence is not None,
+        ])
+
 # Enable nested event loops
 nest_asyncio.apply()
+
+
+def _sanitize_tsquery(text: str) -> str:
+    """
+    Sanitize text for PostgreSQL tsquery.
+
+    Removes special characters that break tsquery syntax: ()&|!:,?
+    """
+    import re
+    # Remove special tsquery characters
+    sanitized = re.sub(r'[()&|!:,?]', ' ', text)
+    # Replace multiple spaces with single space
+    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+    # Replace spaces with & operator
+    sanitized = sanitized.replace(" ", " & ")
+    return sanitized
 
 
 def _run_async_safe(coro):
@@ -56,7 +199,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         self,
         connection_string: str,
         pool_size: int = 20,
-        dimensions: int = 3072,
+        dimensions: int = 4096,  # Qwen3-Embedding-8B (was 3072 for OpenAI)
     ):
         """
         Initialize PostgreSQL adapter.
@@ -71,14 +214,22 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         self.dimensions = dimensions
         self.pool: Optional[asyncpg.Pool] = None
         self._initialized = False
+        self._init_lock = asyncio.Lock()  # Prevents race condition in parallel init
+        self._bm25_store = None  # Will be loaded during initialization (private attribute)
 
         # Metadata cache (materialized on-demand)
         self._metadata_cache = {1: None, 2: None, 3: None}
 
+    @property
+    def bm25_store(self) -> Optional[Any]:
+        """Return BM25 store loaded from PostgreSQL."""
+        return self._bm25_store
+
     async def initialize(self):
-        """Initialize connection pool. Must be called before using the adapter."""
+        """Initialize connection pool."""
         if not self._initialized:
             await self._initialize_pool()
+            # Note: BM25 removed in favor of HyDE + Expansion Fusion pipeline
             self._initialized = True
 
     async def _initialize_pool(self):
@@ -259,12 +410,28 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         k: int,
         document_filter: Optional[str] = None,
         query_text: Optional[str] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
+        exclude_bibliography: bool = True,
     ) -> List[Dict]:
         """
         Search specific layer using pgvector cosine similarity.
 
         Uses <=> operator (cosine distance) from pgvector.
         Score = 1 - distance (0=dissimilar, 1=identical)
+
+        Args:
+            conn: Database connection
+            layer: Vector layer (1, 2, or 3)
+            query_vec: Query embedding
+            k: Number of results
+            document_filter: Filter by document ID
+            query_text: Enable hybrid search with this query text
+            metadata_filter: Filter by metadata (categories, keywords, entities)
+            exclude_bibliography: Exclude chunks from "Literatura" sections (default True)
+                This prevents bibliography entries from dominating search results.
+
+        Returns:
+            List of matching chunks with scores
         """
         # Convert query vector to PostgreSQL-compatible string format
         query_str = self._vector_to_pgvector_string(query_vec)
@@ -282,41 +449,59 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         if query_text:
             # Hybrid search: Dense (pgvector) + Sparse (full-text)
             return await self._hybrid_search_layer(
-                conn, layer, query_vec, query_text, k, document_filter
+                conn, layer, query_vec, query_text, k, document_filter, metadata_filter,
+                exclude_bibliography
             )
         else:
-            # Pure vector search
+            # Pure vector search with optional filtering
+            where_conditions = []
+            params = [query_str]  # $1 is always the query vector
+            param_idx = 1
+
+            # Document filter
             if document_filter:
-                sql = f"""
-                    SELECT
-                        chunk_id,
-                        document_id,
-                        metadata,
-                        content,
-                        {section_columns}
-                        hierarchical_path,
-                        1 - (embedding <=> $1::vector) AS score
-                    FROM vectors.layer{layer}
-                    WHERE document_id = $2
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT $3
-                """
-                rows = await conn.fetch(sql, query_str, document_filter, k)
-            else:
-                sql = f"""
-                    SELECT
-                        chunk_id,
-                        document_id,
-                        metadata,
-                        content,
-                        {section_columns}
-                        hierarchical_path,
-                        1 - (embedding <=> $1::vector) AS score
-                    FROM vectors.layer{layer}
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT $2
-                """
-                rows = await conn.fetch(sql, query_str, k)
+                param_idx += 1
+                where_conditions.append(f"document_id = ${param_idx}")
+                params.append(document_filter)
+
+            # Metadata filter (categories, keywords, entities)
+            if metadata_filter and not metadata_filter.is_empty():
+                meta_conditions, meta_params = metadata_filter.to_sql_conditions(param_idx)
+                if meta_conditions:
+                    where_conditions.append(meta_conditions)
+                    params.extend(meta_params)
+                    param_idx += len(meta_params)
+
+            # Bibliography filter - exclude "Literatura" sections by default
+            # This prevents bibliography entries (high keyword density, low info) from
+            # dominating search results over actual content chunks
+            if exclude_bibliography and layer > 1:  # Only for layer2/3 which have section_path
+                where_conditions.append("(section_path IS NULL OR section_path NOT LIKE 'Literatura%')")
+
+            # Build WHERE clause
+            where_clause = ""
+            if where_conditions:
+                where_clause = "WHERE " + " AND ".join(where_conditions)
+
+            # Add LIMIT parameter
+            param_idx += 1
+            params.append(k)
+
+            sql = f"""
+                SELECT
+                    chunk_id,
+                    document_id,
+                    metadata,
+                    content,
+                    {section_columns}
+                    hierarchical_path,
+                    1 - (embedding <=> $1::vector) AS score
+                FROM vectors.layer{layer}
+                {where_clause}
+                ORDER BY embedding <=> $1::vector
+                LIMIT ${param_idx}
+            """
+            rows = await conn.fetch(sql, *params)
 
         # Convert rows to dicts
         results = []
@@ -345,124 +530,189 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         query_text: str,
         k: int,
         document_filter: Optional[str] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
+        exclude_bibliography: bool = True,
     ) -> List[Dict]:
         """
-        Hybrid search: Dense (pgvector) + Sparse (full-text) with RRF fusion.
+        Hybrid search: Dense (pgvector) + Sparse (BM25) with RRF fusion.
 
+        Uses BM25 from bm25_layer{layer} tables (NOT PostgreSQL full-text search).
         RRF (Reciprocal Rank Fusion): score = 1/(k + rank)
         k=60 (standard parameter from research)
-        """
-        # Convert query vector to PostgreSQL-compatible string format
-        query_str = self._vector_to_pgvector_string(query_vec)
 
-        # Layer-specific columns (Layer 1 doesn't have section_id, section_title)
-        # All layers have hierarchical_path
-        section_columns = (
-            "l.section_id, l.section_title,"
-            if layer > 1
-            else ""
+        Args:
+            metadata_filter: Filter by categories, keywords, entities (applied to dense search)
+            exclude_bibliography: Exclude chunks from "Literatura" sections (default True)
+        """
+        # Strategy: Get dense from PostgreSQL, sparse from BM25, fuse in Python
+        # This matches how FAISS hybrid works and avoids complex SQL
+
+        # 1. Get dense results from PostgreSQL
+        query_str = self._vector_to_pgvector_string(query_vec)
+        section_columns = "section_id, section_title," if layer > 1 else ""
+
+        # Fetch MORE candidates for effective RRF (k * 10 for selectivity)
+        # Empirically optimized: 10x candidates improves hybrid recall by allowing
+        # better fusion of dense and sparse methods. Minimum 200 candidates ensures
+        # sufficient diversity for RRF when k is small (k < 20).
+        candidates_k = max(k * 10, 200)  # At least 200 for good fusion
+
+        # Build WHERE clause with optional filters
+        where_conditions = []
+        params = [query_str]  # $1 is always the query vector
+        param_idx = 1
+
+        # Document filter
+        if document_filter:
+            param_idx += 1
+            where_conditions.append(f"document_id = ${param_idx}")
+            params.append(document_filter)
+
+        # Metadata filter (categories, keywords, entities)
+        if metadata_filter and not metadata_filter.is_empty():
+            meta_conditions, meta_params = metadata_filter.to_sql_conditions(param_idx)
+            if meta_conditions:
+                where_conditions.append(meta_conditions)
+                params.extend(meta_params)
+                param_idx += len(meta_params)
+
+        # Bibliography filter - exclude "Literatura" sections by default
+        if exclude_bibliography and layer > 1:
+            where_conditions.append("(section_path IS NULL OR section_path NOT LIKE 'Literatura%')")
+
+        # Build WHERE clause
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+
+        # Add LIMIT parameter
+        param_idx += 1
+        params.append(candidates_k)
+
+        # Get dense results with filtering
+        dense_sql = f"""
+            SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
+                   1 - (embedding <=> $1::vector) AS score
+            FROM vectors.layer{layer}
+            {where_clause}
+            ORDER BY embedding <=> $1::vector
+            LIMIT ${param_idx}
+        """
+        dense_rows = await conn.fetch(dense_sql, *params)
+
+        # 2. Get BM25 results (same number of candidates for balanced fusion)
+        bm25_results = []
+        if self.bm25_store:
+            try:
+                if layer == 1:
+                    bm25_results = self.bm25_store.search_layer1(query_text, k=candidates_k)
+                elif layer == 2:
+                    bm25_results = self.bm25_store.search_layer2(
+                        query_text, k=candidates_k, document_filter=document_filter
+                    )
+                else:  # layer == 3
+                    bm25_results = self.bm25_store.search_layer3(
+                        query_text, k=candidates_k, document_filter=document_filter
+                    )
+            except Exception as e:
+                logger.warning(f"BM25 search failed: {e}. Using dense-only.")
+                bm25_results = []
+
+        # 3. RRF Fusion with Missing Rank Imputation
+        # RRF k=60 is research-optimal (see hybrid_search.py and CLAUDE.md #8)
+        rrf_k = 60
+        chunk_scores = {}  # {chunk_id: rrf_score}
+        chunk_dense_scores = {}  # {chunk_id: dense_score} - preserve original
+        chunk_bm25_scores = {}  # {chunk_id: bm25_score} - preserve original
+        chunk_dense_ranks = {}  # {chunk_id: dense_rank} - for imputation
+        chunk_bm25_ranks = {}   # {chunk_id: bm25_rank} - for imputation
+
+        logger.debug(
+            f"Hybrid search layer{layer}: {len(dense_rows)} dense + {len(bm25_results)} BM25 "
+            f"candidates → RRF fusion to select top {k}"
         )
 
-        # Build hybrid search with RRF fusion
-        if document_filter:
-            sql = f"""
-                WITH dense AS (
-                    SELECT chunk_id, 1 - (embedding <=> $1::vector) AS dense_score,
-                           ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) AS dense_rank
-                    FROM vectors.layer{layer}
-                    WHERE document_id = $3
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT 50
-                ),
-                sparse AS (
-                    SELECT chunk_id, ts_rank(content_tsv, to_tsquery('english', $2)) AS sparse_score,
-                           ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, to_tsquery('english', $2)) DESC) AS sparse_rank
-                    FROM vectors.layer{layer}
-                    WHERE content_tsv @@ to_tsquery('english', $2)
-                      AND document_id = $3
-                    ORDER BY sparse_score DESC
-                    LIMIT 50
-                ),
-                fused AS (
-                    SELECT
-                        COALESCE(d.chunk_id, s.chunk_id) AS chunk_id,
-                        COALESCE(1.0 / (60 + d.dense_rank), 0) + COALESCE(1.0 / (60 + s.sparse_rank), 0) AS rrf_score
-                    FROM dense d
-                    FULL OUTER JOIN sparse s USING (chunk_id)
-                )
-                SELECT
-                    f.chunk_id,
-                    l.document_id,
-                    l.content,
-                    l.metadata,
-                    {section_columns}
-                    l.hierarchical_path,
-                    f.rrf_score AS score
-                FROM fused f
-                JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
-                ORDER BY f.rrf_score DESC
-                LIMIT $4
-            """
-            # Preprocess query text for tsquery (replace spaces with &)
-            tsquery = query_text.replace(" ", " & ")
-            rows = await conn.fetch(sql, query_str, tsquery, document_filter, k)
-        else:
-            # Same query without document filter
-            sql = f"""
-                WITH dense AS (
-                    SELECT chunk_id, 1 - (embedding <=> $1::vector) AS dense_score,
-                           ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) AS dense_rank
-                    FROM vectors.layer{layer}
-                    ORDER BY embedding <=> $1::vector
-                    LIMIT 50
-                ),
-                sparse AS (
-                    SELECT chunk_id, ts_rank(content_tsv, to_tsquery('english', $2)) AS sparse_score,
-                           ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, to_tsquery('english', $2)) DESC) AS sparse_rank
-                    FROM vectors.layer{layer}
-                    WHERE content_tsv @@ to_tsquery('english', $2)
-                    ORDER BY sparse_score DESC
-                    LIMIT 50
-                ),
-                fused AS (
-                    SELECT
-                        COALESCE(d.chunk_id, s.chunk_id) AS chunk_id,
-                        COALESCE(1.0 / (60 + d.dense_rank), 0) + COALESCE(1.0 / (60 + s.sparse_rank), 0) AS rrf_score
-                    FROM dense d
-                    FULL OUTER JOIN sparse s USING (chunk_id)
-                )
-                SELECT
-                    f.chunk_id,
-                    l.document_id,
-                    l.content,
-                    l.metadata,
-                    {section_columns}
-                    l.hierarchical_path,
-                    f.rrf_score AS score
-                FROM fused f
-                JOIN vectors.layer{layer} l ON f.chunk_id = l.chunk_id
-                ORDER BY f.rrf_score DESC
-                LIMIT $3
-            """
-            tsquery = query_text.replace(" ", " & ")
-            rows = await conn.fetch(sql, query_str, tsquery, k)
+        # Add dense ranks and preserve scores
+        for rank, row in enumerate(dense_rows):
+            chunk_id = row["chunk_id"]
+            chunk_dense_ranks[chunk_id] = rank
+            chunk_dense_scores[chunk_id] = float(row["score"])  # Preserve original dense score
 
-        # Convert to dicts
+        # Add BM25 ranks and preserve scores
+        for rank, result in enumerate(bm25_results):
+            chunk_id = result.get("chunk_id")
+            if chunk_id:
+                chunk_bm25_ranks[chunk_id] = rank
+                # Preserve original BM25 score (None if missing = not found by BM25)
+                score = result.get("score")
+                if score is not None:
+                    chunk_bm25_scores[chunk_id] = float(score)
+
+        # Compute RRF scores with missing rank imputation
+        # For chunks missing in one method, use default rank = len(candidates)
+        # This gives them a small RRF contribution (1/(k+len)) instead of excluding
+        # them entirely (infinite rank). Balances precision and recall.
+        all_chunk_ids = set(chunk_dense_ranks.keys()) | set(chunk_bm25_ranks.keys())
+        default_dense_rank = len(dense_rows)  # Rank for chunks not found by dense
+        default_bm25_rank = len(bm25_results)  # Rank for chunks not found by BM25
+
+        for chunk_id in all_chunk_ids:
+            dense_rank = chunk_dense_ranks.get(chunk_id, default_dense_rank)
+            bm25_rank = chunk_bm25_ranks.get(chunk_id, default_bm25_rank)
+            chunk_scores[chunk_id] = (1.0 / (rrf_k + dense_rank)) + (1.0 / (rrf_k + bm25_rank))
+
+        # Check overlap for diagnostics
+        dense_ids = set(chunk_dense_ranks.keys())
+        bm25_ids = set(chunk_bm25_ranks.keys())
+        overlap_ids = dense_ids & bm25_ids
+        dense_only = len(dense_ids - bm25_ids)
+        bm25_only = len(bm25_ids - dense_ids)
+
+        logger.debug(
+            f"RRF fusion stats: total={len(all_chunk_ids)}, "
+            f"both_methods={len(overlap_ids)} ({len(overlap_ids)*100/len(all_chunk_ids):.1f}%), "
+            f"dense_only={dense_only} ({dense_only*100/len(all_chunk_ids):.1f}%), "
+            f"bm25_only={bm25_only} ({bm25_only*100/len(all_chunk_ids):.1f}%)"
+        )
+
+        # 4. Sort by RRF score and get top k
+        sorted_chunk_ids = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+
+        # 5. Fetch full metadata for top chunks
+        top_chunk_ids = [cid for cid, _ in sorted_chunk_ids]
+        if not top_chunk_ids:
+            return []
+
+        # Batch fetch from PostgreSQL
+        placeholders = ", ".join(f"${i+1}" for i in range(len(top_chunk_ids)))
+        fetch_sql = f"""
+            SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path
+            FROM vectors.layer{layer}
+            WHERE chunk_id IN ({placeholders})
+        """
+        final_rows = await conn.fetch(fetch_sql, *top_chunk_ids)
+
+        # 6. Build results with RRF scores, preserving rank order AND original scores
+        chunk_id_to_row = {row["chunk_id"]: row for row in final_rows}
         results = []
-        for row in rows:
-            result = {
-                "chunk_id": row["chunk_id"],
-                "document_id": row["document_id"],
-                "content": row["content"],
-                "score": float(row["score"]),
-                "section_id": row.get("section_id"),
-                "section_title": row.get("section_title"),
-                "hierarchical_path": row.get("hierarchical_path"),
-            }
-            # Merge JSONB metadata (PostgreSQL returns JSONB as dict)
-            if row["metadata"] and isinstance(row["metadata"], dict):
-                result.update(row["metadata"])
-            results.append(result)
+        for chunk_id, rrf_score in sorted_chunk_ids:
+            if chunk_id in chunk_id_to_row:
+                row = chunk_id_to_row[chunk_id]
+                result = {
+                    "chunk_id": chunk_id,
+                    "document_id": row["document_id"],
+                    "content": row["content"],
+                    "score": float(rrf_score),  # RRF score (for compatibility)
+                    "dense_score": chunk_dense_scores.get(chunk_id),  # Original dense score
+                    "bm25_score": chunk_bm25_scores.get(chunk_id),    # Original BM25 score
+                    "section_id": row.get("section_id"),
+                    "section_title": row.get("section_title"),
+                    "hierarchical_path": row.get("hierarchical_path"),
+                }
+                # Merge JSONB metadata
+                if row["metadata"] and isinstance(row["metadata"], dict):
+                    result.update(row["metadata"])
+                results.append(result)
 
         return results
 
@@ -524,11 +774,61 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         k: int = 6,
         document_filter: Optional[str] = None,
         similarity_threshold: Optional[float] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
     ) -> List[Dict]:
-        """Direct Layer 3 search."""
+        """
+        Direct Layer 3 search (sync wrapper).
+
+        Args:
+            query_embedding: Query vector
+            k: Number of results
+            document_filter: Filter by document ID
+            similarity_threshold: Minimum similarity score
+            metadata_filter: Filter by categories, keywords, entities
+
+        Returns:
+            List of matching chunks
+        """
         return _run_async_safe(
-            self._async_search_layer3(query_embedding, k, document_filter, similarity_threshold)
+            self._async_search_layer3(
+                query_embedding, k, document_filter, similarity_threshold, metadata_filter
+            )
         )
+
+    async def search_layer3_async(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 6,
+        document_filter: Optional[str] = None,
+        similarity_threshold: Optional[float] = None,
+        metadata_filter: Optional[MetadataFilter] = None,
+    ) -> List[Dict]:
+        """
+        Direct Layer 3 search (async version for parallel execution).
+
+        Use this with asyncio.gather() for parallel searches.
+
+        Args:
+            query_embedding: Query vector
+            k: Number of results
+            document_filter: Filter by document ID
+            similarity_threshold: Minimum similarity score
+            metadata_filter: Filter by categories, keywords, entities
+
+        Returns:
+            List of matching chunks
+        """
+        return await self._async_search_layer3(
+            query_embedding, k, document_filter, similarity_threshold, metadata_filter
+        )
+
+    async def _ensure_pool(self):
+        """Ensure connection pool is initialized (thread-safe)."""
+        if self.pool is None:
+            async with self._init_lock:
+                # Double-check after acquiring lock
+                if self.pool is None:
+                    await self.initialize()
 
     async def _async_search_layer3(
         self,
@@ -536,13 +836,32 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         k: int,
         document_filter: Optional[str],
         similarity_threshold: Optional[float],
+        metadata_filter: Optional[MetadataFilter] = None,
     ) -> List[Dict]:
-        """Async Layer 3 search."""
+        """
+        Async Layer 3 search with optional metadata filtering.
+
+        Args:
+            query_embedding: Query vector
+            k: Number of results
+            document_filter: Filter by document ID
+            similarity_threshold: Minimum similarity score
+            metadata_filter: Filter by categories, keywords, entities
+
+        Returns:
+            List of matching chunks
+        """
+        await self._ensure_pool()
         query_vec = self._normalize_vector(query_embedding)
 
         async with self.pool.acquire() as conn:
             results = await self._search_layer(
-                conn, layer=3, query_vec=query_vec, k=k, document_filter=document_filter
+                conn,
+                layer=3,
+                query_vec=query_vec,
+                k=k,
+                document_filter=document_filter,
+                metadata_filter=metadata_filter,
             )
 
             # Apply similarity threshold
@@ -550,6 +869,18 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 results = [r for r in results if r["score"] >= similarity_threshold]
 
             return results
+
+    def get_document_list(self) -> List[str]:
+        """Get list of unique document IDs."""
+        return _run_async_safe(self._async_get_document_list())
+
+    async def _async_get_document_list(self) -> List[str]:
+        """Async get document list."""
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT document_id FROM vectors.layer1 ORDER BY document_id"
+            )
+            return [row["document_id"] for row in rows]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get vector store statistics."""
@@ -700,15 +1031,17 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             limit: Maximum conversations to return
 
         Returns:
-            List of conversation dicts with id, title, created_at, updated_at
+            List of conversation dicts with id, title, created_at, updated_at, message_count
         """
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, title, created_at, updated_at
-                FROM auth.conversations
-                WHERE user_id = $1
-                ORDER BY updated_at DESC
+                SELECT c.id, c.title, c.created_at, c.updated_at,
+                       COALESCE((SELECT COUNT(*) FROM auth.messages m
+                                 WHERE m.conversation_id = c.id), 0)::int as message_count
+                FROM auth.conversations c
+                WHERE c.user_id = $1
+                ORDER BY c.updated_at DESC
                 LIMIT $2
                 """,
                 user_id, limit
@@ -977,8 +1310,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     chunk.metadata.page_number,
                     metadata_json,
                 )
-            else:
-                # Layer 2/3: Sections/Chunks (have section columns)
+            elif layer == 2:
+                # Layer 2: Sections (no char_start/char_end)
                 record = (
                     chunk.chunk_id,
                     chunk.metadata.document_id,
@@ -989,8 +1322,27 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     getattr(chunk.metadata, 'section_depth', None),
                     hierarchical_path,
                     chunk.metadata.page_number,
-                    getattr(chunk.metadata, 'char_start', None) if layer == 3 else None,
-                    getattr(chunk.metadata, 'char_end', None) if layer == 3 else None,
+                    embedding_str,
+                    chunk.raw_content,
+                    chunk.metadata.cluster_id,
+                    chunk.metadata.cluster_label,
+                    chunk.metadata.cluster_confidence,
+                    metadata_json,
+                )
+            else:
+                # Layer 3: Chunks (with char_start/char_end)
+                record = (
+                    chunk.chunk_id,
+                    chunk.metadata.document_id,
+                    chunk.metadata.section_id,
+                    chunk.metadata.section_title,
+                    chunk.metadata.section_path,
+                    getattr(chunk.metadata, 'section_level', None),
+                    getattr(chunk.metadata, 'section_depth', None),
+                    hierarchical_path,
+                    chunk.metadata.page_number,
+                    getattr(chunk.metadata, 'char_start', None),
+                    getattr(chunk.metadata, 'char_end', None),
                     embedding_str,
                     chunk.raw_content,
                     chunk.metadata.cluster_id,
@@ -1145,15 +1497,17 @@ class PostgreSQLStorageAdapter:
             limit: Maximum conversations to return
 
         Returns:
-            List of conversation dicts with id, title, created_at, updated_at
+            List of conversation dicts with id, title, created_at, updated_at, message_count
         """
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, title, created_at, updated_at
-                FROM auth.conversations
-                WHERE user_id = $1
-                ORDER BY updated_at DESC
+                SELECT c.id, c.title, c.created_at, c.updated_at,
+                       COALESCE((SELECT COUNT(*) FROM auth.messages m
+                                 WHERE m.conversation_id = c.id), 0)::int as message_count
+                FROM auth.conversations c
+                WHERE c.user_id = $1
+                ORDER BY c.updated_at DESC
                 LIMIT $2
                 """,
                 user_id, limit

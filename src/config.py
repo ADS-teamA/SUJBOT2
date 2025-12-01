@@ -59,6 +59,7 @@ from src.config_schema import (
     ChunkingConfig as ChunkingSchema,
     EmbeddingConfig as EmbeddingSchema,
     ClusteringConfig as ClusteringSchema,
+    IndexingConfig as IndexingSchema,
 )
 
 logger = logging.getLogger(__name__)
@@ -252,6 +253,13 @@ class ExtractionConfig:
     Configuration for Docling extraction (PHASE 1).
     """
 
+    # Extraction backend selection
+    extraction_backend: str  # "gemini", "unstructured", "auto"
+    gemini_model: str  # e.g., "gemini-2.5-flash"
+    gemini_file_size_threshold_mb: float  # File size threshold for chunked extraction
+    gemini_max_output_tokens: int  # Max output tokens for Gemini
+    fallback_to_unstructured: bool
+
     # OCR settings
     enable_ocr: bool
     ocr_engine: str  # "tesseract" or "rapidocr"
@@ -298,6 +306,11 @@ class ExtractionConfig:
             ExtractionConfig instance
         """
         return cls(
+            extraction_backend=extraction_config.backend,
+            gemini_model=extraction_config.gemini_model,
+            gemini_file_size_threshold_mb=extraction_config.gemini_file_size_threshold_mb,
+            gemini_max_output_tokens=extraction_config.gemini_max_output_tokens,
+            fallback_to_unstructured=extraction_config.fallback_to_unstructured,
             enable_ocr=extraction_config.enable_ocr,
             ocr_engine=extraction_config.ocr_engine,
             ocr_language=extraction_config.ocr_language,
@@ -577,9 +590,9 @@ class EmbeddingConfig:
             raise ValueError(f"dimensions must be positive if specified, got {self.dimensions}")
         if self.cache_max_size <= 0:
             raise ValueError(f"cache_max_size must be positive, got {self.cache_max_size}")
-        if self.provider is not None and self.provider not in ["voyage", "openai", "huggingface"]:
+        if self.provider is not None and self.provider not in ["voyage", "openai", "huggingface", "deepinfra"]:
             raise ValueError(
-                f"provider must be 'voyage', 'openai', or 'huggingface', got {self.provider}"
+                f"provider must be 'voyage', 'openai', 'huggingface', or 'deepinfra', got {self.provider}"
             )
 
     @classmethod

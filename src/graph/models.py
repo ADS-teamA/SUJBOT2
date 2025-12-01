@@ -675,14 +675,16 @@ class KnowledgeGraph:
         """Compute statistics about the graph."""
         entity_type_counts = {}
         for entity in self.entities:
-            # entity.type is already a string
-            entity_type_counts[entity.type] = entity_type_counts.get(entity.type, 0) + 1
+            # Convert EntityType enum to string for JSON serialization
+            type_key = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
+            entity_type_counts[type_key] = entity_type_counts.get(type_key, 0) + 1
 
         relationship_type_counts = {}
         for rel in self.relationships:
-            # rel.type is already a string
-            relationship_type_counts[rel.type] = (
-                relationship_type_counts.get(rel.type, 0) + 1
+            # rel.type should be a string
+            rel_key = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
+            relationship_type_counts[rel_key] = (
+                relationship_type_counts.get(rel_key, 0) + 1
             )
 
         # Average confidence

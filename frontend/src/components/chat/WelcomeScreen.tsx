@@ -9,40 +9,45 @@
  */
 
 import { FileText, Scale, Shield, FileCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 
 interface WelcomeScreenProps {
   onPromptClick: (prompt: string) => void;
+  children?: React.ReactNode;
 }
 
+// Prompt templates - titles and prompts use translation keys
 const SUGGESTED_PROMPTS = [
   {
     icon: Scale,
-    title: 'Legal Compliance',
-    prompt: 'What are the GDPR compliance requirements for data processing?',
+    titleKey: 'welcome.regulatoryCompliance',
+    promptKey: 'welcome.prompts.regulatoryCompliance',
   },
   {
     icon: Shield,
-    title: 'Risk Assessment',
-    prompt: 'Analyze the cybersecurity risks in our data retention policy',
+    titleKey: 'welcome.safetyAnalysis',
+    promptKey: 'welcome.prompts.safetyAnalysis',
   },
   {
     icon: FileCheck,
-    title: 'Document Comparison',
-    prompt: 'Compare the privacy policies across our documents',
+    titleKey: 'welcome.documentComparison',
+    promptKey: 'welcome.prompts.documentComparison',
   },
   {
     icon: FileText,
-    title: 'Citation Lookup',
-    prompt: 'Find all references to data protection regulations',
+    titleKey: 'welcome.citationLookup',
+    promptKey: 'welcome.prompts.citationLookup',
   },
 ];
 
-export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
+export function WelcomeScreen({ onPromptClick, children }: WelcomeScreenProps) {
+  const { t } = useTranslation();
+
   return (
     <div className={cn(
-      'flex-1 flex flex-col items-center justify-start',
-      'px-6 pt-12 pb-32 overflow-hidden'
+      'flex-1 flex flex-col items-center justify-center',
+      'px-6 py-8 overflow-hidden'
     )}>
       {/* Gradient background */}
       <div
@@ -83,7 +88,7 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
 
       {/* Main content */}
       <div
-        className="max-w-4xl w-full flex flex-col"
+        className="max-w-4xl w-full flex flex-col items-center gap-8"
         style={{
           animation: 'fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
@@ -139,17 +144,21 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
           </h1>
         </div>
 
-        {/* Spacer for centered input box (ChatInput is absolutely positioned here) */}
-        <div className="-mt-4" />
+        {/* Search bar slot */}
+        {children && (
+          <div className="w-full max-w-3xl">
+            {children}
+          </div>
+        )}
 
         {/* Suggested prompts */}
-        <div className="space-y-3 mt-44">
+        <div className="w-full space-y-3">
           <p className={cn(
             'text-sm font-medium tracking-wide uppercase',
             'text-accent-500 dark:text-accent-500',
             'text-center'
           )}>
-            Suggested Questions
+            {t('welcome.suggestedQuestions')}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {SUGGESTED_PROMPTS.map((item, index) => {
@@ -157,7 +166,7 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
               return (
                 <button
                   key={index}
-                  onClick={() => onPromptClick(item.prompt)}
+                  onClick={() => onPromptClick(t(item.promptKey))}
                   className={cn(
                     'group relative',
                     'p-4 rounded-xl',
@@ -188,13 +197,13 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
                         'text-sm font-medium mb-1',
                         'text-accent-900 dark:text-accent-100'
                       )}>
-                        {item.title}
+                        {t(item.titleKey)}
                       </div>
                       <div className={cn(
                         'text-xs line-clamp-2',
                         'text-accent-600 dark:text-accent-400'
                       )}>
-                        {item.prompt}
+                        {t(item.promptKey)}
                       </div>
                     </div>
                   </div>
@@ -204,21 +213,6 @@ export function WelcomeScreen({ onPromptClick }: WelcomeScreenProps) {
           </div>
         </div>
 
-        {/* Capabilities hint */}
-        <div className="text-center space-y-1 mt-6">
-          <p className={cn(
-            'text-xs',
-            'text-accent-400 dark:text-accent-600'
-          )}>
-            Multi-agent RAG system with 7 specialized agents
-          </p>
-          <p className={cn(
-            'text-xs',
-            'text-accent-400 dark:text-accent-600'
-          )}>
-            Hierarchical document analysis • Knowledge graph integration • Citation verification
-          </p>
-        </div>
       </div>
     </div>
   );
