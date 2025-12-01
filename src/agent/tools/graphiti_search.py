@@ -28,12 +28,15 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 from pydantic import Field
 
 from src.agent.tools._base import BaseTool, ToolInput, ToolResult
 from src.agent.tools._registry import register_tool
+
+if TYPE_CHECKING:
+    from graphiti_core.search.search_config import SearchConfig
 
 logger = logging.getLogger(__name__)
 
@@ -118,10 +121,14 @@ class GraphitiSearchInput(ToolInput):
     ] = Field(
         default=None,
         description=(
-            "Optional search recipe for advanced ranking: "
-            "combined_rrf/mmr/cross_encoder (edges+nodes), "
-            "edge_distance/edge_rrf (edges only), "
-            "node_rrf/node_cross_encoder (nodes only)"
+            "Optional search recipe for advanced ranking. Choose based on use case:\n"
+            "- combined_rrf: Best for general search, balances edges+nodes via Reciprocal Rank Fusion\n"
+            "- combined_mmr: Diverse results via Maximal Marginal Relevance (reduces redundancy)\n"
+            "- combined_cross_encoder: Highest accuracy but slower (neural reranking)\n"
+            "- edge_distance: Fast edge search by graph distance (for relationship queries)\n"
+            "- edge_rrf: Edge search with RRF ranking\n"
+            "- node_rrf: Entity-focused search with RRF ranking\n"
+            "- node_cross_encoder: Entity search with neural reranking (slower but accurate)"
         ),
     )
     return_episodes: bool = Field(
@@ -533,14 +540,23 @@ class GraphitiSearchTool(BaseTool):
                 error=f"Internal error in Graphiti search: {str(e)}",
             )
 
-    def _pick_search_config(self, recipe: Optional[str], num_results: int):
+    def _pick_search_config(
+        self, recipe: Optional[str], num_results: int
+    ) -> Optional["SearchConfig"]:
         """
         Select a Graphiti search recipe and configure limits.
 
-        Available recipes:
-        - combined_rrf/mmr/cross_encoder: Combined edge + node search
-        - edge_distance/edge_rrf: Edge-focused search
-        - node_rrf/node_cross_encoder: Node-focused search
+        Args:
+            recipe: Recipe name string or None for default behavior.
+                Valid recipes: combined_rrf, combined_mmr, combined_cross_encoder,
+                edge_distance, edge_rrf, node_rrf, node_cross_encoder
+            num_results: Limit to apply to the config and all subconfigs
+
+        Returns:
+            SearchConfig with adjusted limits, or None if recipe is None or unknown.
+
+        Raises:
+            ValueError: If recipe is provided but unknown (invalid recipe name).
         """
         if not recipe:
             return None
@@ -567,8 +583,11 @@ class GraphitiSearchTool(BaseTool):
 
         config = mapping.get(recipe)
         if not config:
-            logger.warning(f"Unknown search recipe: {recipe}, using default search")
-            return None
+            valid_recipes = list(mapping.keys())
+            raise ValueError(
+                f"Unknown search recipe: '{recipe}'. "
+                f"Valid recipes: {valid_recipes}"
+            )
 
         # Deep copy to avoid mutating the original
         config = config.model_copy(deep=True)
@@ -899,12 +918,24 @@ class GraphitiSearchTool(BaseTool):
 
         Episodes are the source chunks that were ingested into Graphiti.
         This provides provenance for facts back to the original document text.
+
+        Note:
+            Failures are logged but do not raise exceptions. If episode hydration
+            fails (e.g., Neo4j connection error), search_result.episodes will
+            remain empty. The search result is still valid - episodes are optional
+            provenance information.
+
+        Args:
+            search_result: The search result to enrich with episodes
+            episode_limit: Maximum number of episodes to fetch
         """
-        # Collect unique episode IDs from all facts
+        # Collect unique episode IDs from all facts (preserve order, deduplicate)
+        episode_ids_set: set[str] = set()
         episode_ids: List[str] = []
         for fact in search_result.facts:
             for episode_uuid in fact.get("episodes", []) or []:
-                if episode_uuid not in episode_ids:
+                if episode_uuid not in episode_ids_set:
+                    episode_ids_set.add(episode_uuid)
                     episode_ids.append(episode_uuid)
 
         if not episode_ids:
@@ -936,8 +967,18 @@ class GraphitiSearchTool(BaseTool):
 
             logger.debug(f"Hydrated {len(search_result.episodes)} episodes for search result")
 
+        except ImportError as e:
+            logger.error(
+                f"graphiti_core.nodes import failed during episode hydration: {e}",
+                exc_info=True,
+            )
+            # Don't fail the search, just leave episodes empty
         except Exception as e:
-            logger.warning(f"Failed to hydrate episodes for Graphiti search: {e}")
+            logger.warning(
+                f"Failed to hydrate episodes for Graphiti search: {e}. "
+                f"Attempted to load {len(limited_ids)} episodes: {limited_ids[:3]}...",
+                exc_info=True,
+            )
             # Don't fail the search, just leave episodes empty
 
 

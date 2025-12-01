@@ -270,17 +270,27 @@ class EntityDeduplicationConfig:
         """
         Load entity alias map from JSON file.
 
-        Expected format:
+        Expected format (metadata keys prefixed with _ are skipped):
         {
+            "_comment": "Description of the file",
+            "_updated": "2024-12-01",
             "canonical_name": ["alias1", "alias2", ...],
             ...
         }
 
-        Returns inverted map: alias -> canonical_name
+        Returns inverted map: alias -> canonical_name (all keys lowercased)
+
+        Note:
+            - Keys starting with "_" are treated as metadata and skipped
+            - All lookups are case-insensitive (keys stored in lowercase)
+            - Canonical name is automatically included as an alias to itself
         """
         alias_path = Path(path)
         if not alias_path.exists():
-            logger.warning(f"Alias map file not found: {path}")
+            logger.warning(
+                f"Alias map file not found: {path}. "
+                f"Alias-based entity deduplication will be disabled."
+            )
             return {}
 
         try:
@@ -289,21 +299,59 @@ class EntityDeduplicationConfig:
 
             # Invert: canonical -> aliases becomes alias -> canonical
             inverted: Dict[str, str] = {}
+            skipped_metadata = 0
+            skipped_invalid = 0
+
             for canonical, aliases in raw_map.items():
+                # Skip metadata keys (e.g., _comment, _updated)
+                if canonical.startswith("_"):
+                    skipped_metadata += 1
+                    continue
+
+                # Validate that aliases is a list
+                if not isinstance(aliases, list):
+                    logger.warning(
+                        f"Skipping malformed alias entry for '{canonical}': "
+                        f"expected list, got {type(aliases).__name__}"
+                    )
+                    skipped_invalid += 1
+                    continue
+
                 # Map canonical to itself (for consistency)
                 inverted[canonical.lower()] = canonical
+
                 # Map all aliases to canonical
                 for alias in aliases:
-                    inverted[alias.lower()] = canonical
+                    if isinstance(alias, str):
+                        inverted[alias.lower()] = canonical
+                    else:
+                        logger.warning(
+                            f"Skipping non-string alias for '{canonical}': {alias}"
+                        )
 
-            logger.info(f"Loaded {len(inverted)} alias mappings from {path}")
+            logger.info(
+                f"Loaded {len(inverted)} alias mappings from {path} "
+                f"(skipped {skipped_metadata} metadata keys)"
+            )
             return inverted
 
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in alias map file {path}: {e}")
+            logger.error(
+                f"Invalid JSON in alias map file {path}: {e}. "
+                f"Alias-based entity deduplication will be disabled."
+            )
             return {}
-        except Exception as e:
-            logger.error(f"Failed to load alias map from {path}: {e}")
+        except (IOError, OSError, PermissionError) as e:
+            logger.error(
+                f"Failed to read alias map file {path}: {e}. "
+                f"Alias-based entity deduplication will be disabled."
+            )
+            return {}
+        except UnicodeDecodeError as e:
+            logger.error(
+                f"Encoding error in alias map file {path}: {e}. "
+                f"Ensure file is UTF-8 encoded. Alias-based deduplication disabled."
+            )
             return {}
 
     @classmethod
@@ -319,12 +367,23 @@ class EntityDeduplicationConfig:
                     acro, expansion = pair.split(":", 1)
                     custom_acronyms[acro.strip()] = expansion.strip()
 
-        # Default alias map path
+        # Default alias map path with existence check and logging
         default_alias_path = os.getenv("KG_ALIAS_MAP_PATH", "config/entity_aliases.json")
+        alias_path = Path(default_alias_path)
+
+        if alias_path.exists():
+            alias_map_path = default_alias_path
+        else:
+            logger.info(
+                f"Alias map file not found at {default_alias_path}. "
+                f"Alias-based entity deduplication will be disabled. "
+                f"Set KG_ALIAS_MAP_PATH to override."
+            )
+            alias_map_path = None
 
         return cls(
             enabled=os.getenv("KG_DEDUPLICATE_ENTITIES", "true").lower() == "true",
-            alias_map_path=default_alias_path if Path(default_alias_path).exists() else None,
+            alias_map_path=alias_map_path,
             enable_entity_linker=os.getenv("KG_ENABLE_ENTITY_LINKER", "false").lower() == "true",
             use_embeddings=os.getenv("KG_DEDUP_USE_EMBEDDINGS", "false").lower() == "true",
             similarity_threshold=float(os.getenv("KG_DEDUP_SIMILARITY_THRESHOLD", "0.90")),

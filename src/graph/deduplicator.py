@@ -28,9 +28,10 @@ class EntityDeduplicator:
     Deduplication strategy (layers applied in order):
     1. Exact match on (entity_type, normalized_value) - Fast, 100% precision
     1.5. Alias map lookup for canonical names - Fast, 100% precision
-    2. Embedding similarity - Medium speed, ~95% precision
-    3. Acronym expansion + fuzzy - Slower, ~90% precision
+    2. Embedding similarity - Medium speed, high precision (configurable threshold)
+    3. Acronym expansion + fuzzy - Slower, moderate precision (configurable threshold)
 
+    Precision estimates for layers 2-3 depend on domain and thresholds.
     Each layer is optional and configurable.
 
     Example:
@@ -239,6 +240,11 @@ class EntityDeduplicator:
             try:
                 entity_type = EntityType(entity_type)
             except ValueError:
+                logger.warning(
+                    f"Unknown entity type '{entity_type}' in alias lookup for value '{value}'. "
+                    f"Entity will not be deduplicated via alias. "
+                    f"Valid types: {[t.value for t in EntityType]}"
+                )
                 return None
 
         # Try exact normalized match first
@@ -317,7 +323,18 @@ class EntityDeduplicator:
         return primary
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get comprehensive deduplication statistics."""
+        """
+        Get comprehensive deduplication statistics.
+
+        Returns:
+            Dict with match counts and precision metadata:
+            - layer1_matches, alias_matches, layer2_matches, layer3_matches: int
+            - total_matches: sum of all matches
+            - layer1_precision: 1.0 (exact match is deterministic)
+            - alias_precision: 1.0 if alias map loaded (deterministic)
+            - layer2_threshold: configured similarity threshold (if enabled)
+            - layer3_threshold: configured fuzzy threshold (if enabled)
+        """
         total_matches = (
             self.stats["layer1_matches"]
             + self.stats["alias_matches"]
@@ -328,8 +345,14 @@ class EntityDeduplicator:
         return {
             **self.stats,
             "total_matches": total_matches,
-            "layer1_precision": 1.0,  # Exact match is 100% precise
-            "alias_precision": 1.0 if self.alias_map else None,  # Alias is deterministic
-            "layer2_precision": 0.95 if self.config.use_embeddings else None,
-            "layer3_precision": 0.90 if self.config.use_acronym_expansion else None,
+            # Deterministic layers - 100% precision by definition
+            "layer1_precision": 1.0,
+            "alias_precision": 1.0 if self.alias_map else None,
+            # Threshold-based layers - precision depends on domain and threshold setting
+            "layer2_threshold": (
+                self.config.similarity_threshold if self.config.use_embeddings else None
+            ),
+            "layer3_threshold": (
+                self.config.acronym_fuzzy_threshold if self.config.use_acronym_expansion else None
+            ),
         }
