@@ -6,11 +6,12 @@ Handles tool schema translation and context caching.
 """
 
 import logging
+import os
 from typing import Any, Dict, Iterator, List, Optional
 
-from google import genai
+import google.generativeai as genai
+from google.generativeai import types as genai_types
 from google.api_core import exceptions as google_exceptions
-from google.genai import types
 
 from .base import BaseProvider, ProviderResponse
 
@@ -54,9 +55,12 @@ class GeminiProvider(BaseProvider):
                 f"Expected model name containing 'gemini' (e.g., 'gemini-2.5-flash')"
             )
 
-        self._client = genai.Client(api_key=api_key)
+        # Configure API key for legacy google.generativeai SDK
+        genai.configure(api_key=api_key)
+        self._api_key = api_key
         self.model = model
-        self._cache: Optional[types.CachedContent] = None
+        self._generative_model: Optional[genai.GenerativeModel] = None  # Lazy init
+        self._cache: Optional[Any] = None
         logger.info(f"Initialized Gemini provider: model={model}")
 
     def create_message(
@@ -102,22 +106,32 @@ class GeminiProvider(BaseProvider):
         if gemini_tools:
             config_params["tools"] = gemini_tools
 
-        # Use cached content if available
-        if self._cache:
-            config_params["cached_content"] = self._cache.name
-            logger.debug(f"Using cached content: {self._cache.name}")
+        # Context caching (for new SDK - currently disabled)
+        # if self._cache:
+        #     config_params["cached_content"] = self._cache.name
+        #     logger.debug(f"Using cached content: {self._cache.name}")
 
-        config = types.GenerateContentConfig(**config_params)
+        # Build generation config for legacy SDK
+        generation_config = genai_types.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+        )
 
-        # Call Gemini API
+        # Call Gemini API using legacy SDK pattern
         try:
             # DEBUG: Log what we're sending
             logger.debug(f"Sending to Gemini: {len(gemini_messages)} messages, tools={'yes' if gemini_tools else 'no'}, system={'yes' if system_instruction else 'no'}")
 
-            response = self._client.models.generate_content(
-                model=self.model,
+            # Create model with system instruction
+            model = genai.GenerativeModel(
+                model_name=self.model,
+                system_instruction=system_instruction,
+            )
+
+            response = model.generate_content(
                 contents=gemini_messages,
-                config=config,
+                generation_config=generation_config,
+                tools=gemini_tools,
             )
 
             # DEBUG: Log what we received
@@ -206,18 +220,25 @@ class GeminiProvider(BaseProvider):
         if gemini_tools:
             config_params["tools"] = gemini_tools
 
-        # Use cached content if available
-        if self._cache:
-            config_params["cached_content"] = self._cache.name
+        # Build generation config for legacy SDK
+        generation_config = genai_types.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+        )
 
-        config = types.GenerateContentConfig(**config_params)
-
-        # Stream from Gemini API
+        # Stream from Gemini API using legacy SDK pattern
         try:
-            stream = self._client.models.generate_content_stream(
-                model=self.model,
+            # Create model with system instruction
+            model = genai.GenerativeModel(
+                model_name=self.model,
+                system_instruction=system_instruction,
+            )
+
+            stream = model.generate_content(
                 contents=gemini_messages,
-                config=config,
+                generation_config=generation_config,
+                tools=gemini_tools,
+                stream=True,
             )
 
             return stream
@@ -303,49 +324,28 @@ class GeminiProvider(BaseProvider):
         """
         Create context cache for system prompt and tools.
 
-        Cache requirements (Gemini):
-        - Minimum 1024 tokens (2.5 Flash) or 4096 tokens (2.5 Pro)
-        - Default TTL: 5 minutes (300s)
+        NOTE: Context caching requires the new google-genai SDK (google.genai).
+        The legacy google-generativeai SDK has limited caching support.
+        This method is a no-op with the legacy SDK.
 
         Args:
             system_instruction: System prompt
             tools: Tool definitions (Anthropic format)
             ttl_seconds: Time-to-live in seconds
         """
-        try:
-            gemini_tools = self._convert_tools_to_gemini(tools) if tools else []
-
-            # Create cached content
-            cache = self._client.caches.create(
-                model=self.model,
-                config=types.CreateCachedContentConfig(
-                    display_name=f"agent_cache_{self.model}",
-                    system_instruction=system_instruction,
-                    tools=gemini_tools,
-                    ttl=f"{ttl_seconds}s",
-                ),
-            )
-
-            self._cache = cache
-            logger.info(
-                f"Created context cache: {cache.name} (TTL={ttl_seconds}s, "
-                f"tokens={cache.usage_metadata.total_token_count if hasattr(cache, 'usage_metadata') else 'unknown'})"
-            )
-
-        except Exception as e:
-            logger.warning(f"Failed to create cache: {e}. Continuing without caching.")
-            self._cache = None
+        # Legacy google-generativeai SDK has different caching API
+        # For now, we skip caching and log a warning
+        logger.warning(
+            "Context caching not available with legacy google-generativeai SDK. "
+            "To enable caching, upgrade to google-genai package."
+        )
+        self._cache = None
 
     def clear_cache(self) -> None:
         """Clear cached content."""
         if self._cache:
-            try:
-                self._client.caches.delete(name=self._cache.name)
-                logger.info(f"Deleted cache: {self._cache.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete cache: {e}")
-            finally:
-                self._cache = None
+            logger.info("Clearing cache reference (legacy SDK - no server-side cache)")
+            self._cache = None
 
     # ========================================================================
     # FORMAT CONVERSION
@@ -353,21 +353,21 @@ class GeminiProvider(BaseProvider):
 
     def _convert_messages_to_gemini(
         self, messages: List[Dict[str, Any]]
-    ) -> List[types.Content]:
+    ) -> List[Dict[str, Any]]:
         """
         Convert Anthropic message format to Gemini format.
 
         Anthropic format:
             [{"role": "user", "content": "..."}, {"role": "assistant", "content": [...]}]
 
-        Gemini format:
-            [Content(role="user", parts=[Part(text="...")]), ...]
+        Gemini format (dict-based for legacy SDK compatibility):
+            [{"role": "user", "parts": [{"text": "..."}]}, ...]
 
         Args:
             messages: Anthropic-format messages
 
         Returns:
-            Gemini Content objects
+            List of Gemini content dicts
         """
         gemini_messages = []
 
@@ -385,14 +385,14 @@ class GeminiProvider(BaseProvider):
             else:
                 gemini_role = "user"
 
-            # Convert content blocks
+            # Convert content blocks using dict format (legacy SDK compatible)
             parts = []
             if isinstance(content, str):
-                parts.append(types.Part(text=content))
+                parts.append({"text": content})
             elif isinstance(content, list):
                 for block in content:
                     if block.get("type") == "text":
-                        parts.append(types.Part(text=block["text"]))
+                        parts.append({"text": block["text"]})
                     elif block.get("type") == "tool_use":
                         # Gemini function call format
                         # Track the mapping for later tool_result conversion
@@ -401,14 +401,12 @@ class GeminiProvider(BaseProvider):
                         if tool_id:
                             tool_id_to_name[tool_id] = tool_name
 
-                        parts.append(
-                            types.Part(
-                                function_call=types.FunctionCall(
-                                    name=tool_name,
-                                    args=block.get("input", {}),
-                                )
-                            )
-                        )
+                        parts.append({
+                            "function_call": {
+                                "name": tool_name,
+                                "args": block.get("input", {}),
+                            }
+                        })
                     elif block.get("type") == "tool_result":
                         # Gemini function response format
                         # CRITICAL: Use function name (not tool_use_id) to match FunctionCall
@@ -423,20 +421,18 @@ class GeminiProvider(BaseProvider):
                                 f"using fallback: {function_name}"
                             )
 
-                        parts.append(
-                            types.Part(
-                                function_response=types.FunctionResponse(
-                                    name=function_name,  # Use function name (not ID)
-                                    response={"result": block.get("content", "")},
-                                )
-                            )
-                        )
+                        parts.append({
+                            "function_response": {
+                                "name": function_name,
+                                "response": {"result": block.get("content", "")},
+                            }
+                        })
 
-            gemini_messages.append(types.Content(role=gemini_role, parts=parts))
+            gemini_messages.append({"role": gemini_role, "parts": parts})
 
         return gemini_messages
 
-    def _convert_tools_to_gemini(self, tools: List[Dict[str, Any]]) -> List[types.Tool]:
+    def _convert_tools_to_gemini(self, tools: List[Dict[str, Any]]) -> List[Any]:
         """
         Convert Anthropic tool format to Gemini function declarations.
 
@@ -450,7 +446,7 @@ class GeminiProvider(BaseProvider):
             tools: Anthropic tool definitions
 
         Returns:
-            Gemini Tool object
+            List containing a single Tool object with function declarations
         """
         function_declarations = []
 
@@ -463,17 +459,18 @@ class GeminiProvider(BaseProvider):
                 "required": input_schema.get("required", []),
             }
 
-            func_decl = types.FunctionDeclaration(
+            # Use genai.protos for legacy SDK compatibility
+            func_decl = genai.protos.FunctionDeclaration(
                 name=tool["name"],
                 description=tool.get("description", ""),
                 parameters=parameters,
             )
             function_declarations.append(func_decl)
 
-        return [types.Tool(function_declarations=function_declarations)]
+        return [genai.protos.Tool(function_declarations=function_declarations)]
 
     def _convert_response_to_anthropic(
-        self, response: types.GenerateContentResponse
+        self, response: Any
     ) -> ProviderResponse:
         """
         Convert Gemini response to Anthropic ProviderResponse format.
@@ -511,11 +508,13 @@ class GeminiProvider(BaseProvider):
                 # Gemini called a function - must continue loop for tool execution
                 stop_reason = "tool_use"
             else:
-                # Normal finish reasons
+                # Normal finish reasons (handle both SDK versions)
                 finish_reason = candidate.finish_reason
-                if finish_reason == types.FinishReason.STOP:
+                # Legacy SDK uses int/enum, convert to string for comparison
+                finish_reason_str = str(finish_reason).upper() if finish_reason else ""
+                if "STOP" in finish_reason_str or finish_reason == 1:
                     stop_reason = "end_turn"
-                elif finish_reason == types.FinishReason.MAX_TOKENS:
+                elif "MAX_TOKENS" in finish_reason_str or finish_reason == 2:
                     stop_reason = "max_tokens"
                 else:
                     stop_reason = "end_turn"  # Default

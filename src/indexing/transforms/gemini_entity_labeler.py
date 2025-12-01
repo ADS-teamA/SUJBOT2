@@ -1,8 +1,13 @@
 """
-Gemini 2.5 Flash entity labeler for chunk metadata enrichment.
+Multi-provider entity labeler for chunk metadata enrichment.
 
-This TransformComponent extracts entities from chunks using Gemini 2.5 Flash,
+This TransformComponent extracts entities from chunks using LLM providers,
 adding entity labels to node metadata for improved retrieval filtering.
+
+Supports:
+- OpenAI models (gpt-4o-mini, gpt-4o, etc.) - default
+- Gemini models (gemini-2.5-flash, etc.)
+- Anthropic Claude models (claude-haiku-4-5, claude-sonnet-4, etc.)
 
 Entity types are aligned with GeminiKGExtractor for consistency:
 - Legal: regulation, legal_provision, requirement, permit
@@ -13,11 +18,12 @@ Entity types are aligned with GeminiKGExtractor for consistency:
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import google.generativeai as genai
 from json_repair import repair_json
 from llama_index.core.schema import BaseNode, TransformComponent
+from pydantic import Field
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +91,32 @@ class GeminiEntityLabeler(TransformComponent):
         [{"name": "SÚJB", "type": "organization", "confidence": 0.95}]
     """
 
+    # Pydantic field declarations (required for BaseModel)
+    model_name: str = Field(
+        default="gemini-2.5-flash",
+        description="Gemini model to use for entity extraction"
+    )
+    batch_size: int = Field(
+        default=10,
+        ge=1,
+        description="Number of nodes to process per batch"
+    )
+    min_confidence: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold for entities"
+    )
+    max_text_length: int = Field(
+        default=4000,
+        ge=1,
+        description="Maximum text length to send to Gemini"
+    )
+
+    # Private field for lazy model initialization
+    _model: Optional[Union[genai.GenerativeModel, Any]] = None
+    _provider: Optional[str] = None
+
     def __init__(
         self,
         model_name: str = "gemini-2.5-flash",
@@ -93,46 +125,60 @@ class GeminiEntityLabeler(TransformComponent):
         max_text_length: int = 4000,
     ):
         """
-        Initialize the entity labeler.
+        Initialize the entity labeler with automatic provider detection.
 
         Args:
-            model_name: Gemini model to use (default: gemini-2.5-flash)
+            model_name: Model name (gemini-2.5-flash, gpt-4o-mini, etc.)
             batch_size: Number of nodes to process per batch
             min_confidence: Minimum confidence threshold for entities
-            max_text_length: Maximum text length to send to Gemini
+            max_text_length: Maximum text length to send to LLM
 
         Raises:
             ValueError: If parameters are invalid.
         """
-        super().__init__()
+        super().__init__(
+            model_name=model_name,
+            batch_size=batch_size,
+            min_confidence=min_confidence,
+            max_text_length=max_text_length,
+        )
 
-        # Validate parameters
-        if batch_size < 1:
-            raise ValueError(f"batch_size must be >= 1, got {batch_size}")
-        if not 0.0 <= min_confidence <= 1.0:
-            raise ValueError(f"min_confidence must be 0.0-1.0, got {min_confidence}")
-        if max_text_length < 1:
-            raise ValueError(f"max_text_length must be >= 1, got {max_text_length}")
-
-        self.model_name = model_name
-        self.batch_size = batch_size
-        self.min_confidence = min_confidence
-        self.max_text_length = max_text_length
-
-        # Initialize Gemini model (lazy)
-        self._model: Optional[genai.GenerativeModel] = None
+        # Detect provider from model name
+        from src.agent.providers.factory import detect_provider_from_model
+        self._provider = detect_provider_from_model(model_name)
+        logger.info(f"Entity labeler initialized: model={model_name}, provider={self._provider}")
 
     @property
-    def model(self) -> genai.GenerativeModel:
-        """Lazy initialization of Gemini model."""
+    def model(self) -> Any:
+        """Lazy initialization of model based on provider."""
         if self._model is None:
             import os
-            if not os.getenv("GOOGLE_API_KEY"):
-                raise RuntimeError(
-                    "GOOGLE_API_KEY environment variable not set. "
-                    "Required for Gemini entity labeling. Set it in .env file."
-                )
-            self._model = genai.GenerativeModel(self.model_name)
+
+            if self._provider == "google":
+                if not os.getenv("GOOGLE_API_KEY"):
+                    raise RuntimeError(
+                        "GOOGLE_API_KEY environment variable not set. "
+                        "Required for Gemini entity labeling. Set it in .env file."
+                    )
+                self._model = genai.GenerativeModel(self.model_name)
+            elif self._provider == "openai":
+                if not os.getenv("OPENAI_API_KEY"):
+                    raise RuntimeError(
+                        "OPENAI_API_KEY environment variable not set. "
+                        "Required for GPT entity labeling. Set it in .env file."
+                    )
+                from openai import OpenAI
+                self._model = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            elif self._provider == "anthropic":
+                if not os.getenv("ANTHROPIC_API_KEY"):
+                    raise RuntimeError(
+                        "ANTHROPIC_API_KEY environment variable not set. "
+                        "Required for Claude entity labeling. Set it in .env file."
+                    )
+                import anthropic
+                self._model = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            else:
+                raise ValueError(f"Unsupported provider for entity labeling: {self._provider}")
         return self._model
 
     def __call__(self, nodes: List[BaseNode], **kwargs: Any) -> List[BaseNode]:
@@ -150,19 +196,43 @@ class GeminiEntityLabeler(TransformComponent):
 
         logger.info(f"Entity labeling: {len(nodes)} nodes with {self.model_name}")
 
+        # Track failures for summary
+        failure_count = 0
+
         # Process in batches
         for i in range(0, len(nodes), self.batch_size):
             batch = nodes[i : i + self.batch_size]
-            self._process_batch(batch)
+            batch_failures = self._process_batch(batch)
+            failure_count += batch_failures
 
             if i > 0 and i % (self.batch_size * 5) == 0:
                 logger.info(f"Entity labeling progress: {i}/{len(nodes)} nodes")
 
-        logger.info(f"Entity labeling complete: {len(nodes)} nodes processed")
+        # Summary logging with failure rate
+        if failure_count > 0:
+            failure_rate = failure_count / len(nodes)
+            if failure_rate > 0.5:
+                logger.error(
+                    f"Entity labeling DEGRADED: {failure_count}/{len(nodes)} nodes failed "
+                    f"({failure_rate:.0%}). Check API keys and rate limits."
+                )
+            else:
+                logger.warning(
+                    f"Entity labeling completed with {failure_count} failures "
+                    f"out of {len(nodes)} nodes ({failure_rate:.0%})"
+                )
+        else:
+            logger.info(f"Entity labeling complete: {len(nodes)} nodes processed successfully")
+
         return nodes
 
-    def _process_batch(self, nodes: List[BaseNode]) -> None:
-        """Process batch of nodes with Gemini."""
+    def _process_batch(self, nodes: List[BaseNode]) -> int:
+        """Process batch of nodes with LLM provider.
+
+        Returns:
+            Number of failures in this batch.
+        """
+        failures = 0
         for node in nodes:
             try:
                 # Get text content from node
@@ -189,6 +259,7 @@ class GeminiEntityLabeler(TransformComponent):
 
             except Exception as e:
                 # Preserve node even if labeling fails
+                failures += 1
                 node_id = getattr(node, 'id_', 'unknown')
                 logger.warning(
                     f"Entity extraction failed for node {node_id}: {e}",
@@ -198,6 +269,8 @@ class GeminiEntityLabeler(TransformComponent):
                 node.metadata["entities"] = []
                 node.metadata["entity_types"] = []
                 node.metadata["topics"] = []
+
+        return failures
 
     def _get_node_text(self, node: BaseNode) -> str:
         """Extract text content from node."""
@@ -209,7 +282,7 @@ class GeminiEntityLabeler(TransformComponent):
         return ""
 
     def _extract_entities(self, text: str) -> Dict[str, Any]:
-        """Call Gemini for entity extraction."""
+        """Call LLM (Gemini, OpenAI, or Anthropic) for entity extraction."""
         # Truncate text if too long
         truncated_text = text[: self.max_text_length]
         if len(text) > self.max_text_length:
@@ -221,11 +294,29 @@ class GeminiEntityLabeler(TransformComponent):
             text=truncated_text,
         )
 
-        # Call Gemini
-        response = self.model.generate_content(prompt)
+        # Call appropriate API
+        if self._provider == "google":
+            response = self.model.generate_content(prompt)
+            response_text = response.text
+        elif self._provider == "openai":
+            response = self.model.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+            )
+            response_text = response.choices[0].message.content
+        elif self._provider == "anthropic":
+            response = self.model.messages.create(
+                model=self.model_name,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            response_text = response.content[0].text
+        else:
+            raise ValueError(f"Unsupported provider: {self._provider}")
 
         # Parse response
-        return self._parse_response(response.text)
+        return self._parse_response(response_text)
 
     def _parse_response(self, text: str) -> Dict[str, Any]:
         """Parse JSON response with repair fallback."""

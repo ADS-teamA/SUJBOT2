@@ -255,7 +255,8 @@ def run_single_document(
     # Show wrapper/entity labeling status
     if use_wrapper and LLAMAINDEX_WRAPPER_AVAILABLE:
         print_info(f"LlamaIndex Wrapper: ON (state persistence + entity labeling)")
-        print_info(f"Entity Labeling: ON (Gemini 2.5 Flash)")
+        entity_model = root_config.indexing.entity_labeling_model  # From RootConfig.indexing
+        print_info(f"Entity Labeling: ON ({entity_model})")
     elif use_wrapper and not LLAMAINDEX_WRAPPER_AVAILABLE:
         print_info(f"LlamaIndex Wrapper: REQUESTED but dependencies not installed")
         use_wrapper = False
@@ -302,11 +303,26 @@ def run_single_document(
         print_success(f"Vector store persisted in PostgreSQL database")
 
         # Save PHASE 5A: Knowledge Graph (if enabled)
+        # Note: KG may already be saved by indexing_pipeline.py
         kg_path = None
         if knowledge_graph:
             kg_path = output_dir / f"{doc_name}_kg.json"
-            knowledge_graph.save_json(str(kg_path))
-            print_success(f"Knowledge graph saved: {kg_path}")
+            if kg_path.exists():
+                print_success(f"Knowledge graph saved: {kg_path}")
+            else:
+                # Fallback: save using appropriate method
+                print_info("KG not saved by indexing pipeline, using fallback save...")
+                try:
+                    import json
+                    # Try save_json method first (KnowledgeGraph), fallback to to_dict (GraphitiExtractionResult)
+                    if hasattr(knowledge_graph, 'save_json'):
+                        knowledge_graph.save_json(str(kg_path))
+                    else:
+                        with open(kg_path, "w", encoding="utf-8") as f:
+                            json.dump(knowledge_graph.to_dict(), f, indent=2, ensure_ascii=False)
+                    print_success(f"Knowledge graph saved (via fallback): {kg_path}")
+                except (IOError, PermissionError) as e:
+                    print_info(f"[WARNING] Could not save knowledge graph to {kg_path}: {e}")
 
         # Knowledge graph merging with --merge flag (PostgreSQL handles vector merging automatically)
         if merge_target:
