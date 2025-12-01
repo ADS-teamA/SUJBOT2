@@ -1,0 +1,252 @@
+{
+  "_comment": "Entity alias map for Czech legal/nuclear domain. Format: canonical_name -> [aliases]",
+  "_updated": "2024-12-01",
+
+  "Státní úřad pro jadernou bezpečnost": [
+    "SÚJB",
+    "SUJB",
+    "State Office for Nuclear Safety",
+    "Státní úřad jaderné bezpečnosti",
+    "úřad pro jadernou bezpečnost",
+    "Nuclear Safety Office"
+  ],
+
+  "Atomový zákon": [
+    "zákon č. 263/2016 Sb.",
+    "zákon 263/2016 Sb.",
+    "263/2016 Sb.",
+    "Atomic Act",
+    "Nuclear Act",
+    "zákon o mírovém využívání jaderné energie"
+  ],
+
+  "Vyhláška č. 378/2016 Sb.": [
+    "378/2016 Sb.",
+    "vyhláška 378/2016 Sb.",
+    "vyhláška o dokumentaci",
+    "Decree 378/2016"
+  ],
+
+  "Vyhláška č. 422/2016 Sb.": [
+    "422/2016 Sb.",
+    "vyhláška 422/2016 Sb.",
+    "vyhláška o radiační ochraně",
+    "Decree 422/2016",
+    "Radiation Protection Decree"
+  ],
+
+  "Mezinárodní agentura pro atomovou energii": [
+    "MAAE",
+    "IAEA",
+    "International Atomic Energy Agency",
+    "Agentura pro atomovou energii"
+  ],
+
+  "České vysoké učení technické v Praze": [
+    "ČVUT",
+    "CVUT",
+    "Czech Technical University",
+    "CTU Prague",
+    "České vysoké učení technické"
+  ],
+
+  "Fakulta jaderná a fyzikálně inženýrská": [
+    "FJFI",
+    "FNSPE",
+    "Faculty of Nuclear Sciences and Physical Engineering",
+    "jaderná fakulta",
+    "Faculty of Nuclear Sciences"
+  ],
+
+  "Reaktor VR-1": [
+    "VR-1",
+    "VR1",
+    "Vrabec",
+    "Training reactor VR-1",
+    "školní reaktor VR-1"
+  ],
+
+  "Euratom": [
+    "Evropské společenství pro atomovou energii",
+    "European Atomic Energy Community",
+    "EAEC",
+    "Smlouva Euratom",
+    "Euratom Treaty"
+  ],
+
+  "Vídeňská úmluva": [
+    "Vienna Convention",
+    "Vídeňská úmluva o občanskoprávní odpovědnosti",
+    "Vienna Convention on Civil Liability",
+    "1963 Vienna Convention"
+  ],
+
+  "Pařížská úmluva": [
+    "Paris Convention",
+    "Pařížská úmluva o odpovědnosti",
+    "Paris Convention on Third Party Liability",
+    "1960 Paris Convention"
+  ],
+
+  "Ministerstvo průmyslu a obchodu": [
+    "MPO",
+    "Ministry of Industry and Trade",
+    "ministerstvo průmyslu"
+  ],
+
+  "Ministerstvo životního prostředí": [
+    "MŽP",
+    "MZP",
+    "Ministry of the Environment",
+    "ministerstvo životního prostředí ČR"
+  ],
+
+  "Jaderná elektrárna Dukovany": [
+    "JE Dukovany",
+    "EDU",
+    "Dukovany NPP",
+    "Dukovany Nuclear Power Plant",
+    "elektrárna Dukovany"
+  ],
+
+  "Jaderná elektrárna Temelín": [
+    "JE Temelín",
+    "ETE",
+    "Temelín NPP",
+    "Temelín Nuclear Power Plant",
+    "elektrárna Temelín"
+  ],
+
+  "ČEZ": [
+    "CEZ",
+    "ČEZ, a.s.",
+    "ČEZ a.s.",
+    "Czech Power Company",
+    "České energetické závody"
+  ],
+
+  "Úřad pro technickou normalizaci, metrologii a státní zkušebnictví": [
+    "ÚNMZ",
+    "UNMZ",
+    "Czech Office for Standards, Metrology and Testing",
+    "úřad pro normalizaci"
+  ],
+
+  "Česká obchodní inspekce": [
+    "ČOI",
+    "COI",
+    "Czech Trade Inspection Authority"
+  ],
+
+  "Nejvyšší kontrolní úřad": [
+    "NKÚ",
+    "NKU",
+    "Supreme Audit Office"
+  ],
+
+  "Směrnice Rady 2013/59/Euratom": [
+    "BSS Directive",
+    "Basic Safety Standards Directive",
+    "2013/59/Euratom",
+    "směrnice o základních bezpečnostních standardech"
+  ],
+
+  "Směrnice Rady 2014/87/Euratom": [
+    "Nuclear Safety Directive",
+    "2014/87/Euratom",
+    "směrnice o jaderné bezpečnosti"
+  ],
+
+  "Občanský zákoník": [
+    "zákon č. 89/2012 Sb.",
+    "89/2012 Sb.",
+    "Civil Code",
+    "nový občanský zákoník",
+    "NOZ"
+  ],
+
+  "Správní řád": [
+    "zákon č. 500/2004 Sb.",
+    "500/2004 Sb.",
+    "Administrative Procedure Act",
+    "Code of Administrative Procedure"
+  ],
+
+  "Zákon o veřejných zakázkách": [
+    "ZZVZ",
+    "zákon č. 134/2016 Sb.",
+    "134/2016 Sb.",
+    "Public Procurement Act"
+  ],
+
+  "Dozimetr": [
+    "dosimeter",
+    "osobní dozimetr",
+    "personal dosimeter",
+    "měřič dávky"
+  ],
+
+  "Sievert": [
+    "Sv",
+    "mSv",
+    "millisievert",
+    "µSv",
+    "microsievert"
+  ],
+
+  "Gray": [
+    "Gy",
+    "mGy",
+    "milligray"
+  ],
+
+  "Becquerel": [
+    "Bq",
+    "kBq",
+    "MBq",
+    "GBq"
+  ],
+
+  "Uran-235": [
+    "U-235",
+    "235U",
+    "uranium-235",
+    "uran 235"
+  ],
+
+  "Plutonium-239": [
+    "Pu-239",
+    "239Pu",
+    "plutonium-239",
+    "plutonium 239"
+  ],
+
+  "Cesium-137": [
+    "Cs-137",
+    "137Cs",
+    "cesium-137",
+    "cesium 137"
+  ],
+
+  "Nouzová připravenost": [
+    "emergency preparedness",
+    "havarijní připravenost",
+    "havarijní plánování",
+    "emergency planning"
+  ],
+
+  "Bezpečnostní dokumentace": [
+    "safety documentation",
+    "bezpečnostní zpráva",
+    "safety report",
+    "SAR",
+    "Safety Analysis Report"
+  ],
+
+  "Limity a podmínky": [
+    "LaP",
+    "limits and conditions",
+    "provozní limity",
+    "operational limits"
+  ]
+}

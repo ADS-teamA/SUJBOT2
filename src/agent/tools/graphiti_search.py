@@ -105,6 +105,35 @@ class GraphitiSearchInput(ToolInput):
         default=None,
         description="Target entity name for path_finder mode",
     )
+    search_recipe: Optional[
+        Literal[
+            "combined_rrf",
+            "combined_mmr",
+            "combined_cross_encoder",
+            "edge_distance",
+            "edge_rrf",
+            "node_rrf",
+            "node_cross_encoder",
+        ]
+    ] = Field(
+        default=None,
+        description=(
+            "Optional search recipe for advanced ranking: "
+            "combined_rrf/mmr/cross_encoder (edges+nodes), "
+            "edge_distance/edge_rrf (edges only), "
+            "node_rrf/node_cross_encoder (nodes only)"
+        ),
+    )
+    return_episodes: bool = Field(
+        default=False,
+        description="If true, also return raw episodes (source chunks) that support the facts",
+    )
+    episode_limit: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Maximum episodes to return when return_episodes is true",
+    )
 
 
 # =============================================================================
@@ -123,6 +152,7 @@ class GraphitiSearchResult:
     mode: str = "semantic"
     processing_time_ms: float = 0.0
     temporal_filter: Optional[Dict[str, str]] = None
+    episodes: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -134,6 +164,7 @@ class GraphitiSearchResult:
             "mode": self.mode,
             "processing_time_ms": self.processing_time_ms,
             "temporal_filter": self.temporal_filter,
+            "episodes": self.episodes,
         }
 
 
@@ -240,6 +271,9 @@ class GraphitiSearchTool(BaseTool):
         num_results: int = 10,
         group_ids: Optional[List[str]] = None,
         target_entity: Optional[str] = None,
+        search_recipe: Optional[str] = None,
+        return_episodes: bool = False,
+        episode_limit: int = 5,
         **kwargs,
     ) -> ToolResult:
         """
@@ -255,6 +289,9 @@ class GraphitiSearchTool(BaseTool):
             num_results: Maximum results
             group_ids: Filter by document IDs
             target_entity: Target entity for path_finder mode
+            search_recipe: Advanced search recipe for ranking
+            return_episodes: Whether to return source episodes
+            episode_limit: Max episodes to return
 
         Returns:
             ToolResult with facts and entities
@@ -280,6 +317,9 @@ class GraphitiSearchTool(BaseTool):
                         num_results=num_results,
                         group_ids=group_ids,
                         target_entity=target_entity,
+                        search_recipe=search_recipe,
+                        return_episodes=return_episodes,
+                        episode_limit=episode_limit,
                     ),
                 )
                 return future.result(timeout=60)  # 60s timeout for graph queries
@@ -296,6 +336,9 @@ class GraphitiSearchTool(BaseTool):
                     num_results=num_results,
                     group_ids=group_ids,
                     target_entity=target_entity,
+                    search_recipe=search_recipe,
+                    return_episodes=return_episodes,
+                    episode_limit=episode_limit,
                 )
             )
 
@@ -310,6 +353,9 @@ class GraphitiSearchTool(BaseTool):
         num_results: int = 10,
         group_ids: Optional[List[str]] = None,
         target_entity: Optional[str] = None,
+        search_recipe: Optional[str] = None,
+        return_episodes: bool = False,
+        episode_limit: int = 5,
     ) -> ToolResult:
         """
         Async implementation of Graphiti search.
@@ -338,6 +384,7 @@ class GraphitiSearchTool(BaseTool):
                     entity_types=entity_types,
                     valid_after=valid_after_dt,
                     valid_before=valid_before_dt,
+                    search_recipe=search_recipe,
                 )
             elif mode == "entity_lookup":
                 result = await self._entity_lookup(
@@ -415,6 +462,10 @@ class GraphitiSearchTool(BaseTool):
                 temporal_filter=temporal_filter,
             )
 
+            # Hydrate episodes if requested (retrieves source chunks for facts)
+            if return_episodes:
+                await self._append_episodes(search_result, episode_limit)
+
             # Format output for agent
             output_lines = [
                 f"**Graphiti Search Results** (mode: {mode})",
@@ -445,6 +496,16 @@ class GraphitiSearchTool(BaseTool):
                     if summary:
                         output_lines.append(f"  {summary}")
 
+            if search_result.episodes:
+                output_lines.append("")
+                output_lines.append("**Source Episodes (Chunks):**")
+                for i, episode in enumerate(search_result.episodes[:5], 1):
+                    name = episode.get("name", "Unknown")
+                    content_preview = episode.get("content", "")[:150]
+                    output_lines.append(f"{i}. {name}")
+                    if content_preview:
+                        output_lines.append(f"   {content_preview}...")
+
             return ToolResult(
                 success=True,
                 output="\n".join(output_lines),
@@ -472,6 +533,57 @@ class GraphitiSearchTool(BaseTool):
                 error=f"Internal error in Graphiti search: {str(e)}",
             )
 
+    def _pick_search_config(self, recipe: Optional[str], num_results: int):
+        """
+        Select a Graphiti search recipe and configure limits.
+
+        Available recipes:
+        - combined_rrf/mmr/cross_encoder: Combined edge + node search
+        - edge_distance/edge_rrf: Edge-focused search
+        - node_rrf/node_cross_encoder: Node-focused search
+        """
+        if not recipe:
+            return None
+
+        from graphiti_core.search.search_config_recipes import (
+            COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+            COMBINED_HYBRID_SEARCH_MMR,
+            COMBINED_HYBRID_SEARCH_RRF,
+            EDGE_HYBRID_SEARCH_NODE_DISTANCE,
+            EDGE_HYBRID_SEARCH_RRF,
+            NODE_HYBRID_SEARCH_CROSS_ENCODER,
+            NODE_HYBRID_SEARCH_RRF,
+        )
+
+        mapping = {
+            "combined_rrf": COMBINED_HYBRID_SEARCH_RRF,
+            "combined_mmr": COMBINED_HYBRID_SEARCH_MMR,
+            "combined_cross_encoder": COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+            "edge_distance": EDGE_HYBRID_SEARCH_NODE_DISTANCE,
+            "edge_rrf": EDGE_HYBRID_SEARCH_RRF,
+            "node_rrf": NODE_HYBRID_SEARCH_RRF,
+            "node_cross_encoder": NODE_HYBRID_SEARCH_CROSS_ENCODER,
+        }
+
+        config = mapping.get(recipe)
+        if not config:
+            logger.warning(f"Unknown search recipe: {recipe}, using default search")
+            return None
+
+        # Deep copy to avoid mutating the original
+        config = config.model_copy(deep=True)
+
+        # Align limits with requested num_results
+        if hasattr(config, "limit"):
+            config.limit = num_results
+
+        for subconfig_name in ("edge_config", "node_config", "community_config", "episode_config"):
+            subconfig = getattr(config, subconfig_name, None)
+            if subconfig and hasattr(subconfig, "limit"):
+                subconfig.limit = num_results
+
+        return config
+
     async def _semantic_search(
         self,
         query: str,
@@ -480,11 +592,13 @@ class GraphitiSearchTool(BaseTool):
         entity_types: Optional[List[str]],
         valid_after: Optional[datetime],
         valid_before: Optional[datetime],
+        search_recipe: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Hybrid semantic + BM25 search.
 
         Returns facts (edges) matching the query.
+        Supports advanced search recipes for different ranking strategies.
         """
         from graphiti_core.search.search_filters import SearchFilters
 
@@ -497,17 +611,29 @@ class GraphitiSearchTool(BaseTool):
                 valid_before=valid_before,
             )
 
-        # Execute search
-        results = await self._graphiti.search(
-            query=query,
-            group_ids=group_ids,
-            num_results=num_results,
-            search_filter=search_filter,
-        )
+        # Get search config if recipe specified
+        config = self._pick_search_config(search_recipe, num_results)
+
+        # Execute search (advanced recipe when provided)
+        if config:
+            results = await self._graphiti.search_(
+                query=query,
+                config=config,
+                group_ids=group_ids,
+                search_filter=search_filter,
+            )
+            edges = results.edges
+        else:
+            edges = await self._graphiti.search(
+                query=query,
+                group_ids=group_ids,
+                num_results=num_results,
+                search_filter=search_filter,
+            )
 
         # Convert to dict format
         facts = []
-        for edge in results:
+        for edge in edges:
             facts.append({
                 "uuid": edge.uuid,
                 "fact": edge.fact,
@@ -516,7 +642,7 @@ class GraphitiSearchTool(BaseTool):
                 "invalid_at": edge.invalid_at.isoformat() if edge.invalid_at else None,
                 "source_uuid": edge.source_node_uuid,
                 "target_uuid": edge.target_node_uuid,
-                "episodes": len(edge.episodes) if hasattr(edge, "episodes") else 0,
+                "episodes": getattr(edge, "episodes", []) or [],
             })
 
         return {
@@ -566,6 +692,8 @@ class GraphitiSearchTool(BaseTool):
                 "fact": edge.fact,
                 "name": edge.name,
                 "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
+                "invalid_at": edge.invalid_at.isoformat() if hasattr(edge, "invalid_at") and edge.invalid_at else None,
+                "episodes": getattr(edge, "episodes", []) or [],
             })
 
         return {
@@ -613,6 +741,7 @@ class GraphitiSearchTool(BaseTool):
                         "name": edge.name,
                         "valid_at": edge.valid_at.isoformat(),
                         "invalid_at": edge.invalid_at.isoformat() if edge.invalid_at else None,
+                        "episodes": getattr(edge, "episodes", []) or [],
                     })
 
         return {
@@ -650,6 +779,7 @@ class GraphitiSearchTool(BaseTool):
                     "valid_at": edge.valid_at.isoformat(),
                     "invalid_at": edge.invalid_at.isoformat() if edge.invalid_at else None,
                     "is_current": edge.invalid_at is None,
+                    "episodes": getattr(edge, "episodes", []) or [],
                 })
 
         # Sort chronologically
@@ -685,26 +815,36 @@ class GraphitiSearchTool(BaseTool):
         """
         Find paths connecting two entities.
 
-        Uses graph traversal to find relationship chains.
+        Uses deterministic node resolution with NODE_HYBRID_SEARCH_RRF
+        for entity lookup, then EDGE_HYBRID_SEARCH_NODE_DISTANCE for
+        graph distance-based path finding.
         """
-        # First, find both entities
-        source_results = await self._graphiti.search(
+        from graphiti_core.search.search_config_recipes import (
+            EDGE_HYBRID_SEARCH_NODE_DISTANCE,
+            NODE_HYBRID_SEARCH_RRF,
+        )
+
+        # Use deterministic node search for source and target resolution
+        node_config = NODE_HYBRID_SEARCH_RRF.model_copy(deep=True)
+        node_config.limit = 3
+
+        # Resolve source and target nodes deterministically
+        source_hits = await self._graphiti.search_(
             query=source_entity,
+            config=node_config,
             group_ids=group_ids,
-            num_results=3,
         )
-
-        target_results = await self._graphiti.search(
+        target_hits = await self._graphiti.search_(
             query=target_entity,
+            config=node_config,
             group_ids=group_ids,
-            num_results=3,
         )
 
-        if not source_results or not target_results:
+        if not source_hits.nodes or not target_hits.nodes:
             error_msg = (
                 f"Could not find entities for path_finder: "
-                f"source='{source_entity}' ({'found' if source_results else 'NOT FOUND'}), "
-                f"target='{target_entity}' ({'found' if target_results else 'NOT FOUND'})"
+                f"source='{source_entity}' ({'found' if source_hits.nodes else 'NOT FOUND'}), "
+                f"target='{target_entity}' ({'found' if target_hits.nodes else 'NOT FOUND'})"
             )
             logger.warning(error_msg)
             return {
@@ -714,19 +854,22 @@ class GraphitiSearchTool(BaseTool):
                 "error": error_msg,
             }
 
-        # Use center_node_uuid to find paths near source
-        center_uuid = source_results[0].source_node_uuid
+        # Use resolved node UUID as center for path finding
+        center_uuid = source_hits.nodes[0].uuid
 
-        # Search with graph distance reranking
-        path_results = await self._graphiti.search(
+        # Use edge distance config for graph traversal
+        edge_config = EDGE_HYBRID_SEARCH_NODE_DISTANCE.model_copy(deep=True)
+        edge_config.edge_config.limit = num_results
+
+        path_results = await self._graphiti.search_(
             query=target_entity,
+            config=edge_config,
             center_node_uuid=center_uuid,
             group_ids=group_ids,
-            num_results=num_results,
         )
 
         facts = []
-        for edge in path_results:
+        for edge in path_results.edges:
             facts.append({
                 "uuid": edge.uuid,
                 "fact": edge.fact,
@@ -734,6 +877,8 @@ class GraphitiSearchTool(BaseTool):
                 "source_uuid": edge.source_node_uuid,
                 "target_uuid": edge.target_node_uuid,
                 "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
+                "invalid_at": edge.invalid_at.isoformat() if hasattr(edge, "invalid_at") and edge.invalid_at else None,
+                "episodes": getattr(edge, "episodes", []) or [],
             })
 
         return {
@@ -743,6 +888,57 @@ class GraphitiSearchTool(BaseTool):
             "source_entity": source_entity,
             "target_entity": target_entity,
         }
+
+    async def _append_episodes(
+        self,
+        search_result: GraphitiSearchResult,
+        episode_limit: int,
+    ) -> None:
+        """
+        Load raw episodes referenced by facts and attach them to the result.
+
+        Episodes are the source chunks that were ingested into Graphiti.
+        This provides provenance for facts back to the original document text.
+        """
+        # Collect unique episode IDs from all facts
+        episode_ids: List[str] = []
+        for fact in search_result.facts:
+            for episode_uuid in fact.get("episodes", []) or []:
+                if episode_uuid not in episode_ids:
+                    episode_ids.append(episode_uuid)
+
+        if not episode_ids:
+            return
+
+        # Limit episodes to avoid large payloads
+        limited_ids = episode_ids[:episode_limit]
+
+        try:
+            from graphiti_core.nodes import EpisodicNode
+
+            # Fetch episodes from Neo4j via Graphiti
+            episodes = await EpisodicNode.get_by_uuids(
+                self._graphiti.driver, limited_ids
+            )
+
+            # Convert to dict format
+            search_result.episodes = [
+                {
+                    "uuid": episode.uuid,
+                    "name": episode.name,
+                    "content": episode.content,
+                    "valid_at": episode.valid_at.isoformat() if episode.valid_at else None,
+                    "source": episode.source.value if hasattr(episode, "source") else None,
+                    "group_id": getattr(episode, "group_id", None),
+                }
+                for episode in episodes
+            ]
+
+            logger.debug(f"Hydrated {len(search_result.episodes)} episodes for search result")
+
+        except Exception as e:
+            logger.warning(f"Failed to hydrate episodes for Graphiti search: {e}")
+            # Don't fail the search, just leave episodes empty
 
 
 # =============================================================================

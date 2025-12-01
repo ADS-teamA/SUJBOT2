@@ -3,6 +3,7 @@ Entity deduplication for knowledge graph merging.
 
 Supports:
 - Layer 1: Exact match by (type, normalized_value) - fast, <1ms
+- Layer 1.5: Alias-based resolution from ontology map - fast, <1ms
 - Layer 2: Embedding-based semantic similarity - 50-200ms
 - Layer 3: Acronym expansion + fuzzy matching - 100-500ms
 """
@@ -22,10 +23,11 @@ logger = logging.getLogger(__name__)
 
 class EntityDeduplicator:
     """
-    Three-layer entity deduplicator for graph merging.
+    Four-layer entity deduplicator for graph merging.
 
     Deduplication strategy (layers applied in order):
     1. Exact match on (entity_type, normalized_value) - Fast, 100% precision
+    1.5. Alias map lookup for canonical names - Fast, 100% precision
     2. Embedding similarity - Medium speed, ~95% precision
     3. Acronym expansion + fuzzy - Slower, ~90% precision
 
@@ -34,6 +36,7 @@ class EntityDeduplicator:
     Example:
         >>> from src.graph.config import EntityDeduplicationConfig
         >>> config = EntityDeduplicationConfig(
+        ...     alias_map_path="config/entity_aliases.json",
         ...     use_embeddings=True,
         ...     use_acronym_expansion=True
         ... )
@@ -62,6 +65,11 @@ class EntityDeduplicator:
 
         self.config = config or EntityDeduplicationConfig()
 
+        # Layer 1.5: Alias map (loaded from config)
+        self.alias_map = self.config.alias_map or {}
+        if self.alias_map:
+            logger.info(f"Alias map loaded with {len(self.alias_map)} mappings")
+
         # Layer 2: Semantic similarity (optional)
         self.similarity_detector = similarity_detector
         if self.config.use_embeddings and not similarity_detector:
@@ -80,6 +88,7 @@ class EntityDeduplicator:
         # Statistics
         self.stats = {
             "layer1_matches": 0,  # Exact match
+            "alias_matches": 0,  # Alias resolution (Layer 1.5)
             "layer2_matches": 0,  # Semantic similarity
             "layer3_matches": 0,  # Acronym expansion
             "total_checks": 0,
@@ -89,6 +98,7 @@ class EntityDeduplicator:
         logger.info(
             f"EntityDeduplicator initialized: "
             f"exact={self.config.exact_match_enabled}, "
+            f"alias_map={bool(self.alias_map)}, "
             f"embeddings={self.config.use_embeddings}, "
             f"acronyms={self.config.use_acronym_expansion}"
         )
@@ -103,6 +113,7 @@ class EntityDeduplicator:
 
         Layers applied in order (first match wins):
         1. Exact match (O(1) hash lookup)
+        1.5. Alias map lookup (O(1) hash lookup)
         2. Semantic similarity (if enabled)
         3. Acronym expansion (if enabled)
 
@@ -121,6 +132,14 @@ class EntityDeduplicator:
             if dup_id:
                 self.stats["layer1_matches"] += 1
                 logger.debug(f"Layer 1 match: {entity.normalized_value} -> {dup_id}")
+                return dup_id
+
+        # Layer 1.5: Alias map lookup (if alias map loaded)
+        if self.alias_map:
+            dup_id = self._find_alias_duplicate(entity, graph)
+            if dup_id:
+                self.stats["alias_matches"] += 1
+                logger.debug(f"Alias match: {entity.normalized_value} -> {dup_id}")
                 return dup_id
 
         # Layer 2: Semantic similarity (if enabled and detector available)
@@ -157,6 +176,82 @@ class EntityDeduplicator:
         # Lookup in index (O(1) operation)
         key = (entity.type, entity.normalized_value)
         return graph.entity_by_normalized_value.get(key)
+
+    def _find_alias_duplicate(
+        self,
+        entity: "Entity",
+        graph: "SimpleGraphBuilder",
+    ) -> Optional[str]:
+        """
+        Find duplicate using alias map lookup.
+
+        If entity's normalized_value matches an alias, look up the canonical
+        name and check if that canonical entity exists in the graph.
+
+        Args:
+            entity: Entity to check
+            graph: Graph to search in
+
+        Returns:
+            Entity ID if canonical entity found, None otherwise
+        """
+        # Lookup alias -> canonical
+        normalized_lower = entity.normalized_value.lower()
+        canonical_name = self.alias_map.get(normalized_lower)
+
+        if not canonical_name:
+            return None
+
+        # Skip if entity value is already the canonical form
+        if canonical_name.lower() == normalized_lower:
+            return None
+
+        # Look up entity with canonical name
+        return self._lookup_entity_id(graph, entity.type, canonical_name)
+
+    def _lookup_entity_id(
+        self,
+        graph: "SimpleGraphBuilder",
+        entity_type: "EntityType",
+        value: str,
+    ) -> Optional[str]:
+        """
+        Lookup entity ID by type and value with flexible matching.
+
+        Tries multiple case variants:
+        1. Exact normalized value
+        2. Lowercase
+        3. Original case
+
+        Args:
+            graph: Graph to search
+            entity_type: Type to filter by
+            value: Value to match
+
+        Returns:
+            Entity ID if found, None otherwise
+        """
+        # Import here to avoid circular dependencies
+        from .models import EntityType
+
+        # Ensure entity_type is proper enum
+        if isinstance(entity_type, str):
+            try:
+                entity_type = EntityType(entity_type)
+            except ValueError:
+                return None
+
+        # Try exact normalized match first
+        key = (entity_type, value.lower())
+        if key in graph.entity_by_normalized_value:
+            return graph.entity_by_normalized_value[key]
+
+        # Try with original case (some graphs may not normalize)
+        key = (entity_type, value)
+        if key in graph.entity_by_normalized_value:
+            return graph.entity_by_normalized_value[key]
+
+        return None
 
     def merge_entity_properties(
         self,
@@ -225,6 +320,7 @@ class EntityDeduplicator:
         """Get comprehensive deduplication statistics."""
         total_matches = (
             self.stats["layer1_matches"]
+            + self.stats["alias_matches"]
             + self.stats["layer2_matches"]
             + self.stats["layer3_matches"]
         )
@@ -233,6 +329,7 @@ class EntityDeduplicator:
             **self.stats,
             "total_matches": total_matches,
             "layer1_precision": 1.0,  # Exact match is 100% precise
+            "alias_precision": 1.0 if self.alias_map else None,  # Alias is deterministic
             "layer2_precision": 0.95 if self.config.use_embeddings else None,
             "layer3_precision": 0.90 if self.config.use_acronym_expansion else None,
         }

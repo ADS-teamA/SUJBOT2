@@ -5,12 +5,17 @@ Defines settings for entity extraction, relationship extraction,
 graph storage backends, and integration with the RAG pipeline.
 """
 
+import json
+import logging
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Set
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 from .models import EntityType, RelationshipType
+
+logger = logging.getLogger(__name__)
 
 
 class GraphBackend(Enum):
@@ -206,8 +211,9 @@ class EntityDeduplicationConfig:
     """
     Configuration for entity deduplication during indexing.
 
-    Three-layer deduplication strategy:
+    Four-layer deduplication strategy:
     - Layer 1 (Exact): Fast exact match on (type, normalized_value) - <1ms
+    - Layer 1.5 (Alias): Alias map lookup for canonical names - <1ms
     - Layer 2 (Semantic): Embedding similarity for variants - 50-200ms
     - Layer 3 (Acronym): Acronym expansion + fuzzy match - 100-500ms
     """
@@ -217,6 +223,11 @@ class EntityDeduplicationConfig:
 
     # Layer 1: Exact match (always enabled if master enabled)
     exact_match_enabled: bool = True
+
+    # Layer 1.5: Alias-based resolution (fast ontology lookup)
+    alias_map_path: Optional[str] = None  # Path to entity_aliases.json
+    alias_map: Dict[str, str] = field(default_factory=dict)  # Loaded alias map
+    enable_entity_linker: bool = False  # Enable LLM-based disambiguation when multiple matches
 
     # Layer 2: Embedding-based similarity
     use_embeddings: bool = False
@@ -235,7 +246,7 @@ class EntityDeduplicationConfig:
     create_uniqueness_constraints: bool = True
 
     def __post_init__(self) -> None:
-        """Validate configuration values after initialization."""
+        """Validate configuration values and load alias map."""
         if not (0.0 <= self.similarity_threshold <= 1.0):
             raise ValueError(
                 f"similarity_threshold must be in [0.0, 1.0], got {self.similarity_threshold}"
@@ -251,10 +262,53 @@ class EntityDeduplicationConfig:
                 f"embedding_batch_size must be positive, got {self.embedding_batch_size}"
             )
 
+        # Load alias map if path provided and map is empty
+        if self.alias_map_path and not self.alias_map:
+            self.alias_map = self._load_alias_map(self.alias_map_path)
+
+    def _load_alias_map(self, path: str) -> Dict[str, str]:
+        """
+        Load entity alias map from JSON file.
+
+        Expected format:
+        {
+            "canonical_name": ["alias1", "alias2", ...],
+            ...
+        }
+
+        Returns inverted map: alias -> canonical_name
+        """
+        alias_path = Path(path)
+        if not alias_path.exists():
+            logger.warning(f"Alias map file not found: {path}")
+            return {}
+
+        try:
+            with open(alias_path, "r", encoding="utf-8") as f:
+                raw_map = json.load(f)
+
+            # Invert: canonical -> aliases becomes alias -> canonical
+            inverted: Dict[str, str] = {}
+            for canonical, aliases in raw_map.items():
+                # Map canonical to itself (for consistency)
+                inverted[canonical.lower()] = canonical
+                # Map all aliases to canonical
+                for alias in aliases:
+                    inverted[alias.lower()] = canonical
+
+            logger.info(f"Loaded {len(inverted)} alias mappings from {path}")
+            return inverted
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in alias map file {path}: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to load alias map from {path}: {e}")
+            return {}
+
     @classmethod
     def from_env(cls) -> "EntityDeduplicationConfig":
         """Load deduplication config from environment variables."""
-        import os
 
         custom_acronyms = {}
         acronym_str = os.getenv("KG_DEDUP_CUSTOM_ACRONYMS", "")
@@ -265,8 +319,13 @@ class EntityDeduplicationConfig:
                     acro, expansion = pair.split(":", 1)
                     custom_acronyms[acro.strip()] = expansion.strip()
 
+        # Default alias map path
+        default_alias_path = os.getenv("KG_ALIAS_MAP_PATH", "config/entity_aliases.json")
+
         return cls(
             enabled=os.getenv("KG_DEDUPLICATE_ENTITIES", "true").lower() == "true",
+            alias_map_path=default_alias_path if Path(default_alias_path).exists() else None,
+            enable_entity_linker=os.getenv("KG_ENABLE_ENTITY_LINKER", "false").lower() == "true",
             use_embeddings=os.getenv("KG_DEDUP_USE_EMBEDDINGS", "false").lower() == "true",
             similarity_threshold=float(os.getenv("KG_DEDUP_SIMILARITY_THRESHOLD", "0.90")),
             use_acronym_expansion=os.getenv("KG_DEDUP_USE_ACRONYM_EXPANSION", "false").lower()
