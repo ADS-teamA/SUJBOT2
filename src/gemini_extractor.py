@@ -1088,7 +1088,8 @@ Pro page_number uvádějte čísla RELATIVNĚ k tomuto chunku:
                 deduplicated.append(secs[0])
             else:
                 # Multiple sections with same path - keep the one with longest content
-                best = max(secs, key=lambda s: len(s.get("content", "")))
+                # Use `or ""` to handle None values (key exists but value is None)
+                best = max(secs, key=lambda s: len(s.get("content") or ""))
 
                 # But use page_number from the section with highest page_number
                 # (TOC sections have low page numbers, content sections have correct ones)
@@ -1218,7 +1219,9 @@ Pro page_number uvádějte čísla RELATIVNĚ k tomuto chunku:
                 parent_id = number_to_section_id[parent_number]
 
             # Compute depth from level (in legal docs, depth often equals level)
-            depth = sec.get("depth", level)
+            # Ensure depth >= 1 (Gemini may return 0 for some sections)
+            raw_depth = sec.get("depth", level)
+            depth = max(1, raw_depth if raw_depth else level)
 
             # Build ancestors from path
             path_parts = path.split(" > ") if path else []

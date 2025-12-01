@@ -130,10 +130,10 @@ def check_existing_components(document_id: str, connection_string: str = None) -
         async def check_postgres():
             conn = await asyncpg.connect(connection_string)
             try:
-                # Check if document exists in chunks table (layer 3)
+                # Check if document exists in vectors.layer3 (chunk embeddings)
                 query = """
                     SELECT DISTINCT document_id
-                    FROM chunks
+                    FROM vectors.layer3
                     WHERE document_id = $1 OR document_id LIKE $2
                     LIMIT 1
                 """
@@ -150,8 +150,14 @@ def check_existing_components(document_id: str, connection_string: str = None) -
 
     except ImportError:
         logger.warning("asyncpg not installed, cannot check PostgreSQL")
+    except ConnectionRefusedError as e:
+        logger.warning(f"PostgreSQL connection refused (is database running?): {e}")
     except Exception as e:
-        logger.warning(f"Failed to check PostgreSQL: {e}")
+        # Log more context for unexpected errors
+        logger.warning(
+            f"Failed to check PostgreSQL: {e}. "
+            f"Document may be re-indexed if check fails. Verify DATABASE_URL and schema."
+        )
 
     # Check Knowledge Graph (in output directory)
     if result["existing_doc_id"]:
@@ -161,6 +167,29 @@ def check_existing_components(document_id: str, connection_string: str = None) -
             result["has_kg"] = True
 
     return result
+
+
+def _get_storage_layers(config) -> List[int]:
+    """Extract storage_layers from config, defaulting to [1, 3].
+
+    Handles both direct dict access and Pydantic v2 model_extra.
+    """
+    default = [1, 3]
+    try:
+        # Try direct attribute access (if storage is a proper sub-model)
+        storage = getattr(config, 'storage', None)
+        if storage and hasattr(storage, 'get'):
+            return storage.get('storage_layers', default)
+
+        # Try Pydantic v2 model_extra
+        if hasattr(config, 'model_extra') and config.model_extra:
+            storage_extra = config.model_extra.get('storage', {})
+            if hasattr(storage_extra, 'get'):
+                return storage_extra.get('storage_layers', default)
+
+        return default
+    except (AttributeError, TypeError):
+        return default
 
 
 @dataclass
@@ -207,7 +236,7 @@ class IndexingConfig:
 
     # Duplicate Detection (semantic similarity before indexing)
     enable_duplicate_detection: bool = True  # Detect semantic duplicates before indexing
-    duplicate_similarity_threshold: float = 0.98  # 98% cosine similarity threshold
+    duplicate_similarity_threshold: float = 0.85  # 85% cosine similarity threshold (was 0.98, too strict)
     duplicate_sample_pages: int = 1  # Pages to sample for detection (1 = first page)
 
     # Storage Backend Selection (PHASE 4) - PostgreSQL only
@@ -274,7 +303,7 @@ class IndexingConfig:
         storage_backend = "postgresql"
 
         # Load storage_layers from config.json (default: [1, 3] - skip sections)
-        storage_layers = getattr(root_config.storage, 'storage_layers', [1, 3])
+        storage_layers = _get_storage_layers(root_config)
 
         # Create config with sub-configs loaded from config.json
         config = cls(
@@ -286,7 +315,7 @@ class IndexingConfig:
             enable_semantic_clustering=root_config.clustering.enable_labels,
             enable_knowledge_graph=root_config.knowledge_graph.enable,
             enable_duplicate_detection=True,  # Always enabled
-            duplicate_similarity_threshold=0.98,  # Default value
+            duplicate_similarity_threshold=0.85,  # Match field default (was 0.98, too strict)
             duplicate_sample_pages=1,  # Default value
             storage_backend=storage_backend,
             storage_layers=storage_layers,
@@ -561,6 +590,32 @@ class IndexingPipeline:
                 raise  # Always re-raise user interrupts
             except SystemExit:
                 raise  # Always re-raise system exits
+
+        # EXACT DOCUMENT_ID CHECK (skip if already fully indexed)
+        # Predict document_id from file path (same as extraction: document_id = file_path.stem)
+        predicted_doc_id = document_path.stem
+
+        try:
+            existing = check_existing_components(predicted_doc_id)
+
+            if existing["exists"] and existing["has_dense"]:
+                logger.info("")
+                logger.info("=" * 80)
+                logger.info("[ALREADY INDEXED] Document found in PostgreSQL!")
+                logger.info("=" * 80)
+                logger.info(f"   Document ID: {existing['existing_doc_id']}")
+                logger.info(f"   Vector embeddings: EXISTS")
+                logger.info(f"   Knowledge Graph: {'EXISTS' if existing['has_kg'] else 'MISSING'}")
+                logger.info("")
+                logger.info("[SKIPPED] Skipping re-indexing (document fully embedded)")
+                logger.info("=" * 80)
+                return None
+        except (ImportError, RuntimeError, PermissionError, OSError) as e:
+            logger.info(
+                f"Document pre-check skipped (continuing with indexing): {e}. "
+                f"This may result in re-indexing if document '{predicted_doc_id}' already exists."
+            )
+            # Continue with indexing if check fails
 
         # PHASE 1+2: Extract + Summaries (skip if cached)
         if cached_extraction is not None and phase_status and phase_status.completed_phase >= 2:

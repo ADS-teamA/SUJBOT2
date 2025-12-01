@@ -920,11 +920,11 @@ class IndexingConfig(BaseModel):
     # Entity labeling settings
     enable_entity_labeling: bool = Field(
         default=True,
-        description="Enable entity labeling phase (3.5) using Gemini"
+        description="Enable entity labeling phase (3.5) using LLM"
     )
     entity_labeling_model: str = Field(
-        default="gemini-2.5-flash",
-        description="Gemini model for entity labeling"
+        default="gpt-4o-mini",
+        description="LLM model for entity labeling (gpt-4o-mini, gemini-2.5-flash, or claude-haiku-4-5)"
     )
     entity_labeling_batch_size: int = Field(
         default=10,

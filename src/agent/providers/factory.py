@@ -10,9 +10,11 @@ from typing import Optional
 
 from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
-from .gemini_provider import GeminiProvider
 from .openai_provider import OpenAIProvider
 from .deepinfra_provider import DeepInfraProvider
+
+# GeminiProvider uses lazy import to avoid breaking other providers
+# when google-generativeai SDK is incompatible
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,15 @@ def create_provider(
                 "Set GOOGLE_API_KEY environment variable or pass google_api_key parameter.\n"
                 "Example: export GOOGLE_API_KEY=AIza..."
             )
+
+        # Lazy import to avoid breaking other providers when SDK is incompatible
+        try:
+            from .gemini_provider import GeminiProvider
+        except (ImportError, AttributeError) as e:
+            raise ValueError(
+                f"Gemini provider unavailable due to SDK incompatibility: {e}\n"
+                "Install compatible google-generativeai version or use a different provider."
+            ) from e
 
         return GeminiProvider(api_key=key, model=resolved_model)
 
