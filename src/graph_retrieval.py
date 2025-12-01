@@ -393,16 +393,17 @@ class GraphEnhancedRetriever:
         # Step 3: Graph boosting
         if query_entities:
             # Boost by entity mentions
+            boost_weight = max(self.config.graph_boost_weight, 0.0)
             results["layer3"] = self.graph_booster.boost_by_entity_mentions(
                 chunk_results=results["layer3"],
                 query_entities=query_entities,
-                boost_weight=self.config.graph_weight,
+                boost_weight=boost_weight,
             )
 
             # Boost by centrality (optional)
             results["layer3"] = self.graph_booster.boost_by_centrality(
                 chunk_results=results["layer3"],
-                boost_weight=self.config.graph_weight * 0.5,  # Half weight for centrality
+                boost_weight=boost_weight * 0.5,  # Half weight for centrality
             )
 
             logger.info(f"Graph boosting applied: {len(query_entities)} entities")

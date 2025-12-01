@@ -221,6 +221,7 @@ class MultiAgentRunner:
         from ..storage import load_vector_store_adapter
         from ..embedding_generator import EmbeddingGenerator
         from ..agent.config import ToolConfig
+        from ..graph_retrieval import GraphEnhancedRetriever, GraphRetrievalConfig
         from ..agent.providers.factory import create_provider
         import os
 
@@ -480,7 +481,7 @@ class MultiAgentRunner:
                 reranker=None,  # Reranker removed - HyDE + Expansion Fusion pipeline
                 graph_retriever=graph_retriever,
                 knowledge_graph=knowledge_graph,
-                context_assembler=None,  # TODO: Add context assembler if needed
+                context_assembler=context_assembler,
                 llm_provider=self.llm_provider,
                 config=tool_config,  # Use the full config from above, not minimal config
             )

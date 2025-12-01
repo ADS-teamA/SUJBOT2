@@ -254,9 +254,8 @@ class GraphitiExtractor:
         self._graphiti = None
         self._initialized = False
 
-        # Don't use custom entity types - they cause Neo4j nested Map errors
-        # Graphiti's default extraction works fine without custom types
-        self._entity_types = None
+        # Build typed schema up-front so we can validate coverage and fail fast
+        self._entity_types = self._build_entity_types()
 
         logger.info(
             f"GraphitiExtractor initialized: model={self.model_name}, "
@@ -285,6 +284,24 @@ class GraphitiExtractor:
 
         logger.debug(f"Built {len(entity_types)} entity types for Graphiti")
         return entity_types
+
+    def _validate_entity_type_mapping(self) -> None:
+        """
+        Ensure all declared GraphitiEntityType enums are covered by the mapping.
+
+        Raises:
+            ValueError if any enum is missing a mapped Pydantic model.
+        """
+        missing: List[str] = []
+        for entity_type in get_all_entity_types():
+            name = entity_type.value.title().replace("_", "")
+            if name not in self._entity_types:
+                missing.append(name)
+
+        if missing:
+            raise ValueError(
+                f"Missing entity type mappings for Graphiti: {', '.join(sorted(missing))}"
+            )
 
     def _patch_neo4j_community_compatibility(self) -> None:
         """
@@ -402,6 +419,9 @@ class GraphitiExtractor:
             # Disable reasoning and verbosity parameters (only supported by gpt-5/o1/o3)
             llm_client = OpenAIClient(config=llm_config, reasoning=None, verbosity=None)
 
+            # Ensure entity schema coverage before touching the driver
+            self._validate_entity_type_mapping()
+
             # MONKEY-PATCH: Fix Neo4j Community Edition compatibility
             # Neo4j Community doesn't support dynamic labels (SET n:$(node.labels))
             # We patch the bulk query to use Neptune-style per-node queries instead
@@ -476,57 +496,159 @@ class GraphitiExtractor:
         start_time = datetime.now(timezone.utc)
         reference_time = reference_time or start_time
 
+        from graphiti_core.nodes import EpisodeType
+        from graphiti_core.utils.bulk_utils import RawEpisode
+
         logger.info(
             f"Starting Graphiti extraction for {len(chunks)} chunks from {document_id}"
         )
 
-        # Process chunks in parallel batches
-        chunk_results: List[ChunkExtractionResult] = []
-        all_entities: List[ExtractedEntity] = []
-        all_relationships: List[ExtractedRelationship] = []
+        # Prepare bulk episodes (one per chunk), capturing local errors early
+        sanitized_group_id = _sanitize_group_id(document_id)
+        bulk_episodes: List[RawEpisode] = []
+        chunk_ids_for_bulk: List[str] = []
+        error_results: Dict[str, ChunkExtractionResult] = {}
 
-        for batch_start in range(0, len(chunks), self.batch_size):
-            batch_end = min(batch_start + self.batch_size, len(chunks))
-            batch = chunks[batch_start:batch_end]
+        for idx, chunk in enumerate(chunks):
+            chunk_id = chunk.get("chunk_id", f"chunk_{idx}")
+            raw_content = chunk.get("raw_content", chunk.get("content", ""))
 
-            logger.debug(
-                f"Processing batch {batch_start // self.batch_size + 1}: "
-                f"chunks {batch_start + 1}-{batch_end}"
+            if not raw_content or len(raw_content.strip()) < 10:
+                error_results[chunk_id] = ChunkExtractionResult(
+                    chunk_id=chunk_id,
+                    episode_uuid="",
+                    error="Chunk content too short",
+                )
+                continue
+
+            bulk_episodes.append(
+                RawEpisode(
+                    name=f"chunk_{chunk_id}",
+                    content=raw_content,
+                    source=EpisodeType.text,
+                    source_description=f"Document chunk from {document_id}",
+                    reference_time=reference_time,
+                )
+            )
+            chunk_ids_for_bulk.append(chunk_id)
+
+        # Short-circuit if nothing to ingest
+        if not bulk_episodes:
+            processing_time_ms = (
+                datetime.now(timezone.utc) - start_time
+            ).total_seconds() * 1000
+            return GraphitiExtractionResult(
+                document_id=document_id,
+                total_chunks=len(chunks),
+                successful_chunks=0,
+                failed_chunks=len(chunks),
+                total_entities=0,
+                total_relationships=0,
+                unique_entity_count=0,
+                chunk_results=list(error_results.values()),
+                processing_time_ms=processing_time_ms,
+                entity_type_counts={},
             )
 
-            # Process batch concurrently with asyncio.gather
-            batch_tasks = [
-                self._process_chunk(chunk, document_id, reference_time)
-                for chunk in batch
-            ]
-            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+        # Run bulk ingestion
+        try:
+            bulk_result = await self._graphiti.add_episode_bulk(
+                bulk_episodes=bulk_episodes,
+                group_id=sanitized_group_id,
+                entity_types=self._entity_types,
+            )
+        except Exception as e:
+            logger.error(f"Bulk Graphiti ingestion failed: {e}", exc_info=True)
+            raise
 
-            for i, result in enumerate(batch_results):
-                if isinstance(result, Exception):
-                    chunk_id = batch[i].get("chunk_id", f"unknown_{batch_start + i}")
-                    # Log with traceback for debugging
-                    logger.error(
-                        f"Failed to process chunk {chunk_id}: {result}",
-                        exc_info=(type(result), result, result.__traceback__) if hasattr(result, '__traceback__') else True
+        # Map episode UUIDs back to chunk ids
+        episode_uuid_by_chunk: Dict[str, str] = {}
+        chunk_results_map: Dict[str, ChunkExtractionResult] = {}
+
+        for chunk_id, episode in zip(chunk_ids_for_bulk, bulk_result.episodes):
+            episode_uuid_by_chunk[episode.uuid] = chunk_id
+            chunk_results_map[chunk_id] = ChunkExtractionResult(
+                chunk_id=chunk_id,
+                episode_uuid=episode.uuid,
+                entities=[],
+                relationships=[],
+                processing_time_ms=0.0,
+            )
+
+        # Convert nodes and edges to local dataclasses
+        nodes_by_uuid = {}
+        entity_cache: Dict[str, ExtractedEntity] = {}
+        for node in bulk_result.nodes:
+            entity = ExtractedEntity(
+                uuid=node.uuid,
+                name=node.name,
+                labels=getattr(node, "labels", []),
+                summary=getattr(node, "summary", None),
+                attributes=getattr(node, "attributes", {}),
+                source_chunk_id="",
+            )
+            nodes_by_uuid[node.uuid] = node
+            entity_cache[node.uuid] = entity
+
+        all_entities: List[ExtractedEntity] = list(entity_cache.values())
+        all_relationships: List[ExtractedRelationship] = []
+
+        for edge in bulk_result.edges:
+            relationship = ExtractedRelationship(
+                uuid=edge.uuid,
+                source_uuid=edge.source_node_uuid,
+                target_uuid=edge.target_node_uuid,
+                name=edge.name,
+                fact=edge.fact,
+                valid_at=getattr(edge, "valid_at", None),
+                invalid_at=getattr(edge, "invalid_at", None),
+                source_chunk_id="",
+            )
+            all_relationships.append(relationship)
+
+            # Attach relationship to every chunk that mentioned it
+            for episode_uuid in getattr(edge, "episodes", []) or []:
+                chunk_id = episode_uuid_by_chunk.get(episode_uuid)
+                if not chunk_id or chunk_id not in chunk_results_map:
+                    continue
+                chunk_results_map[chunk_id].relationships.append(relationship)
+
+        # Attach entities to per-chunk results based on relationships
+        for chunk_id, result in chunk_results_map.items():
+            seen_entities: set[str] = set()
+            for rel in result.relationships:
+                for node_uuid in (rel.source_uuid, rel.target_uuid):
+                    if node_uuid in seen_entities:
+                        continue
+                    node = nodes_by_uuid.get(node_uuid)
+                    if not node:
+                        continue
+                    seen_entities.add(node_uuid)
+                    result.entities.append(entity_cache[node_uuid])
+
+        # Combine success + pre-validation errors preserving original order
+        chunk_results: List[ChunkExtractionResult] = []
+        for idx, chunk in enumerate(chunks):
+            chunk_id = chunk.get("chunk_id", f"chunk_{idx}")
+            if chunk_id in chunk_results_map:
+                chunk_results.append(chunk_results_map[chunk_id])
+            elif chunk_id in error_results:
+                chunk_results.append(error_results[chunk_id])
+            else:
+                chunk_results.append(
+                    ChunkExtractionResult(
+                        chunk_id=chunk_id,
+                        episode_uuid="",
+                        error="Chunk not processed (missing from bulk response)",
                     )
-                    chunk_results.append(
-                        ChunkExtractionResult(
-                            chunk_id=chunk_id,
-                            episode_uuid="",
-                            error=str(result),
-                        )
-                    )
-                else:
-                    chunk_results.append(result)
-                    all_entities.extend(result.entities)
-                    all_relationships.extend(result.relationships)
+                )
 
         # Compute statistics
         successful_chunks = sum(1 for r in chunk_results if r.error is None)
         failed_chunks = len(chunk_results) - successful_chunks
 
         # Count unique entities by UUID
-        unique_entity_uuids = set(e.uuid for e in all_entities)
+        unique_entity_uuids = set(entity_cache.keys())
 
         # Count entities by type
         entity_type_counts: Dict[str, int] = {}
@@ -538,6 +660,18 @@ class GraphitiExtractor:
         processing_time_ms = (
             datetime.now(timezone.utc) - start_time
         ).total_seconds() * 1000
+
+        # Optional post-processing: rebuild communities for this group
+        try:
+            community_nodes, community_edges = await self._graphiti.build_communities(
+                group_ids=[sanitized_group_id]
+            )
+            logger.info(
+                f"Graphiti community build: {len(community_nodes)} nodes, "
+                f"{len(community_edges)} edges for group {sanitized_group_id}"
+            )
+        except Exception as community_err:
+            logger.warning(f"Community build skipped: {community_err}")
 
         result = GraphitiExtractionResult(
             document_id=document_id,

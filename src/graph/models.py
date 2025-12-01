@@ -46,25 +46,36 @@ class EntityType(Enum):
     REGULATION = "regulation"  # National laws (Atomový zákon, GDPR)
     DECREE = "decree"  # Vyhlášky, implementing regulations (378/2016 Sb.)
     DIRECTIVE = "directive"  # EU directives (Euratom)
+    DECISION = "decision"
     TREATY = "treaty"  # International treaties (ADR, ADN, Vienna Convention)
     LEGAL_PROVISION = "legal_provision"  # Specific § / article / paragraph in law
-    REQUIREMENT = "requirement"  # Extracted compliance requirement from LEGAL_PROVISION
-
+      # Extracted compliance requirement from LEGAL_PROVISION
+    TECHNICAL_STANDARD = "technical_standard"
     # ==================== AUTHORIZATION & COMPLIANCE ====================
     PERMIT = "permit"  # Formal authorization (e.g., §9 stages: siting, construction, operation)
     LICENSE_CONDITION = "license_condition"  # Specific condition in a permit/license
-
+    REQUIREMENT = "requirement"
+    CONSTRAINT = "constraint"
     # ==================== NUCLEAR TECHNICAL ENTITIES ====================
     REACTOR = "reactor"  # Nuclear reactor unit (VR-1, type, power rating)
     FACILITY = "facility"  # Nuclear facility/site hosting reactors/systems
     SYSTEM = "system"  # Technical systems (I&C, cooling, protection, monitoring)
     SAFETY_FUNCTION = "safety_function"  # Safety functions (shutdown, heat removal, confinement)
+    OPERATIONAL_STATE = "operational_state" # Normal op, AOOs, Design Basis Accidents
     FUEL_TYPE = "fuel_type"  # Nuclear fuel (IRT-4M, enrichment, cladding)
     ISOTOPE = "isotope"  # Radioactive isotopes (U-235, Cs-137, Pu-239)
     RADIATION_SOURCE = "radiation_source"  # Sealed sources, radiation equipment
     WASTE_CATEGORY = "waste_category"  # Radioactive waste categories (low/medium/high level)
-    DOSE_LIMIT = "dose_limit"  # Radiation dose limits (mSv/year for workers/public)
-
+    PARAMETER = "parameter"             # "Pressure", "Temperature", "Enrichment"
+    VALUE = "value"                     # "15 MPa", "3.5%"
+    UNIT = "unit"                       # "MPa", "mSv", "MWt"
+    # ==================== QUANTITATIVE LOGIC (MISSING) ====================
+    HAS_PARAMETER = "has_parameter"       # System -> Parameter (e.g., Cooling -> Pressure)
+    HAS_VALUE = "has_value"               # Parameter -> Value (e.g., Pressure -> 15)
+    HAS_UNIT = "has_unit"                 # Value -> Unit (e.g., 15 -> MPa)
+    
+    LIMITS = "limits"                     # Constraint -> Parameter (e.g., Limit -> Pressure)
+    DEFINES_CONSTRAINT = "defines_constraint" # Requirement -> Constraint (e.g., Law -> < 16 MPa)
     # ==================== EVENTS & PROCESSES ====================
     INCIDENT = "incident"  # Specific safety/security events
     EMERGENCY_CLASSIFICATION = "emergency_classification"  # Event classification levels
@@ -104,7 +115,9 @@ class RelationshipType(Enum):
     CONTAINS_PROVISION = "contains_provision"  # Regulation → Legal provision
     CONTAINS = "contains"  # Document → Section (generic hierarchy)
     PART_OF = "part_of"  # Section → Document (reverse hierarchy)
-
+    # ==================== DOCUMENT LOGIC ====================
+    CONDITION_OF = "condition_of"         # Requirement A -> Requirement B (A is prereq for B)
+    APPLICABLE_IN = "applicable_in"       # Requirement -> Operational State (Rule applies only in accident mode)
     # ==================== CITATIONS & REFERENCES ====================
     REFERENCES = "references"  # Document A → Document B (generic reference)
     REFERENCED_BY = "referenced_by"  # Document B → Document A (reverse)
@@ -137,7 +150,15 @@ class RelationshipType(Enum):
     # ==================== CONTENT & TOPICS ====================
     COVERS_TOPIC = "covers_topic"  # Document → Topic
     APPLIES_TO = "applies_to"  # Regulation → Location/Jurisdiction
+    # ==================== TECHNICAL COMPLIANCE ====================
+    VERIFIES = "verifies"                 # Test/Analysis -> Requirement
+    MITIGATES = "mitigates"               # Safety Function -> Incident
+    DETECTS = "detects"                   # System -> Incident/Parameter
 
+    # ==================== STANDARD ALIGNMENT ====================
+    # Essential for "Generic" vs "Specific" compliance
+    ALIGNED_WITH = "aligned_with"         # Safety Guide -> Decree (BN interprets Decree)
+    DEVIATES_FROM = "deviates_from"       # Contract -> Standard (Justified deviations)
     # ==================== LEGAL TERMINOLOGY (Definition Alignment) ====================
     DEFINITION_OF = "definition_of"  # Definition → Legal term (links term to its authoritative definition)
 
