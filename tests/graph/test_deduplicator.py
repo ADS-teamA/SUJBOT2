@@ -67,15 +67,18 @@ def test_deduplicator_initialization():
     """Test EntityDeduplicator initialization."""
     dedup = EntityDeduplicator()
 
-    assert dedup.use_exact_match is True
-    assert dedup.similarity_threshold == 0.98
+    assert dedup.config.exact_match_enabled is True
+    assert dedup.config.similarity_threshold == 0.90  # Default from EntityDeduplicationConfig
 
 
 def test_deduplicator_custom_threshold():
     """Test EntityDeduplicator with custom threshold."""
-    dedup = EntityDeduplicator(similarity_threshold=0.95)
+    from src.graph.config import EntityDeduplicationConfig
 
-    assert dedup.similarity_threshold == 0.95
+    config = EntityDeduplicationConfig(similarity_threshold=0.95)
+    dedup = EntityDeduplicator(config=config)
+
+    assert dedup.config.similarity_threshold == 0.95
 
 
 def test_find_duplicate_exact_match(sample_entities, graph_with_entities):
@@ -185,29 +188,66 @@ def test_find_duplicate_whitespace_normalized():
 
 def test_get_stats():
     """Test getting deduplication statistics."""
-    dedup = EntityDeduplicator(use_exact_match=True, similarity_threshold=0.95)
+    from src.graph.config import EntityDeduplicationConfig
+
+    config = EntityDeduplicationConfig(
+        exact_match_enabled=True,
+        similarity_threshold=0.95
+    )
+    dedup = EntityDeduplicator(config=config)
 
     stats = dedup.get_stats()
 
-    assert stats["strategy"] == "exact_match"
-    assert stats["threshold"] == 0.95
+    # Check new stats structure
+    assert "layer1_matches" in stats
+    assert "alias_matches" in stats
+    assert "total_matches" in stats
+    assert stats["layer1_precision"] == 1.0
 
 
-def test_similarity_matching_not_implemented():
-    """Test that similarity matching is not yet implemented."""
-    dedup = EntityDeduplicator(use_exact_match=False)
+def test_alias_deduplication():
+    """Test alias-based deduplication with loaded alias map."""
+    from src.graph.config import EntityDeduplicationConfig
 
-    config = GraphStorageConfig(backend=GraphBackend.SIMPLE)
-    graph = SimpleGraphBuilder(config)
+    # Create config with inline alias map (SÚJB variants)
+    config = EntityDeduplicationConfig(
+        exact_match_enabled=True,
+        alias_map={
+            "sújb": "Státní úřad pro jadernou bezpečnost",
+            "sujb": "Státní úřad pro jadernou bezpečnost",
+            "státní úřad pro jadernou bezpečnost": "Státní úřad pro jadernou bezpečnost",
+        }
+    )
+    dedup = EntityDeduplicator(config=config)
 
-    entity = Entity(
-        id="e1",
-        type=EntityType.PERSON,
-        value="John Smith",
-        normalized_value="john smith",
+    # Verify alias map is loaded
+    assert len(dedup.alias_map) == 3
+
+    storage_config = GraphStorageConfig(backend=GraphBackend.SIMPLE)
+    graph = SimpleGraphBuilder(storage_config)
+
+    # Add canonical entity
+    canonical = Entity(
+        id="canonical_sujb",
+        type=EntityType.ORGANIZATION,
+        value="Státní úřad pro jadernou bezpečnost",
+        normalized_value="státní úřad pro jadernou bezpečnost",
         confidence=0.95,
         source_chunk_ids=["chunk1"],
     )
+    graph.add_entities([canonical])
 
-    with pytest.raises(NotImplementedError, match="Non-exact matching not yet implemented"):
-        dedup.find_duplicate(entity, graph)
+    # Try to add alias variant
+    alias_variant = Entity(
+        id="alias_sujb",
+        type=EntityType.ORGANIZATION,
+        value="SÚJB",
+        normalized_value="sújb",
+        confidence=0.90,
+        source_chunk_ids=["chunk2"],
+    )
+
+    # Should find canonical via alias resolution
+    duplicate_id = dedup.find_duplicate(alias_variant, graph)
+    assert duplicate_id == "canonical_sujb"
+    assert dedup.stats["alias_matches"] == 1

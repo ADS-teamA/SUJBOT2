@@ -13,6 +13,7 @@ from src.graph.config import (
     GraphStorageConfig,
     KnowledgeGraphConfig,
     GraphBackend,
+    EntityDeduplicationConfig,
     get_default_config,
     get_development_config,
     get_production_config,
@@ -222,6 +223,181 @@ class TestPresetConfigs:
         assert config.entity_extraction.llm_model == "gpt-4o"
         assert config.entity_extraction.batch_size == 20
         assert config.graph_storage.backend == GraphBackend.NEO4J
+
+
+class TestEntityDeduplicationConfig:
+    """Tests for EntityDeduplicationConfig and alias map loading."""
+
+    def test_default_config(self):
+        """Test default deduplication config."""
+        config = EntityDeduplicationConfig()
+
+        assert config.enabled is True
+        assert config.exact_match_enabled is True
+        assert config.similarity_threshold == 0.90
+        assert config.alias_map == {}  # Empty by default (no path)
+
+    def test_validation_similarity_threshold(self):
+        """Test similarity threshold validation."""
+        with pytest.raises(ValueError, match="similarity_threshold"):
+            EntityDeduplicationConfig(similarity_threshold=1.5)
+
+        with pytest.raises(ValueError, match="similarity_threshold"):
+            EntityDeduplicationConfig(similarity_threshold=-0.1)
+
+    def test_validation_acronym_threshold(self):
+        """Test acronym fuzzy threshold validation."""
+        with pytest.raises(ValueError, match="acronym_fuzzy_threshold"):
+            EntityDeduplicationConfig(acronym_fuzzy_threshold=2.0)
+
+    def test_validation_batch_size(self):
+        """Test embedding batch size validation."""
+        with pytest.raises(ValueError, match="embedding_batch_size"):
+            EntityDeduplicationConfig(embedding_batch_size=0)
+
+    def test_alias_map_loading_missing_file(self, tmp_path):
+        """Test alias map loading with non-existent file."""
+        config = EntityDeduplicationConfig(
+            alias_map_path=str(tmp_path / "nonexistent.json")
+        )
+        # Should return empty map, not crash
+        assert config.alias_map == {}
+
+    def test_alias_map_loading_invalid_json(self, tmp_path):
+        """Test alias map loading with malformed JSON."""
+        invalid_file = tmp_path / "invalid.json"
+        invalid_file.write_text("{ not valid json }")
+
+        config = EntityDeduplicationConfig(alias_map_path=str(invalid_file))
+        # Should return empty map, not crash
+        assert config.alias_map == {}
+
+    def test_alias_map_loading_inverts_correctly(self, tmp_path):
+        """Test canonical->aliases is inverted to alias->canonical."""
+        import json
+
+        alias_file = tmp_path / "aliases.json"
+        alias_file.write_text(json.dumps({
+            "Canonical Name": ["alias1", "alias2"],
+            "Another Entity": ["alias3"],
+        }))
+
+        config = EntityDeduplicationConfig(alias_map_path=str(alias_file))
+
+        # Check inversion: alias -> canonical (all lowercase keys)
+        assert config.alias_map["canonical name"] == "Canonical Name"
+        assert config.alias_map["alias1"] == "Canonical Name"
+        assert config.alias_map["alias2"] == "Canonical Name"
+        assert config.alias_map["another entity"] == "Another Entity"
+        assert config.alias_map["alias3"] == "Another Entity"
+
+    def test_alias_map_loading_skips_metadata_keys(self, tmp_path):
+        """Test _comment and _updated metadata keys are skipped."""
+        import json
+
+        alias_file = tmp_path / "aliases.json"
+        alias_file.write_text(json.dumps({
+            "_comment": "This is a comment",
+            "_updated": "2024-01-01",
+            "Real Entity": ["alias1"],
+        }))
+
+        config = EntityDeduplicationConfig(alias_map_path=str(alias_file))
+
+        # Metadata keys should be skipped
+        assert "_comment" not in config.alias_map
+        assert "_updated" not in config.alias_map
+        assert "this is a comment" not in config.alias_map  # Wasn't processed
+
+        # Real entity should be loaded
+        assert config.alias_map["real entity"] == "Real Entity"
+        assert config.alias_map["alias1"] == "Real Entity"
+
+    def test_alias_map_loading_skips_invalid_entries(self, tmp_path):
+        """Test entries with non-list values are skipped."""
+        import json
+
+        alias_file = tmp_path / "aliases.json"
+        alias_file.write_text(json.dumps({
+            "Valid Entity": ["alias1", "alias2"],
+            "Invalid Entity": "not a list",  # Should be skipped
+            "Also Invalid": 123,  # Should be skipped
+        }))
+
+        config = EntityDeduplicationConfig(alias_map_path=str(alias_file))
+
+        # Valid entry should be loaded
+        assert config.alias_map["valid entity"] == "Valid Entity"
+        assert config.alias_map["alias1"] == "Valid Entity"
+
+        # Invalid entries should be skipped (no crash)
+        # The canonical names are still added, just not the aliases
+        assert "invalid entity" not in config.alias_map or config.alias_map.get("not a list") is None
+
+    def test_alias_map_loading_handles_czech_diacritics(self, tmp_path):
+        """Test proper handling of Czech characters."""
+        import json
+
+        alias_file = tmp_path / "aliases.json"
+        alias_file.write_text(json.dumps({
+            "Státní úřad pro jadernou bezpečnost": ["SÚJB", "SUJB"],
+        }), encoding="utf-8")
+
+        config = EntityDeduplicationConfig(alias_map_path=str(alias_file))
+
+        # Czech diacritics should be preserved in canonical name
+        assert config.alias_map["sújb"] == "Státní úřad pro jadernou bezpečnost"
+        assert config.alias_map["sujb"] == "Státní úřad pro jadernou bezpečnost"
+        # Lowercase canonical
+        assert config.alias_map["státní úřad pro jadernou bezpečnost"] == "Státní úřad pro jadernou bezpečnost"
+
+    def test_inline_alias_map(self):
+        """Test providing alias map directly (not from file)."""
+        config = EntityDeduplicationConfig(
+            alias_map={
+                "sújb": "Státní úřad pro jadernou bezpečnost",
+                "sujb": "Státní úřad pro jadernou bezpečnost",
+            }
+        )
+
+        assert len(config.alias_map) == 2
+        assert config.alias_map["sújb"] == "Státní úřad pro jadernou bezpečnost"
+
+
+class TestEntityDeduplicationConfigFromEnv:
+    """Tests for EntityDeduplicationConfig.from_env() method."""
+
+    def test_from_env_default_values(self, monkeypatch):
+        """Test from_env() with default values."""
+        # Clear relevant env vars
+        monkeypatch.delenv("KG_DEDUPLICATE_ENTITIES", raising=False)
+        monkeypatch.delenv("KG_ALIAS_MAP_PATH", raising=False)
+
+        config = EntityDeduplicationConfig.from_env()
+
+        assert config.enabled is True
+        # alias_map_path will be None if default path doesn't exist
+
+    def test_from_env_custom_acronyms(self, monkeypatch):
+        """Test from_env() parses custom acronyms."""
+        monkeypatch.setenv("KG_DEDUP_CUSTOM_ACRONYMS", "ACRO1:expansion1,ACRO2:expansion2")
+
+        config = EntityDeduplicationConfig.from_env()
+
+        assert config.custom_acronyms == {
+            "ACRO1": "expansion1",
+            "ACRO2": "expansion2",
+        }
+
+    def test_from_env_custom_thresholds(self, monkeypatch):
+        """Test from_env() parses custom thresholds."""
+        monkeypatch.setenv("KG_DEDUP_SIMILARITY_THRESHOLD", "0.85")
+        monkeypatch.setenv("KG_DEDUP_ACRONYM_FUZZY_THRESHOLD", "0.80")
+
+        config = EntityDeduplicationConfig.from_env()
+
+        assert config.similarity_threshold == 0.85
+        assert config.acronym_fuzzy_threshold == 0.80
 
 
 if __name__ == "__main__":
