@@ -314,8 +314,25 @@ async def create_user(
 
         return _format_user_response(user)
 
+    except asyncpg.PostgresConnectionError as e:
+        logger.error(f"Database connection failed creating user {user_data.email}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable. Please try again."
+        )
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already exists"
+        )
+    except asyncpg.PostgresError as e:
+        logger.error(f"Database error creating user {user_data.email}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error"
+        )
     except Exception as e:
-        logger.error(f"Failed to create user {user_data.email}: {e}")
+        logger.error(f"Unexpected error creating user {user_data.email}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user"
@@ -413,8 +430,20 @@ async def update_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already in use"
         )
+    except asyncpg.PostgresConnectionError as e:
+        logger.error(f"Database connection failed updating user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable. Please try again."
+        )
+    except asyncpg.PostgresError as e:
+        logger.error(f"Database error updating user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error"
+        )
     except Exception as e:
-        logger.error(f"Failed to update user {user_id}: {e}")
+        logger.error(f"Unexpected error updating user {user_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update user"
@@ -460,12 +489,37 @@ async def delete_user(
         )
 
     # Delete user
-    deleted = await admin_queries.delete_user(user_id)
+    try:
+        deleted = await admin_queries.delete_user(user_id)
 
-    if deleted:
-        logger.info(f"Admin {admin['id']} deleted user {user_id}")
+        if deleted:
+            logger.info(f"Admin {admin['id']} deleted user {user_id}")
 
-    return None
+        return None
+
+    except asyncpg.PostgresConnectionError as e:
+        logger.error(f"Database connection failed deleting user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database temporarily unavailable. Please try again."
+        )
+    except asyncpg.ForeignKeyViolationError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete user with associated data"
+        )
+    except asyncpg.PostgresError as e:
+        logger.error(f"Database error deleting user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error deleting user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete user"
+        )
 
 
 # =============================================================================

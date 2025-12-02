@@ -137,7 +137,8 @@
       "adminUsers": "Administrátoři",
       "totalConversations": "Celkem konverzací",
       "totalMessages": "Celkem zpráv",
-      "activeLast24h": "Aktivní za 24h"
+      "activeLast24h": "Aktivní za 24h",
+      "lastUpdated": "Naposledy aktualizováno"
     },
     "health": {
       "title": "Stav systému",
@@ -146,7 +147,9 @@
       "healthy": "V pořádku",
       "degraded": "Omezený",
       "unhealthy": "Nedostupný",
-      "latency": "Latence"
+      "latency": "Latence",
+      "overallStatus": "Celkový stav",
+      "lastChecked": "Naposledy zkontrolováno"
     },
     "users": {
       "title": "Správa uživatelů",
@@ -155,12 +158,22 @@
       "email": "E-mail",
       "fullName": "Celé jméno",
       "password": "Heslo",
+      "newPassword": "Nové heslo",
+      "passwordHelperEdit": "Nechte prázdné pro zachování aktuálního hesla",
+      "passwordHelperCreate": "Minimálně 8 znaků",
       "isActive": "Aktivní",
       "isAdmin": "Administrátor",
       "agentVariant": "Varianta agenta",
       "createdAt": "Vytvořeno",
+      "updatedAt": "Aktualizováno",
       "lastLogin": "Poslední přihlášení",
-      "actions": "Akce"
+      "actions": "Akce",
+      "statusActive": "Aktivní",
+      "statusInactive": "Neaktivní",
+      "roleAdmin": "Administrátor",
+      "variantPremium": "Premium (Claude Opus/Sonnet)",
+      "variantCheap": "Levný (Claude Haiku)",
+      "variantLocal": "Lokální (Llama 3.1 70B)"
     }
   }
 }

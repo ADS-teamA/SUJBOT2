@@ -74,17 +74,11 @@ export const dataProvider: DataProvider = {
 
   create: async (resource, params) => {
     const url = `${API_BASE_URL}/admin/${resource}`;
-    console.log('dataProvider.create:', { resource, url, data: params.data });
-    try {
-      const { json } = await httpClient(url, {
-        method: 'POST',
-        body: JSON.stringify(params.data),
-      });
-      return { data: { ...json, id: json.id } };
-    } catch (error) {
-      console.error('dataProvider.create error:', error);
-      throw error;
-    }
+    const { json } = await httpClient(url, {
+      method: 'POST',
+      body: JSON.stringify(params.data),
+    });
+    return { data: { ...json, id: json.id } };
   },
 
   update: async (resource, params) => {
@@ -98,35 +92,57 @@ export const dataProvider: DataProvider = {
   },
 
   updateMany: async (resource, params) => {
-    const results = await Promise.all(
+    const results = await Promise.allSettled(
       params.ids.map(id =>
         httpClient(`${API_BASE_URL}/admin/${resource}/${id}`, {
           method: 'PUT',
           body: JSON.stringify(params.data),
-        })
+        }).then(({ json }) => json.id)
       )
     );
 
-    return { data: results.map(({ json }) => json.id) };
+    const successIds = results
+      .filter((r): r is PromiseFulfilledResult<unknown> => r.status === 'fulfilled')
+      .map(r => r.value);
+
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('Some updates failed:', failures);
+    }
+
+    return { data: successIds };
   },
 
   delete: async (resource, params) => {
     const url = `${API_BASE_URL}/admin/${resource}/${params.id}`;
     await httpClient(url, { method: 'DELETE' });
 
-    // React Admin expects the full record back - previousData is always available on delete
-    return { data: params.previousData! };
+    // React Admin expects the full record back
+    if (!params.previousData) {
+      console.error('Delete called without previousData - returning minimal object');
+      return { data: { id: params.id } };
+    }
+    return { data: params.previousData };
   },
 
   deleteMany: async (resource, params) => {
-    await Promise.all(
+    const results = await Promise.allSettled(
       params.ids.map(id =>
         httpClient(`${API_BASE_URL}/admin/${resource}/${id}`, {
           method: 'DELETE',
-        })
+        }).then(() => id)
       )
     );
 
-    return { data: params.ids };
+    const successIds = results
+      .filter((r): r is PromiseFulfilledResult<unknown> => r.status === 'fulfilled')
+      .map(r => r.value);
+
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('Some deletes failed:', failures);
+    }
+
+    return { data: successIds };
   },
 };

@@ -41,7 +41,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         "/openapi.json",
         "/redoc",
         "/auth/login",
-        "/auth/register",  # If admin creates accounts, this should be protected
+        # Note: /auth/register is NOT public - requires admin auth via get_current_admin_user
+        # Note: /admin/login is NOT here - it has no middleware check but validates admin after password
     }
 
     def __init__(self, app, auth_manager, auth_queries):

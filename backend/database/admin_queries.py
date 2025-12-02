@@ -20,10 +20,12 @@ Usage:
         raise HTTPException(400, "Cannot demote the last admin")
 """
 
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, NoReturn
 from datetime import datetime, timezone
 import logging
 import asyncpg
+
+from src.exceptions import DatabaseConnectionError, StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -45,22 +47,30 @@ class AdminQueries:
         """
         self.pool = postgres_adapter.pool
 
-    def _handle_db_error(self, operation: str, context: Dict, error: Exception) -> None:
-        """Helper to log and re-raise database errors with context."""
+    def _handle_db_error(self, operation: str, context: Dict, error: Exception) -> NoReturn:
+        """Helper to log and re-raise database errors with typed exceptions."""
         if isinstance(error, asyncpg.PostgresConnectionError):
             logger.error(
                 f"Database connection error during {operation}",
                 exc_info=True,
                 extra={**context, "error_type": "ConnectionError"}
             )
-            raise RuntimeError(f"Database connection failed: {error}") from error
+            raise DatabaseConnectionError(
+                message=f"Database connection failed during {operation}",
+                details=context,
+                cause=error
+            )
         else:
             logger.error(
                 f"Unexpected error during {operation}: {error}",
                 exc_info=True,
                 extra={**context, "error_type": error.__class__.__name__}
             )
-            raise
+            raise StorageError(
+                message=f"Unexpected error during {operation}: {error}",
+                details={**context, "error_type": error.__class__.__name__},
+                cause=error
+            )
 
     # =========================================================================
     # User CRUD Operations
@@ -79,7 +89,8 @@ class AdminQueries:
             User dict with all fields, or None if not found
 
         Raises:
-            RuntimeError: If database connection fails
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
         """
         try:
             async with self.pool.acquire() as conn:
@@ -123,7 +134,8 @@ class AdminQueries:
 
         Raises:
             asyncpg.UniqueViolationError: If email already exists
-            RuntimeError: If database connection fails
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
         """
         # Build dynamic UPDATE query
         updates = []
@@ -192,7 +204,8 @@ class AdminQueries:
             True if deleted, False if not found
 
         Raises:
-            RuntimeError: If database connection fails
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
         """
         try:
             async with self.pool.acquire() as conn:
@@ -221,7 +234,8 @@ class AdminQueries:
             Number of active admin users
 
         Raises:
-            RuntimeError: If database connection fails
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
         """
         try:
             async with self.pool.acquire() as conn:
@@ -244,7 +258,8 @@ class AdminQueries:
             True if this is the only active admin
 
         Raises:
-            RuntimeError: If database connection fails
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
         """
         try:
             async with self.pool.acquire() as conn:
@@ -280,7 +295,8 @@ class AdminQueries:
             Dict with user and conversation counts
 
         Raises:
-            RuntimeError: If database connection fails
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
         """
         try:
             async with self.pool.acquire() as conn:

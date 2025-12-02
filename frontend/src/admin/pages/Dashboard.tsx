@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, Typography, Box, Grid, CircularProgress } from '@mui/material';
 import { Users, UserCheck, Shield, MessageSquare, Activity } from 'lucide-react';
 
@@ -64,6 +65,7 @@ const StatCard = ({ title, value, icon, color }: StatCardProps) => (
 );
 
 export const Dashboard = () => {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +104,7 @@ export const Dashboard = () => {
   if (error) {
     return (
       <Box p={3}>
-        <Typography color="error">Error: {error}</Typography>
+        <Typography color="error">{t('common.error')}: {error}</Typography>
       </Box>
     );
   }
@@ -114,16 +116,16 @@ export const Dashboard = () => {
   return (
     <Box p={3}>
       <Typography variant="h4" gutterBottom>
-        Dashboard
+        {t('admin.dashboard.title')}
       </Typography>
       <Typography variant="body2" color="textSecondary" gutterBottom sx={{ mb: 3 }}>
-        System overview and statistics
+        {t('admin.dashboard.subtitle')}
       </Typography>
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard
-            title="Total Users"
+            title={t('admin.dashboard.totalUsers')}
             value={stats.total_users}
             icon={<Users size={24} color="white" />}
             color="#3b82f6"
@@ -132,7 +134,7 @@ export const Dashboard = () => {
 
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard
-            title="Active Users"
+            title={t('admin.dashboard.activeUsers')}
             value={stats.active_users}
             icon={<UserCheck size={24} color="white" />}
             color="#22c55e"
@@ -141,7 +143,7 @@ export const Dashboard = () => {
 
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard
-            title="Admin Users"
+            title={t('admin.dashboard.adminUsers')}
             value={stats.admin_users}
             icon={<Shield size={24} color="white" />}
             color="#8b5cf6"
@@ -150,7 +152,7 @@ export const Dashboard = () => {
 
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard
-            title="Total Conversations"
+            title={t('admin.dashboard.totalConversations')}
             value={stats.total_conversations}
             icon={<MessageSquare size={24} color="white" />}
             color="#f59e0b"
@@ -159,7 +161,7 @@ export const Dashboard = () => {
 
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard
-            title="Total Messages"
+            title={t('admin.dashboard.totalMessages')}
             value={stats.total_messages}
             icon={<MessageSquare size={24} color="white" />}
             color="#ec4899"
@@ -168,7 +170,7 @@ export const Dashboard = () => {
 
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <StatCard
-            title="Active Last 24h"
+            title={t('admin.dashboard.activeLast24h')}
             value={stats.users_last_24h}
             icon={<Activity size={24} color="white" />}
             color="#06b6d4"
@@ -177,7 +179,7 @@ export const Dashboard = () => {
       </Grid>
 
       <Typography variant="caption" color="textSecondary" sx={{ mt: 3, display: 'block' }}>
-        Last updated: {new Date(stats.timestamp).toLocaleString()}
+        {t('admin.dashboard.lastUpdated')}: {new Date(stats.timestamp).toLocaleString()}
       </Typography>
     </Box>
   );

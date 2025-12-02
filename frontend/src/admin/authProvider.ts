@@ -44,10 +44,19 @@ export const authProvider: AuthProvider = {
 
   logout: async () => {
     cachedUser = null;
-    await fetch(`${API_BASE_URL}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        console.error('Logout failed on server:', response.status);
+        // Still proceed with local logout, but log the issue
+      }
+    } catch (error) {
+      console.error('Logout request failed:', error);
+      // Network error - still clear local state but log for debugging
+    }
     return Promise.resolve();
   },
 
@@ -75,6 +84,12 @@ export const authProvider: AuthProvider = {
     if (status === 401 || status === 403) {
       cachedUser = null;
       throw new Error('Session expired');
+    }
+    // Log unexpected errors for debugging
+    if (status >= 500) {
+      console.error('Server error:', status, error.message || error);
+    } else if (status >= 400) {
+      console.warn('Client error:', status, error.message || error);
     }
     return Promise.resolve();
   },
@@ -107,6 +122,21 @@ export const authProvider: AuthProvider = {
   },
 
   getPermissions: async () => {
-    return cachedUser?.is_admin ? 'admin' : 'user';
+    if (!cachedUser) {
+      // Try to fetch user if not cached
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/me`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          cachedUser = await response.json();
+        } else {
+          throw new Error('Not authenticated');
+        }
+      } catch {
+        throw new Error('Unable to determine permissions');
+      }
+    }
+    return cachedUser.is_admin ? 'admin' : 'user';
   },
 };

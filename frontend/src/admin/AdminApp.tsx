@@ -39,9 +39,6 @@ const AdminLayout = ({ children, ...props }: { children: React.ReactNode }) => (
 );
 
 export function AdminApp() {
-  // Debug: Log current URL
-  console.log('AdminApp rendering, pathname:', window.location.pathname, 'href:', window.location.href);
-
   return (
     <BrowserRouter basename="/admin">
       <Admin

@@ -136,7 +136,8 @@
       "adminUsers": "Admin Users",
       "totalConversations": "Total Conversations",
       "totalMessages": "Total Messages",
-      "activeLast24h": "Active Last 24h"
+      "activeLast24h": "Active Last 24h",
+      "lastUpdated": "Last updated"
     },
     "health": {
       "title": "System Health",
@@ -145,7 +146,9 @@
       "healthy": "Healthy",
       "degraded": "Degraded",
       "unhealthy": "Unhealthy",
-      "latency": "Latency"
+      "latency": "Latency",
+      "overallStatus": "Overall Status",
+      "lastChecked": "Last checked"
     },
     "users": {
       "title": "User Management",
@@ -154,12 +157,22 @@
       "email": "Email",
       "fullName": "Full Name",
       "password": "Password",
+      "newPassword": "New Password",
+      "passwordHelperEdit": "Leave empty to keep current password",
+      "passwordHelperCreate": "Minimum 8 characters",
       "isActive": "Active",
       "isAdmin": "Admin",
       "agentVariant": "Agent Variant",
       "createdAt": "Created",
+      "updatedAt": "Updated",
       "lastLogin": "Last Login",
-      "actions": "Actions"
+      "actions": "Actions",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "roleAdmin": "Admin",
+      "variantPremium": "Premium (Claude Opus/Sonnet)",
+      "variantCheap": "Cheap (Claude Haiku)",
+      "variantLocal": "Local (Llama 3.1 70B)"
     }
   }
 }

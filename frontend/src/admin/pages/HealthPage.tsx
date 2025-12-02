@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Card,
   CardContent,
@@ -50,7 +51,7 @@ const StatusIcon = ({ status }: { status: string }) => {
   }
 };
 
-const StatusChip = ({ status }: { status: string }) => {
+const StatusChip = ({ status, t }: { status: string; t: (key: string) => string }) => {
   const colors = {
     healthy: { bg: '#dcfce7', color: '#166534' },
     degraded: { bg: '#fef3c7', color: '#92400e' },
@@ -58,10 +59,15 @@ const StatusChip = ({ status }: { status: string }) => {
   };
 
   const style = colors[status as keyof typeof colors] || { bg: '#f3f4f6', color: '#374151' };
+  const labels: Record<string, string> = {
+    healthy: t('admin.health.healthy'),
+    degraded: t('admin.health.degraded'),
+    unhealthy: t('admin.health.unhealthy'),
+  };
 
   return (
     <Chip
-      label={status.charAt(0).toUpperCase() + status.slice(1)}
+      label={labels[status] || status}
       sx={{
         backgroundColor: style.bg,
         color: style.color,
@@ -71,7 +77,7 @@ const StatusChip = ({ status }: { status: string }) => {
   );
 };
 
-const ServiceCard = ({ service }: { service: ServiceHealth }) => (
+const ServiceCard = ({ service, t }: { service: ServiceHealth; t: (key: string) => string }) => (
   <Card>
     <CardContent>
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
@@ -79,12 +85,12 @@ const ServiceCard = ({ service }: { service: ServiceHealth }) => (
           <StatusIcon status={service.status} />
           <Typography variant="h6">{service.name}</Typography>
         </Box>
-        <StatusChip status={service.status} />
+        <StatusChip status={service.status} t={t} />
       </Box>
 
       {service.latency_ms !== null && (
         <Typography variant="body2" color="textSecondary">
-          Latency: {service.latency_ms.toFixed(2)} ms
+          {t('admin.health.latency')}: {service.latency_ms.toFixed(2)} ms
         </Typography>
       )}
 
@@ -98,6 +104,7 @@ const ServiceCard = ({ service }: { service: ServiceHealth }) => (
 );
 
 export const HealthPage = () => {
+  const { t } = useTranslation();
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,10 +149,10 @@ export const HealthPage = () => {
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
         <Box>
           <Typography variant="h4" gutterBottom>
-            System Health
+            {t('admin.health.title')}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Monitor service status and performance
+            {t('admin.health.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -154,13 +161,13 @@ export const HealthPage = () => {
           onClick={fetchHealth}
           disabled={refreshing}
         >
-          Refresh
+          {t('admin.health.refresh')}
         </Button>
       </Box>
 
       {error && (
         <Box mb={3}>
-          <Typography color="error">Error: {error}</Typography>
+          <Typography color="error">{t('common.error')}: {error}</Typography>
         </Box>
       )}
 
@@ -168,21 +175,21 @@ export const HealthPage = () => {
         <>
           <Box mb={3}>
             <Typography variant="h6" gutterBottom>
-              Overall Status
+              {t('admin.health.overallStatus')}
             </Typography>
-            <StatusChip status={health.status} />
+            <StatusChip status={health.status} t={t} />
           </Box>
 
           <Grid container spacing={3}>
             {health.services.map((service) => (
               <Grid size={{ xs: 12, sm: 6, md: 4 }} key={service.name}>
-                <ServiceCard service={service} />
+                <ServiceCard service={service} t={t} />
               </Grid>
             ))}
           </Grid>
 
           <Typography variant="caption" color="textSecondary" sx={{ mt: 3, display: 'block' }}>
-            Last checked: {new Date(health.timestamp).toLocaleString()}
+            {t('admin.health.lastChecked')}: {new Date(health.timestamp).toLocaleString()}
           </Typography>
         </>
       )}

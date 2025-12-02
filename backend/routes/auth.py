@@ -349,27 +349,29 @@ async def register_user(
     admin: Dict = Depends(get_current_admin_user)  # Requires admin authentication
 ):
     """
-    Register new user (admin creates accounts manually).
+    Register new user (admin-only endpoint).
 
-    ⚠️ PRODUCTION SECURITY:
-    - This endpoint should be protected with admin authentication
-    - Uncomment the current_user dependency to require admin login
-    - Add admin role check: if not current_user.get("is_admin"): raise 403
+    This endpoint requires admin authentication. Admins can create new user
+    accounts with optional full name. Password strength is validated.
 
-    For now: Open registration for development/testing.
+    Note: For admin portal user creation, prefer POST /admin/users which
+    has additional options like setting is_admin flag directly.
 
     Args:
         user_data: Email, password, optional full name
+        admin: Admin user (automatically validated via dependency)
 
     Returns:
         Created user profile (without password hash)
 
     Raises:
+        HTTPException 401: Not authenticated
+        HTTPException 403: Not an admin
         HTTPException 409: Email already exists
         HTTPException 422: Validation error (weak password, invalid email)
 
     Example:
-        POST /auth/register
+        POST /auth/register (requires admin JWT cookie)
         {
             "email": "user@example.com",
             "password": "SecurePass123!",

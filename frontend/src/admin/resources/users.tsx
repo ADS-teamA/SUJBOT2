@@ -8,6 +8,7 @@
  * - UserShow: User details view
  */
 
+import { useTranslation } from 'react-i18next';
 import {
   List,
   Datagrid,
@@ -39,6 +40,7 @@ interface FieldProps {
 
 // Status chip component
 const StatusField = (_props: FieldProps) => {
+  const { t } = useTranslation();
   const record = useRecordContext();
   if (!record) return null;
 
@@ -53,13 +55,14 @@ const StatusField = (_props: FieldProps) => {
         color: record.is_active ? '#166534' : '#991b1b',
       }}
     >
-      {record.is_active ? 'Active' : 'Inactive'}
+      {record.is_active ? t('admin.users.statusActive') : t('admin.users.statusInactive')}
     </span>
   );
 };
 
 // Admin badge component
 const AdminBadge = (_props: FieldProps) => {
+  const { t } = useTranslation();
   const record = useRecordContext();
   if (!record || !record.is_admin) return null;
 
@@ -74,7 +77,7 @@ const AdminBadge = (_props: FieldProps) => {
         color: '#1e40af',
       }}
     >
-      Admin
+      {t('admin.users.roleAdmin')}
     </span>
   );
 };
@@ -99,60 +102,70 @@ export const UserList = () => (
   </List>
 );
 
-export const UserEdit = () => (
-  <Edit>
-    <SimpleForm>
-      <TextInput source="id" disabled />
-      <TextInput source="email" validate={[required(), email()]} />
-      <PasswordInput
-        source="password"
-        label="New Password"
-        helperText="Leave empty to keep current password"
-      />
-      <TextInput source="full_name" label="Full Name" />
-      <BooleanInput source="is_active" label="Active" />
-      <BooleanInput source="is_admin" label="Admin" />
-      <SelectInput
-        source="agent_variant"
-        label="Agent Variant"
-        choices={[
-          { id: 'premium', name: 'Premium (Claude Opus/Sonnet)' },
-          { id: 'cheap', name: 'Cheap (Claude Haiku)' },
-          { id: 'local', name: 'Local (Llama 3.1 70B)' },
-        ]}
-      />
-    </SimpleForm>
-  </Edit>
-);
+export const UserEdit = () => {
+  const { t } = useTranslation();
+  return (
+    <Edit>
+      <SimpleForm>
+        <TextInput source="id" disabled />
+        <TextInput source="email" validate={[required(), email()]} label={t('admin.users.email')} />
+        <PasswordInput
+          source="password"
+          label={t('admin.users.newPassword')}
+          helperText={t('admin.users.passwordHelperEdit')}
+        />
+        <TextInput source="full_name" label={t('admin.users.fullName')} />
+        <BooleanInput source="is_active" label={t('admin.users.isActive')} />
+        <BooleanInput source="is_admin" label={t('admin.users.isAdmin')} />
+        <SelectInput
+          source="agent_variant"
+          label={t('admin.users.agentVariant')}
+          choices={[
+            { id: 'premium', name: t('admin.users.variantPremium') },
+            { id: 'cheap', name: t('admin.users.variantCheap') },
+            { id: 'local', name: t('admin.users.variantLocal') },
+          ]}
+        />
+      </SimpleForm>
+    </Edit>
+  );
+};
 
-export const UserCreate = () => (
-  <Create>
-    <SimpleForm>
-      <TextInput source="email" validate={[required(), email()]} />
-      <PasswordInput
-        source="password"
-        validate={[required(), minLength(8)]}
-        helperText="Minimum 8 characters, must include uppercase, lowercase, number, and special character"
-      />
-      <TextInput source="full_name" label="Full Name" />
-      <BooleanInput source="is_active" label="Active" defaultValue={true} />
-      <BooleanInput source="is_admin" label="Admin" defaultValue={false} />
-    </SimpleForm>
-  </Create>
-);
+export const UserCreate = () => {
+  const { t } = useTranslation();
+  return (
+    <Create>
+      <SimpleForm>
+        <TextInput source="email" validate={[required(), email()]} label={t('admin.users.email')} />
+        <PasswordInput
+          source="password"
+          validate={[required(), minLength(8)]}
+          label={t('admin.users.password')}
+          helperText={t('admin.users.passwordHelperCreate')}
+        />
+        <TextInput source="full_name" label={t('admin.users.fullName')} />
+        <BooleanInput source="is_active" label={t('admin.users.isActive')} defaultValue={true} />
+        <BooleanInput source="is_admin" label={t('admin.users.isAdmin')} defaultValue={false} />
+      </SimpleForm>
+    </Create>
+  );
+};
 
-export const UserShow = () => (
-  <Show>
-    <SimpleShowLayout>
-      <TextField source="id" />
-      <EmailField source="email" />
-      <TextField source="full_name" label="Full Name" />
-      <BooleanField source="is_active" label="Active" />
-      <BooleanField source="is_admin" label="Admin" />
-      <TextField source="agent_variant" label="Agent Variant" />
-      <DateField source="created_at" label="Created" showTime />
-      <DateField source="updated_at" label="Updated" showTime />
-      <DateField source="last_login_at" label="Last Login" showTime />
-    </SimpleShowLayout>
-  </Show>
-);
+export const UserShow = () => {
+  const { t } = useTranslation();
+  return (
+    <Show>
+      <SimpleShowLayout>
+        <TextField source="id" />
+        <EmailField source="email" label={t('admin.users.email')} />
+        <TextField source="full_name" label={t('admin.users.fullName')} />
+        <BooleanField source="is_active" label={t('admin.users.isActive')} />
+        <BooleanField source="is_admin" label={t('admin.users.isAdmin')} />
+        <TextField source="agent_variant" label={t('admin.users.agentVariant')} />
+        <DateField source="created_at" label={t('admin.users.createdAt')} showTime />
+        <DateField source="updated_at" label={t('admin.users.updatedAt')} showTime />
+        <DateField source="last_login_at" label={t('admin.users.lastLogin')} showTime />
+      </SimpleShowLayout>
+    </Show>
+  );
+};

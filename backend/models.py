@@ -5,7 +5,7 @@ These models define the contract between frontend and backend.
 """
 
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class ChatMessage(BaseModel):
@@ -112,16 +112,16 @@ class AdminUserListResponse(BaseModel):
     """Paginated list of users for admin."""
 
     users: List[AdminUserResponse]
-    total: int
-    limit: int
-    offset: int
+    total: int = Field(..., ge=0)
+    limit: int = Field(..., ge=1, le=1000)
+    offset: int = Field(..., ge=0)
 
 
 class AdminUserCreateRequest(BaseModel):
     """Request to create a new user (admin endpoint)."""
 
-    email: str = Field(..., description="User email address")
-    password: str = Field(..., min_length=8, max_length=128, description="User password")
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, max_length=128, description="User password (min 8 chars)")
     full_name: Optional[str] = Field(None, max_length=100, description="Display name")
     is_admin: bool = Field(False, description="Grant admin privileges")
     is_active: bool = Field(True, description="Account active status")
@@ -130,8 +130,8 @@ class AdminUserCreateRequest(BaseModel):
 class AdminUserUpdateRequest(BaseModel):
     """Request to update user (admin endpoint)."""
 
-    email: Optional[str] = Field(None, description="New email address")
-    password: Optional[str] = Field(None, min_length=1, max_length=128, description="New password (admin can set any)")
+    email: Optional[EmailStr] = Field(None, description="New email address")
+    password: Optional[str] = Field(None, min_length=8, max_length=128, description="New password (min 8 chars)")
     full_name: Optional[str] = Field(None, max_length=100, description="Display name")
     is_admin: Optional[bool] = Field(None, description="Admin privileges")
     is_active: Optional[bool] = Field(None, description="Account active status")
@@ -143,16 +143,16 @@ class AdminUserUpdateRequest(BaseModel):
 class AdminLoginRequest(BaseModel):
     """Admin login credentials."""
 
-    email: str = Field(..., description="Admin email address")
-    password: str = Field(..., min_length=1, description="Admin password")
+    email: EmailStr = Field(..., description="Admin email address")
+    password: str = Field(..., min_length=8, description="Admin password")
 
 
 class ServiceHealthDetail(BaseModel):
     """Individual service health status."""
 
-    name: str
+    name: str = Field(..., min_length=1)
     status: Literal["healthy", "degraded", "unhealthy"]
-    latency_ms: Optional[float] = None
+    latency_ms: Optional[float] = Field(None, ge=0)
     message: Optional[str] = None
 
 
@@ -167,10 +167,10 @@ class AdminHealthResponse(BaseModel):
 class AdminStatsResponse(BaseModel):
     """System statistics for admin dashboard."""
 
-    total_users: int
-    active_users: int
-    admin_users: int
-    total_conversations: int
-    total_messages: int
-    users_last_24h: int
+    total_users: int = Field(..., ge=0)
+    active_users: int = Field(..., ge=0)
+    admin_users: int = Field(..., ge=0)
+    total_conversations: int = Field(..., ge=0)
+    total_messages: int = Field(..., ge=0)
+    users_last_24h: int = Field(..., ge=0)
     timestamp: str
