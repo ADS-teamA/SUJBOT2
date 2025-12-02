@@ -188,15 +188,20 @@ class SummaryGenerator:
 Summarize the following document text. Focus on extracting the most important entities,
 core purpose, and key topics.
 
-CRITICAL: The summary MUST be EXACTLY {self.max_chars} characters or less (current limit: {self.max_chars} chars).
-This is a hard constraint. The summary should be optimized for providing context to smaller text chunks.
+CRITICAL CONSTRAINTS:
+- The summary MUST be EXACTLY {self.max_chars} characters or less (current limit: {self.max_chars} chars).
+- This is a hard constraint. The summary should be optimized for providing context to smaller text chunks.
+
+LANGUAGE REQUIREMENT: Your summary MUST be in the SAME LANGUAGE as the document text below.
+If the document is in Czech, respond in Czech. If in English, respond in English.
+Match the document language exactly - do NOT translate.
 
 Output only the summary text, nothing else.
 
 Document:
 {text_preview}
 
-Summary (max {self.max_chars} characters):"""
+Summary (max {self.max_chars} characters, same language as document):"""
 
             try:
                 if self.provider == "claude":
@@ -283,9 +288,11 @@ Summary (max {self.max_chars} characters):"""
                 target_chars = int(self.document_max_chars * 0.9)
                 prompt_strict = f"""CRITICAL: Summarize in EXACTLY {target_chars} characters or LESS.
 
+LANGUAGE REQUIREMENT: Respond in the SAME LANGUAGE as the section summaries below.
+
 {combined_text}
 
-Summary (STRICT LIMIT: {target_chars} characters):"""
+Summary (STRICT LIMIT: {target_chars} characters, same language as content):"""
 
                 if self.provider == "claude":
                     summary = self._generate_with_claude(prompt_strict)
@@ -406,10 +413,12 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
         prompt = f"""CRITICAL: Summarize this document in EXACTLY {target_chars} characters or LESS.
 Be extremely concise.
 
+LANGUAGE REQUIREMENT: Respond in the SAME LANGUAGE as the document text below.
+
 Document:
 {text_preview}
 
-Summary (STRICT LIMIT: {target_chars} characters):"""
+Summary (STRICT LIMIT: {target_chars} characters, same language as document):"""
 
         try:
             if self.provider == "claude":
@@ -634,6 +643,10 @@ CRITICAL CONSTRAINTS:
 - Output MUST be valid JSON array
 - Preserve the exact order and index numbers
 
+LANGUAGE REQUIREMENT: Each summary MUST be in the SAME LANGUAGE as its section content.
+If the content is in Czech, respond in Czech. If in English, respond in English.
+Match the document language exactly - do NOT translate.
+
 Input sections (JSON):
 {sections_json}
 
@@ -644,7 +657,7 @@ Output format (JSON array):
   ...
 ]
 
-Generate summaries (MUST be valid JSON):"""
+Generate summaries (MUST be valid JSON, same language as content):"""
 
         try:
             # Generate with LLM

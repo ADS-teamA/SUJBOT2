@@ -3,7 +3,12 @@ Summarize this document section concisely.
 {title_context}Section content:
 {text_preview}
 
-CRITICAL: Provide a summary that is EXACTLY {max_chars} characters or less (current limit: {max_chars} chars).
-Focus on the main topic and key information. This is a hard constraint.
+CRITICAL CONSTRAINTS:
+- Provide a summary that is EXACTLY {max_chars} characters or less (current limit: {max_chars} chars).
+- Focus on the main topic and key information. This is a hard constraint.
 
-Summary (max {max_chars} characters):
+LANGUAGE REQUIREMENT: Your summary MUST be in the SAME LANGUAGE as the section content above.
+If the content is in Czech, respond in Czech. If in English, respond in English.
+Match the document language exactly - do NOT translate.
+
+Summary (max {max_chars} characters, same language as content):

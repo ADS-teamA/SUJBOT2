@@ -15,7 +15,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 mcp__langsmith__list_projects      # List projects
 mcp__langsmith__fetch_runs         # Fetch runs with filters
 mcp__langsmith__list_experiments   # List experiments
+mcp__langsmith__list_datasets      # List evaluation datasets
 ```
+
+## LangSmith Evaluation
+
+Run QA evaluation on indexed documents using LLM-as-judge:
+
+```bash
+# Full evaluation (20 QA pairs, ~$1.50)
+uv run python scripts/langsmith_eval.py
+
+# Quick test (5 examples)
+uv run python scripts/langsmith_eval.py --limit 5
+
+# Upload dataset only
+uv run python scripts/langsmith_eval.py --upload-only
+
+# With cheaper judge model
+uv run python scripts/langsmith_eval.py --judge-model openai:gpt-4o-mini
+```
+
+**Metrics evaluated:**
+- `semantic_correctness` - Does answer match reference meaning?
+- `factual_accuracy` - Are numbers/names/dates correct?
+- `completeness` - Are all key points covered?
+
+**Dataset:** `dataset/eval.json` (20 Czech legal/nuclear QA pairs)
+**LangSmith Dataset:** `sujbot2-eval-qa`
 
 ## Common Commands
 
@@ -48,6 +75,10 @@ docker compose exec backend uv run pytest  # Run tests in container
 # Agent CLI
 uv run python -m src.agent.cli             # Interactive mode
 uv run python -m src.agent.cli --debug     # Debug mode
+
+# Evaluation
+uv run python scripts/langsmith_eval.py             # Full QA evaluation
+uv run python scripts/langsmith_eval.py --limit 5   # Quick test
 ```
 
 ## Architecture Overview
@@ -399,5 +430,5 @@ curl -s "https://eu.api.smith.langchain.com/api/v1/runs/query" \
 
 ---
 
-**Last Updated:** 2025-11-26
-**Version:** PHASE 1-7 + Multi-Agent + Graphiti KG + Gemini Extractor + Exception Hierarchy + SSOT Refactoring
+**Last Updated:** 2025-12-01
+**Version:** PHASE 1-7 + Multi-Agent + Graphiti KG + Gemini Extractor + Exception Hierarchy + SSOT Refactoring + LangSmith Evaluation

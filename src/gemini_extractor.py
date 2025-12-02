@@ -396,10 +396,13 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
    - Správně: "32", "1", "a", "I", "PÁTÁ", "1.2.3"
    - Špatně: "§ 32", "(1)", "a)", "Kapitola 1"
 
-2. **content** = úplný text elementu VČETNĚ:
-   - Odkazů na poznámky: "smlouvy,26) kterou..."
-   - Interních odkazů: "podle § 33 odst. 1"
-   - České diakritiky: ěščřžýáíéůúďťňĚŠČŘŽÝÁÍÉŮÚĎŤŇ
+2. **content** = ÚPLNÝ VERBATIM TEXT elementu (doslovný přepis z dokumentu):
+   - Pro strukturní sekce (ČÁST, HLAVA, DÍL) BEZ vlastního textu: content = "" (prázdný)
+   - Pro textové sekce (§, odstavce, písmena): content = kompletní doslovný text
+   - VČETNĚ odkazů na poznámky: "smlouvy,26) kterou..."
+   - VČETNĚ interních odkazů: "podle § 33 odst. 1"
+   - VČETNĚ české diakritiky: ěščřžýáíéůúďťňĚŠČŘŽÝÁÍÉŮÚĎŤŇ
+   - NIKDY nezkracuj ani neparafrázuj - přepiš PŘESNĚ jak je v dokumentu
 
 3. **path** = hierarchická cesta od kořene oddělená " > "
    - Právní: "ČÁST I > HLAVA PÁTÁ > § 32 > (1)"
@@ -417,9 +420,9 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
 6. **Úplnost**:
    - Extrahuj VŠECHNY elementy z CELÉHO dokumentu
    - Ignoruj záhlaví a zápatí stránek
-   - **POVINNĚ extrahuj content** - každá sekce MUSÍ mít neprázdný content (text pod nadpisem)
-   - Pokud nadpis nemá vlastní text, použij první odstavec pod ním jako content
-   - content je KRITICKÝ pro další zpracování - prázdný content = neúplná extrakce
+   - Strukturní sekce (ČÁST, HLAVA, DÍL) MOHOU mít prázdný content - mají jen nadpis
+   - Textové sekce (§, odstavce, písmena) MUSÍ mít neprázdný content s doslovným textem
+   - **summary je VŽDY povinné** - každá sekce MUSÍ mít summary (shrnutí obsahu)
 
 7. **summary** = stručné shrnutí (max 200 znaků) pro KAŽDOU sekci
    - Piš GENERICKY srozumitelně (ne právnický žargon)
@@ -450,10 +453,10 @@ EXTRACTION_PROMPT = """Jsi expertní analyzátor dokumentů. Analyzuj nahraný d
     "summary": "Zákon upravuje podmínky využívání jaderné energie, ionizujícího záření a nakládání s radioaktivními odpady. Stanoví požadavky na bezpečnost, odpovědnost provozovatelů a ochranu před zářením."
   },
   "sections": [
-    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": "OBECNÁ USTANOVENÍ", "content": "Tato část stanoví základní pojmy a principy pro využívání jaderné energie.", "level": 1, "path": "ČÁST I", "page_number": 3, "summary": "Definuje základní pojmy a principy atomového zákona."},
-    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "content": "Tato hlava upravuje odpovědnost za škody způsobené jadernou havárií.", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I", "page_number": 15, "summary": "Definuje pravidla odpovědnosti za jaderné škody."},
-    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": "Odpovědnost provozovatele", "content": "Provozovatel jaderného zařízení odpovídá za škody způsobené jadernou havárií.", "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ", "page_number": 15, "summary": "Stanoví odpovědnost provozovatele."},
-    {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 15, "summary": "Odkazuje na mezinárodní smlouvu pro řešení odpovědnosti za jaderné škody."}
+    {"section_id": "sec_1", "element_type": "cast", "number": "I", "title": "OBECNÁ USTANOVENÍ", "content": "", "level": 1, "path": "ČÁST I", "page_number": 3, "summary": "Úvodní část zákona definující základní pojmy, principy a předmět úpravy pro mírové využívání jaderné energie a ionizujícího záření."},
+    {"section_id": "sec_2", "element_type": "hlava", "number": "PÁTÁ", "title": "OBČANSKOPRÁVNÍ ODPOVĚDNOST ZA JADERNÉ ŠKODY", "content": "", "level": 2, "path": "ČÁST I > HLAVA PÁTÁ", "parent_number": "I", "page_number": 15, "summary": "Hlava upravující odpovědnost za škody způsobené jadernou havárií, včetně pojištění a finančního zajištění provozovatelů."},
+    {"section_id": "sec_3", "element_type": "paragraf", "number": "32", "title": "Odpovědnost provozovatele", "content": "(1) Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.\n(2) Pokud mezinárodní smlouva nebo tento zákon nestanoví jinak, použijí se pro odpovědnost za jaderné škody ustanovení občanského zákoníku.", "level": 4, "path": "ČÁST I > HLAVA PÁTÁ > § 32", "parent_number": "PÁTÁ", "page_number": 15, "summary": "Stanoví pravidla odpovědnosti provozovatele za jaderné škody s odkazem na mezinárodní smlouvy a občanský zákoník."},
+    {"section_id": "sec_4", "element_type": "odstavec", "number": "1", "content": "Pro účely občanskoprávní odpovědnosti za jaderné škody se použijí ustanovení mezinárodní smlouvy,26) kterou je Česká republika vázána.", "level": 5, "path": "ČÁST I > HLAVA PÁTÁ > § 32 > (1)", "parent_number": "32", "page_number": 15, "summary": "Odkazuje na mezinárodní smlouvu jako primární zdroj pro řešení odpovědnosti za jaderné škody."}
   ]
 }
 ```

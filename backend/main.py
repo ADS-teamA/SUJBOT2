@@ -43,6 +43,7 @@ from backend.routes.conversations import router as conversations_router, set_pos
 from backend.routes.citations import router as citations_router
 from backend.routes.documents import router as documents_router
 from backend.routes.settings import router as settings_router
+from backend.routes.admin import router as admin_router, set_admin_dependencies
 
 # Import PostgreSQL adapter for user/conversation storage
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
@@ -138,6 +139,9 @@ async def lifespan(app: FastAPI):
         # Set dependencies for auth routes and middleware
         set_dependencies(auth_manager, auth_queries)
         set_auth_instances(auth_manager, auth_queries)
+
+        # Set dependencies for admin routes
+        set_admin_dependencies(auth_manager, auth_queries, postgres_adapter)
 
         logger.info("✓ Authentication system initialized (Argon2 + JWT)")
 
@@ -261,6 +265,9 @@ app.include_router(documents_router)
 
 # Register settings routes (/api/settings/agent-variant)
 app.include_router(settings_router)
+
+# Register admin routes (/admin/login, /admin/users, /admin/health, /admin/stats)
+app.include_router(admin_router)
 
 
 @app.get("/health", response_model=HealthResponse)

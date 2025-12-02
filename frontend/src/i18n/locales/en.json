@@ -121,5 +121,58 @@
     "switchTo": "Switch language",
     "czech": "Čeština",
     "english": "English"
+  },
+  "admin": {
+    "login": {
+      "title": "Admin Portal",
+      "subtitle": "Sign in with your admin credentials",
+      "backToApp": "← Back to main application"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "System overview and statistics",
+      "totalUsers": "Total Users",
+      "activeUsers": "Active Users",
+      "adminUsers": "Admin Users",
+      "totalConversations": "Total Conversations",
+      "totalMessages": "Total Messages",
+      "activeLast24h": "Active Last 24h",
+      "lastUpdated": "Last updated"
+    },
+    "health": {
+      "title": "System Health",
+      "subtitle": "Monitor service status and performance",
+      "refresh": "Refresh",
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "unhealthy": "Unhealthy",
+      "latency": "Latency",
+      "overallStatus": "Overall Status",
+      "lastChecked": "Last checked"
+    },
+    "users": {
+      "title": "User Management",
+      "create": "Create User",
+      "edit": "Edit User",
+      "email": "Email",
+      "fullName": "Full Name",
+      "password": "Password",
+      "newPassword": "New Password",
+      "passwordHelperEdit": "Leave empty to keep current password",
+      "passwordHelperCreate": "Minimum 8 characters",
+      "isActive": "Active",
+      "isAdmin": "Admin",
+      "agentVariant": "Agent Variant",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "lastLogin": "Last Login",
+      "actions": "Actions",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "roleAdmin": "Admin",
+      "variantPremium": "Premium (Claude Opus/Sonnet)",
+      "variantCheap": "Cheap (Claude Haiku)",
+      "variantLocal": "Local (Llama 3.1 70B)"
+    }
   }
 }

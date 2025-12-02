@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { DollarSign, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
+import { useAuth } from '../../contexts/AuthContext';
 
 type Variant = 'premium' | 'cheap' | 'local';
 
@@ -18,6 +19,9 @@ interface IndicatorStyle {
 
 export function AgentVariantSelector() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.is_admin ?? false;
+
   const [currentVariant, setCurrentVariant] = useState<Variant>('cheap');
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
@@ -128,33 +132,35 @@ export function AgentVariantSelector() {
         }}
       />
 
-      {/* Premium Button */}
-      <button
-        ref={premiumRef}
-        onClick={() => switchVariant('premium')}
-        disabled={isSwitching}
-        className={cn(
-          'relative z-10 flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium',
-          'transition-colors duration-300',
-          currentVariant === 'premium'
-            ? 'text-accent-900'
-            : 'text-accent-500 hover:text-accent-700',
-          isSwitching && 'opacity-50 cursor-not-allowed'
-        )}
-        title={t('agentVariant.premiumTooltip')}
-      >
-        <span
+      {/* Premium Button - Only visible to admins */}
+      {isAdmin && (
+        <button
+          ref={premiumRef}
+          onClick={() => switchVariant('premium')}
+          disabled={isSwitching}
           className={cn(
-            'flex -space-x-1.5 transition-colors duration-300',
-            currentVariant === 'premium' ? 'text-yellow-500' : ''
+            'relative z-10 flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium',
+            'transition-colors duration-300',
+            currentVariant === 'premium'
+              ? 'text-accent-900'
+              : 'text-accent-500 hover:text-accent-700',
+            isSwitching && 'opacity-50 cursor-not-allowed'
           )}
+          title={t('agentVariant.premiumTooltip')}
         >
-          <DollarSign size={14} />
-          <DollarSign size={14} />
-          <DollarSign size={14} />
-        </span>
-        <span>{t('agentVariant.premium')}</span>
-      </button>
+          <span
+            className={cn(
+              'flex -space-x-1.5 transition-colors duration-300',
+              currentVariant === 'premium' ? 'text-yellow-500' : ''
+            )}
+          >
+            <DollarSign size={14} />
+            <DollarSign size={14} />
+            <DollarSign size={14} />
+          </span>
+          <span>{t('agentVariant.premium')}</span>
+        </button>
+      )}
 
       {/* Cheap Button */}
       <button

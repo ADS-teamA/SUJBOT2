@@ -78,6 +78,10 @@ class EntityType(Enum):
     LEGAL_TERM = "legal_term"  # Legal terminology requiring alignment (e.g., "Consumer", "Data Controller")
     DEFINITION = "definition"  # Legal definition text from authoritative source
 
+    # ==================== FALLBACK TYPES ====================
+    ENTITY = "Entity"  # Generic entity (Graphiti default when no specific type)
+    UNKNOWN = "unknown"  # Unknown entity type (fallback for unrecognized types)
+
 
 class RelationshipType(Enum):
     """Types of relationships between entities."""
