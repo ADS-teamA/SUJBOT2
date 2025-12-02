@@ -100,6 +100,7 @@ async def populate_metadata_documents(conn, dry_run: bool = False):
         return
 
     inserted = 0
+    failed = 0
     for doc in docs:
         try:
             await conn.execute("""
@@ -116,10 +117,19 @@ async def populate_metadata_documents(conn, dry_run: bool = False):
                 f'{{"sections": {doc["section_count"]}, "source": "fix_postgres.py"}}'
             )
             inserted += 1
-        except Exception as e:
-            print(f"    Error inserting {doc['document_id']}: {e}")
+        except asyncpg.UniqueViolationError:
+            # Expected: document already exists
+            print(f"    Document {doc['document_id']} already exists, skipping")
+        except asyncpg.PostgresError as e:
+            print(f"    DB error inserting {doc['document_id']}: {e}")
+            failed += 1
+        except KeyError as e:
+            print(f"    Missing field in document record: {e}")
+            failed += 1
 
-    print(f"  Inserted/updated {inserted} documents")
+    print(f"  Inserted/updated {inserted} documents, {failed} failed")
+    if failed > inserted:
+        print(f"  WARNING: More failures than successes!")
 
 
 async def populate_vector_store_stats(conn, state: dict, dry_run: bool = False):
@@ -187,8 +197,9 @@ async def generate_content_tsv(conn, dry_run: bool = False):
             SET content_tsv = to_tsvector('simple', COALESCE(content, ''))
             WHERE content_tsv IS NULL
         """)
-
-        print(f"    Updated rows in layer{layer}")
+        # asyncpg returns string like "UPDATE 42"
+        updated_count = result.split()[-1] if result else "unknown"
+        print(f"    Updated {updated_count} rows in layer{layer}")
 
 
 async def identify_short_chunks(conn, cleanup: bool = False, dry_run: bool = False):

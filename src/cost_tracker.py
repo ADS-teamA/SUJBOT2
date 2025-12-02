@@ -39,6 +39,8 @@ from typing import Dict, Optional, List, Any, Union
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from src.exceptions import StorageError
+
 logger = logging.getLogger(__name__)
 
 
@@ -665,9 +667,25 @@ class CostTracker:
 
         Returns:
             Path to the saved JSON file
+
+        Raises:
+            StorageError: If directory creation or file writing fails
         """
+        if not document_id or not document_id.strip():
+            raise StorageError(
+                "Invalid document_id for cost statistics",
+                details={"document_id": document_id, "output_path": str(output_path)},
+            )
+
         output_path = Path(output_path)
-        output_path.mkdir(parents=True, exist_ok=True)
+        try:
+            output_path.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise StorageError(
+                f"Failed to create output directory: {output_path}",
+                details={"output_path": str(output_path), "document_id": document_id},
+                cause=e,
+            ) from e
 
         # Calculate cache savings
         cache_stats = self.get_cache_stats()
@@ -720,8 +738,19 @@ class CostTracker:
 
         # Save to file
         output_file = output_path / f"{document_id}_costs.json"
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(stats, f, indent=2, ensure_ascii=False)
+        try:
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(stats, f, indent=2, ensure_ascii=False)
+        except (OSError, IOError) as e:
+            raise StorageError(
+                f"Failed to write cost statistics to {output_file}",
+                details={
+                    "output_file": str(output_file),
+                    "document_id": document_id,
+                    "total_cost": self._total_cost,
+                },
+                cause=e,
+            ) from e
 
         logger.info(
             f"Cost statistics saved to: {output_file} "

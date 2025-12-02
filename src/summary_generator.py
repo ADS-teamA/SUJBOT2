@@ -528,11 +528,11 @@ Summary (STRICT LIMIT: {target_chars} characters, same language as document):"""
                 "messages": [{"role": "user", "content": prompt}],
             }
 
-            if self.model.startswith(("o1-", "o3-", "o4-")):
-                # O-series parameters
+            if self.model.startswith(("o1", "o3", "o4")):
+                # O-series reasoning models require different parameters
                 body["max_completion_tokens"] = self.max_tokens
-                body["temperature"] = 1.0  # O-series only supports default temperature
-                body["reasoning_effort"] = "minimal"  # Fast mode for simple tasks (summarization doesn't need deep reasoning)
+                body["temperature"] = 1.0  # O-series requires temperature=1.0
+                body["reasoning_effort"] = "minimal"  # Fast mode for summarization
             else:
                 # GPT-4 and earlier parameters
                 body["max_tokens"] = self.max_tokens

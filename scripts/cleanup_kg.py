@@ -22,21 +22,46 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
+from neo4j.exceptions import ServiceUnavailable, AuthError, Neo4jError
 
 load_dotenv()
 
 
 def get_neo4j_driver():
-    """Create Neo4j driver from environment variables."""
+    """Create Neo4j driver from environment variables.
+
+    Raises:
+        ValueError: If NEO4J_PASSWORD is not set
+    """
     uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
     user = os.getenv("NEO4J_USER", "neo4j")
-    password = os.getenv("NEO4J_PASSWORD", "graphiti123")
+    password = os.getenv("NEO4J_PASSWORD")
+
+    if not password:
+        raise ValueError(
+            "NEO4J_PASSWORD environment variable is required.\n"
+            "Set it in your .env file or environment."
+        )
+
     return GraphDatabase.driver(uri, auth=(user, password))
 
 
 def run_cleanup(dry_run: bool = False):
     """Run all cleanup queries."""
-    driver = get_neo4j_driver()
+    try:
+        driver = get_neo4j_driver()
+    except ValueError as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
+    except ServiceUnavailable as e:
+        print(f"ERROR: Cannot connect to Neo4j at {os.getenv('NEO4J_URI', 'bolt://localhost:7687')}")
+        print("  Make sure Neo4j is running: docker compose up neo4j")
+        print(f"  Technical details: {e}")
+        sys.exit(1)
+    except AuthError as e:
+        print("ERROR: Neo4j authentication failed")
+        print("  Check NEO4J_USER and NEO4J_PASSWORD in .env")
+        sys.exit(1)
 
     cleanup_queries = [
         {
@@ -124,30 +149,36 @@ def run_cleanup(dry_run: bool = False):
     print(f"Mode: {'DRY RUN (no changes)' if dry_run else 'LIVE (applying changes)'}")
     print()
 
-    with driver.session() as session:
-        for query in cleanup_queries:
-            print(f"\n--- {query['name']} ---")
+    try:
+        with driver.session() as session:
+            for query in cleanup_queries:
+                print(f"\n--- {query['name']} ---")
 
-            # Check current state
-            result = session.run(query["check"])
-            record = result.single()
-            count = record["count"] if record else 0
-            print(f"  Found: {count} items to fix")
+                try:
+                    # Check current state
+                    result = session.run(query["check"])
+                    record = result.single()
+                    count = record["count"] if record else 0
+                    print(f"  Found: {count} items to fix")
 
-            if count == 0:
-                print("  Status: Nothing to do")
-                continue
+                    if count == 0:
+                        print("  Status: Nothing to do")
+                        continue
 
-            if dry_run:
-                print("  Status: Would fix (dry run)")
-            else:
-                # Apply fix
-                result = session.run(query["fix"])
-                record = result.single()
-                fixed = list(record.values())[0] if record else 0
-                print(f"  Status: Fixed {fixed} items")
-
-    driver.close()
+                    if dry_run:
+                        print("  Status: Would fix (dry run)")
+                    else:
+                        # Apply fix
+                        result = session.run(query["fix"])
+                        record = result.single()
+                        fixed = list(record.values())[0] if record else 0
+                        print(f"  Status: Fixed {fixed} items")
+                except Neo4jError as e:
+                    print(f"  ERROR: Query failed: {e}")
+                    print("  Skipping this cleanup step")
+                    continue
+    finally:
+        driver.close()
 
     print("\n" + "=" * 60)
     print("Cleanup complete!")

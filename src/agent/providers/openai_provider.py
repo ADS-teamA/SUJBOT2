@@ -331,8 +331,8 @@ class OpenAIProvider(BaseProvider):
         Check if OpenAI supports a feature.
 
         Supported features:
-        - prompt_caching: ❌ No (OpenAI doesn't support this)
-        - streaming: ❌ No (disabled by default due to API limitations)
+        - prompt_caching: ❌ No (OpenAI doesn't support native caching)
+        - streaming: ✅ Yes (via stream_message method)
         - tool_use: ✅ Yes (function calling)
         - structured_system: ❌ No (uses simple string)
 
@@ -344,6 +344,7 @@ class OpenAIProvider(BaseProvider):
         """
         supported_features = {
             "tool_use",
+            "streaming",
         }
         return feature in supported_features
 

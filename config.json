@@ -178,9 +178,9 @@
     "enabled_types": null
   },
   "neo4j": {
-    "uri": "bolt://localhost:7687",
-    "username": "neo4j",
-    "password": "password",
+    "uri_env": "NEO4J_URI",
+    "username_env": "NEO4J_USER",
+    "password_env": "NEO4J_PASSWORD",
     "database": "neo4j",
     "max_connection_lifetime": 3600,
     "max_connection_pool_size": 50,
@@ -401,7 +401,7 @@
     },
     "langsmith": {
       "enabled": true,
-      "api_key": "",
+      "api_key_env": "LANGSMITH_API_KEY",
       "project_name": "sujbot2-multi-agent",
       "trace_logging_level": "INFO",
       "sample_rate": 1.0

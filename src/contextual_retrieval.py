@@ -537,11 +537,11 @@ Answer only with the succinct context and nothing else."""
                 "messages": [{"role": "user", "content": prompt}],
             }
 
-            if self.model.startswith(("o1-", "o3-", "o4-")):
-                # O-series parameters
+            if self.model.startswith(("o1", "o3", "o4")):
+                # O-series reasoning models require different parameters
                 body["max_completion_tokens"] = self.config.max_tokens
-                body["temperature"] = 1.0  # O-series only supports default temperature
-                body["reasoning_effort"] = "minimal"  # Fast mode for simple tasks (context generation doesn't need deep reasoning)
+                body["temperature"] = 1.0  # O-series requires temperature=1.0
+                body["reasoning_effort"] = "minimal"  # Fast mode for context generation
             else:
                 # GPT-4 and earlier parameters
                 body["max_tokens"] = self.config.max_tokens
