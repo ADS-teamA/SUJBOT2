@@ -121,5 +121,45 @@
     "switchTo": "Switch language",
     "czech": "Čeština",
     "english": "English"
+  },
+  "admin": {
+    "login": {
+      "title": "Admin Portal",
+      "subtitle": "Sign in with your admin credentials",
+      "backToApp": "← Back to main application"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "System overview and statistics",
+      "totalUsers": "Total Users",
+      "activeUsers": "Active Users",
+      "adminUsers": "Admin Users",
+      "totalConversations": "Total Conversations",
+      "totalMessages": "Total Messages",
+      "activeLast24h": "Active Last 24h"
+    },
+    "health": {
+      "title": "System Health",
+      "subtitle": "Monitor service status and performance",
+      "refresh": "Refresh",
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "unhealthy": "Unhealthy",
+      "latency": "Latency"
+    },
+    "users": {
+      "title": "User Management",
+      "create": "Create User",
+      "edit": "Edit User",
+      "email": "Email",
+      "fullName": "Full Name",
+      "password": "Password",
+      "isActive": "Active",
+      "isAdmin": "Admin",
+      "agentVariant": "Agent Variant",
+      "createdAt": "Created",
+      "lastLogin": "Last Login",
+      "actions": "Actions"
+    }
   }
 }

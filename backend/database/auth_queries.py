@@ -289,6 +289,32 @@ class AuthQueries:
                 extra={"user_id": user_id, "error_type": e.__class__.__name__}
             )
 
+    async def update_password(self, user_id: int, password_hash: str) -> None:
+        """
+        Update user's password hash.
+
+        Args:
+            user_id: User ID to update
+            password_hash: New Argon2 password hash
+
+        Raises:
+            RuntimeError: If database connection fails
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE auth.users
+                    SET password_hash = $2, updated_at = NOW()
+                    WHERE id = $1
+                    """,
+                    user_id,
+                    password_hash
+                )
+                logger.info(f"Password updated for user {user_id}")
+        except Exception as e:
+            self._handle_db_error("update_password", {"user_id": user_id}, e)
+
     async def deactivate_user(self, user_id: int) -> None:
         """
         Deactivate user (soft delete - prevents login).

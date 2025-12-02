@@ -308,11 +308,9 @@ class ContextualRetrieval:
                     + "\n\n".join(surrounding_parts)
                 )
 
-        # Build prompt (Anthropic format) with optional language instruction
-        language_instruction = ""
-        if hasattr(self.config, 'language') and self.config.language == "ces":
-            language_instruction = " Odpovídej pouze v češtině."
-
+        # Build prompt (Anthropic format)
+        # IMPORTANT: Context must be in the SAME LANGUAGE as the document
+        # This is critical for retrieval quality in multilingual settings
         prompt = f"""<document>
 {context_block}{surrounding_chunks_block}
 </document>
@@ -322,7 +320,11 @@ Here is the chunk we want to situate within the whole document:
 {chunk_escaped}
 </chunk>
 
-Please give a short succinct context (50-100 words) to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk.{language_instruction} Answer only with the succinct context and nothing else."""
+Please give a short succinct context (50-100 words) to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk.
+
+CRITICAL: Your response MUST be in the SAME LANGUAGE as the chunk text above. If the chunk is in Czech, respond in Czech. If in English, respond in English. Match the document language exactly.
+
+Answer only with the succinct context and nothing else."""
 
         return prompt
 
@@ -517,15 +519,11 @@ Please give a short succinct context (50-100 words) to situate this chunk within
 
             prompt_parts.append(f"Chunk content:\n{chunk_preview}")
 
-            # Add language instruction for Czech
-            if hasattr(self.config, 'language') and self.config.language == "ces":
-                prompt_parts.append(
-                    "Provide a brief context (50-100 words) explaining what this chunk discusses within the document. Odpovídej pouze v češtině."
-                )
-            else:
-                prompt_parts.append(
-                    "Provide a brief context (50-100 words) explaining what this chunk discusses within the document."
-                )
+            # Add language instruction - MUST match document language
+            prompt_parts.append(
+                "Provide a brief context (50-100 words) explaining what this chunk discusses within the document. "
+                "CRITICAL: Respond in the SAME LANGUAGE as the chunk text above."
+            )
 
             prompt = "\n\n".join(prompt_parts)
 

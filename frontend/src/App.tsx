@@ -1,14 +1,10 @@
 /**
- * Main App Component
+ * Main App Component with URL-based Routing
  *
- * Wires together:
- * - Header (with model selector and sidebar toggle)
- * - ResponsiveSidebar (conversation history with collapsible behavior)
- * - ChatContainer (messages and input)
- *
- * Uses custom hooks:
- * - useChat: Manages conversation state and SSE streaming
- * - useTheme: Applies light theme
+ * Routes (based on window.location.pathname):
+ * - / - Main chat application
+ * - /admin/login - Admin login
+ * - /admin/* - Admin portal (requires admin auth)
  */
 
 import { useState, useEffect } from 'react';
@@ -24,16 +20,20 @@ import { useTheme } from './hooks/useTheme';
 import { useAuth } from './contexts/AuthContext';
 import { cn } from './design-system/utils/cn';
 import { apiService } from './services/api';
+
+// Admin imports
+import { AdminLoginPage } from './admin/pages/AdminLoginPage';
+import { AdminApp } from './admin/AdminApp';
+
 import './index.css';
 
-function App() {
-  // Translations
+/**
+ * Main chat application component
+ */
+function MainApp() {
   const { t } = useTranslation();
-
-  // Authentication
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Custom hooks
   const {
     conversations,
     currentConversation,
@@ -52,17 +52,13 @@ function App() {
     cancelStreaming,
   } = useChat();
 
-  useTheme(); // Apply light theme
+  useTheme();
 
-  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  // Health status state
   const [degradedComponents, setDegradedComponents] = useState<Array<{component: string; error: string}>>([]);
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
-  // Check health status on mount
   useEffect(() => {
     apiService.checkHealth()
       .then((health) => {
@@ -75,7 +71,6 @@ function App() {
       });
   }, []);
 
-  // Show loading state while verifying token
   if (isLoading) {
     return (
       <div className={cn(
@@ -90,7 +85,6 @@ function App() {
     );
   }
 
-  // Show login page if not authenticated
   if (!isAuthenticated) {
     return <LoginPage />;
   }
@@ -101,13 +95,11 @@ function App() {
       'bg-white dark:bg-accent-950',
       'text-accent-900 dark:text-accent-100'
     )}>
-      {/* Header */}
       <Header
         onToggleSidebar={toggleSidebar}
         sidebarOpen={sidebarOpen}
       />
 
-      {/* Degraded Mode Warning Banner */}
       {degradedComponents.length > 0 && (
         <div className={cn(
           'px-4 py-3 border-b',
@@ -129,9 +121,7 @@ function App() {
         </div>
       )}
 
-      {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Responsive Sidebar */}
         <ResponsiveSidebar isOpen={sidebarOpen} onToggle={toggleSidebar}>
           <Sidebar
             conversations={conversations}
@@ -143,7 +133,6 @@ function App() {
           />
         </ResponsiveSidebar>
 
-        {/* Chat area */}
         <ChatContainer
           conversation={currentConversation}
           isStreaming={isStreaming}
@@ -159,6 +148,58 @@ function App() {
       </div>
     </div>
   );
+}
+
+/**
+ * Admin guard component - redirects to admin login if not admin
+ */
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // Debug logging
+  console.log('AdminGuard state:', { isLoading, isAuthenticated, user, is_admin: user?.is_admin });
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-accent-50 dark:bg-accent-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-900 dark:border-accent-100"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user?.is_admin) {
+    console.log('AdminGuard: Redirecting to /admin/login - not authenticated or not admin');
+    // Redirect to admin login
+    window.location.href = '/admin/login';
+    return null;
+  }
+
+  console.log('AdminGuard: Access granted, rendering children');
+  return <>{children}</>;
+}
+
+/**
+ * App with URL-based routing (no react-router-dom dependency)
+ */
+function App() {
+  const pathname = window.location.pathname;
+
+  // Admin login page
+  if (pathname === '/admin/login') {
+    return <AdminLoginPage />;
+  }
+
+  // Admin portal (protected)
+  if (pathname.startsWith('/admin')) {
+    return (
+      <AdminGuard>
+        <AdminApp />
+      </AdminGuard>
+    );
+  }
+
+  // Main application (default)
+  return <MainApp />;
 }
 
 export default App;

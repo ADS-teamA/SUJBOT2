@@ -122,5 +122,45 @@
     "switchTo": "Přepnout jazyk",
     "czech": "Čeština",
     "english": "English"
+  },
+  "admin": {
+    "login": {
+      "title": "Admin portál",
+      "subtitle": "Přihlaste se pomocí administrátorských údajů",
+      "backToApp": "← Zpět do hlavní aplikace"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Přehled systému a statistiky",
+      "totalUsers": "Celkem uživatelů",
+      "activeUsers": "Aktivní uživatelé",
+      "adminUsers": "Administrátoři",
+      "totalConversations": "Celkem konverzací",
+      "totalMessages": "Celkem zpráv",
+      "activeLast24h": "Aktivní za 24h"
+    },
+    "health": {
+      "title": "Stav systému",
+      "subtitle": "Monitoring služeb a výkonu",
+      "refresh": "Obnovit",
+      "healthy": "V pořádku",
+      "degraded": "Omezený",
+      "unhealthy": "Nedostupný",
+      "latency": "Latence"
+    },
+    "users": {
+      "title": "Správa uživatelů",
+      "create": "Vytvořit uživatele",
+      "edit": "Upravit uživatele",
+      "email": "E-mail",
+      "fullName": "Celé jméno",
+      "password": "Heslo",
+      "isActive": "Aktivní",
+      "isAdmin": "Administrátor",
+      "agentVariant": "Varianta agenta",
+      "createdAt": "Vytvořeno",
+      "lastLogin": "Poslední přihlášení",
+      "actions": "Akce"
+    }
   }
 }

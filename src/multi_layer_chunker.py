@@ -133,26 +133,27 @@ class Chunk:
         # - breadcrumb: document + hierarchical path for structure awareness
         # - context: SAC summary for semantic context (first part before \n\n)
         # - raw_content: actual text for retrieval
+
+        # Extract SAC context first (ONLY the description, no breadcrumb)
+        context_part = ""
+        if self.content != self.raw_content and "\n\n" in self.content:
+            context_part = self.content.split("\n\n", 1)[0]
+
         if breadcrumb_parts:
             breadcrumb = " > ".join(breadcrumb_parts)
-            # Check if content contains context prefix (SAC augmentation)
-            if self.content != self.raw_content and "\n\n" in self.content:
-                # Content has SAC prefix - extract it (first part, not last!)
-                context_part = self.content.split("\n\n", 1)[0]
+            if context_part:
                 embedding_text = f"[{breadcrumb}]\n\n{context_part}\n\n{self.raw_content}"
             else:
-                # No SAC prefix - use raw_content directly
                 embedding_text = f"[{breadcrumb}]\n\n{self.raw_content}"
         else:
-            if self.content != self.raw_content and "\n\n" in self.content:
-                context_part = self.content.split("\n\n", 1)[0]
+            if context_part:
                 embedding_text = f"{context_part}\n\n{self.raw_content}"
             else:
                 embedding_text = self.raw_content
 
         return {
             "chunk_id": self.chunk_id,
-            "context": self.content,  # SAC-augmented content
+            "context": context_part,  # SAC context ONLY (no breadcrumb)
             "raw_content": self.raw_content,
             "embedding_text": embedding_text,  # [breadcrumb]\n\ncontext\n\nraw_content
             "metadata": {
@@ -419,34 +420,36 @@ class MultiLayerChunker:
 
     def _create_layer2_sections(self, extracted_doc) -> List[Chunk]:
         """
-        Layer 2: Section-level chunks.
+        Layer 2: Section-level chunks (SUMMARIES ONLY).
 
         Purpose:
-        - Mid-level context
+        - Mid-level semantic search (search by section meaning)
         - Section-specific queries
         - Context expansion when needed
+
+        Note:
+        - Layer 2 contains ONLY section summaries, not full text
+        - Full text is in Layer 3 (tokenized chunks)
+        - This separation enables: L2 for "what is this section about", L3 for "find specific text"
         """
 
         chunks = []
 
         for section in extracted_doc.sections:
-            # Use section summary if available, else section content
-            content = section.summary or section.content
-            raw_content = section.content
+            # Layer 2 uses ONLY summary - this is the key distinction from Layer 3
+            # Layer 3 contains actual text content, Layer 2 contains semantic summaries
+            summary = section.summary
 
-            # Skip completely empty sections (no content AND no summary)
-            if not raw_content.strip() and not content.strip():
+            # Skip sections without summary (they won't be useful for section-level search)
+            if not summary or not summary.strip():
                 continue
 
-            # If section has no direct content but has summary, use fallback text
-            # This happens for structural headers that only contain child sections
-            if not raw_content.strip() and content.strip():
-                raw_content = f"[Sekce: {section.title or section.path}]"
-
+            # Both content and raw_content are the summary for Layer 2
+            # This ensures consistent behavior in to_dict() and retrieval
             chunk = Chunk(
                 chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
-                content=content,
-                raw_content=raw_content,
+                content=summary,
+                raw_content=summary,
                 metadata=ChunkMetadata(
                     chunk_id=f"{extracted_doc.document_id}_L2_{section.section_id}",
                     layer=2,

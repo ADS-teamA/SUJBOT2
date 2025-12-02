@@ -346,19 +346,31 @@ class MultiAgentRunner:
 
                         try:
                             # Query all entities from Neo4j
-                            cypher = "MATCH (e:Entity) RETURN e"
+                            # Include labels(e) because Neo4j labels are metadata, not properties
+                            cypher = "MATCH (e:Entity) RETURN e, labels(e) AS node_labels"
                             result = neo4j_manager.execute(cypher)
 
                             entities = []
                             for record in result:
                                 node = record["e"]
+                                # Neo4j labels are returned separately (not as node property)
+                                node_labels = record.get("node_labels", [])
 
                                 # Validate required fields
-                                entity_id = node.get("id", "")
-                                entity_type_str = node.get("type", "")
+                                # Support both SUJBOT2 schema (id/type) and Graphiti schema (uuid/labels)
+                                entity_id = node.get("id") or node.get("uuid", "")
+                                # Try multiple sources for type: direct property, entity_type, or node labels
+                                # Filter out generic "Entity" label to get the actual type
+                                type_labels = [lbl for lbl in node_labels if lbl != "Entity"]
+                                entity_type_str = (
+                                    node.get("type")
+                                    or node.get("entity_type")
+                                    or (type_labels[0] if type_labels else "")
+                                    or "Entity"  # Default to "Entity" if no type specified (Graphiti schema)
+                                )
 
-                                if not entity_id or not entity_type_str:
-                                    logger.warning(f"Skipping malformed Neo4j entity: id={entity_id}, type={entity_type_str}")
+                                if not entity_id:
+                                    logger.warning(f"Skipping malformed Neo4j entity: missing id")
                                     continue
 
                                 # Convert Neo4j node to Entity

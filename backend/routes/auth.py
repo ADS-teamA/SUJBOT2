@@ -5,6 +5,7 @@ Endpoints:
 - POST /auth/login - User login with email/password
 - POST /auth/logout - Clear session (delete JWT cookie)
 - GET /auth/me - Get current user profile
+- POST /auth/change-password - Change current user's password
 - POST /auth/register - Create new user (admin only in production)
 
 All responses use httpOnly cookies for JWT storage (XSS protection).
@@ -41,6 +42,12 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     password: str = Field(..., min_length=8, description="Password (min 8 chars)")
     full_name: Optional[str] = Field(None, max_length=100, description="Display name")
+
+
+class ChangePasswordRequest(BaseModel):
+    """Password change request."""
+    current_password: str = Field(..., min_length=1, description="Current password")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 chars)")
 
 
 class UserResponse(BaseModel):
@@ -278,6 +285,60 @@ async def get_current_user_profile(
         created_at=user["created_at"].isoformat(),
         last_login_at=user["last_login_at"].isoformat() if user["last_login_at"] else None
     )
+
+
+@router.post("/change-password")
+async def change_password(
+    password_data: ChangePasswordRequest,
+    user: Dict = Depends(get_current_user),
+    auth_manager: AuthManager = Depends(get_auth_manager),
+    auth_queries: AuthQueries = Depends(get_auth_queries)
+):
+    """
+    Change current user's password.
+
+    Requires authentication. User must provide current password for verification.
+
+    Args:
+        password_data: Current and new password
+        user: Current authenticated user
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException 401: Current password incorrect
+        HTTPException 422: New password doesn't meet requirements
+    """
+    # Get full user data with password hash
+    full_user = await auth_queries.get_user_by_id(user["id"])
+
+    # Verify current password
+    if not auth_manager.verify_password(password_data.current_password, full_user["password_hash"]):
+        logger.warning(f"Password change failed - wrong current password: user {user['id']}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+
+    # Validate new password strength
+    is_valid, errors = auth_manager.validate_password_strength(password_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "New password does not meet security requirements",
+                "errors": errors
+            }
+        )
+
+    # Hash and update password
+    new_hash = auth_manager.hash_password(password_data.new_password)
+    await auth_queries.update_password(user["id"], new_hash)
+
+    logger.info(f"Password changed for user {user['id']} ({user['email']})")
+
+    return {"message": "Password changed successfully"}
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

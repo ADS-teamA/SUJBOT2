@@ -87,3 +87,90 @@ class AgentVariantResponse(BaseModel):
     variant: Literal["premium", "cheap", "local"] = Field(..., description="Current variant")
     display_name: str = Field(..., description="Human-readable variant name")
     model: str = Field(..., description="Default model identifier for this variant")
+
+
+# =============================================================================
+# Admin API Models
+# =============================================================================
+
+
+class AdminUserResponse(BaseModel):
+    """Admin view of user (includes all fields)."""
+
+    id: int
+    email: str
+    full_name: Optional[str] = None
+    is_active: bool
+    is_admin: bool
+    agent_variant: Optional[str] = None
+    created_at: str
+    updated_at: str
+    last_login_at: Optional[str] = None
+
+
+class AdminUserListResponse(BaseModel):
+    """Paginated list of users for admin."""
+
+    users: List[AdminUserResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminUserCreateRequest(BaseModel):
+    """Request to create a new user (admin endpoint)."""
+
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, max_length=128, description="User password")
+    full_name: Optional[str] = Field(None, max_length=100, description="Display name")
+    is_admin: bool = Field(False, description="Grant admin privileges")
+    is_active: bool = Field(True, description="Account active status")
+
+
+class AdminUserUpdateRequest(BaseModel):
+    """Request to update user (admin endpoint)."""
+
+    email: Optional[str] = Field(None, description="New email address")
+    password: Optional[str] = Field(None, min_length=1, max_length=128, description="New password (admin can set any)")
+    full_name: Optional[str] = Field(None, max_length=100, description="Display name")
+    is_admin: Optional[bool] = Field(None, description="Admin privileges")
+    is_active: Optional[bool] = Field(None, description="Account active status")
+    agent_variant: Optional[Literal["premium", "cheap", "local"]] = Field(
+        None, description="Model preference"
+    )
+
+
+class AdminLoginRequest(BaseModel):
+    """Admin login credentials."""
+
+    email: str = Field(..., description="Admin email address")
+    password: str = Field(..., min_length=1, description="Admin password")
+
+
+class ServiceHealthDetail(BaseModel):
+    """Individual service health status."""
+
+    name: str
+    status: Literal["healthy", "degraded", "unhealthy"]
+    latency_ms: Optional[float] = None
+    message: Optional[str] = None
+
+
+class AdminHealthResponse(BaseModel):
+    """Detailed health check for admin dashboard."""
+
+    status: Literal["healthy", "degraded", "unhealthy"]
+    services: List[ServiceHealthDetail]
+    timestamp: str
+
+
+class AdminStatsResponse(BaseModel):
+    """System statistics for admin dashboard."""
+
+    total_users: int
+    active_users: int
+    admin_users: int
+    total_conversations: int
+    total_messages: int
+    users_last_24h: int
+    timestamp: str

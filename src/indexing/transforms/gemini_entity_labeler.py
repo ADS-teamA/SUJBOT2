@@ -50,27 +50,34 @@ ENTITY_TYPES = [
     "location",         # Places
 ]
 
-# Prompt optimized for Czech legal/technical documents
-ENTITY_EXTRACTION_PROMPT = """Extrahuj entity z následujícího textu českého právního/technického dokumentu.
+# Language-aware entity extraction prompt
+# NOTE: topics removed - use Labeling Pipeline categories instead (SSOT)
+# IMPORTANT: Entity names must be in the SAME language as the document
+ENTITY_EXTRACTION_PROMPT = """Extract entities from the following legal/technical document text.
 
-## Typy entit:
+## Entity types:
 {entity_types}
 
-## Text k analýze:
+## Text to analyze:
 {text}
 
-## Pokyny:
-1. Identifikuj VŠECHNY významné entity
-2. Pro každou entitu uveď: name (název), type (typ z výše uvedených), confidence (0.0-1.0)
-3. Uveď také seznam hlavních typů entit a témat v dokumentu
+## Instructions:
+1. Identify ALL significant entities (specific instances, not general concepts)
+2. For each entity provide: name (entity name), type (from types above), confidence (0.0-1.0)
+3. List all entity types found in the text
 
-## Vrať POUZE validní JSON ve formátu:
+## CRITICAL LANGUAGE REQUIREMENT:
+- Entity names (the "name" field) MUST be in the SAME LANGUAGE as the source text above
+- If the text is in Czech, entity names must be in Czech (e.g., "SÚJB", "vyhláška č. 422/2016 Sb.")
+- If the text is in English, entity names must be in English
+- DO NOT translate entity names - keep them exactly as they appear in the text
+
+## Return ONLY valid JSON in this format:
 {{
   "entities": [
-    {{"name": "název entity", "type": "typ_entity", "confidence": 0.9}}
+    {{"name": "entity name in document language", "type": "entity_type", "confidence": 0.9}}
   ],
-  "types": ["typ1", "typ2"],
-  "topics": ["téma1", "téma2"]
+  "types": ["type1", "type2"]
 }}
 """
 
@@ -82,7 +89,8 @@ class GeminiEntityLabeler(TransformComponent):
     Adds to node.metadata:
         - entities: List of entity dicts with name, type, confidence
         - entity_types: List of unique entity types found
-        - topics: List of topics identified in the chunk
+
+    NOTE: topics removed for SSOT - use Labeling Pipeline categories instead.
 
     Example:
         >>> labeler = GeminiEntityLabeler(batch_size=10, min_confidence=0.6)
@@ -241,7 +249,6 @@ class GeminiEntityLabeler(TransformComponent):
                     # Skip very short or empty texts
                     node.metadata["entities"] = []
                     node.metadata["entity_types"] = []
-                    node.metadata["topics"] = []
                     continue
 
                 # Extract entities
@@ -255,7 +262,6 @@ class GeminiEntityLabeler(TransformComponent):
 
                 node.metadata["entities"] = filtered_entities
                 node.metadata["entity_types"] = entities.get("types", [])
-                node.metadata["topics"] = entities.get("topics", [])
 
             except Exception as e:
                 # Preserve node even if labeling fails
@@ -268,7 +274,6 @@ class GeminiEntityLabeler(TransformComponent):
                 node.metadata["entity_extraction_error"] = str(e)
                 node.metadata["entities"] = []
                 node.metadata["entity_types"] = []
-                node.metadata["topics"] = []
 
         return failures
 
@@ -320,7 +325,7 @@ class GeminiEntityLabeler(TransformComponent):
 
     def _parse_response(self, text: str) -> Dict[str, Any]:
         """Parse JSON response with repair fallback."""
-        default = {"entities": [], "types": [], "topics": []}
+        default = {"entities": [], "types": []}
 
         if not text:
             return default

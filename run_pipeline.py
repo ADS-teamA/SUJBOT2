@@ -42,6 +42,11 @@ import argparse
 import shutil
 from pathlib import Path
 
+# CRITICAL: Apply nest_asyncio early to allow nested event loops
+# Required because PostgreSQL adapter uses asyncio.run() internally
+import nest_asyncio
+nest_asyncio.apply()
+
 # CRITICAL: Validate config.json before doing anything else
 try:
     from src.config import get_config
@@ -332,83 +337,92 @@ def run_single_document(
 
             # Knowledge graph merging
             if knowledge_graph and config.enable_knowledge_graph:
-                try:
+                # Skip merge for GraphitiExtractionResult - Graphiti stores entities directly in Neo4j
+                from src.graph.graphiti_extractor import GraphitiExtractionResult
+                if isinstance(knowledge_graph, GraphitiExtractionResult):
                     print()
-                    print_info("Merging knowledge graphs with cross-document deduplication...")
+                    print_info(f"Graphiti KG stored directly in Neo4j: {knowledge_graph.total_entities} entities, "
+                              f"{knowledge_graph.total_relationships} relationships")
+                    print_info("Skipping unified KG merge (Graphiti uses Neo4j as primary storage)")
+                else:
+                    try:
+                        print()
+                        print_info("Merging knowledge graphs with cross-document deduplication...")
 
-                    from src.graph import (
-                        KnowledgeGraph,
-                        UnifiedKnowledgeGraphManager,
-                        CrossDocumentRelationshipDetector
-                    )
+                        from src.graph import (
+                            KnowledgeGraph,
+                            UnifiedKnowledgeGraphManager,
+                            CrossDocumentRelationshipDetector
+                        )
 
-                    # Initialize unified KG manager (uses merge_target directory for storage)
-                    manager = UnifiedKnowledgeGraphManager(storage_dir=str(merge_target))
+                        # Initialize unified KG manager (uses merge_target directory for storage)
+                        manager = UnifiedKnowledgeGraphManager(storage_dir=str(merge_target))
 
-                    # Initialize cross-document detector
-                    detector = CrossDocumentRelationshipDetector(
-                        use_llm_validation=False,  # Fast pattern-based detection
-                        confidence_threshold=0.7
-                    )
+                        # Initialize cross-document detector
+                        detector = CrossDocumentRelationshipDetector(
+                            use_llm_validation=False,  # Fast pattern-based detection
+                            confidence_threshold=0.7
+                        )
 
-                    # Load or create unified KG
-                    unified_kg = manager.load_or_create()
+                        # Load or create unified KG
+                        unified_kg = manager.load_or_create()
 
-                    print_info(f"Current unified KG: {len(unified_kg.entities)} entities, "
-                              f"{len(unified_kg.relationships)} relationships")
-                    print_info(f"New document KG: {len(knowledge_graph.entities)} entities, "
-                              f"{len(knowledge_graph.relationships)} relationships")
+                        print_info(f"Current unified KG: {len(unified_kg.entities)} entities, "
+                                  f"{len(unified_kg.relationships)} relationships")
+                        print_info(f"New document KG: {len(knowledge_graph.entities)} entities, "
+                                  f"{len(knowledge_graph.relationships)} relationships")
 
-                    # Merge with deduplication and cross-doc detection
-                    unified_kg = manager.merge_document_graph(
-                        unified_kg=unified_kg,
-                        document_kg=knowledge_graph,
-                        document_id=doc_name,
-                        cross_doc_detector=detector
-                    )
+                        # Merge with deduplication and cross-doc detection
+                        unified_kg = manager.merge_document_graph(
+                            unified_kg=unified_kg,
+                            document_kg=knowledge_graph,
+                            document_id=doc_name,
+                            cross_doc_detector=detector
+                        )
 
-                    # Save unified KG + per-document backup
-                    manager.save(unified_kg, document_id=doc_name)
+                        # Save unified KG + per-document backup
+                        manager.save(unified_kg, document_id=doc_name)
 
-                    # Get statistics
-                    doc_stats = manager.get_document_statistics(unified_kg)
+                        # Get statistics
+                        doc_stats = manager.get_document_statistics(unified_kg)
 
-                    print_success(f"KG merge complete with cross-document relationships!")
-                    print_info(f"Unified KG: {len(unified_kg.entities)} entities, "
-                              f"{len(unified_kg.relationships)} relationships")
-                    print_info(f"Documents in unified KG: {doc_stats['total_documents']}")
-                    print_info(f"Cross-document entities: {doc_stats['cross_document_entities']} "
-                              f"({doc_stats['cross_document_entity_percentage']:.1f}%)")
-                    print_info(f"Saved: {merge_target / 'unified_kg.json'}")
+                        print_success(f"KG merge complete with cross-document relationships!")
+                        print_info(f"Unified KG: {len(unified_kg.entities)} entities, "
+                                  f"{len(unified_kg.relationships)} relationships")
+                        print_info(f"Documents in unified KG: {doc_stats['total_documents']}")
+                        print_info(f"Cross-document entities: {doc_stats['cross_document_entities']} "
+                                  f"({doc_stats['cross_document_entity_percentage']:.1f}%)")
+                        print_info(f"Saved: {merge_target / 'unified_kg.json'}")
 
-                except FileNotFoundError as e:
-                    print()
-                    print_info(f"[ERROR] KG file not found: {e}")
-                    logger.error(f"KG merge failed - file missing: {e}", exc_info=True)
-                    logger.error(f"Document: {doc_name}, Merge target: {merge_target}")
-                    print_info(f"Document '{doc_name}' KG will not be merged into unified graph")
-                except PermissionError as e:
-                    print()
-                    print_info(f"[ERROR] Cannot write to {merge_target}: Permission denied")
-                    logger.error(f"KG merge failed - permission error: {e}", exc_info=True)
-                    print_info(f"Document '{doc_name}' KG will not be merged")
-                except (KeyError, AttributeError) as e:
-                    # Data structure errors - likely data corruption
-                    print()
-                    print_info(f"[ERROR] KG data structure error: {e}")
-                    logger.error(f"KG merge failed - data integrity issue: {e}", exc_info=True)
-                    logger.error(f"Document: {doc_name}")
-                    if 'unified_kg' in locals():
-                        logger.error(f"Unified KG state: {len(unified_kg.entities)} entities, {len(unified_kg.relationships)} relationships")
-                    logger.error(f"New KG state: {len(knowledge_graph.entities)} entities, {len(knowledge_graph.relationships)} relationships")
-                    print_info(f"Document '{doc_name}' KG appears corrupted - skipping merge")
-                except (ValueError, RuntimeError) as e:
-                    # Expected validation/merge errors
-                    print()
-                    print_info(f"[ERROR] KG merge validation failed: {e}")
-                    logger.error(f"KG merge failed - validation error: {e}", exc_info=True)
-                    print_info(f"Document '{doc_name}' KG validation failed - skipping merge")
-                # Removed broad Exception catch - let unexpected errors propagate!
+                    except FileNotFoundError as e:
+                        print()
+                        print_info(f"[ERROR] KG file not found: {e}")
+                        logger.error(f"KG merge failed - file missing: {e}", exc_info=True)
+                        logger.error(f"Document: {doc_name}, Merge target: {merge_target}")
+                        print_info(f"Document '{doc_name}' KG will not be merged into unified graph")
+                    except PermissionError as e:
+                        print()
+                        print_info(f"[ERROR] Cannot write to {merge_target}: Permission denied")
+                        logger.error(f"KG merge failed - permission error: {e}", exc_info=True)
+                        print_info(f"Document '{doc_name}' KG will not be merged")
+                    except (KeyError, AttributeError) as e:
+                        # Data structure errors - likely data corruption
+                        print()
+                        print_info(f"[ERROR] KG data structure error: {e}")
+                        logger.error(f"KG merge failed - data integrity issue: {e}", exc_info=True)
+                        logger.error(f"Document: {doc_name}")
+                        if 'unified_kg' in locals():
+                            logger.error(f"Unified KG state: {len(unified_kg.entities)} entities, {len(unified_kg.relationships)} relationships")
+                        if hasattr(knowledge_graph, 'entities'):
+                            logger.error(f"New KG state: {len(knowledge_graph.entities)} entities, {len(knowledge_graph.relationships)} relationships")
+                        print_info(f"Document '{doc_name}' KG appears corrupted - skipping merge")
+                    except (ValueError, RuntimeError) as e:
+                        # Expected validation/merge errors
+                        print()
+                        print_info(f"[ERROR] KG merge validation failed: {e}")
+                        logger.error(f"KG merge failed - validation error: {e}", exc_info=True)
+                        print_info(f"Document '{doc_name}' KG validation failed - skipping merge")
+                    # Removed broad Exception catch - let unexpected errors propagate!
 
         # Print comprehensive statistics
         print_header("INDEXING COMPLETE")

@@ -16,7 +16,6 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, TYPE_CHECKING
 import logging
-import nest_asyncio
 
 from .vector_store_adapter import VectorStoreAdapter
 
@@ -146,8 +145,8 @@ class MetadataFilter:
             self.min_confidence is not None,
         ])
 
-# Enable nested event loops
-nest_asyncio.apply()
+# NOTE: nest_asyncio.apply() removed - should only be called once in entry point
+# (e.g., langsmith_eval.py, FastAPI app.py) to avoid event loop conflicts
 
 
 def _sanitize_tsquery(text: str) -> str:
@@ -170,12 +169,12 @@ def _run_async_safe(coro):
     """
     Safely run async coroutine from sync context.
 
-    Uses asyncio.run() with nest-asyncio to handle nested event loops.
-    nest_asyncio patches asyncio.run() to work even when called from within
-    an existing event loop (e.g., FastAPI's loop).
+    Uses asyncio.run() to execute the coroutine. When nest_asyncio is applied
+    in the entry point (e.g., FastAPI app or evaluation script), this works
+    even from within an existing event loop.
+
+    Note: nest_asyncio.apply() must be called ONCE in the application entry point.
     """
-    # With nest_asyncio.apply() at module level, asyncio.run() works
-    # even when called from within FastAPI's async context
     return asyncio.run(coro)
 
 

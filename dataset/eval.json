@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jaký je maximální povolený tepelný výkon reaktoru VR-1 a jaká je jeho nominální hodnota?",
+    "answer": "Jmenovitý výkon reaktoru je 100 Wt, krátkodobě (maximálně 72 hodin ročně) je povolen maximální tepelný výkon 500 Wt."
+  },
+  {
+    "id": 2,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jaký typ jaderného paliva se používá v reaktoru VR-1 a jaké je jeho obohacení?",
+    "answer": "Používá se palivo typu IRT-4M, což je disperze Al + UO2, s obohacením 19,7 % U-235."
+  },
+  {
+    "id": 3,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jaká technická opatření byla přijata na ochranu areálu reaktoru VR-1 proti povodním po zkušenostech z roku 2002?",
+    "answer": "Areál je chráněn protipovodňovými bariérami, zpětnými klapkami a souborem organizačních opatření, což bylo ověřeno během povodně v roce 2013."
+  },
+  {
+    "id": 4,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jakým způsobem je zajištěn odvod tepla z aktivní zóny reaktoru VR-1?",
+    "answer": "Odvod tepla z aktivní zóny je zajištěn přirozenou konvekcí, nucené chlazení není pro tento výkon potřeba."
+  },
+  {
+    "id": 5,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Z kolika absorpčních tyčí se skládá systém řízení reaktivity reaktoru VR-1 a jaký obsahují absorbátor?",
+    "answer": "Systém řízení tvoří 5 až 7 absorpčních tyčí typu UR-70, které obsahují kadmiový absorbátor."
+  },
+  {
+    "id": 6,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jaké konkrétní události jsou klasifikovány jako radiační mimořádné události prvního stupně na reaktoru VR-1?",
+    "answer": "Mezi radiační mimořádné události prvního stupně patří: selhání řídicího systému s nekontrolovaným zvýšením výkonu, poškození palivových článků nebo neutronového zdroje, únik vody z vodního hospodářství a ztráta kontroly nad zdrojem."
+  },
+  {
+    "id": 7,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Z jakého materiálu jsou vyrobeny nádoby reaktoru H01 a H02 a jakou mají tloušťku stěn?",
+    "answer": "Nádoby jsou vyrobeny z nerezové oceli 08CH18N10T a tloušťka jejich stěn je 15 mm (tloušťka dna je 20 mm)."
+  },
+  {
+    "id": 8,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jaké je maximální seismické zrychlení (hodnota SL-2) stanovené pro lokalitu reaktoru VR-1 včetně započtení standardní odchylky?",
+    "answer": "Hodnota SL-2 (střední hodnota špičkového zrychlení kmitů půdy jednou za 10 000 let) včetně standardní odchylky (kvantil 0,84) činí 0,089 g."
+  },
+  {
+    "id": 9,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jaké jsou limitní teploty pro moderátor a povrch palivových článků reaktoru VR-1?",
+    "answer": "Teplota moderátoru na vstupu do aktivní zóny může být maximálně 45 °C a teplota povrchu palivových článků nesmí překročit 98 °C."
+  },
+  {
+    "id": 10,
+    "source_document": "BZ_VR1.pdf",
+    "question": "Jaký je plánovaný termín zahájení vyřazování reaktoru VR-1 z provozu podle strategie z roku 2017?",
+    "answer": "Zahájení vyřazovacích činností se předpokládá nejdříve v roce 2030, tedy 40 let od dosažení prvního kritického stavu."
+  },
+  {
+    "id": 11,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jaká přeprava je považována za přepravu vyžadující povolení podle § 3 vyhlášky č. 379/2016 Sb. ve znění vyhlášky č. 157/2025 Sb.?",
+    "answer": "Mimo jiné se jedná o přepravu jaderného paliva a radioaktivní zásilky radioaktivní látky zvláštní formy o aktivitě vyšší než 3000-násobek hodnoty A1."
+  },
+  {
+    "id": 12,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jaké specifické údaje musí uvést Úřad v rozhodnutí o vydání povolení k přepravě radioaktivní nebo štěpné látky podle § 3a?",
+    "answer": "Musí uvést odkaz na požadavky mezinárodních smluv, unikátní identifikační číslo přepravy, způsob dopravy, dodatečné provozní kontroly a odkaz na informace o obalovém souboru."
+  },
+  {
+    "id": 13,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jaká je maximální hmotnost štěpných nuklidů v zásilce, aby mohla být považována za vyjmutou podle bodu 74 písm. c) přílohy č. 1?",
+    "answer": "Maximální hmotnost štěpných nuklidů v každé radioaktivní zásilce nesmí překročit 15 g."
+  },
+  {
+    "id": 14,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jaký je maximální povolený normální provozní tlak pro radioaktivní zásilku určenou pro obsah 0,1 kg nebo více hexafluoridu uranu?",
+    "answer": "Radioaktivní zásilka nesmí mít maximální normální provozní tlak větší než 700 kPa."
+  },
+  {
+    "id": 15,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jak musí být označena radioaktivní zásilka s brutto hmotností větší než 50 kg?",
+    "answer": "Musí být čitelně a trvale označena na vnějším povrchu údajem o přípustné brutto hmotnosti."
+  },
+  {
+    "id": 16,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jaká je maximální přípustná hodnota přepravního indexu pro jednu radioaktivní zásilku, která není přepravována za výlučného použití?",
+    "answer": "Přepravní index nesmí překročit hodnotu 10."
+  },
+  {
+    "id": 17,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jaký je limit nefixované kontaminace na vnějším povrchu radioaktivní zásilky pro beta a gama zářiče?",
+    "answer": "Limit nefixované kontaminace pro beta a gama zářiče a pro alfa zářiče s nízkou toxicitou je 4,0 Bq/cm²."
+  },
+  {
+    "id": 18,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jak dlouho musí dopravce uchovávat kopii přepravního dokladu podle přílohy č. 4 vyhlášky?",
+    "answer": "Dopravce musí uchovávat kopii přepravního dokladu po dobu nejméně 3 měsíců."
+  },
+  {
+    "id": 19,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Co musí navíc obsahovat rozhodnutí o schválení typu pro obalový soubor obsahující štěpnou látku oproti běžnému obalu?",
+    "answer": "Musí obsahovat popis povoleného obsahu štěpné látky, hodnotu indexu bezpečné podkritičnosti, odkazy na dokumentaci prokazující podkritičnost a popis vybavení proti pronikání vody."
+  },
+  {
+    "id": 20,
+    "source_document": "Sb_2025_157_PZZ.pdf",
+    "question": "Jaké jsou podmínky pro zařazení velkého pevného předmětu do skupiny SCO-III podle přílohy č. 3?",
+    "answer": "Předmět nemůže být přepravován v běžném obalu, všechny uzávěry musí být uzavřeny, vnitřek vysušen, nefixovaná kontaminace na vnějším povrchu nepřekračuje limity bodu 8 a součet kontaminace na nepřístupném povrchu nepřekračuje 8x10^5 Bq/cm² pro beta/gama zářiče."
+  }
+]

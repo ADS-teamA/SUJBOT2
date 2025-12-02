@@ -69,6 +69,7 @@ async def update_agent_variant(
 
     Raises:
         HTTPException(400): If variant is invalid
+        HTTPException(403): If non-admin tries to select premium
 
     Example request:
         {"variant": "premium"}
@@ -80,6 +81,14 @@ async def update_agent_variant(
             "model": "claude-sonnet-4-5-20250929"
         }
     """
+    # Premium variant requires admin privileges
+    if request.variant == "premium" and not current_user.get("is_admin", False):
+        logger.warning(f"Non-admin user {current_user['id']} attempted to select premium variant")
+        raise HTTPException(
+            status_code=403,
+            detail="Premium models are only available to admin users"
+        )
+
     queries = get_auth_queries()
 
     try:
