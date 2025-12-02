@@ -213,7 +213,12 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         self.dimensions = dimensions
         self.pool: Optional[asyncpg.Pool] = None
         self._initialized = False
-        self._init_lock = asyncio.Lock()  # Prevents race condition in parallel init
+        # asyncio.Lock for async context only - protects against concurrent coroutines
+        # calling initialize() simultaneously. NOT thread-safe (use threading.Lock if needed).
+        # Note: Sync wrappers use asyncio.run() which creates new event loops, so this
+        # lock won't protect across threads. For thread safety, call initialize() once
+        # at application startup before spawning threads.
+        self._init_lock = asyncio.Lock()
         self._bm25_store = None  # Will be loaded during initialization (private attribute)
 
         # Metadata cache (materialized on-demand)
@@ -1398,9 +1403,14 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             try:
                 # Try graceful close - may fail during Python shutdown
                 _run_async_safe(self.pool.close())
-            except Exception:
-                # Ignore errors during destruction (Python may be shutting down)
-                pass
+            except Exception as e:
+                # Log errors during destruction for debugging
+                # (don't raise - Python may be shutting down)
+                try:
+                    logger.debug(f"Error closing PostgreSQL pool during cleanup: {e}")
+                except Exception:
+                    # Logger may also be unavailable during shutdown
+                    pass
 
 # ====================================================================================
 # PostgreSQL Storage Adapter for Authentication & User Data

@@ -124,7 +124,7 @@ copy .env.example .env
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...  # Required
 OPENAI_API_KEY=sk-...         # Optional (for OpenAI embeddings)
-LLM_MODEL=gpt-5-nano          # For summaries & agent
+LLM_MODEL=gpt-4o-mini         # For summaries & agent
 EMBEDDING_MODEL=text-embedding-3-large  # Windows
 # EMBEDDING_MODEL=bge-m3      # macOS M1/M2/M3 (local, FREE, GPU-accelerated)
 ```
@@ -409,7 +409,7 @@ Document (PDF/DOCX)
     └─ HierarchicalChunker (parent-child relationships)
     ↓
 [PHASE 2] Summary Generation
-    ├─ gpt-4o-mini or gpt-5-nano (~$0.001 per doc)
+    ├─ gpt-4o-mini (~$0.001 per doc)
     ├─ Generic summaries (150 chars) - NOT expert
     └─ Document + section summaries
     ↓
@@ -548,7 +548,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
 # Models
-LLM_MODEL=gpt-5-nano                    # Summaries & agent
+LLM_MODEL=gpt-4o-mini                   # Summaries & agent
 EMBEDDING_MODEL=text-embedding-3-large  # Windows
 # EMBEDDING_MODEL=bge-m3                # macOS (local, FREE)
 
@@ -572,7 +572,7 @@ IndexingConfig(
 
     # PHASE 2: Summaries
     generate_summaries=True,
-    summary_model="gpt-5-nano",
+    summary_model="gpt-4o-mini",
     summary_max_chars=150,
     summary_style="generic",  # NOT expert!
 

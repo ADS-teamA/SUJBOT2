@@ -1035,7 +1035,7 @@ class RootConfig(BaseModel):
                     f"Please set ANTHROPIC_API_KEY in your .env file.\n"
                     f"Example: ANTHROPIC_API_KEY=sk-ant-..."
                 )
-        elif self.models.llm_model.startswith(("gpt-", "o1-", "o3-", "gpt-5")):
+        elif self.models.llm_model.startswith(("gpt-", "o1-", "o3-")):
             if self._is_placeholder(self.api_keys.openai_api_key):
                 raise ValueError(
                     f"OPENAI_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"

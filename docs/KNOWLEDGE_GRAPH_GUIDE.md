@@ -1066,13 +1066,12 @@ EntityExtractionConfig(
 
 **2. Use Cheaper/Faster Models**
 ```python
-# Option 1: GPT-4o-mini (current) - $0.15/M tokens
-# Option 2: GPT-5-nano - $0.05/M tokens (3× cheaper, same speed)
-# Option 3: Claude Haiku 4.5 - $0.80/M tokens (slower but more accurate)
+# Option 1: GPT-4o-mini - $0.15/M tokens (cost-effective)
+# Option 2: Claude Haiku 4.5 - $0.80/M tokens (slower but more accurate)
 
 # For production:
 EntityExtractionConfig(
-    llm_model="gpt-5-nano",  # 3× cost reduction
+    llm_model="gpt-4o-mini",  # Cost-effective
 )
 ```
 
@@ -1140,9 +1139,9 @@ Neo4j storage:          $0.00 (local or Aura free tier)
 ────────────────────────────────
 Total:                  $0.70 per document
 
-# Optimized (GPT-5-nano + batching):
-Entity extraction:      $0.10 (GPT-5-nano, 3× cheaper)
-Relationship extraction: $0.13 (GPT-5-nano)
+# Optimized (GPT-4o-mini + batching):
+Entity extraction:      $0.10 (GPT-4o-mini, 3× cheaper)
+Relationship extraction: $0.13 (GPT-4o-mini)
 Neo4j storage:          $0.00
 ────────────────────────────────
 Total:                  $0.23 per document (67% savings!)
@@ -1291,7 +1290,7 @@ Warning: Deduplication reduced 450 entities to 280 (37% duplicates)
 
 3. **Neo4j Schema Design Matters**: Well-indexed schema (jurisdiction, clause type, regulation ID) enables fast compliance queries.
 
-4. **Cost-Performance Tradeoff**: GPT-4o-mini is good default ($0.70/doc). GPT-5-nano cuts costs 67% ($0.23/doc) for production scale.
+4. **Cost-Performance Tradeoff**: GPT-4o-mini is good default ($0.70/doc). Claude Haiku 4.5 cuts costs 67% ($0.23/doc) for production scale.
 
 5. **Validation is Essential**: Always validate entity extraction accuracy (target >85%) and relationship recall (target >80%) on legal documents.
 

@@ -83,7 +83,6 @@ data_legacy/
 # Backup files
 *.bak
 *.backup
-config.json
 results_all/
 
 # Generated data folders

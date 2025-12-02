@@ -111,7 +111,14 @@ class SujbotIngestionPipeline:
         self.redis_port = redis_port or int(os.getenv("REDIS_PORT", "6379"))
 
         # Entity labeling configuration
-        self.enable_entity_labeling = enable_entity_labeling
+        # OPTIMIZATION: Auto-disable if Knowledge Graph is enabled (redundant extraction)
+        if enable_entity_labeling and self.config.enable_knowledge_graph:
+            logger.info(
+                "Entity labeling auto-disabled (redundant with Knowledge Graph extraction)"
+            )
+            self.enable_entity_labeling = False
+        else:
+            self.enable_entity_labeling = enable_entity_labeling
         self.entity_labeling_batch_size = entity_labeling_batch_size
         self.entity_labeling_model = entity_labeling_model
 

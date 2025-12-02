@@ -42,6 +42,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Minimum chunk length to filter out structural/header-only chunks
+# Chunks shorter than this are usually TOC entries, page numbers, or section headers
+MIN_CHUNK_LENGTH = 50
+
 
 @dataclass
 class ChunkMetadata:
@@ -322,18 +326,37 @@ class MultiLayerChunker:
 
         # PHASE 3B: Generate section summaries FROM chunk contexts (NEW!)
         # This eliminates truncation problem - uses ALL chunks (entire section)
+        # OPTIMIZATION: Skip if summaries already exist (from Gemini extraction or Phase 2)
         if layer3_chunks:
-            if self.enable_contextual:
+            existing_summaries = sum(
+                1 for s in extracted_doc.sections if s.summary and len(s.summary.strip()) >= 50
+            )
+            total_sections = len(extracted_doc.sections)
+
+            if existing_summaries == total_sections:
                 logger.info(
-                    "PHASE 3B: Generating section summaries from chunk contexts "
-                    "(hierarchical approach - NO TRUNCATION)..."
+                    f"PHASE 3B: [SKIPPED] - All {total_sections} sections already have summaries "
+                    "(from extraction/Phase 2)"
                 )
+            elif existing_summaries > 0:
+                missing_count = total_sections - existing_summaries
+                logger.info(
+                    f"PHASE 3B: Generating summaries for {missing_count}/{total_sections} "
+                    f"sections missing summaries (partial regeneration)..."
+                )
+                self._generate_section_summaries_from_contexts(extracted_doc, layer3_chunks)
             else:
-                logger.info(
-                    "PHASE 3B: Generating section summaries from chunk content "
-                    "(basic mode - NO TRUNCATION)..."
-                )
-            self._generate_section_summaries_from_contexts(extracted_doc, layer3_chunks)
+                if self.enable_contextual:
+                    logger.info(
+                        "PHASE 3B: Generating section summaries from chunk contexts "
+                        "(hierarchical approach - NO TRUNCATION)..."
+                    )
+                else:
+                    logger.info(
+                        "PHASE 3B: Generating section summaries from chunk content "
+                        "(basic mode - NO TRUNCATION)..."
+                    )
+                self._generate_section_summaries_from_contexts(extracted_doc, layer3_chunks)
         else:
             logger.warning(
                 "Skipping section summary generation: no chunks available"
@@ -615,6 +638,14 @@ class MultiLayerChunker:
                 char_start = section.char_start
                 char_end = section.char_start + len(chunk_text)
 
+                # Filter out short chunks (headers, TOC entries, page numbers)
+                if len(chunk_text.strip()) < MIN_CHUNK_LENGTH:
+                    logger.debug(
+                        f"Skipping short chunk ({len(chunk_text)} chars): "
+                        f"{chunk_text[:30].replace(chr(10), ' ')}..."
+                    )
+                    continue
+
                 chunk = Chunk(
                     chunk_id=chunk_id,
                     content=chunk_text,  # Will be augmented with context if enabled
@@ -797,9 +828,16 @@ class MultiLayerChunker:
         sections_data = []  # [(section_index, contexts_text, section_title)]
         section_index_map = {}  # {section_id: index in extracted_doc.sections}
 
+        skipped_existing = 0  # Track sections skipped due to existing summaries
+
         for section_idx, section in enumerate(extracted_doc.sections):
             section_id = section.section_id
             section_index_map[section_id] = section_idx
+
+            # OPTIMIZATION: Skip sections that already have valid summaries
+            if section.summary and len(section.summary.strip()) >= 50:
+                skipped_existing += 1
+                continue
 
             # Get chunks for this section
             section_chunks = chunks_by_section.get(section_id, [])
@@ -845,10 +883,16 @@ class MultiLayerChunker:
             for (section_idx, _, _), summary in zip(sections_data, summaries):
                 extracted_doc.sections[section_idx].summary = summary
 
-            logger.info(
-                f"✓ Generated {len(summaries)} section summaries from chunks "
-                f"(100% coverage - no truncation)"
-            )
+            if skipped_existing > 0:
+                logger.info(
+                    f"✓ Generated {len(summaries)} section summaries from chunks "
+                    f"(skipped {skipped_existing} sections with existing summaries)"
+                )
+            else:
+                logger.info(
+                    f"✓ Generated {len(summaries)} section summaries from chunks "
+                    f"(100% coverage - no truncation)"
+                )
 
         except Exception as e:
             logger.error(f"Failed to generate section summaries from chunks: {e}")

@@ -932,34 +932,30 @@ class UnstructuredExtractor:
         tables = self._extract_tables(elements)
 
         # PHASE 2: Generate summaries (hierarchical document summary from section summaries)
+        # OPTIMIZATION: Skip if summaries already exist (e.g., from Gemini extraction)
         if self.config.generate_summaries:
             from src.summary_generator import SummaryGenerator
             from src.config import SummarizationConfig, get_config
 
-            # Load summarization config from config.json
-            root_config = get_config()
-            summary_config = SummarizationConfig.from_config(root_config.summarization)
+            # Check for existing summaries (from Gemini extraction)
+            existing_summaries = sum(
+                1 for s in sections if s.summary and len(s.summary.strip()) >= 50
+            )
+            total_sections = len(sections)
 
-            summary_gen = SummaryGenerator(config=summary_config)
+            if existing_summaries == total_sections:
+                # All sections already have summaries - skip regeneration
+                logger.info(
+                    f"PHASE 2: [SKIPPED] - All {total_sections} sections already have summaries "
+                    "(from extraction)"
+                )
+                section_summaries = [s.summary for s in sections if s.summary]
 
-            # Generate section summaries
-            section_summaries = []
-            for section in sections:
-                if section.content and len(section.content.strip()) > 50:  # Min length threshold
-                    try:
-                        section.summary = summary_gen.generate_section_summary(
-                            section.content, section.title or ""
-                        )
-                        section_summaries.append(section.summary)
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to generate summary for section '{section.title}': {e}"
-                        )
-                        section.summary = None
+                # Still generate document summary from existing section summaries
+                root_config = get_config()
+                summary_config = SummarizationConfig.from_config(root_config.summarization)
+                summary_gen = SummaryGenerator(config=summary_config)
 
-            # Generate hierarchical document summary from section summaries (NOT full text)
-            # This follows CLAUDE.md constraint: "ALWAYS generate from section summaries"
-            if section_summaries:
                 try:
                     document_summary = summary_gen.generate_document_summary(
                         section_summaries=section_summaries
@@ -968,7 +964,52 @@ class UnstructuredExtractor:
                     logger.warning(f"Failed to generate document summary: {e}")
                     document_summary = "(Document summary unavailable)"
             else:
-                document_summary = "(No section summaries available)"
+                # Generate missing summaries
+                if existing_summaries > 0:
+                    logger.info(
+                        f"PHASE 2: Generating summaries for {total_sections - existing_summaries} "
+                        f"sections (partial - {existing_summaries} already exist)"
+                    )
+                else:
+                    logger.info("PHASE 2: Generating section summaries...")
+
+                # Load summarization config from config.json
+                root_config = get_config()
+                summary_config = SummarizationConfig.from_config(root_config.summarization)
+                summary_gen = SummaryGenerator(config=summary_config)
+
+                # Generate section summaries (only for sections without existing summary)
+                section_summaries = []
+                for section in sections:
+                    # Skip sections that already have valid summaries
+                    if section.summary and len(section.summary.strip()) >= 50:
+                        section_summaries.append(section.summary)
+                        continue
+
+                    if section.content and len(section.content.strip()) > 50:  # Min length threshold
+                        try:
+                            section.summary = summary_gen.generate_section_summary(
+                                section.content, section.title or ""
+                            )
+                            section_summaries.append(section.summary)
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to generate summary for section '{section.title}': {e}"
+                            )
+                            section.summary = None
+
+                # Generate hierarchical document summary from section summaries (NOT full text)
+                # This follows CLAUDE.md constraint: "ALWAYS generate from section summaries"
+                if section_summaries:
+                    try:
+                        document_summary = summary_gen.generate_document_summary(
+                            section_summaries=section_summaries
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to generate document summary: {e}")
+                        document_summary = "(Document summary unavailable)"
+                else:
+                    document_summary = "(No section summaries available)"
         else:
             document_summary = None
 
