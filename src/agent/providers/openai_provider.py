@@ -31,10 +31,10 @@ class OpenAIProvider(BaseProvider):
     """
     OpenAI GPT provider with format translation.
 
-    Supports GPT-5 models:
-    - gpt-5-nano (ultra-fast, cost-effective)
-    - gpt-5-mini (balanced)
-    - gpt-5 (most capable)
+    Supports OpenAI models:
+    - gpt-4o (most capable)
+    - gpt-4o-mini (balanced, cost-effective)
+    - o-series (reasoning models: o1, o3, o4)
     """
 
     def __init__(self, api_key: str, model: str):
@@ -43,7 +43,7 @@ class OpenAIProvider(BaseProvider):
 
         Args:
             api_key: OpenAI API key (sk-...)
-            model: Model name (e.g., "gpt-5-mini")
+            model: Model name (e.g., "gpt-4o-mini")
 
         Raises:
             ValueError: If API key is invalid
@@ -98,7 +98,7 @@ class OpenAIProvider(BaseProvider):
         if openai_tools:
             api_params["tools"] = openai_tools
 
-        # GPT-5/o1/o3 only support default temperature (1.0)
+        # O-series reasoning models only support default temperature (1.0)
         if not self._requires_default_temperature():
             api_params["temperature"] = temperature
 
@@ -156,7 +156,7 @@ class OpenAIProvider(BaseProvider):
         openai_messages = self._convert_messages_to_openai(messages, system)
         openai_tools = self._translator.to_openai(tools) if tools else None
 
-        # Prepare API parameters (GPT-5 has specific requirements)
+        # Prepare API parameters
         api_params = {
             "model": self.model,
             "messages": openai_messages,
@@ -165,7 +165,7 @@ class OpenAIProvider(BaseProvider):
             **kwargs,
         }
 
-        # GPT-5/o1/o3 only support default temperature (1.0)
+        # O-series reasoning models only support default temperature (1.0)
         if not self._requires_default_temperature():
             api_params["temperature"] = temperature
 
@@ -331,17 +331,10 @@ class OpenAIProvider(BaseProvider):
         Check if OpenAI supports a feature.
 
         Supported features:
-        - prompt_caching: ❌ No (OpenAI doesn't support this)
-        - streaming: ❌ No (disabled by default due to API limitations and organization verification requirements)
+        - prompt_caching: ❌ No (OpenAI doesn't support native caching)
+        - streaming: ✅ Yes (via stream_message method)
         - tool_use: ✅ Yes (function calling)
         - structured_system: ❌ No (uses simple string)
-
-        Note: While GPT-5 models technically support streaming, we disable it by default because:
-        1. Many organizations get HTTP 400 errors (verification required)
-        2. Some models may not have streaming enabled in beta
-        3. Streaming adds complexity without significant UX benefit for tool-heavy workflows
-
-        If you need streaming for OpenAI, enable it manually via config after switching models.
 
         Args:
             feature: Feature name
@@ -351,6 +344,7 @@ class OpenAIProvider(BaseProvider):
         """
         supported_features = {
             "tool_use",
+            "streaming",
         }
         return feature in supported_features
 
@@ -358,32 +352,32 @@ class OpenAIProvider(BaseProvider):
         """
         Check if model uses max_completion_tokens instead of max_tokens.
 
-        GPT-5 and newer models (o1, o3) use max_completion_tokens.
+        O-series reasoning models (o1, o3, o4) use max_completion_tokens.
         Older models (gpt-4, gpt-3.5) use max_tokens.
 
         Returns:
             True if should use max_completion_tokens
         """
         model_lower = self.model.lower()
-        # GPT-5 series and reasoning models
+        # O-series reasoning models
         return any(
-            pattern in model_lower for pattern in ["gpt-5", "o1", "o3", "o4"]
+            pattern in model_lower for pattern in ["o1", "o3", "o4"]
         )
 
     def _requires_default_temperature(self) -> bool:
         """
         Check if model requires default temperature (1.0).
 
-        GPT-5 and reasoning models (o1, o3) only support temperature=1.
+        O-series reasoning models (o1, o3, o4) only support temperature=1.
         Older models support custom temperature values.
 
         Returns:
             True if should omit temperature parameter
         """
         model_lower = self.model.lower()
-        # GPT-5 series and reasoning models
+        # O-series reasoning models
         return any(
-            pattern in model_lower for pattern in ["gpt-5", "o1", "o3", "o4"]
+            pattern in model_lower for pattern in ["o1", "o3", "o4"]
         )
 
     def get_model_name(self) -> str:

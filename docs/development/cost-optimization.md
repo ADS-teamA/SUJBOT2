@@ -12,15 +12,15 @@ Analyzovaný dokument: BZ_VR1 (1).pdf (46 MB, 1173 sekcí)
 ## Současná konfigurace modelů
 
 ### PHASE 2: Generování sumářů
-- **Model:** GPT-5 Nano
-- **Cena:** $0.25 input / $1.00 output (za 1M tokenů)
+- **Model:** GPT-4o-mini
+- **Cena:** $0.15 input / $0.60 output (za 1M tokenů)
 - **Použití:** 1x dokument summary + 1173 section summaries
 - **Batching:** ✅ AKTIVNÍ (`generate_batch_summaries`)
 - **Paralelizace:** ✅ ThreadPoolExecutor (max_workers=20)
 
 ### PHASE 3: Kontextuální retrieval (SAC)
-- **Model:** GPT-5 Nano
-- **Cena:** $0.25 input / $1.00 output (za 1M tokenů)
+- **Model:** GPT-4o-mini
+- **Cena:** $0.15 input / $0.60 output (za 1M tokenů)
 - **Použití:** ~2000-4000 chunků (odhad na základě 1173 sekcí)
 - **Batching:** ✅ AKTIVNÍ (`generate_contexts_batch`)
 - **Paralelizace:** ✅ ThreadPoolExecutor (max_workers=10)
@@ -34,8 +34,8 @@ Analyzovaný dokument: BZ_VR1 (1).pdf (46 MB, 1173 sekcí)
 - **Alternativa:** BGE-M3 (LOCAL, ZDARMA) - dostupné v .env ale neaktivní
 
 ### PHASE 5A: Knowledge Graph
-- **Model:** GPT-5 Mini
-- **Cena:** $0.50 input / $2.00 output (za 1M tokenů)
+- **Model:** GPT-4o-mini
+- **Cena:** $0.15 input / $0.60 output (za 1M tokenů)
 - **Použití:** Entity extraction + Relationship extraction pro každý chunk
 - **Batching:** ✅ AKTIVNÍ (batch_size=20, max_workers=10)
 
@@ -89,7 +89,7 @@ EMBEDDING_MODEL=bge-m3
 
 ### 2. 🔥 KRITICKÁ OPTIMALIZACE: Knowledge Graph je drahý
 **Současný stav:** ~$3.60 na dokument (80% celkových nákladů!)
-**Problém:** GPT-5 Mini používá se pro každý chunk (3000× entity + 3000× relationships)
+**Problém:** Drahý model se používá pro každý chunk (3000× entity + 3000× relationships)
 **Optimalizace možnosti:**
 
 #### A) Přepnout na levnější model pro KG
@@ -137,8 +137,8 @@ KG_BATCH_SIZE=20  # místo 10
 **Benefit:** Rychlejší zpracování (2×), stejné náklady
 
 ### 4. 🎯 PHASE 2 & 3: Levnější modely pro summaries
-**Současný stav:** GPT-5 Nano ($0.25/$1.00)
-**Optimalizace:** GPT-4o-mini ($0.15/$0.60)
+**Současný stav:** GPT-4o-mini ($0.15/$0.60)
+**Optimalizace:** Claude Haiku 4.5 ($1.00/$5.00 - ale kratší prompty)
 
 ```bash
 # V .env změnit:
@@ -182,14 +182,14 @@ KG_LLM_MODEL=gpt-4o-mini                # PHASE 5A
 
 ### Strategie B: VYVÁŽENÁ (kvalita vs. cena)
 ```bash
-LLM_MODEL=gpt-5-nano                     # PHASE 2/3 (keep)
+LLM_MODEL=gpt-4o-mini                    # PHASE 2/3 (keep)
 EMBEDDING_PROVIDER=huggingface           # PHASE 4
 EMBEDDING_MODEL=bge-m3                   # PHASE 4
 KG_LLM_MODEL=gpt-4o-mini                # PHASE 5A
 ```
 
 **Náklady:** $1.93 (57% úspora)
-**Kvalita:** Lepší summaries (GPT-5), stále levné embeddingy + KG
+**Kvalita:** Kvalitní summaries (GPT-4o-mini), stále levné embeddingy + KG
 
 ### Strategie C: PREMIUM (maximální kvalita)
 ```bash
@@ -263,9 +263,9 @@ def extract_knowledge_graph_selective(
 
 ## 🐛 AKTUÁLNÍ CHYBA (OPRAVENO)
 
-**Error:** `max_tokens` parameter není podporován pro GPT-5/O-series modely
+**Error:** `max_tokens` parameter není podporován pro O-series modely
 **Fix:** ✅ Opraveno v `src/contextual_retrieval.py` a `src/summary_generator.py`
-- Detekce GPT-5/O-series modelů
+- Detekce O-series modelů (o1, o3, o4)
 - Použití `max_completion_tokens` místo `max_tokens`
 
 ## 📝 POZNÁMKY

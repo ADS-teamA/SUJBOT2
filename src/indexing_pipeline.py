@@ -831,6 +831,43 @@ class IndexingPipeline:
                     "Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/dbname'"
                 )
 
+            # Register document in metadata.documents table
+            async def register_document_metadata():
+                """Register document in metadata.documents for tracking."""
+                import asyncpg
+                try:
+                    conn = await asyncpg.connect(connection_string)
+                    try:
+                        doc_metadata = {
+                            "title": result.document_title,
+                            "sections": len(result.sections),
+                            "extraction_method": result.extraction_method,
+                            "hierarchy_depth": result.hierarchy_depth,
+                            "source_file": str(document_path.name),
+                        }
+                        await conn.execute("""
+                            INSERT INTO metadata.documents
+                                (document_id, title, file_path, hierarchy_depth, total_chunks, metadata)
+                            VALUES ($1, $2, $3, $4, $5, $6)
+                            ON CONFLICT (document_id) DO UPDATE
+                            SET title = $2, file_path = $3, hierarchy_depth = $4,
+                                total_chunks = $5, metadata = $6, indexed_at = NOW()
+                        """,
+                            result.document_id,
+                            result.document_title,
+                            str(document_path),
+                            result.hierarchy_depth,
+                            len(chunks),
+                            json.dumps(doc_metadata)
+                        )
+                        logger.info(f"Registered document in metadata.documents: {result.document_id}")
+                    finally:
+                        await conn.close()
+                except Exception as e:
+                    logger.warning(f"Failed to register document metadata: {e}")
+
+            asyncio.run(register_document_metadata())
+
             # Create PostgreSQL adapter
             async def create_postgres_adapter():
                 adapter = create_vector_store_adapter(
@@ -938,10 +975,15 @@ class IndexingPipeline:
                 output_dir=output_dir, result=result, chunks=chunks, chunking_stats=chunking_stats
             )
 
-        # Display cost summary
+        # Display cost summary and save to JSON
         tracker = get_global_tracker()
         if tracker.get_total_cost() > 0:
             logger.info("\n" + tracker.get_summary())
+
+            # Save cost statistics to JSON file
+            cost_output_dir = output_dir if output_dir else Path("output")
+            cost_file = tracker.save_to_json(cost_output_dir, result.document_id)
+            logger.info(f"Cost statistics saved to: {cost_file}")
 
         logger.info("=" * 80)
         logger.info(f"Indexing complete: {document_path.name}")

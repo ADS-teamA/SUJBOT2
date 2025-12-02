@@ -292,7 +292,7 @@ class AgentConfig:
         if not is_valid_model:
             raise ValueError(
                 f"Invalid model name: {self.model}\n"
-                f"Supported models: Claude (haiku/sonnet/opus), GPT-5 (gpt-5-mini/gpt-5-nano), "
+                f"Supported models: Claude (haiku/sonnet/opus), OpenAI (gpt-4o/gpt-4o-mini/o1/o3), "
                 f"Gemini (gemini-2.5-flash/gemini-2.5-pro)"
             )
 

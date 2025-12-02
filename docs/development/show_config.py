@@ -238,7 +238,7 @@ def display_config():
     print(f"\n  Pricing (2025):")
     print(f"    Anthropic Haiku:  $1.00/$5.00 per 1M tokens (input/output)")
     print(f"    Anthropic Sonnet: $3.00/$15.00 per 1M tokens (input/output)")
-    print(f"    OpenAI GPT-5:     $1.25/$10.00 per 1M tokens (input/output)")
+    print(f"    OpenAI GPT-4o:    $2.50/$10.00 per 1M tokens (input/output)")
     print(f"    OpenAI Embeddings: $0.13 per 1M tokens")
     print(f"    Voyage AI:        $0.06 per 1M tokens")
     print(f"    HuggingFace:      $0.00 (FREE local)")

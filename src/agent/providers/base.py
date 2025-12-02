@@ -178,7 +178,7 @@ class BaseProvider(ABC):
         Get current model name.
 
         Returns:
-            Model identifier (e.g., "claude-haiku-4-5", "gpt-5-mini")
+            Model identifier (e.g., "claude-haiku-4-5", "gpt-4o-mini")
         """
         pass
 

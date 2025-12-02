@@ -33,7 +33,7 @@ def create_provider(
     environment if not provided.
 
     Args:
-        model: Model name or alias (e.g., "claude-haiku-4-5", "gpt-5-mini", "gemini-flash")
+        model: Model name or alias (e.g., "claude-haiku-4-5", "gpt-4o-mini", "gemini-flash")
         api_key: API key for the provider (deprecated, use provider-specific keys)
         anthropic_api_key: Anthropic API key (optional, defaults to ANTHROPIC_API_KEY env var)
         openai_api_key: OpenAI API key (optional, defaults to OPENAI_API_KEY env var)
@@ -48,15 +48,15 @@ def create_provider(
     Examples:
         >>> # Using model registry aliases
         >>> provider = create_provider("haiku")  # Uses ANTHROPIC_API_KEY from env
-        >>> provider = create_provider("gpt-5-mini")  # Uses OPENAI_API_KEY from env
+        >>> provider = create_provider("gpt-4o-mini")  # Uses OPENAI_API_KEY from env
         >>>
         >>> # Using full model names
         >>> provider = create_provider("claude-haiku-4-5-20251001")
-        >>> provider = create_provider("gpt-5-nano")
+        >>> provider = create_provider("gpt-4o-mini")
         >>>
         >>> # Providing API keys explicitly
         >>> provider = create_provider("haiku", anthropic_api_key="sk-ant-...")
-        >>> provider = create_provider("gpt-5-mini", openai_api_key="sk-...")
+        >>> provider = create_provider("gpt-4o-mini", openai_api_key="sk-...")
     """
     # Import here to avoid circular dependency
     try:
@@ -138,7 +138,7 @@ def create_provider(
     else:
         raise ValueError(
             f"Unsupported provider: {provider_name} for model: {model}\n"
-            f"Supported providers: anthropic (Claude), openai (GPT-5), google (Gemini), deepinfra (Qwen)"
+            f"Supported providers: anthropic (Claude), openai (GPT-4o/o-series), google (Gemini), deepinfra (Qwen)"
         )
 
 

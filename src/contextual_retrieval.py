@@ -367,16 +367,16 @@ Answer only with the succinct context and nothing else."""
         # Debug: Log prompt length
         logger.debug(f"OpenAI context generation: prompt length={len(prompt)} chars")
 
-        # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
-        # GPT-5 models only support temperature=1.0 (default)
-        # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast, deterministic tasks
+        # O-series models use max_completion_tokens instead of max_tokens
+        # O-series models only support temperature=1.0 (default)
+        # O-series uses reasoning mode by default, set reasoning_effort="minimal" for fast, deterministic tasks
         # Valid values: "minimal" (fastest), "low", "medium" (default), "high"
-        if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
-            logger.debug(f"Using GPT-5/o-series parameters for model: {self.model}")
+        if self.model.startswith(("o1", "o3", "o4")):
+            logger.debug(f"Using o-series parameters for model: {self.model}")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=1.0,  # GPT-5 only supports default temperature
+                temperature=1.0,  # O-series only supports default temperature
                 max_completion_tokens=self.config.max_tokens,
                 reasoning_effort="minimal",  # Fast mode for simple tasks (context generation doesn't need deep reasoning)
             )
@@ -528,20 +528,20 @@ Answer only with the succinct context and nothing else."""
             prompt = "\n\n".join(prompt_parts)
 
             # Build request body with model-specific parameters
-            # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
-            # GPT-5 models only support temperature=1.0 (default)
-            # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast tasks
+            # O-series models use max_completion_tokens instead of max_tokens
+            # O-series models only support temperature=1.0 (default)
+            # O-series uses reasoning mode by default, set reasoning_effort="minimal" for fast tasks
             # Valid values: "minimal" (fastest), "low", "medium", "high"
             body = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
             }
 
-            if self.model.startswith(("gpt-5", "o1-", "o3-", "o4-")):
-                # GPT-5/o-series parameters
+            if self.model.startswith(("o1", "o3", "o4")):
+                # O-series reasoning models require different parameters
                 body["max_completion_tokens"] = self.config.max_tokens
-                body["temperature"] = 1.0  # GPT-5 only supports default temperature
-                body["reasoning_effort"] = "minimal"  # Fast mode for simple tasks (context generation doesn't need deep reasoning)
+                body["temperature"] = 1.0  # O-series requires temperature=1.0
+                body["reasoning_effort"] = "minimal"  # Fast mode for context generation
             else:
                 # GPT-4 and earlier parameters
                 body["max_tokens"] = self.config.max_tokens

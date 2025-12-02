@@ -8,7 +8,7 @@ Kompletní návod pro sledování nákladů na API volání během indexace a RA
 
 ### LLM Usage (Summaries, Context, Agent)
 - ✅ **Anthropic Claude** (Haiku 4.5, Sonnet 4.5, Opus 4)
-- ✅ **OpenAI** (GPT-4o, GPT-5, O-series)
+- ✅ **OpenAI** (GPT-4o, O-series)
 - ✅ Input tokens + Output tokens
 - ✅ Náklady podle aktuálních cen (2025)
 
@@ -34,7 +34,6 @@ Kompletní návod pro sledování nákladů na API volání během indexace a RA
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) |
 |-------|----------------------|------------------------|
-| GPT-5 | $1.25 | $10.00 |
 | GPT-4o | $2.50 | $10.00 |
 | GPT-4o-mini | $0.15 | $0.60 |
 | o1 | $15.00 | $60.00 |
@@ -338,7 +337,7 @@ logging.getLogger("src.cost_tracker").setLevel(logging.DEBUG)
 2. **Voyage AI free tier** - prvních 200M tokenů zdarma!
 3. **Ceny se mění** - aktualizujte `PRICING` dict v `cost_tracker.py`
 4. **Token counting** - používáme usage data z API responses (přesné)
-5. **Estimace** - některé ceny (GPT-5 nano, o3-pro) jsou odhadnuté
+5. **Estimace** - některé ceny (o3-pro) jsou odhadnuté
 
 ---
 

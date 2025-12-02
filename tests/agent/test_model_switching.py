@@ -142,13 +142,13 @@ class TestModelSwitching:
         # Switch model (WebApp logic - same as CLI now)
         with patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test-key-12345'}):
             new_provider = create_provider(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 anthropic_api_key=None,
                 openai_api_key="sk-test-key-12345",
                 google_api_key=None,
             )
             agent_with_history.provider = new_provider
-            agent_with_history.config.model = "gpt-5-mini"
+            agent_with_history.config.model = "gpt-4o-mini"
 
         # Verify history is preserved
         assert len(agent_with_history.conversation_history) == initial_history_length, \
@@ -159,9 +159,9 @@ class TestModelSwitching:
             "Document list should be preserved"
 
         # Verify new model is set
-        assert agent_with_history.config.model == "gpt-5-mini", \
+        assert agent_with_history.config.model == "gpt-4o-mini", \
             "Model should be updated"
-        assert agent_with_history.provider.get_model_name() == "gpt-5-mini", \
+        assert agent_with_history.provider.get_model_name() == "gpt-4o-mini", \
             "Provider model should be updated"
 
     def test_system_prompt_sent_after_switch(self, agent_with_history):

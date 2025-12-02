@@ -128,7 +128,12 @@ class GraphitiEntityBase(BaseModel):
     Provides common fields required by Graphiti for node creation.
     Note: 'name' and 'summary' are reserved attributes in Graphiti,
     so we use 'label' and 'description' instead.
+
+    Important: Uses extra="forbid" to generate additionalProperties: false
+    in JSON schema, which is required for OpenAI structured outputs.
     """
+
+    model_config = {"extra": "forbid", "use_enum_values": True}
 
     label: str = Field(
         ...,
@@ -151,9 +156,6 @@ class GraphitiEntityBase(BaseModel):
         max_length=1000,
         description="Brief description of the entity"
     )
-
-    class Config:
-        use_enum_values = True
 
 
 # =============================================================================
@@ -589,14 +591,17 @@ class GenericEntity(GraphitiEntityBase):
     Generic entity for types from original models.py.
 
     Used for entity types that don't need specialized Pydantic models.
+
+    Note: We intentionally avoid Dict[str, Any] fields as OpenAI's structured
+    outputs require additionalProperties: false on all object schemas.
     """
 
-    # Accept any entity type
+    # Inherits model_config from GraphitiEntityBase
+
+    # Accept any entity type - uses base class entity_type
     entity_type: GraphitiEntityType = Field(..., description="Entity type")
-    properties: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Type-specific properties"
-    )
+    # Optional notes field for any additional context (string, not Dict)
+    notes: str = Field(default="", description="Additional notes or context")
 
 
 # =============================================================================

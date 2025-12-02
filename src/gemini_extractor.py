@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+from src.cost_tracker import get_global_tracker
 from src.exceptions import APIKeyError
 from src.unstructured_extractor import (
     DocumentSection,
@@ -562,6 +563,9 @@ class GeminiExtractor:
         genai.configure(api_key=api_key)
         self.model_id = self.gemini_config.model
 
+        # Initialize cost tracker
+        self.tracker = get_global_tracker()
+
         logger.info(f"GeminiExtractor initialized with model={self.model_id}")
 
     def _fallback_to_unstructured(self, file_path: Path, reason: str) -> ExtractedDocument:
@@ -748,11 +752,22 @@ class GeminiExtractor:
         # Parse JSON response with SOTA repair for truncated/malformed output
         result = _repair_truncated_json(response.text)
 
-        # Log token usage
+        # Log token usage and track cost
         if hasattr(response, "usage_metadata"):
+            input_tokens = response.usage_metadata.prompt_token_count or 0
+            output_tokens = response.usage_metadata.candidates_token_count or 0
+
             logger.info(
-                f"Tokens: prompt={response.usage_metadata.prompt_token_count}, "
-                f"output={response.usage_metadata.candidates_token_count}"
+                f"Tokens: prompt={input_tokens}, output={output_tokens}"
+            )
+
+            # Track cost
+            self.tracker.track_llm(
+                provider="google",
+                model=self.model_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                operation="extraction",
             )
 
         return result
@@ -1415,6 +1430,9 @@ def get_extractor(
                     f"{type(e).__name__}: {e}. Using Unstructured.",
                     exc_info=True
                 )
+            except (KeyboardInterrupt, SystemExit):
+                # Always re-raise system interrupts
+                raise
             except Exception as e:
                 # Unexpected error - log with traceback for investigation
                 logger.error(

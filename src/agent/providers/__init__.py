@@ -3,7 +3,7 @@ Provider abstraction for multi-LLM support.
 
 Supports:
 - Anthropic Claude (Haiku, Sonnet, Opus) with prompt caching
-- OpenAI GPT-5 (Mini, Nano) with function calling
+- OpenAI GPT-4o (Standard, Mini) with function calling
 - Google Gemini (2.5 Flash, Pro) with context caching
 
 Usage:

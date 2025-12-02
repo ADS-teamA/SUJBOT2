@@ -3,7 +3,7 @@ Cost tracking for API usage (LLM and Embeddings).
 
 Tracks token usage and calculates costs for:
 - Anthropic Claude (Haiku, Sonnet, Opus)
-- OpenAI (GPT-4o, GPT-5, o-series, embeddings)
+- OpenAI (GPT-4o, o-series, embeddings)
 - Voyage AI (embeddings)
 - Local models (free)
 
@@ -32,10 +32,14 @@ Usage:
     print(f"Total cost: ${cost:.4f}")
 """
 
+import json
 import logging
-from typing import Dict, Optional, List, Any
+from pathlib import Path
+from typing import Dict, Optional, List, Any, Union
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from src.exceptions import StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +77,6 @@ PRICING = {
         # GPT-4o models
         "gpt-4o": {"input": 2.50, "output": 10.00},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-        # GPT-5 models
-        "gpt-5": {"input": 1.25, "output": 10.00},
-        "gpt-5-mini": {"input": 0.50, "output": 2.00},  # Estimated
-        "gpt-5-nano": {"input": 0.25, "output": 1.00},  # Estimated
-        "gpt-5-pro": {"input": 5.00, "output": 20.00},  # Estimated
-        "gpt-5-codex": {"input": 1.50, "output": 12.00},  # Estimated
-        "gpt-5-chat": {"input": 1.25, "output": 10.00},  # Estimated
         # O-series reasoning models
         "o1": {"input": 15.00, "output": 60.00},
         "o1-mini": {"input": 3.00, "output": 12.00},
@@ -653,6 +650,114 @@ class CostTracker:
         self._cost_by_operation.clear()
 
         logger.info("Cost tracker reset")
+
+    def save_to_json(self, output_path: Union[str, Path], document_id: str) -> Path:
+        """
+        Save cost statistics to JSON file.
+
+        Creates a comprehensive cost report including:
+        - Total costs and token counts
+        - Breakdown by provider and operation
+        - Cache statistics with savings calculation
+        - Detailed entry log for audit trail
+
+        Args:
+            output_path: Output directory path
+            document_id: Document identifier for filename
+
+        Returns:
+            Path to the saved JSON file
+
+        Raises:
+            StorageError: If directory creation or file writing fails
+        """
+        if not document_id or not document_id.strip():
+            raise StorageError(
+                "Invalid document_id for cost statistics",
+                details={"document_id": document_id, "output_path": str(output_path)},
+            )
+
+        output_path = Path(output_path)
+        try:
+            output_path.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise StorageError(
+                f"Failed to create output directory: {output_path}",
+                details={"output_path": str(output_path), "document_id": document_id},
+                cause=e,
+            ) from e
+
+        # Calculate cache savings
+        cache_stats = self.get_cache_stats()
+        cache_savings_usd = 0.0
+
+        # Cache savings = what would have cost at full price minus discounted price
+        # Cache reads are billed at 10%, so savings = 90% of what full price would be
+        for entry in self._entries:
+            if entry.cache_read_tokens > 0 and entry.provider in PRICING:
+                model_pricing = PRICING[entry.provider].get(entry.model, {})
+                if model_pricing:
+                    # Full price - discounted price = savings
+                    full_price = (entry.cache_read_tokens / 1_000_000) * model_pricing.get("input", 0)
+                    discounted = full_price * 0.1
+                    cache_savings_usd += full_price - discounted
+
+        # Build comprehensive stats
+        stats: Dict[str, Any] = {
+            "document_id": document_id,
+            "timestamp": datetime.now().isoformat(),
+            "summary": {
+                "total_cost_usd": round(self._total_cost, 6),
+                "total_input_tokens": self._total_input_tokens,
+                "total_output_tokens": self._total_output_tokens,
+                "total_api_calls": len(self._entries),
+            },
+            "cost_by_provider": {k: round(v, 6) for k, v in self._cost_by_provider.items()},
+            "cost_by_operation": {k: round(v, 6) for k, v in self._cost_by_operation.items()},
+            "cache_stats": {
+                "cache_read_tokens": cache_stats["cache_read_tokens"],
+                "cache_creation_tokens": cache_stats["cache_creation_tokens"],
+                "cache_savings_usd": round(cache_savings_usd, 6),
+            },
+            "entries": [
+                {
+                    "timestamp": e.timestamp.isoformat(),
+                    "provider": e.provider,
+                    "model": e.model,
+                    "operation": e.operation,
+                    "input_tokens": e.input_tokens,
+                    "output_tokens": e.output_tokens,
+                    "cache_read_tokens": e.cache_read_tokens,
+                    "cache_creation_tokens": e.cache_creation_tokens,
+                    "cost_usd": round(e.cost, 8),
+                    "response_time_ms": round(e.response_time_ms, 2),
+                }
+                for e in self._entries
+            ],
+        }
+
+        # Save to file
+        output_file = output_path / f"{document_id}_costs.json"
+        try:
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(stats, f, indent=2, ensure_ascii=False)
+        except (OSError, IOError) as e:
+            raise StorageError(
+                f"Failed to write cost statistics to {output_file}",
+                details={
+                    "output_file": str(output_file),
+                    "document_id": document_id,
+                    "total_cost": self._total_cost,
+                },
+                cause=e,
+            ) from e
+
+        logger.info(
+            f"Cost statistics saved to: {output_file} "
+            f"(${self._total_cost:.4f}, {len(self._entries)} API calls)"
+        )
+
+        return output_file
 
 
 # Global instance for easy access
