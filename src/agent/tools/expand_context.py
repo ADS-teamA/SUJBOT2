@@ -176,29 +176,53 @@ class ExpandContextTool(BaseTool):
             return ToolResult(success=False, data=None, error=str(e))
 
     def _expand_adjacent(self, target_chunk: Dict, all_chunks: List[Dict], k: int) -> List[Dict]:
-        """Get adjacent chunks (before/after)."""
+        """
+        Get adjacent chunks (before/after) based on chunk_id sequence.
+
+        IMPORTANT: We use document_id + chunk_id ordering, NOT section_id.
+        This is because during PDF extraction, headers and their bullet list items
+        get different section_ids (sequential: sec_383, sec_384, sec_385...) even
+        though they are logically adjacent content.
+
+        By using chunk_id sequence, we can correctly find content that follows
+        a header regardless of section_id assignment.
+        """
         document_id = target_chunk.get("document_id")
-        section_id = target_chunk.get("section_id")
         chunk_id = target_chunk.get("chunk_id")
 
-        # Find all chunks from same section
-        same_section = [
-            (i, chunk)
-            for i, chunk in enumerate(all_chunks)
-            if chunk.get("document_id") == document_id and chunk.get("section_id") == section_id
+        if not document_id or not chunk_id:
+            logger.warning("expand_adjacent: missing document_id or chunk_id")
+            return []
+
+        # Helper to extract numeric part from chunk_id (e.g., BZ_VR1_L3_266 -> 266)
+        def extract_chunk_num(cid: str) -> int:
+            try:
+                parts = cid.split("_")
+                return int(parts[-1]) if parts and parts[-1].isdigit() else 0
+            except (ValueError, IndexError):
+                return 0
+
+        # Find ALL chunks from same document (NOT filtered by section_id)
+        # This allows finding adjacent content even across section boundaries
+        same_doc = [
+            chunk
+            for chunk in all_chunks
+            if chunk.get("document_id") == document_id
         ]
 
-        # Sort by chunk_id
-        same_section.sort(key=lambda x: x[1].get("chunk_id", ""))
+        # Sort by chunk_id numerically (L3_266 < L3_267 < L3_268)
+        same_doc.sort(key=lambda x: extract_chunk_num(x.get("chunk_id", "")))
 
         # Find target position
+        target_num = extract_chunk_num(chunk_id)
         target_position = None
-        for pos, (_, chunk) in enumerate(same_section):
-            if chunk.get("chunk_id") == chunk_id:
+        for pos, chunk in enumerate(same_doc):
+            if extract_chunk_num(chunk.get("chunk_id", "")) == target_num:
                 target_position = pos
                 break
 
         if target_position is None:
+            logger.warning(f"expand_adjacent: target chunk {chunk_id} not found in document")
             return []
 
         # Get context_window from config (default: 2)
@@ -206,21 +230,26 @@ class ExpandContextTool(BaseTool):
 
         # Extract context chunks
         start_pos = max(0, target_position - context_window)
-        end_pos = min(len(same_section), target_position + context_window + 1)
+        end_pos = min(len(same_doc), target_position + context_window + 1)
 
         context_chunks = []
 
         # Before chunks
         for i in range(start_pos, target_position):
-            chunk = format_chunk_result(same_section[i][1])
+            chunk = format_chunk_result(same_doc[i])
             chunk["position"] = "before"
             context_chunks.append(chunk)
 
         # After chunks
         for i in range(target_position + 1, end_pos):
-            chunk = format_chunk_result(same_section[i][1])
+            chunk = format_chunk_result(same_doc[i])
             chunk["position"] = "after"
             context_chunks.append(chunk)
+
+        logger.debug(
+            f"expand_adjacent: found {len(context_chunks)} adjacent chunks "
+            f"for {chunk_id} (window={context_window})"
+        )
 
         return context_chunks
 

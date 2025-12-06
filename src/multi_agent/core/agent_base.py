@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from langgraph.graph import StateGraph
 
 from .event_bus import EventBus, EventType
+from .state import ToolExecution
 from ..observability.trajectory import AgentTrajectory, TrajectoryStep, StepType
 
 logger = logging.getLogger(__name__)
@@ -762,12 +763,21 @@ class BaseAgent(ABC):
                         "is_error": not result.get("success", False)  # Add error flag for debugging
                     })
 
+                    # Build result summary for evaluation tracking
+                    result_data = result.get("data", "") if result.get("success", False) else result.get("error", "Unknown error")
+                    result_summary = str(result_data)[:200]
+
                     tool_call_history.append({
                         "tool": tool_name,
                         "input": tool_input,
                         "success": result.get("success", False),
                         "api_cost_usd": tool_cost,  # Track cost per tool call
-                        "result": result  # CRITICAL: Store full result for downstream agents (includes citations!)
+                        "result": result,  # CRITICAL: Store full result for downstream agents (includes citations!)
+                        # Fields for ToolExecution tracking
+                        "timestamp": datetime.now(),
+                        "duration_ms": tool_duration_ms,
+                        "result_summary": result_summary,
+                        "error": result.get("error") if not result.get("success", False) else None,
                     })
 
                     # Capture OBSERVATION step in trajectory
@@ -804,12 +814,18 @@ class BaseAgent(ABC):
                     )
 
                     # Ask LLM to provide final answer with what we have
+                    # CRITICAL: Include explicit format instructions to ensure **Odpověď:** section
                     messages.append({
                         "role": "user",
                         "content": (
                             f"STOP SIGNAL: {stop_reason}. "
-                            "Please provide your final answer based on the information gathered so far. "
-                            "Do NOT call any more tools."
+                            "Provide your FINAL answer now. Do NOT call any more tools.\n\n"
+                            "REQUIRED FORMAT:\n"
+                            "**FINAL OUTPUT:**\n"
+                            "chunk_id: <ID>, text: <content>...\n\n"
+                            "**Odpověď:**\n"
+                            "[Your synthesized answer with \\cite{chunk_id} citations]\n\n"
+                            "If you found no relevant information, say 'Informace nebyla v dokumentech nalezena.'"
                         )
                     })
 
@@ -833,9 +849,26 @@ class BaseAgent(ABC):
                     trajectory.finalize(final_text)
                     trajectory_metrics = trajectory.compute_metrics()
 
+                    # Build ToolExecution objects for evaluation tracking
+                    tool_executions = [
+                        ToolExecution(
+                            tool_name=tc.get("tool", "unknown"),
+                            agent_name=self.config.name,
+                            timestamp=tc.get("timestamp", datetime.now()),
+                            duration_ms=tc.get("duration_ms", 0.0),
+                            input_tokens=0,  # Not tracked at tool level
+                            output_tokens=0,  # Not tracked at tool level
+                            success=tc.get("success", False),
+                            error=tc.get("error"),
+                            result_summary=tc.get("result_summary", "")[:200],
+                        )
+                        for tc in tool_call_history
+                    ]
+
                     return {
                         "final_answer": final_text,
                         "tool_calls": tool_call_history,
+                        "tool_executions": tool_executions,  # For state reducer
                         "iterations": iteration + 1,
                         "reasoning": f"Early stop: {stop_reason}",
                         "total_tool_cost_usd": total_tool_cost,
@@ -857,9 +890,26 @@ class BaseAgent(ABC):
                 trajectory.finalize(final_text)
                 trajectory_metrics = trajectory.compute_metrics()
 
+                # Build ToolExecution objects for evaluation tracking
+                tool_executions = [
+                    ToolExecution(
+                        tool_name=tc.get("tool", "unknown"),
+                        agent_name=self.config.name,
+                        timestamp=tc.get("timestamp", datetime.now()),
+                        duration_ms=tc.get("duration_ms", 0.0),
+                        input_tokens=0,  # Not tracked at tool level
+                        output_tokens=0,  # Not tracked at tool level
+                        success=tc.get("success", False),
+                        error=tc.get("error"),
+                        result_summary=tc.get("result_summary", "")[:200],
+                    )
+                    for tc in tool_call_history
+                ]
+
                 return {
                     "final_answer": final_text,
                     "tool_calls": tool_call_history,
+                    "tool_executions": tool_executions,  # For state reducer
                     "iterations": iteration + 1,
                     "reasoning": "Autonomous tool calling completed",
                     "total_tool_cost_usd": total_tool_cost,  # Total API cost for all tool calls
@@ -867,15 +917,15 @@ class BaseAgent(ABC):
                     "trajectory_metrics": trajectory_metrics.to_dict()
                 }
 
-        # Max iterations reached - compile partial results instead of generic error
+        # Max iterations reached - do one final synthesis call
         self.logger.warning(
-            f"Max iterations ({max_iterations}) reached, compiling partial results "
+            f"Max iterations ({max_iterations}) reached, requesting final synthesis "
             f"(total tool cost: ${total_tool_cost:.6f})"
         )
 
-        # Extract all chunk_ids found during tool calls
+        # Extract all chunk_ids and content found during tool calls
         found_chunk_ids = []
-        found_chunks_summary = []
+        found_chunks_full = []
         for call in tool_call_history:
             tool_name = call.get("tool", "unknown")
             result = call.get("result", {})
@@ -893,22 +943,69 @@ class BaseAgent(ABC):
                 chunk_id = chunk.get("chunk_id")
                 if not chunk_id:
                     continue
-                content = chunk.get("content", "")[:150]
+                content = chunk.get("content", "")
                 if chunk_id not in found_chunk_ids:
                     found_chunk_ids.append(chunk_id)
-                    found_chunks_summary.append(f"chunk_id: {chunk_id}, text: {content}...")
+                    found_chunks_full.append(f"chunk_id: {chunk_id}, text: {content}")
 
-        # Build partial answer with found chunks
-        if found_chunk_ids:
-            partial_answer = (
-                f"**PARTIAL OUTPUT (max iterations reached):**\n"
-                f"Found {len(found_chunk_ids)} relevant chunks during search:\n\n"
-                + "\n".join(found_chunks_summary[:10])  # Limit to 10 chunks
+        # Do final synthesis LLM call if we have chunks
+        if found_chunk_ids and self.provider:
+            original_query = state.get("query", "")
+            synthesis_prompt = (
+                "You have reached maximum iterations. Synthesize a FINAL ANSWER from the chunks found.\n\n"
+                f"Original query: {original_query}\n\n"
+                f"Chunks found ({len(found_chunk_ids)}):\n"
+                + "\n".join(found_chunks_full[:10])
+                + "\n\n"
+                "REQUIRED OUTPUT FORMAT:\n"
+                "**FINAL OUTPUT:**\n"
+                "[list chunk_ids with key excerpts]\n\n"
+                "**Odpověď:**\n"
+                "[synthesized answer in user's language with \\cite{chunk_id} citations]\n\n"
+                "DO NOT output 'PARTIAL OUTPUT'. Synthesize a complete answer from what you found."
             )
+            try:
+                synthesis_response = self.provider.create_message(
+                    messages=[{"role": "user", "content": synthesis_prompt}],
+                    tools=[],  # No tools for final synthesis - just generate answer
+                    system=self.system_prompt,
+                    max_tokens=1024,
+                    temperature=0.2
+                )
+                partial_answer = synthesis_response.text if hasattr(synthesis_response, 'text') else str(synthesis_response.content)
+                self.logger.info(f"Final synthesis completed with {len(found_chunk_ids)} chunks")
+            except Exception as e:
+                self.logger.error(f"Final synthesis failed: {e}")
+                # Fallback: Generate structured answer directly from chunks
+                # Extract meaningful content from top chunks for user-readable answer
+                top_chunks = []
+                for cid, full_chunk in zip(found_chunk_ids[:5], found_chunks_full[:5]):
+                    # Extract text content from "chunk_id: X, text: Y" format
+                    if ", text: " in full_chunk:
+                        text = full_chunk.split(", text: ", 1)[1]
+                        # Truncate to meaningful length but keep enough context
+                        text = text[:300].strip()
+                        if text:
+                            top_chunks.append(f"• {text} \\cite{{{cid}}}")
+
+                if top_chunks:
+                    partial_answer = (
+                        f"**FINAL OUTPUT:**\n"
+                        + "\n".join([f"chunk_id: {cid}" for cid in found_chunk_ids[:10]])
+                        + f"\n\n**Odpověď:**\n"
+                        f"Na základě nalezených dokumentů:\n\n"
+                        + "\n\n".join(top_chunks)
+                    )
+                else:
+                    partial_answer = (
+                        f"**FINAL OUTPUT:**\n"
+                        + "\n".join([f"chunk_id: {cid}, text: {txt[:150]}..." for cid, txt in zip(found_chunk_ids[:10], [c.split(", text: ", 1)[1] if ", text: " in c else "" for c in found_chunks_full[:10]])])
+                        + f"\n\n**Odpověď:**\nInformace byla nalezena v {len(found_chunk_ids)} úsecích, viz výše."
+                    )
         else:
             partial_answer = (
-                "Analysis incomplete - maximum reasoning steps reached. "
-                "No relevant chunks found. Please rephrase your query for a more focused response."
+                "V dostupných dokumentech nebyla nalezena relevantní informace k tomuto dotazu. "
+                "Zkuste prosím přeformulovat dotaz nebo upřesnit hledaný termín."
             )
 
         # Finalize trajectory for max iterations case
@@ -916,9 +1013,26 @@ class BaseAgent(ABC):
         trajectory.finalize(partial_answer)
         trajectory_metrics = trajectory.compute_metrics()
 
+        # Build ToolExecution objects for evaluation tracking
+        tool_executions = [
+            ToolExecution(
+                tool_name=tc.get("tool", "unknown"),
+                agent_name=self.config.name,
+                timestamp=tc.get("timestamp", datetime.now()),
+                duration_ms=tc.get("duration_ms", 0.0),
+                input_tokens=0,  # Not tracked at tool level
+                output_tokens=0,  # Not tracked at tool level
+                success=tc.get("success", False),
+                error=tc.get("error"),
+                result_summary=tc.get("result_summary", "")[:200],
+            )
+            for tc in tool_call_history
+        ]
+
         return {
             "final_answer": partial_answer,
             "tool_calls": tool_call_history,
+            "tool_executions": tool_executions,  # For state reducer
             "iterations": max_iterations,
             "reasoning": f"Max iterations reached, compiled {len(found_chunk_ids)} partial results",
             "total_tool_cost_usd": total_tool_cost,

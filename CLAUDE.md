@@ -214,6 +214,43 @@ When Gemini extracts large PDFs in chunks (TOC pages first, content pages later)
 
 **Solution**: `GeminiKGExtractor._deduplicate_sections_by_path()` merges sections with the same hierarchical path, keeping the one with the longest content. This happens automatically during chunked extraction.
 
+### 6.3 PostgreSQL Vector Schema
+
+**IMPORTANT:** Vectors are stored in the `vectors` schema (NOT `public`). Always use `vectors.layer{n}` when querying.
+
+```sql
+-- Schema: vectors
+-- Tables: layer1 (documents), layer2 (sections), layer3 (chunks)
+
+-- Primary table for RAG retrieval: vectors.layer3
+-- Columns:
+--   id (serial)           - Primary key
+--   chunk_id (text)       - Unique chunk identifier (e.g., "BZ_VR1_L3_266")
+--   document_id (text)    - Source document (e.g., "BZ_VR1")
+--   section_id (text)     - Section identifier (e.g., "sec_383")
+--   section_title (text)  - Section heading
+--   section_path (text)   - Hierarchical breadcrumb path
+--   embedding (vector)    - 4096-dimension vector (Qwen3-Embedding-8B)
+--   content (text)        - SAC-formatted text: "[breadcrumb]\n\ncontext\n\nraw_content"
+--   content_tsv (tsvector)- Full-text search index
+--   metadata (jsonb)      - Additional chunk metadata
+--   created_at (timestamp)
+```
+
+**Key implementation details:**
+- Embeddings: 4096 dimensions via `Qwen/Qwen3-Embedding-8B` (DeepInfra)
+- Content field: Contains SAC context prepended (breadcrumb format for retrieval)
+- Cosine similarity: `1 - (embedding <=> query_vector)`
+
+**Query example:**
+```sql
+SELECT chunk_id, content, 1 - (embedding <=> $1::vector) AS similarity
+FROM vectors.layer3
+WHERE document_id = 'BZ_VR1'
+ORDER BY embedding <=> $1::vector
+LIMIT 10;
+```
+
 ### 7. No Cohere Reranking
 
 Cohere performs WORSE on legal docs. Use `ms-marco` or `bge-reranker` instead.

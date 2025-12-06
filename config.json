@@ -130,7 +130,7 @@
     "fusion_k": 60
   },
   "knowledge_graph": {
-    "enable": true,
+    "enable": false,
     "extractor": "graphiti",
     "llm_provider": "openai",
     "llm_model": "gpt-4o-mini",
@@ -143,7 +143,7 @@
     "enable_relationship_extraction": true,
     "enable_cross_document_relationships": false,
     "enable_temporal": true,
-    "enable_deduplication": false,
+    "enable_deduplication": true,
     "max_entity_types": 55,
     "batch_size": 20,
     "max_retries": 3,

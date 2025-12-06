@@ -27,9 +27,6 @@ from .routing.workflow_builder import WorkflowBuilder
 from .checkpointing import create_checkpointer, StateManager
 from .caching import create_cache_manager
 from .observability import setup_langsmith
-from .hitl.config import HITLConfig
-from .hitl.quality_detector import QualityDetector
-from .hitl.clarification_generator import ClarificationGenerator
 from .core.event_bus import EventBus, Event, EventType
 
 logger = logging.getLogger(__name__)
@@ -61,11 +58,6 @@ class MultiAgentRunner:
         self.complexity_analyzer = None
         self.workflow_builder = None
         self.vector_store = None  # Store vector store for orchestrator
-
-        # HITL components
-        self.hitl_config = None
-        self.quality_detector = None
-        self.clarification_generator = None
 
         logger.info("MultiAgentRunner initialized")
 
@@ -102,28 +94,7 @@ class MultiAgentRunner:
             routing_config = self.multi_agent_config.get("routing", {})
             self.complexity_analyzer = ComplexityAnalyzer(routing_config)
 
-            # 6. Initialize HITL components (if enabled)
-            clarification_config = self.multi_agent_config.get("clarification", {})
-            if clarification_config.get("enabled", False):
-                logger.info("Initializing HITL clarification system...")
-
-                # Load HITL config
-                self.hitl_config = HITLConfig.from_dict(clarification_config)
-
-                # Initialize quality detector
-                self.quality_detector = QualityDetector(self.hitl_config)
-
-                # Initialize clarification generator
-                api_key = self.config.get("api_keys", {}).get("anthropic_api_key", "")
-                self.clarification_generator = ClarificationGenerator(
-                    config=self.hitl_config, api_key=api_key
-                )
-
-                logger.info("HITL clarification system initialized")
-            else:
-                logger.info("HITL clarification system disabled")
-
-            # 7. Initialize workflow builder (with HITL components if enabled)
+            # 6. Initialize workflow builder
             # IMPORTANT: Use async checkpointer for astream() compatibility
             async_checkpointer = None
             if self.checkpointer:
@@ -132,9 +103,6 @@ class MultiAgentRunner:
             self.workflow_builder = WorkflowBuilder(
                 agent_registry=self.agent_registry,
                 checkpointer=async_checkpointer,
-                hitl_config=self.hitl_config,
-                quality_detector=self.quality_detector,
-                clarification_generator=self.clarification_generator,
             )
 
             logger.info("Multi-agent system initialized successfully")
@@ -634,6 +602,11 @@ class MultiAgentRunner:
         """
         logger.info(f"Running query: {query[:100]}...")
 
+        # Reset global cost tracker for this query (prevents cumulative costs across queries)
+        # This ensures each query gets its own cost measurement, not cumulative total
+        from src.cost_tracker import reset_global_tracker
+        reset_global_tracker()
+
         # Create thread ID
         thread_id = self.state_manager.create_thread_id()
 
@@ -875,6 +848,17 @@ class MultiAgentRunner:
             total_cost_usd = tracker.get_total_cost()
             total_cost_cents = total_cost_usd * 100.0
 
+            # Extract tool executions for evaluation tracking
+            tool_executions_raw = result.get("tool_executions", [])
+            tool_executions_serialized = [
+                {
+                    "tool_name": te.tool_name if hasattr(te, "tool_name") else te.get("tool_name", "unknown"),
+                    "agent_name": te.agent_name if hasattr(te, "agent_name") else te.get("agent_name", "unknown"),
+                    "success": te.success if hasattr(te, "success") else te.get("success", True),
+                }
+                for te in tool_executions_raw
+            ]
+
             # Build final result dict
             final_result_dict = {
                 "success": True,
@@ -887,6 +871,7 @@ class MultiAgentRunner:
                 "total_cost_cents": total_cost_cents,
                 "errors": result.get("errors", []),
                 "synthesis_mode": synthesis_mode,  # For metrics: "lightweight" or "full"
+                "tool_executions": tool_executions_serialized,  # For evaluation tracking
             }
 
             # Always yield final result (function is now always a generator)

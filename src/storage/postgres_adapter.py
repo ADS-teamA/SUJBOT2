@@ -165,17 +165,42 @@ def _sanitize_tsquery(text: str) -> str:
     return sanitized
 
 
-def _run_async_safe(coro):
+def _run_async_safe(coro, timeout: float = 30.0):
     """
     Safely run async coroutine from sync context.
 
-    Uses asyncio.run() to execute the coroutine. When nest_asyncio is applied
-    in the entry point (e.g., FastAPI app or evaluation script), this works
-    even from within an existing event loop.
+    Handles two scenarios:
+    1. No running event loop: Uses asyncio.run() directly
+    2. Already in async context: Uses nest_asyncio to allow nested loops
 
-    Note: nest_asyncio.apply() must be called ONCE in the application entry point.
+    Args:
+        coro: Async coroutine to execute
+        timeout: Timeout in seconds (default: 30) - used for async timeout
+
+    Returns:
+        Result of the coroutine
+
+    Raises:
+        asyncio.TimeoutError: If execution exceeds timeout
+        RuntimeError: If execution fails
     """
-    return asyncio.run(coro)
+    import nest_asyncio
+
+    try:
+        # Check if we're already in an async context
+        loop = asyncio.get_running_loop()
+    except RuntimeError as e:
+        # Check specifically for "no running event loop" error
+        if "no running event loop" not in str(e).lower():
+            # This is a different RuntimeError - re-raise it
+            logger.error(f"Unexpected RuntimeError in async context check: {e}")
+            raise
+        # No running event loop - use asyncio.run() with timeout
+        return asyncio.run(asyncio.wait_for(coro, timeout=timeout))
+
+    # If we get here, we have a running loop - use nest_asyncio
+    nest_asyncio.apply(loop)
+    return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
 
 
 class PostgresVectorStoreAdapter(VectorStoreAdapter):
@@ -1306,7 +1331,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     chunk.metadata.document_id,
                     chunk.metadata.section_title or chunk.metadata.document_id,  # title
                     embedding_str,
-                    chunk.raw_content,  # content without SAC
+                    chunk.content,  # Use content with SAC context (embedding_text)
                     chunk.metadata.cluster_id,
                     chunk.metadata.cluster_label,
                     chunk.metadata.cluster_confidence,
@@ -1327,7 +1352,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     hierarchical_path,
                     chunk.metadata.page_number,
                     embedding_str,
-                    chunk.raw_content,
+                    chunk.content,  # Use content with SAC context (embedding_text)
                     chunk.metadata.cluster_id,
                     chunk.metadata.cluster_label,
                     chunk.metadata.cluster_confidence,
@@ -1348,7 +1373,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     getattr(chunk.metadata, 'char_start', None),
                     getattr(chunk.metadata, 'char_end', None),
                     embedding_str,
-                    chunk.raw_content,
+                    chunk.content,  # Use content with SAC context (embedding_text)
                     chunk.metadata.cluster_id,
                     chunk.metadata.cluster_label,
                     chunk.metadata.cluster_confidence,
