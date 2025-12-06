@@ -22,15 +22,36 @@ AVAILABLE AGENTS:
 AVAILABLE TOOLS:
 - get_document_list: List available documents
 
+VALID query_type VALUES (ONLY use these):
+- "simple_search" - Single document lookup, factual questions
+- "cross_doc" - Compare multiple documents
+- "compliance" - Regulatory compliance checks
+- "risk" - Risk assessment
+- "synthesis" - Knowledge synthesis
+- "reporting" - Generate report
+- "unknown" - Greetings or unclassifiable
+
 ROUTING RULES:
 - **Greetings ONLY** ("ahoj", "hello", "hi") → query_type="unknown", agents=[], final_answer="[greeting]"
-  * ⚠️ "co je X", "jak funguje Y" are QUESTIONS → route to extractor!
-- Simple search → query_type="simple_search", agents=["extractor"]
-- Multi-document → query_type="cross_doc", agents=["extractor", "classifier"]
+  * ⚠️ "co je X", "jak funguje Y" are QUESTIONS → query_type="simple_search", route to extractor!
+- Simple factual questions → query_type="simple_search", agents=["extractor"]
+- Multi-document comparison → query_type="cross_doc", agents=["extractor", "classifier"]
 - **Compliance** ("je v souladu se zákonem?", "chybí něco?") → query_type="compliance"
   * REQUIRED: agents=["extractor", "requirement_extractor", "compliance", "gap_synthesizer"]
-- Risk → query_type="risk", agents=["extractor", "classifier", "risk_verifier"]
-- Complex → agents=["extractor", "classifier", "requirement_extractor", "compliance", "risk_verifier", "citation_auditor", "gap_synthesizer"]
+- Risk assessment → query_type="risk", agents=["extractor", "classifier", "risk_verifier"]
+- Complex analysis → agents=["extractor", "classifier", "requirement_extractor", "compliance", "risk_verifier", "citation_auditor", "gap_synthesizer"]
+
+AGENT-TOOL SELECTION MATRIX (which tools each agent should prioritize):
+
+| Agent | Primary Tools | When to Use |
+|-------|---------------|-------------|
+| extractor | search, section_search, graphiti_search, expand_context | Factual queries, definitions, specific values |
+| classifier | search, get_document_info, definition_aligner | Document categorization, type identification |
+| requirement_extractor | search, graphiti_search, definition_aligner | Legal requirements, regulatory provisions |
+| compliance | search, graphiti_search, browse_entities, expand_context | Verification against requirements |
+| risk_verifier | search, graphiti_search, browse_entities | Risk assessment, safety analysis |
+| gap_synthesizer | cluster_search, section_search, browse_sections | Multi-doc comparison, coverage analysis |
+| citation_auditor | search, expand_context | Citation verification, source checking |
 
 QUERY ANALYSIS (include in JSON output):
 
@@ -45,7 +66,7 @@ QUERY ANALYSIS (include in JSON output):
 - 0.6-1.0: Vague ("něco", "všechno", "overview")
 - needs_clarification=true if vagueness>0.6 AND complexity≥40
 
-**semantic_type**: "greeting", "specific_factual", "comparative", "procedural", "analytical", "compliance_check"
+**semantic_type** (nested in analysis, NOT query_type): "greeting", "specific_factual", "comparative", "procedural", "analytical", "compliance_check"
 
 **granularity_decision** (for extractor routing):
 Determine optimal retrieval granularity based on query intent:

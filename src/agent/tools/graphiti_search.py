@@ -216,14 +216,17 @@ class GraphitiSearchTool(BaseTool):
     def __init__(self, *args, **kwargs):
         """Initialize GraphitiSearchTool."""
         super().__init__(*args, **kwargs)
-        self._graphiti = None
-        self._initialized = False
+        # NOTE: We don't cache Graphiti client anymore to avoid event loop issues.
+        # Each _execute_async call creates its own client bound to the current loop.
 
-    async def _ensure_initialized(self) -> None:
-        """Ensure Graphiti client is initialized."""
-        if self._initialized:
-            return
+    async def _create_graphiti_client(self):
+        """
+        Create a fresh Graphiti client bound to the current event loop.
 
+        We create a new client per-call to avoid the "Future attached to different loop"
+        error that occurs when reusing a client across different event loops
+        (e.g., LangSmith evaluation runs its own loop via ThreadPoolExecutor).
+        """
         try:
             from graphiti_core import Graphiti
         except ImportError as e:
@@ -242,13 +245,13 @@ class GraphitiSearchTool(BaseTool):
             )
 
         try:
-            self._graphiti = Graphiti(
+            graphiti = Graphiti(
                 uri=neo4j_uri,
                 user="neo4j",
                 password=neo4j_password,
             )
-            self._initialized = True
             logger.info(f"GraphitiSearchTool connected to {neo4j_uri}")
+            return graphiti
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j at {neo4j_uri}: {e}", exc_info=True)
             raise RuntimeError(
@@ -368,11 +371,14 @@ class GraphitiSearchTool(BaseTool):
         Async implementation of Graphiti search.
 
         This is the actual search logic, called by the sync wrapper.
+        Creates a fresh Graphiti client per call to avoid event loop issues.
         """
         start_time = datetime.now(timezone.utc)
+        graphiti = None
 
         try:
-            await self._ensure_initialized()
+            # Create fresh client bound to current event loop
+            graphiti = await self._create_graphiti_client()
 
             # Parse temporal filters
             try:
@@ -385,6 +391,7 @@ class GraphitiSearchTool(BaseTool):
             # Execute search based on mode
             if mode == "semantic":
                 result = await self._semantic_search(
+                    graphiti=graphiti,
                     query=query,
                     num_results=num_results,
                     group_ids=group_ids,
@@ -395,12 +402,14 @@ class GraphitiSearchTool(BaseTool):
                 )
             elif mode == "entity_lookup":
                 result = await self._entity_lookup(
+                    graphiti=graphiti,
                     query=query,
                     num_results=num_results,
                     group_ids=group_ids,
                 )
             elif mode == "temporal_query":
                 result = await self._temporal_query(
+                    graphiti=graphiti,
                     query=query,
                     valid_at=valid_at_dt or datetime.now(timezone.utc),
                     num_results=num_results,
@@ -408,12 +417,14 @@ class GraphitiSearchTool(BaseTool):
                 )
             elif mode == "entity_evolution":
                 result = await self._entity_evolution(
+                    graphiti=graphiti,
                     query=query,
                     num_results=num_results,
                     group_ids=group_ids,
                 )
             elif mode == "fact_timeline":
                 result = await self._fact_timeline(
+                    graphiti=graphiti,
                     query=query,
                     num_results=num_results,
                     group_ids=group_ids,
@@ -426,6 +437,7 @@ class GraphitiSearchTool(BaseTool):
                         error="path_finder mode requires target_entity parameter",
                     )
                 result = await self._path_finder(
+                    graphiti=graphiti,
                     source_entity=query,
                     target_entity=target_entity,
                     num_results=num_results,
@@ -471,7 +483,7 @@ class GraphitiSearchTool(BaseTool):
 
             # Hydrate episodes if requested (retrieves source chunks for facts)
             if return_episodes:
-                await self._append_episodes(search_result, episode_limit)
+                await self._append_episodes(graphiti, search_result, episode_limit)
 
             # Format output for agent
             output_lines = [
@@ -513,10 +525,12 @@ class GraphitiSearchTool(BaseTool):
                     if content_preview:
                         output_lines.append(f"   {content_preview}...")
 
+            # Include formatted output in data (no 'output' param in ToolResult)
+            result_data = search_result.to_dict()
+            result_data["formatted_output"] = "\n".join(output_lines)
             return ToolResult(
                 success=True,
-                output="\n".join(output_lines),
-                data=search_result.to_dict(),
+                data=result_data,
             )
 
         except (ConnectionError, TimeoutError, RuntimeError) as e:
@@ -539,6 +553,13 @@ class GraphitiSearchTool(BaseTool):
                 data=None,
                 error=f"Internal error in Graphiti search: {str(e)}",
             )
+        finally:
+            # Close the graphiti client to release Neo4j connections
+            if graphiti is not None:
+                try:
+                    await graphiti.close()
+                except Exception as close_err:
+                    logger.debug(f"Error closing Graphiti client: {close_err}")
 
     def _pick_search_config(
         self, recipe: Optional[str], num_results: int
@@ -605,6 +626,7 @@ class GraphitiSearchTool(BaseTool):
 
     async def _semantic_search(
         self,
+        graphiti,
         query: str,
         num_results: int,
         group_ids: Optional[List[str]],
@@ -635,7 +657,7 @@ class GraphitiSearchTool(BaseTool):
 
         # Execute search (advanced recipe when provided)
         if config:
-            results = await self._graphiti.search_(
+            results = await graphiti.search_(
                 query=query,
                 config=config,
                 group_ids=group_ids,
@@ -643,7 +665,7 @@ class GraphitiSearchTool(BaseTool):
             )
             edges = results.edges
         else:
-            edges = await self._graphiti.search(
+            edges = await graphiti.search(
                 query=query,
                 group_ids=group_ids,
                 num_results=num_results,
@@ -672,6 +694,7 @@ class GraphitiSearchTool(BaseTool):
 
     async def _entity_lookup(
         self,
+        graphiti,
         query: str,
         num_results: int,
         group_ids: Optional[List[str]],
@@ -687,7 +710,7 @@ class GraphitiSearchTool(BaseTool):
         node_config = NODE_HYBRID_SEARCH_RRF.model_copy(deep=True)
         node_config.limit = num_results
 
-        results = await self._graphiti.search_(
+        results = await graphiti.search_(
             query=query,
             config=node_config,
             group_ids=group_ids,
@@ -723,6 +746,7 @@ class GraphitiSearchTool(BaseTool):
 
     async def _temporal_query(
         self,
+        graphiti,
         query: str,
         valid_at: datetime,
         num_results: int,
@@ -741,7 +765,7 @@ class GraphitiSearchTool(BaseTool):
             valid_before=valid_at,  # Must be valid before query time
         )
 
-        results = await self._graphiti.search(
+        results = await graphiti.search(
             query=query,
             group_ids=group_ids,
             num_results=num_results * 2,  # Get more to filter
@@ -771,6 +795,7 @@ class GraphitiSearchTool(BaseTool):
 
     async def _entity_evolution(
         self,
+        graphiti,
         query: str,
         num_results: int,
         group_ids: Optional[List[str]],
@@ -781,7 +806,7 @@ class GraphitiSearchTool(BaseTool):
         Returns chronological list of facts about the entity.
         """
         # Search for all facts mentioning the entity
-        results = await self._graphiti.search(
+        results = await graphiti.search(
             query=query,
             group_ids=group_ids,
             num_results=num_results * 3,  # Get more to sort
@@ -812,6 +837,7 @@ class GraphitiSearchTool(BaseTool):
 
     async def _fact_timeline(
         self,
+        graphiti,
         query: str,
         num_results: int,
         group_ids: Optional[List[str]],
@@ -822,10 +848,11 @@ class GraphitiSearchTool(BaseTool):
         Similar to entity_evolution but for broader topics.
         """
         # Same implementation as entity_evolution for now
-        return await self._entity_evolution(query, num_results, group_ids)
+        return await self._entity_evolution(graphiti, query, num_results, group_ids)
 
     async def _path_finder(
         self,
+        graphiti,
         source_entity: str,
         target_entity: str,
         num_results: int,
@@ -848,12 +875,12 @@ class GraphitiSearchTool(BaseTool):
         node_config.limit = 3
 
         # Resolve source and target nodes deterministically
-        source_hits = await self._graphiti.search_(
+        source_hits = await graphiti.search_(
             query=source_entity,
             config=node_config,
             group_ids=group_ids,
         )
-        target_hits = await self._graphiti.search_(
+        target_hits = await graphiti.search_(
             query=target_entity,
             config=node_config,
             group_ids=group_ids,
@@ -880,7 +907,7 @@ class GraphitiSearchTool(BaseTool):
         edge_config = EDGE_HYBRID_SEARCH_NODE_DISTANCE.model_copy(deep=True)
         edge_config.edge_config.limit = num_results
 
-        path_results = await self._graphiti.search_(
+        path_results = await graphiti.search_(
             query=target_entity,
             config=edge_config,
             center_node_uuid=center_uuid,
@@ -910,6 +937,7 @@ class GraphitiSearchTool(BaseTool):
 
     async def _append_episodes(
         self,
+        graphiti,
         search_result: GraphitiSearchResult,
         episode_limit: int,
     ) -> None:
@@ -926,6 +954,7 @@ class GraphitiSearchTool(BaseTool):
             provenance information.
 
         Args:
+            graphiti: The Graphiti client instance
             search_result: The search result to enrich with episodes
             episode_limit: Maximum number of episodes to fetch
         """
@@ -949,7 +978,7 @@ class GraphitiSearchTool(BaseTool):
 
             # Fetch episodes from Neo4j via Graphiti
             episodes = await EpisodicNode.get_by_uuids(
-                self._graphiti.driver, limited_ids
+                graphiti.driver, limited_ids
             )
 
             # Convert to dict format

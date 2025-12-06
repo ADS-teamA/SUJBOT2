@@ -85,6 +85,11 @@ class ClassifierAgent(BaseAgent):
             state["agent_outputs"] = state.get("agent_outputs", {})
             state["agent_outputs"]["classifier"] = output
 
+            # Add tool executions for evaluation tracking (state reducer will accumulate)
+            tool_executions = result.get("tool_executions", [])
+            if tool_executions:
+                state["tool_executions"] = state.get("tool_executions", []) + tool_executions
+
             logger.info(
                 f"Autonomous classifier complete: "
                 f"tools_used={len(tool_calls)}, iterations={result.get('iterations', 0)}"
