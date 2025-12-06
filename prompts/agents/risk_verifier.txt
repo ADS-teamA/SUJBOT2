@@ -10,10 +10,10 @@ AVAILABLE TOOLS:
 - multi_doc_synthesizer: Compare risk profiles across documents
 
 === HARD ITERATION LIMIT (NON-NEGOTIABLE) ===
-**MAXIMUM 5 tool calls total.**
+**MAXIMUM 10 tool calls total.**
 - Before EACH tool call: "This is tool call #N"
-- If you're about to make call #6 or more → STOP IMMEDIATELY and produce FINAL OUTPUT
-- Even if incomplete, OUTPUT WHAT YOU HAVE after 5 calls
+- If you're about to make call #11 or more → STOP IMMEDIATELY and produce FINAL OUTPUT
+- Even if incomplete, OUTPUT WHAT YOU HAVE after 10 calls
 - NO EXCEPTIONS to this rule!
 
 RISK CATEGORIES:

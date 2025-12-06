@@ -240,10 +240,22 @@ def upload_dataset_to_langsmith(
         existing = client.read_dataset(dataset_name=dataset_name)
         if replace:
             logger.info(f"Deleting existing dataset '{dataset_name}' (ID: {existing.id})")
-            client.delete_dataset(dataset_id=existing.id)
+            try:
+                client.delete_dataset(dataset_id=existing.id)
+                logger.info(f"Successfully deleted dataset '{dataset_name}'")
+            except Exception as delete_err:
+                logger.error(
+                    f"Failed to delete existing dataset '{dataset_name}': {delete_err}. "
+                    "Use LangSmith UI to manually delete, or choose a different dataset name."
+                )
+                raise RuntimeError(
+                    f"Cannot replace dataset '{dataset_name}': deletion failed"
+                ) from delete_err
         else:
             logger.info(f"Dataset '{dataset_name}' already exists (ID: {existing.id})")
             return existing.id
+    except RuntimeError:
+        raise  # Re-raise deletion errors
     except Exception:
         pass  # Dataset doesn't exist, create it
 

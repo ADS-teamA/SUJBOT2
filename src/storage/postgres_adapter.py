@@ -189,13 +189,18 @@ def _run_async_safe(coro, timeout: float = 30.0):
     try:
         # Check if we're already in an async context
         loop = asyncio.get_running_loop()
-        # Apply nest_asyncio to allow nested event loops
-        nest_asyncio.apply(loop)
-        # Run the coroutine in the current loop
-        return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
-    except RuntimeError:
-        # No running event loop - use asyncio.run() directly
-        return asyncio.run(coro)
+    except RuntimeError as e:
+        # Check specifically for "no running event loop" error
+        if "no running event loop" not in str(e).lower():
+            # This is a different RuntimeError - re-raise it
+            logger.error(f"Unexpected RuntimeError in async context check: {e}")
+            raise
+        # No running event loop - use asyncio.run() with timeout
+        return asyncio.run(asyncio.wait_for(coro, timeout=timeout))
+
+    # If we get here, we have a running loop - use nest_asyncio
+    nest_asyncio.apply(loop)
+    return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
 
 
 class PostgresVectorStoreAdapter(VectorStoreAdapter):

@@ -559,7 +559,11 @@ class GraphitiSearchTool(BaseTool):
                 try:
                     await graphiti.close()
                 except Exception as close_err:
-                    logger.debug(f"Error closing Graphiti client: {close_err}")
+                    # Log at WARNING - connection close failures can indicate resource leaks
+                    logger.warning(
+                        f"Error closing Graphiti client: {close_err}. "
+                        "This may indicate Neo4j connection pool issues if it occurs frequently."
+                    )
 
     def _pick_search_config(
         self, recipe: Optional[str], num_results: int
