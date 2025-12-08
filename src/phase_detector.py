@@ -165,10 +165,9 @@ class PhaseDetector:
 
         # Check for KG file (phase 5A)
         kg_files = list(output_dir.glob("*_kg.json"))
-        if kg_files:
+        if kg_files and highest_phase >= 4:  # Only count KG if phase 4 exists
             phase_files[5] = kg_files[0]
-            if highest_phase >= 4:  # Only count KG if phase 4 exists
-                highest_phase = 5
+            highest_phase = 5
 
         logger.info(f"Detected completed phases: {list(phase_files.keys())} (highest: {highest_phase})")
 

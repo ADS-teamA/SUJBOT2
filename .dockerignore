@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Logs
+*.log
+logs/
+
+# Data (large files, don't include in build context)
+vector_db/
+data/*.pdf
+data/*.docx
+*.faiss
+*.pkl
+
+# Model cache (will be downloaded on first run)
+.cache/
+
+# Output
+output/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Frontend (when building backend)
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+
+# Documentation
+*.md
+docs/
+
+# Environment
+.env
+.env.local

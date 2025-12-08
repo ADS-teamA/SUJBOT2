@@ -83,6 +83,32 @@ class ModelsConfig(BaseModel):
 class ExtractionConfig(BaseModel):
     """Document extraction configuration (PHASE 1)."""
 
+    # Extraction backend selection
+    backend: Literal["gemini", "unstructured", "auto"] = Field(
+        ...,
+        description="Extraction backend: 'gemini' (native PDF), 'unstructured' (with ToC), 'auto'"
+    )
+    gemini_model: str = Field(
+        ...,
+        description="Gemini model for extraction (e.g., 'gemini-2.5-flash')"
+    )
+    gemini_file_size_threshold_mb: float = Field(
+        default=0.3,
+        description="File size threshold in MB for chunked extraction (lower = more reliable for large docs)",
+        ge=0.1,
+        le=50.0
+    )
+    gemini_max_output_tokens: int = Field(
+        default=100000,
+        description="Maximum output tokens for Gemini extraction",
+        ge=1000,
+        le=200000
+    )
+    fallback_to_unstructured: bool = Field(
+        ...,
+        description="Fallback to Unstructured if Gemini fails"
+    )
+
     # OCR settings
     enable_ocr: bool = Field(..., description="Enable OCR processing")
     ocr_engine: Literal["tesseract", "rapidocr"] = Field(
@@ -138,9 +164,15 @@ class ExtractionConfig(BaseModel):
     summary_model: Optional[str] = Field(None, description="Override summary model (uses llm_model if None)")
     summary_max_chars: int = Field(
         ...,
-        description="Summary length target (research-optimal: 150 chars, valid range: 50-300)",
+        description="Summary length target for sections (research-optimal: 150 chars, valid range: 50-300)",
         ge=50,
         le=300
+    )
+    document_summary_max_chars: int = Field(
+        ...,
+        description="Document summary length target (100-1000 chars for describing document and sections)",
+        ge=100,
+        le=1000
     )
     summary_style: Literal["generic", "expert"] = Field(
         ...,
@@ -295,6 +327,10 @@ class ContextGenerationConfig(BaseModel):
         description="Batch API timeout in seconds",
         ge=60
     )
+    language: str = Field(
+        default="ces",
+        description="Language code for context generation ('ces' for Czech, 'eng' for English)"
+    )
 
 
 class ChunkingConfig(BaseModel):
@@ -390,7 +426,15 @@ class HybridSearchConfig(BaseModel):
 
 
 class KnowledgeGraphConfig(BaseModel):
-    """Knowledge graph configuration (PHASE 5A)."""
+    """
+    Knowledge graph configuration (PHASE 5A) - config.json schema.
+
+    NOTE: This is the CONFIG SCHEMA for validating config.json.
+    For the internal pipeline configuration, see src/graph/config.py::KnowledgeGraphConfig.
+    The two classes serve different purposes:
+    - This class: Validates user-provided config.json (flat structure)
+    - graph/config.py: Rich internal representation with nested sub-configs
+    """
 
     enable: bool = Field(..., description="Enable knowledge graph extraction")
     llm_provider: str = Field(
@@ -427,6 +471,12 @@ class KnowledgeGraphConfig(BaseModel):
     enable_cross_document_relationships: bool = Field(
         ...,
         description="Extract cross-document relationships (expensive)"
+    )
+    batch_size: int = Field(
+        default=10,
+        description="Batch size for Graphiti chunk processing (parallel)",
+        ge=1,
+        le=50
     )
     max_retries: int = Field(..., description="Max retry attempts", ge=0)
     retry_delay: float = Field(..., description="Delay between retries in seconds", ge=0.0)
@@ -705,6 +755,12 @@ class AgentToolConfig(BaseModel):
         description="Lazy load knowledge graph (speeds up startup)"
     )
     cache_embeddings: bool = Field(..., description="Cache embeddings")
+    hyde_num_hypotheses: int = Field(
+        ...,
+        description="Number of hypothetical documents for HyDE (multi-hypothesis averaging)",
+        ge=1,
+        le=10
+    )
 
 
 class CLIConfig(BaseModel):
@@ -724,6 +780,163 @@ class CLIConfig(BaseModel):
         ...,
         description="Max history items to keep",
         ge=1
+    )
+
+
+class LabelingConfig(BaseModel):
+    """
+    Document labeling configuration (PHASE 3.5 extension).
+
+    Adds hierarchical labeling with smart propagation:
+    - Categories: Document-level (1 LLM call), propagated to sections/chunks
+    - Keywords: Section-level (~100 LLM calls), propagated to chunks
+    - Synthetic Questions: Chunk-level (HyDE boost for retrieval)
+
+    Uses OpenAI Batch API for 50% cost savings.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable document labeling pipeline"
+    )
+
+    # Feature toggles
+    enable_categories: bool = Field(
+        default=True,
+        description="Enable category/classification extraction"
+    )
+    enable_keywords: bool = Field(
+        default=True,
+        description="Enable keyword extraction"
+    )
+    enable_questions: bool = Field(
+        default=True,
+        description="Enable synthetic question generation (HyDE boost)"
+    )
+
+    # Model configuration
+    provider: Literal["openai", "gemini", "anthropic"] = Field(
+        default="openai",
+        description="LLM provider for labeling"
+    )
+    model: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model for labeling (gpt-4o-mini recommended for cost)"
+    )
+    use_batch_api: bool = Field(
+        default=True,
+        description="Use OpenAI Batch API for 50% cost savings (async, up to 24h)"
+    )
+
+    # Smart propagation
+    category_generation_level: Literal["document", "section", "chunk"] = Field(
+        default="document",
+        description="Level at which to generate categories (document = 1 LLM call)"
+    )
+    keyword_generation_level: Literal["document", "section", "chunk"] = Field(
+        default="section",
+        description="Level at which to generate keywords (section = ~100 LLM calls)"
+    )
+    question_generation_level: Literal["chunk"] = Field(
+        default="chunk",
+        description="Level at which to generate questions (always chunk-level)"
+    )
+
+    # Dynamic categories
+    use_dynamic_categories: bool = Field(
+        default=True,
+        description="LLM creates document-specific taxonomy (vs fixed categories)"
+    )
+    fixed_categories: Optional[List[str]] = Field(
+        default=None,
+        description="Fixed category list if use_dynamic_categories=False"
+    )
+
+    # HyDE embedding boost
+    include_questions_in_embedding: bool = Field(
+        default=True,
+        description="Add synthetic questions to embedding_text (+20-30% retrieval precision)"
+    )
+
+    # Performance
+    batch_size: int = Field(
+        default=50,
+        description="Batch size for Batch API requests",
+        ge=1,
+        le=1000
+    )
+    max_keywords_per_chunk: int = Field(
+        default=10,
+        description="Maximum keywords per chunk",
+        ge=1,
+        le=20
+    )
+    max_questions_per_chunk: int = Field(
+        default=5,
+        description="Maximum synthetic questions per chunk",
+        ge=1,
+        le=10
+    )
+
+    # Caching
+    cache_enabled: bool = Field(
+        default=True,
+        description="Enable content-hash based caching"
+    )
+    cache_size: int = Field(
+        default=1000,
+        description="Maximum cache entries",
+        ge=100
+    )
+
+    # Batch API timeouts
+    batch_api_poll_interval: int = Field(
+        default=30,
+        description="Seconds between batch status checks",
+        ge=5
+    )
+    batch_api_timeout_hours: int = Field(
+        default=12,
+        description="Maximum hours to wait for batch completion",
+        ge=1,
+        le=24
+    )
+
+
+class IndexingConfig(BaseModel):
+    """
+    Indexing pipeline configuration (optional section).
+
+    Controls LlamaIndex wrapper, Redis caching, and entity labeling.
+    Redis connection uses environment variables (REDIS_HOST, REDIS_PORT).
+    """
+
+    # LlamaIndex wrapper toggle
+    use_llamaindex_wrapper: bool = Field(
+        default=True,
+        description="Use LlamaIndex wrapper for state persistence"
+    )
+
+    # Entity labeling settings
+    enable_entity_labeling: bool = Field(
+        default=True,
+        description="Enable entity labeling phase (3.5) using LLM"
+    )
+    entity_labeling_model: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model for entity labeling (gpt-4o-mini, gemini-2.5-flash, or claude-haiku-4-5)"
+    )
+    entity_labeling_batch_size: int = Field(
+        default=10,
+        description="Batch size for entity labeling",
+        ge=1,
+        le=50
+    )
+
+    # Document labeling (categories, keywords, questions)
+    labeling: LabelingConfig = Field(
+        default_factory=LabelingConfig,
+        description="Document labeling configuration (categories, keywords, questions)"
     )
 
 
@@ -751,7 +964,7 @@ class RootConfig(BaseModel):
 
     model_config = ConfigDict(
         strict=True,  # Disable automatic type coercion
-        extra="forbid",  # Reject unknown fields
+        extra="allow",  # Allow unknown fields (for backwards compatibility with multi_agent, storage, etc.)
     )
 
     api_keys: APIKeysConfig = Field(default_factory=APIKeysConfig)
@@ -775,6 +988,7 @@ class RootConfig(BaseModel):
     agent_tools: AgentToolConfig
     cli: CLIConfig
     pipeline: PipelineConfig
+    indexing: IndexingConfig = Field(default_factory=IndexingConfig)
 
     def _is_placeholder(self, value: Optional[str]) -> bool:
         """
@@ -804,7 +1018,8 @@ class RootConfig(BaseModel):
 
         return any(pattern in value.upper() for pattern in PLACEHOLDER_PATTERNS)
 
-    def validate_api_keys(self):
+    @model_validator(mode="after")
+    def validate_api_keys(self) -> "RootConfig":
         """
         Validate that at least one API key is provided and matches model selection.
         API keys are loaded from .env file - this validation runs after loading.
@@ -820,7 +1035,7 @@ class RootConfig(BaseModel):
                     f"Please set ANTHROPIC_API_KEY in your .env file.\n"
                     f"Example: ANTHROPIC_API_KEY=sk-ant-..."
                 )
-        elif self.models.llm_model.startswith(("gpt-", "o1-", "o3-", "gpt-5")):
+        elif self.models.llm_model.startswith(("gpt-", "o1-", "o3-")):
             if self._is_placeholder(self.api_keys.openai_api_key):
                 raise ValueError(
                     f"OPENAI_API_KEY is REQUIRED for LLM model '{self.models.llm_model}'.\n"
@@ -868,6 +1083,8 @@ class RootConfig(BaseModel):
                 "See .env.example for template."
             )
 
+        return self
+
     @classmethod
     def from_json_file(cls, path: Path) -> "RootConfig":
         """
@@ -908,8 +1125,7 @@ class RootConfig(BaseModel):
 
         try:
             config = cls(**data)
-            # Run additional validation
-            config.validate_api_keys()
+            # validate_api_keys() is now a @model_validator, runs automatically
             return config
         except ValidationError as e:
             # Pydantic validation errors - user config issues

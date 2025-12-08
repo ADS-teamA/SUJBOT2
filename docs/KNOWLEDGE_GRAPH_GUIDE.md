@@ -1,9 +1,9 @@
 # Knowledge Graph System - Complete Guide
 
-**Version:** 2025-10-31
-**Status:** PHASE 5A COMPLETE ✅ (Entity/Relationship Extraction + Neo4j Storage)
+**Version:** 2025-11-26
+**Status:** GRAPHITI TEMPORAL KG ✅ (Replaced legacy Gemini KG Extractor)
 
-This document explains how MY_SUJBOT's knowledge graph system works and how to enhance it for legal compliance checking (regulations + clauses).
+This document explains SUJBOT2's temporal knowledge graph system powered by **Graphiti** for entity extraction and relationship management with temporal awareness.
 
 ---
 
@@ -25,21 +25,30 @@ This document explains how MY_SUJBOT's knowledge graph system works and how to e
 
 ### What is the Knowledge Graph?
 
-The Knowledge Graph (KG) is **Phase 5A** of the indexing pipeline. It extracts structured information (entities and relationships) from legal documents and stores them in Neo4j for graph-based retrieval.
+The Knowledge Graph (KG) uses **Graphiti** - a temporal knowledge graph framework that automatically extracts entities and relationships from documents with temporal awareness. Unlike static KGs, Graphiti tracks how facts evolve over time.
 
 ```
-INDEXING PIPELINE (Phase 1-6):
+INDEXING PIPELINE (Phase 1-7):
 ┌────────────────────────────────────────────────────┐
-│ Phase 1: Docling Extraction (Hierarchy)           │
+│ Phase 1: Docling/Gemini Extraction (Hierarchy)    │
 │ Phase 2: Summary Generation                       │
 │ Phase 3: Multi-Layer Chunking (SAC)               │
-│ Phase 4: FAISS Vector Store                       │
-│ Phase 5A: Knowledge Graph ← YOU ARE HERE          │
-│ Phase 5B: Hybrid Search (BM25 + FAISS)            │
-│ Phase 5C: Reranking (Cross-encoder)               │
-│ Phase 6: Context Assembly                         │
+│ Phase 4: Vector Store (PostgreSQL pgvector)       │
+│ Phase 5: Graphiti Temporal KG (Neo4j + Postgres)  │
+│ Phase 6: Hybrid Search (BM25 + Dense + RRF)       │
+│ Phase 7: Context Assembly & Reranking             │
 └────────────────────────────────────────────────────┘
 ```
+
+### Graphiti vs Legacy KG Extractor
+
+| Feature | Legacy (Gemini KG) | Graphiti |
+|---------|-------------------|----------|
+| **Temporal awareness** | ❌ Static | ✅ Tracks fact validity over time |
+| **Entity resolution** | Manual | ✅ Automatic deduplication |
+| **Relationship evolution** | ❌ None | ✅ Tracks relationship changes |
+| **Schema** | Fixed 9 types | ✅ Dynamic, extensible |
+| **Storage** | Neo4j only | ✅ Neo4j + PostgreSQL hybrid |
 
 ### Why Knowledge Graphs for Legal Documents?
 
@@ -1057,13 +1066,12 @@ EntityExtractionConfig(
 
 **2. Use Cheaper/Faster Models**
 ```python
-# Option 1: GPT-4o-mini (current) - $0.15/M tokens
-# Option 2: GPT-5-nano - $0.05/M tokens (3× cheaper, same speed)
-# Option 3: Claude Haiku 4.5 - $0.80/M tokens (slower but more accurate)
+# Option 1: GPT-4o-mini - $0.15/M tokens (cost-effective)
+# Option 2: Claude Haiku 4.5 - $0.80/M tokens (slower but more accurate)
 
 # For production:
 EntityExtractionConfig(
-    llm_model="gpt-5-nano",  # 3× cost reduction
+    llm_model="gpt-4o-mini",  # Cost-effective
 )
 ```
 
@@ -1131,9 +1139,9 @@ Neo4j storage:          $0.00 (local or Aura free tier)
 ────────────────────────────────
 Total:                  $0.70 per document
 
-# Optimized (GPT-5-nano + batching):
-Entity extraction:      $0.10 (GPT-5-nano, 3× cheaper)
-Relationship extraction: $0.13 (GPT-5-nano)
+# Optimized (GPT-4o-mini + batching):
+Entity extraction:      $0.10 (GPT-4o-mini, 3× cheaper)
+Relationship extraction: $0.13 (GPT-4o-mini)
 Neo4j storage:          $0.00
 ────────────────────────────────
 Total:                  $0.23 per document (67% savings!)
@@ -1282,7 +1290,7 @@ Warning: Deduplication reduced 450 entities to 280 (37% duplicates)
 
 3. **Neo4j Schema Design Matters**: Well-indexed schema (jurisdiction, clause type, regulation ID) enables fast compliance queries.
 
-4. **Cost-Performance Tradeoff**: GPT-4o-mini is good default ($0.70/doc). GPT-5-nano cuts costs 67% ($0.23/doc) for production scale.
+4. **Cost-Performance Tradeoff**: GPT-4o-mini is good default ($0.70/doc). Claude Haiku 4.5 cuts costs 67% ($0.23/doc) for production scale.
 
 5. **Validation is Essential**: Always validate entity extraction accuracy (target >85%) and relationship recall (target >80%) on legal documents.
 

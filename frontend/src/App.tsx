@@ -1,55 +1,64 @@
 /**
- * Main App Component
+ * Main App Component with URL-based Routing
  *
- * Wires together:
- * - Header (with model selector, theme toggle, and sidebar toggle)
- * - ResponsiveSidebar (conversation history with collapsible behavior)
- * - ChatContainer (messages and input)
- *
- * Uses custom hooks:
- * - useChat: Manages conversation state and SSE streaming
- * - useTheme: Manages dark/light mode
+ * Routes (based on window.location.pathname):
+ * - / - Main chat application
+ * - /admin/login - Admin login
+ * - /admin/* - Admin portal (requires admin auth)
  */
 
 import { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Header } from './components/header/Header';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { ResponsiveSidebar } from './components/layout/ResponsiveSidebar';
 import { ChatContainer } from './components/chat/ChatContainer';
+import { LoginPage } from './pages/LoginPage';
 import { useChat } from './hooks/useChat';
 import { useTheme } from './hooks/useTheme';
+import { useAuth } from './contexts/AuthContext';
 import { cn } from './design-system/utils/cn';
 import { apiService } from './services/api';
+
+// Admin imports
+import { AdminLoginPage } from './admin/pages/AdminLoginPage';
+import { AdminApp } from './admin/AdminApp';
+
 import './index.css';
 
-function App() {
-  // Custom hooks
+/**
+ * Main chat application component
+ */
+function MainApp() {
+  const { t } = useTranslation();
+  const { isAuthenticated, isLoading } = useAuth();
+
   const {
     conversations,
     currentConversation,
     isStreaming,
-    selectedModel,
+    clarificationData,
+    awaitingClarification,
     createConversation,
     selectConversation,
     deleteConversation,
+    renameConversation,
     sendMessage,
-    switchModel,
     editMessage,
     regenerateMessage,
+    submitClarification,
+    cancelClarification,
+    cancelStreaming,
   } = useChat();
 
-  const { theme, toggleTheme } = useTheme();
+  useTheme();
 
-  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  // Health status state
   const [degradedComponents, setDegradedComponents] = useState<Array<{component: string; error: string}>>([]);
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
-  // Check health status on mount
   useEffect(() => {
     apiService.checkHealth()
       .then((health) => {
@@ -62,23 +71,35 @@ function App() {
       });
   }, []);
 
+  if (isLoading) {
+    return (
+      <div className={cn(
+        'h-screen flex items-center justify-center',
+        'bg-white dark:bg-accent-950'
+      )}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-900 dark:border-accent-100 mx-auto mb-4"></div>
+          <p className="text-accent-600 dark:text-accent-400">{t('common.verifyingSession')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
     <div className={cn(
       'h-screen flex flex-col',
       'bg-white dark:bg-accent-950',
       'text-accent-900 dark:text-accent-100'
     )}>
-      {/* Header */}
       <Header
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        selectedModel={selectedModel}
-        onModelChange={switchModel}
         onToggleSidebar={toggleSidebar}
         sidebarOpen={sidebarOpen}
       />
 
-      {/* Degraded Mode Warning Banner */}
       {degradedComponents.length > 0 && (
         <div className={cn(
           'px-4 py-3 border-b',
@@ -90,20 +111,17 @@ function App() {
             <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <div className="font-semibold text-sm mb-1">
-                Running in Degraded Mode
+                {t('degradedMode.title')}
               </div>
               <div className="text-xs opacity-90">
-                Some features are unavailable: {degradedComponents.map(d => d.component).join(', ')}.
-                {' '}Search quality may be reduced without reranking. Knowledge graph features are disabled.
+                {t('degradedMode.description', { components: degradedComponents.map(d => d.component).join(', ') })}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Responsive Sidebar */}
         <ResponsiveSidebar isOpen={sidebarOpen} onToggle={toggleSidebar}>
           <Sidebar
             conversations={conversations}
@@ -111,20 +129,77 @@ function App() {
             onSelectConversation={selectConversation}
             onNewConversation={createConversation}
             onDeleteConversation={deleteConversation}
+            onRenameConversation={renameConversation}
           />
         </ResponsiveSidebar>
 
-        {/* Chat area */}
         <ChatContainer
           conversation={currentConversation}
           isStreaming={isStreaming}
           onSendMessage={sendMessage}
           onEditMessage={editMessage}
           onRegenerateMessage={regenerateMessage}
+          onCancelStreaming={cancelStreaming}
+          clarificationData={clarificationData}
+          awaitingClarification={awaitingClarification}
+          onSubmitClarification={submitClarification}
+          onCancelClarification={cancelClarification}
         />
       </div>
     </div>
   );
+}
+
+/**
+ * Admin guard component - redirects to admin login if not admin
+ */
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // Debug logging
+  console.log('AdminGuard state:', { isLoading, isAuthenticated, user, is_admin: user?.is_admin });
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-accent-50 dark:bg-accent-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-900 dark:border-accent-100"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user?.is_admin) {
+    console.log('AdminGuard: Redirecting to /admin/login - not authenticated or not admin');
+    // Redirect to admin login
+    window.location.href = '/admin/login';
+    return null;
+  }
+
+  console.log('AdminGuard: Access granted, rendering children');
+  return <>{children}</>;
+}
+
+/**
+ * App with URL-based routing (no react-router-dom dependency)
+ */
+function App() {
+  const pathname = window.location.pathname;
+
+  // Admin login page
+  if (pathname === '/admin/login') {
+    return <AdminLoginPage />;
+  }
+
+  // Admin portal (protected)
+  if (pathname.startsWith('/admin')) {
+    return (
+      <AdminGuard>
+        <AdminApp />
+      </AdminGuard>
+    );
+  }
+
+  // Main application (default)
+  return <MainApp />;
 }
 
 export default App;

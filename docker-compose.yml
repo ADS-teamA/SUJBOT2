@@ -1,0 +1,342 @@
+services:
+  # Neo4j - Graph database for Graphiti temporal knowledge graphs
+  neo4j:
+    image: neo4j:5.22.0-community  # Upgraded for Graphiti vector index support
+    container_name: sujbot_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env file}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      # Memory settings for Neo4j 5.x (optimized for development - 8-16GB RAM systems)
+      # Use server.memory.* syntax (dbms.memory.* deprecated)
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 256m
+    volumes:
+      # Persistent data
+      - neo4j_data:/data
+      # Import directory (for importing unified_kg.json)
+      - ./vector_db:/import:ro
+    ports:
+      # HTTP (Neo4j Browser)
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      # Bolt protocol
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-password}", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Resource limits (optimized for development)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 768M
+
+  # PostgreSQL with pgvector and Apache AGE extensions
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    container_name: sujbot_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}
+      POSTGRES_DB: ${POSTGRES_DB:-sujbot}
+      # Performance tuning (optimized for development - 8-16GB RAM systems)
+      # For production with 32GB+ RAM, use: shared_buffers=4GB, effective_cache=12GB
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-512MB}
+      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE:-2GB}
+      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-32MB}
+      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-256MB}
+    volumes:
+      # Persistent data
+      - postgres_data:/var/lib/postgresql/data
+      # Initialization scripts (run once on first start)
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      # Performance config
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    # NOTE: Port mapping removed for security (production default)
+    # For local development, use docker-compose.override.yml to expose ports
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sujbot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    # Resource limits (optimized for development - 8-16GB RAM systems)
+    # For production with 32GB+ RAM, use: cpus=4, memory=8G
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Redis - State persistence for indexing pipeline
+  redis:
+    image: redis:7-alpine
+    container_name: sujbot_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # pgAdmin - PostgreSQL web administration
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sujbot_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - sujbot_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Backend - FastAPI with multi-agent RAG system
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+      target: ${BUILD_TARGET:-production}
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.10}
+    container_name: sujbot_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}@postgres:5432/${POSTGRES_DB:-sujbot}
+
+      # API Keys (load from .env)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      DEEPINFRA_API_KEY: ${DEEPINFRA_API_KEY}
+
+      # LangSmith observability
+      LANGSMITH_TRACING: "true"
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT_NAME: ${LANGSMITH_PROJECT_NAME:-sujbot2-multi-agent}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+
+      # Neo4j (for knowledge graph)
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+
+      # Storage backend
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-postgresql}
+
+      # Python environment
+      PYTHONUNBUFFERED: 1
+      PYTHONPATH: /app:/app/backend
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # Model cache (sentence-transformers, ~2-5GB)
+      - model_cache:/root/.cache
+      # Configuration file (read-only, enables hot-reload)
+      - ./config.json:/app/config.json:ro
+      # Document data (read-only)
+      - ./data:/app/data:ro
+      # Benchmark dataset (read-only, for evaluation)
+      - ./benchmark_dataset:/app/benchmark_dataset:ro
+      # Vector database (read-only, contains BM25 + FAISS indexes)
+      - ./vector_db:/app/vector_db:ro
+      # Scripts directory (read-only, for evaluation scripts)
+      - ./scripts:/app/scripts:ro
+      # Source code (read-only, for hot-reload of Python modules)
+      - ./src:/app/src:ro
+      # Backend code (read-only, for hot-reload)
+      - ./backend:/app/backend:ro
+      # Results directory (read-write, for evaluation outputs)
+      - ./results:/app/results
+      # Logs (optional, for debugging)
+      - ./logs:/app/logs
+    # No external ports - accessed via nginx reverse proxy
+    expose:
+      - "8000"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Resource limits (optimized for development)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3G
+        reservations:
+          cpus: '1'
+          memory: 1.5G
+
+  # Frontend - React + Vite (dev) or Nginx (prod)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend/Dockerfile
+      target: ${BUILD_TARGET:-production}
+      args:
+        NODE_VERSION: ${NODE_VERSION:-22}
+        # API URL for production build
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: sujbot_frontend
+    depends_on:
+      - backend
+    environment:
+      # Development mode environment variables
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    # No external ports - accessed via nginx reverse proxy
+    expose:
+      - "80"
+      - "5173"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Nginx - Reverse proxy with SSL termination
+  nginx:
+    image: nginx:alpine
+    container_name: sujbot_nginx
+    depends_on:
+      - frontend
+      - backend
+    volumes:
+      # Nginx configuration
+      - ./docker/nginx/reverse-proxy.conf:/etc/nginx/nginx.conf:ro
+      # SSL certificates (Let's Encrypt)
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      # Logs
+      - ./logs/nginx:/var/log/nginx
+    ports:
+      # HTTP and HTTPS
+      - "80:80"
+      - "443:443"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://backend:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Certbot - SSL certificate management
+  certbot:
+    image: certbot/certbot:latest
+    container_name: sujbot_certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+      - ./logs/certbot:/var/log/letsencrypt
+    # Certbot runs on-demand, not as persistent service
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - sujbot_net
+    restart: unless-stopped
+
+volumes:
+  # PostgreSQL data - CRITICAL (contains all vectors, graphs, checkpoints)
+  postgres_data:
+    driver: local
+
+  # Neo4j data - CRITICAL (contains knowledge graph)
+  neo4j_data:
+    driver: local
+
+  # Model cache - Speeds up startup (sentence-transformers models)
+  model_cache:
+    driver: local
+
+  # pgAdmin configuration and sessions
+  pgadmin_data:
+    driver: local
+
+  # Redis data - Indexing pipeline state and cache
+  redis_data:
+    driver: local
+
+  # SSL certificates (Let's Encrypt via Certbot)
+  certbot_certs:
+    driver: local
+
+  # Certbot ACME challenge files
+  certbot_www:
+    driver: local
+
+networks:
+  sujbot_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

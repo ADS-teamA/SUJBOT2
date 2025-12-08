@@ -1,0 +1,408 @@
+{
+  "metadata": {
+    "date": "2025-12-02 23:45",
+    "experiment_prefix": "sujbot2-qa-eval",
+    "judge_model": "anthropic:claude-sonnet-4-5",
+    "num_examples": 20
+  },
+  "metrics": {
+    "semantic_correctness": {
+      "mean": 0.5025,
+      "std": 0.41996279597126224,
+      "p50": 0.7250000000000001,
+      "p99": 1.0
+    },
+    "factual_accuracy": {
+      "mean": 0.4800000000000001,
+      "std": 0.4075536774462966,
+      "p50": 0.55,
+      "p99": 1.0
+    },
+    "completeness": {
+      "mean": 0.40599999999999997,
+      "std": 0.3732077169620157,
+      "p50": 0.475,
+      "p99": 0.9904999999999999
+    }
+  },
+  "cost": {
+    "total_cents": 380.13666000000006,
+    "avg_per_query_cents": 19.006833000000004
+  },
+  "response_time": {
+    "mean_ms": 33816.442918777466,
+    "p50_ms": 24496.964931488037,
+    "p99_ms": 62906.578829288475
+  },
+  "results": [
+    {
+      "id": 1,
+      "question": "Jaké události jsou v havarijním plánu reaktoru VR-1 klasifikovány jako radiační mimořádné události prvního stupně?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Mezi radiační mimořádné události prvního stupně (RMU 1. stupně) patří: 1) selhání řídicího systému reaktoru doprovázené nekontrolovaným zvýšením výkonu, 2) poškození palivových článků nebo neutronového zdroje, 3) únik vody z vodního hospodářství reaktoru, a 4) ztráta kontroly nad zdrojem ionizujícího záření (Kapitola 1.9.4).",
+      "model_answer": "Rozumím. Podle pravidel musím nyní pracovat s tím, co jsem našel. Chunk BZ_VR1_L3_266 obsahuje pouze nadpis bez seznamu. Zkusím cílený search na konkrétní typy událostí, které by měly být v seznamu.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 24517.11130142212,
+      "cost_cents": 1.28188,
+      "tools_used": [
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 2,
+      "question": "Jaké jsou bezpečnostní limity teploty pro moderátor a pokrytí paliva reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Limitní hodnota teploty moderátoru (chladiva) na vstupu do aktivní zóny je maximálně 45 °C. Limitní hodnota teploty na povrchu pokrytí nejzatíženějšího palivového článku při ustáleném provozu je 98 °C. Pro krátkodobé havarijní stavy nesmí teplota povrchu překročit 500 °C (Kapitola 16).",
+      "model_answer": "Nalezeno 27 relevantních úseků. Pro úplnou syntézu prosím zopakujte dotaz.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 63979.29620742798,
+      "cost_cents": 4.01658,
+      "tools_used": [
+        "search",
+        "search",
+        "search",
+        "search",
+        "search"
+      ]
+    },
+    {
+      "id": 3,
+      "question": "Jakým způsobem je zajištěn odvod tepla (chlazení) z aktivní zóny reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Odvod tepla uvolněného při štěpení v aktivní zóně je zajištěn přirozenou konvekcí (samovolným prouděním) demineralizované vody, která slouží jako moderátor a chladivo. Vzhledem k nízkému výkonu reaktoru (do 500 Wt) není nucené chlazení potřeba. Cirkulační čerpadla slouží pouze k zajištění pohybu vody pro úpravu její kvality a omezení koroze, nikoliv pro odvod tepla (Kapitola 6.1; Kapitola 10.2).",
+      "model_answer": "Odvod tepla z aktivní zóny reaktoru VR-1 je zajištěn prostřednictvím **přirozené cirkulace demineralizované vody** \\cite{BZ_VR1_L3_499}. Mechanismus funguje následovně:\n\n1. **Chladivo a jeho funkce**: Reaktor používá **lehkou demineralizovanou vodu** \\cite{BZ_VR1_L3_577}, která plní roli chladiva a zároveň slouží jako moderátor a stínění.\n\n2. **Princip přirozené cirkulace**: Teplo generované v aktivní zóně je předáváno chladivu, které se ohřívá a stoupá v bazénu vzhůru. V horní části bazénu se voda ochlazuje a následně klesá po stranách bazénu dolů pod aktivní zónu \\cite{BZ_VR1_L3_498}. Tímto způsobem se při stacionárním provozu reaktoru na stálém výkonu ustálí proudění závislé na teplotním rozdílu mezi horkou a studenou větví bazénu.\n\n3. **Monitorování**: Cirkulace demineralizované vody je nepřetržitě kontrolována obsluhou, přičemž průtok je indikován na pultu operátora.",
+      "scores": {
+        "semantic_correctness": 0.8,
+        "factual_accuracy": 0.85,
+        "completeness": 0.5
+      },
+      "response_time_ms": 52463.56225013733,
+      "cost_cents": 7.031180000000001,
+      "tools_used": [
+        "search",
+        "search",
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 4,
+      "question": "Jaká přeprava nově vyžaduje povolení úřadu podle § 3 odst. 2 písm. h) vyhlášky?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Nově vyžaduje povolení přeprava povrchově kontaminovaného předmětu skupiny SCO-III (§ 3 odst. 2 písm. h).",
+      "model_answer": "Nalezeno 32 relevantních úseků. Pro úplnou syntézu prosím zopakujte dotaz.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 55687.068700790405,
+      "cost_cents": 9.530080000000002,
+      "tools_used": [
+        "graphiti_search",
+        "search",
+        "search",
+        "search",
+        "search"
+      ]
+    },
+    {
+      "id": 5,
+      "question": "Jaká technická opatření byla přijata na ochranu areálu reaktoru VR-1 proti povodním?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Na základě zkušeností s povodní v roce 2002 byla vybudována technická opatření k zamezení dopadu povodní na areál. Patří sem protipovodňové bariéry, zpětné klapky na kanalizaci a soubor organizačních opatření. Účinnost těchto ochran byla v praxi ověřena během povodně v roce 2013, kdy nedošlo k žádnému dopadu na reaktor (Kapitola 3.4).",
+      "model_answer": "Na ochranu areálu reaktoru VR-1 byla přijata následující technická opatření proti povodním \\cite{BZ_VR1_L3_338}:\n\n1. **Protipovodňové bariéry** - fyzické překážky bránící vniknutí vody do areálu\n2. **Zpětné klapky** - zařízení zabraňující zpětnému toku vody do kritických systémů\n3. **Soubor organizačních opatření** - doplňující procedury a protokoly\n\nÚčinnost těchto opatření byla prokázána v červnu 2013, kdy při průtoku Vltavy 3210 m³/s povodeň neměla žádný dopad na provoz reaktoru VR-1.",
+      "scores": {
+        "semantic_correctness": 0.85,
+        "factual_accuracy": 0.85,
+        "completeness": 0.9
+      },
+      "response_time_ms": 26128.695964813232,
+      "cost_cents": 10.795760000000003,
+      "tools_used": [
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 6,
+      "question": "Z jakého materiálu jsou vyrobeny nádoby reaktoru H01 a H02 a jaké jsou jejich rozměry?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Reaktorové nádoby H01 a H02 jsou vyrobeny z nerezové oceli 08CH18N10T. Mají průměr 2300 mm, výšku 4720 mm, tloušťku stěny 15 mm a tloušťku dna 20 mm (Kapitola 5.2.1; Tab. 10).",
+      "model_answer": "Nádoby reaktoru H01 a H02 jsou vyrobeny z **nerezové oceli 08CH18N10T** \\cite{BZ_VR1_L3_426}. \n\nJejich rozměry jsou následující:\n- **Výška:** 4720 mm\n- **Vnitřní průměr:** 2300 mm\n- **Tloušťka stěn:** 15 mm\n- **Tloušťka dna:** 20 mm\n- **Objem:** přibližně 17 m³\n- **Hmotnost:** 5000 kg\n\nNádoby jsou konstrukčně shodné, přičemž nádoba H01 má navíc průchodky pro radiální a tangenciální kanál. Obě nádoby jsou celosvařované s klenutým výliskovým dnem a horní částí tvořenou přírubovým lemem se 7 okny \\cite{BZ_VR1_L3_426}.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 1.0
+      },
+      "response_time_ms": 21943.509101867676,
+      "cost_cents": 12.252540000000003,
+      "tools_used": [
+        "search"
+      ]
+    },
+    {
+      "id": 7,
+      "question": "Co je hopik?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "'Hopík' je experimentální zařízení určené pro studium rychlých změn reaktivity (kinetiky reaktoru). Jedná se o vertikální kanál, uvnitř kterého se pomocí stlačeného vzduchu pohybuje pouzdro se vzorkem ovlivňujícím reaktivitu (např. kadmium, moderátor). Koncovka kanálu se umisťuje do palivového článku (Kapitola 11.2).",
+      "model_answer": "**Hopík** je experimentální zařízení reaktoru VR-1 určené ke studiu dynamických změn reaktivity. Jedná se o vertikální kanál, v němž se pohybuje hliníkové pouzdro se vzorkem, který ovlivňuje reaktivitu reaktoru. Pohyb pouzdra je zajištěn pomocí stlačeného vzduchu a koncovka kanálu je umístěna do šestitrubkového nebo čtyřtrubkového palivového prvku.",
+      "scores": {
+        "semantic_correctness": 0.9,
+        "factual_accuracy": 0.95,
+        "completeness": 0.85
+      },
+      "response_time_ms": 20307.442665100098,
+      "cost_cents": 13.616520000000005,
+      "tools_used": [
+        "search"
+      ]
+    },
+    {
+      "id": 8,
+      "question": "Z čeho se skládá systém řízení reaktivity (regulační systém) reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Regulační systém reaktoru se skládá z 5 až 7 absorpčních tyčí typu UR-70. Tyto tyče obsahují kadmiový absorbátor (Cd). Podle funkce se dělí na bezpečnostní (3 ks), regulační (2 ks) a případně experimentální tyče (Kapitola 5.2; Kapitola 5.5; Tab. 10).",
+      "model_answer": "Informace nebyla nalezena v dostupných dokumentech.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 36092.0569896698,
+      "cost_cents": 15.351040000000001,
+      "tools_used": [
+        "search",
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 9,
+      "question": "Kdy se předpokládá zahájení vyřazování reaktoru VR-1 z provozu?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Dle strategie uvedené v bezpečnostní zprávě z roku 2017 se zahájení vyřazovacích činností nepředpokládá dříve než v roce 2030. Celkový proces vyřazování by měl trvat přibližně 3 roky (Kapitola 19; Kapitola 19.5).",
+      "model_answer": "Zahájení vyřazování reaktoru VR-1 z provozu se předpokládá **nejdříve v roce 2030** \\cite{BZ_VR1_L3_1180}, což představuje 40 let od dosažení prvního kritického stavu reaktoru. Tento termín však není pevný – může být zkrácen v případě určitých událostí či změn, nebo naopak prodloužen v závislosti na konkrétním vývoji situace.",
+      "scores": {
+        "semantic_correctness": 0.85,
+        "factual_accuracy": 0.6,
+        "completeness": 0.7
+      },
+      "response_time_ms": 20935.18590927124,
+      "cost_cents": 16.68872,
+      "tools_used": [
+        "search"
+      ]
+    },
+    {
+      "id": 10,
+      "question": "Jaká je hodnota maximálního seismického zrychlení (SL-2) stanovená pro lokalitu reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Hodnota SL-2, která odpovídá střední hodnotě špičkového zrychlení kmitů půdy s periodou opakování 10 000 let, byla pro lokalitu stanovena na 0,061 g. Po započtení standardní odchylky (kvantil 0,84) je tato hodnota 0,089 g. Nepřesahuje tedy limitní hodnotu 0,1 g (Kapitola 3.2).",
+      "model_answer": "Maximální seismické zrychlení (SL-2) pro lokalitu reaktoru VR-1 je stanoveno na **0,061 g** \\cite{BZ_VR1_L3_390}. Jedná se o střední hodnotu špičkového zrychlení kmitů půdy, která nastává průměrně jednou za 10 000 let. Po připočtení standardní odchylky (kvantil 0,84) se tato hodnota zvýší na **0,089 g** \\cite{BZ_VR1_L3_390}.",
+      "scores": {
+        "semantic_correctness": 0.9,
+        "factual_accuracy": 0.95,
+        "completeness": 0.7
+      },
+      "response_time_ms": 22598.470211029053,
+      "cost_cents": 18.114600000000003,
+      "tools_used": [
+        "search"
+      ]
+    },
+    {
+      "id": 11,
+      "question": "Jak se mění požadavky na přepravní index pro radioaktivní zásilku SCO-I v kontejneru?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Pokud je radioaktivní zásilka SCO-I přepravována v kontejneru nebo nebalená, přepravní index se určí vynásobením nejvyšší hladiny záření ve vzdálenosti 1 m od nákladu (v mSv/h) hodnotou 100. Pro rudy a koncentráty uranu/thoria lze použít alternativní faktory (Příloha č. 4, bod 23).",
+      "model_answer": "Informace nebyla nalezena v dostupných dokumentech.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.1,
+        "completeness": 0.0
+      },
+      "response_time_ms": 23787.684202194214,
+      "cost_cents": 19.40298,
+      "tools_used": [
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 12,
+      "question": "Co je dojička?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Zařízení 'Dojička' slouží k detekci a studiu zpožděných neutronů. Skládá se z transportní trubice vedoucí do aktivní zóny a měřicí nádoby s detektory v parafínu. Vzorek (např. uran) je aktivován v reaktoru a následně transportován k detektorům pro měření (Kapitola 11.2).",
+      "model_answer": "**Dojička** je experimentální zařízení reaktoru VR-1, které slouží k **detekci zpožděných neutronů** \\cite{BZ_VR1_L3_668}. Toto zařízení je klíčové pro analýzu a monitorování jaderných reakcí v reaktoru.",
+      "scores": {
+        "semantic_correctness": 0.65,
+        "factual_accuracy": 0.5,
+        "completeness": 0.2
+      },
+      "response_time_ms": 20624.127864837646,
+      "cost_cents": 20.65396,
+      "tools_used": [
+        "search"
+      ]
+    },
+    {
+      "id": 13,
+      "question": "Co jsou bublinky?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "'Bublinky' jsou experimentální zařízení pro simulaci vlivu bublinkového varu na reaktivitu. Do aktivní zóny je vháněn stlačený vzduch přes speciální koncovky, čímž se simulují dutiny v moderátoru (Kapitola 11.2).",
+      "model_answer": "**Bublinky** jsou experimentálním zařízením reaktoru VR-1 \\cite{BZ_VR1_L3_669}, které slouží k **simulaci bublinkového varu** a k **studiu dutinového koeficientu reaktivity**. Toto zařízení je součástí experimentálního vybavení reaktoru a umožňuje analýzu chování reaktoru za podmínek, kdy v chladivě vznikají bublinky páry.",
+      "scores": {
+        "semantic_correctness": 0.8,
+        "factual_accuracy": 0.6,
+        "completeness": 0.45
+      },
+      "response_time_ms": 22880.6893825531,
+      "cost_cents": 21.86684,
+      "tools_used": [
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 14,
+      "question": "Jaká voda se používá v reaktoru VR-1 a je tato voda pitná?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "V reaktoru se používá lehká demineralizovaná voda (H2O), která plní funkci moderátoru, reflektoru, chladiva a biologického stínění. Tato voda není pitná. Ačkoliv jde o chemicky čistou vodu, její pití je v reaktorové hale striktně zakázáno z důvodu vymezení kontrolovaného pásma a možného rizika. Pitná voda je k dispozici v šatně mimo kontrolované pásmo (Kapitola 10.2).",
+      "model_answer": "V reaktoru VR-1 se používá **lehká demineralizovaná voda** (demivoda) \\cite{BZ_VR1_L3_577}. Tato voda plní více funkcí: slouží jako **moderátor** (zpomaluje neutrony), **reflektor**, **biologické stínění** a **chladivo** \\cite{BZ_VR1_L3_9}. \n\nVoda **není pitná** – jedná se o speciálně upravenou demineralizovanou vodu vyráběnou dvoustupňovou demineralizací na stanici MIX 250 PP umístěné v reaktorové hale \\cite{BZ_VR1_L3_577}. Demineralizovaná voda je určena výhradně pro provoz reaktoru, nikoliv pro lidskou spotřebu.",
+      "scores": {
+        "semantic_correctness": 0.9,
+        "factual_accuracy": 0.9,
+        "completeness": 0.7
+      },
+      "response_time_ms": 41445.52397727966,
+      "cost_cents": 24.2869,
+      "tools_used": [
+        "search",
+        "expand_context",
+        "search"
+      ]
+    },
+    {
+      "id": 15,
+      "question": "Jaké jsou podmínky pro zařazení předmětu do nové skupiny SCO-III (povrchově kontaminované předměty)?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Předmět skupiny SCO-III je velký pevný předmět, který nemůže být přepravován v běžném obalu. Musí splňovat podmínky: všechny uzávěry jsou uzavřeny (aby se zabránilo úniku), vnitřek je maximálně vysušen, úroveň nefixované kontaminace na vnějším povrchu nepřekračuje stanovené meze a součet kontaminace na nepřístupném povrchu nepřekračuje 8 × 10^5 Bq/cm² pro beta/gama a nízko toxické alfa zářiče (nebo 8 × 10^4 Bq/cm² pro ostatní alfa zářiče) (Příloha č. 3, bod 93).",
+      "model_answer": "Informace nebyla nalezena v dostupných dokumentech.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 58333.415269851685,
+      "cost_cents": 26.543360000000003,
+      "tools_used": [
+        "search",
+        "search",
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 16,
+      "question": "Jak bezpečnostní zpráva hodnotí vliv provozu reaktoru na blízkou přírodní památku Bílá skála?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Bezpečnostní zpráva uvádí, že hranice přírodní památky Bílá skála probíhá ve vzdálenosti cca 50 m od areálu. Hodnocené území reaktoru nezasahuje do ochranného pásma této památky a provoz reaktoru nemá na tuto přírodní památku žádný negativní vliv (Kapitola 14.1.1; Kapitola 3.10).",
+      "model_answer": "Bezpečnostní zpráva hodnotí vliv provozu reaktoru na přírodní památku Bílá skála následovně:\n\n1. **Prostorové oddělení**: Reaktor se nachází ve vzdálenosti přibližně **50 m od nejbližší hranice přírodní památky** \\cite{BZ_VR1_L3_649}, přičemž hodnocené území **nezasahuje do ochranného pásma** této památky.\n\n2. **Charakteristika lokality**: Bílá skála je přírodní památka o rozloze 6,4 hektaru s charakteristickými biotopy (mezofilní a xerofilní křoviny, suché acidofilní doubravy) \\cite{BZ_VR1_L3_649}.\n\n3. **Riziko požárů**: Zpráva konkrétně hodnotí, že **jaderné zařízení není ohroženo požáry v přírodní lokalitě Bílá skála**, protože požáry mají tendenci se šířit směrem vzhůru po stráni (tedy od reaktoru pryč) a mezi budovou a přírodní lokalitou existuje proluka \\cite{BZ_VR1_L3_945}.\n\nCelkově bezpečnostní zpráva dochází k závěru, že provoz reaktoru nemá negativní vliv na Bílou skálu, která je adekvátně oddělena a chráněna.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 0.95
+      },
+      "response_time_ms": 50638.26084136963,
+      "cost_cents": 28.335480000000008,
+      "tools_used": [
+        "search",
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 17,
+      "question": "Co musí obsahovat rozhodnutí úřadu o povolení k přepravě radioaktivní nebo štěpné látky podle nové vyhlášky?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Rozhodnutí musí obsahovat odkaz na požadavky mezinárodních smluv, unikátní identifikační číslo přepravy, poučení o dodržování požadavků tranzitních států, způsob dopravy a jeho omezení, dodatečné provozní kontroly, odkaz na informace o obalovém souboru a podrobný popis radioaktivního obsahu včetně formy a aktivity (§ 3a).",
+      "model_answer": "Podle nové vyhlášky (157/2025 Sb.) musí rozhodnutí úřadu o povolení k přepravě radioaktivní nebo štěpné látky obsahovat \\cite{157/2025 Sb._L3_20}:\n\na) **identifikaci žadatele a jeho kontaktní údaje**\nb) **popis radioaktivní nebo štěpné látky** – včetně fyzické a chemické formy, aktivity, hmotnosti nebo objemu\nc) **způsob dopravy a jeho omezení** – včetně omezení týkající se typu dopravních prostředků a kontejnerů a nezbytných pokynů pro plánovanou cestu\nd) **požadavky pro přepravce** – včetně zvláštních požadavků na umístění radioaktivní zásilky na dopravním prostředku pro bezpečný odvod tepla nebo udržení bezpečné podkritičnosti\ne) **odkaz na informace o obalovém souboru** – poskytnuté žadatelem\n\nRozhodnutí musí také obsahovat \\cite{157/2025 Sb._L3_19} **odkaz na požadavky mezinárodních smluv** týkajících se přepravy radioaktivní nebo štěpné látky, jimiž je Česká republika vázána.",
+      "scores": {
+        "semantic_correctness": 0.6,
+        "factual_accuracy": 0.5,
+        "completeness": 0.57
+      },
+      "response_time_ms": 47091.48287773132,
+      "cost_cents": 30.600240000000007,
+      "tools_used": [
+        "search",
+        "expand_context",
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 18,
+      "question": "Jaký typ jaderného paliva se používá v reaktoru VR-1 a jaké je jeho obohacení?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "V reaktoru VR-1 se používá jaderné palivo typu IRT-4M. Jedná se o palivovou směs ve formě disperze Al + UO2. Obohacení paliva izotopem uranu 235 (235U) je 19,7 %. Geometrie paliva je trubková se čtvercovým průřezem (Kapitola 5.1, Tab. 10; Kapitola 5.3).",
+      "model_answer": "V reaktoru VR-1 se používá **jaderné palivo typu IRT-4M** s obohacením **19,7 % 235U** \\cite{BZ_VR1_L3_10}. Jedná se o trubkové palivo sendvičového typu vyráběné ruským závodem NZCHK Novosibirsk, které patří do typové řady IRT-M určené pro výzkumná jaderná zařízení.",
+      "scores": {
+        "semantic_correctness": 0.8,
+        "factual_accuracy": 0.8,
+        "completeness": 0.6
+      },
+      "response_time_ms": 21300.472259521484,
+      "cost_cents": 31.940920000000002,
+      "tools_used": [
+        "search"
+      ]
+    },
+    {
+      "id": 19,
+      "question": "Jaký je maximální povolený tepelný výkon reaktoru VR-1 a jaká je jeho nominální hodnota?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Jmenovitý tepelný výkon reaktoru VR-1 je stanoven na 100 Wt. Maximální povolený tepelný výkon je 500 Wt, avšak tento provoz je časově omezen na maximálně 72 hodin ročně (krátkodobý provoz). Tyto hodnoty jsou uvedeny v přehledu základních technických parametrů (Kapitola 5.1, Tab. 10).",
+      "model_answer": "Informace nebyla nalezena v dostupných dokumentech.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 21097.983837127686,
+      "cost_cents": 33.247,
+      "tools_used": [
+        "search",
+        "expand_context"
+      ]
+    },
+    {
+      "id": 20,
+      "question": "Jaké jsou požadavky na schválení typu pro radioaktivní látku v obalovém souboru typu B(M) z hlediska teploty?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Schválení typu je vyžadováno pro radioaktivní látku v obalovém souboru typu B(M), který není konstruován pro rozsah teplot od -40 °C do +70 °C nebo který je konstruován tak, aby bylo umožněno občasné kontrolované větrání (§ 3 odst. 2 písm. d).",
+      "model_answer": "Informace nebyla nalezena v dostupných dokumentech.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 24476.818561553955,
+      "cost_cents": 34.58008,
+      "tools_used": [
+        "search",
+        "expand_context"
+      ]
+    }
+  ]
+}

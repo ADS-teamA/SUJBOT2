@@ -56,13 +56,14 @@ class ModelRegistry:
         # OpenAI models
         "gpt-4o": "gpt-4o",
         "gpt-4o-mini": "gpt-4o-mini",
-        # GPT-5 models (2025)
-        "gpt-5": "gpt-5",
-        "gpt-5-mini": "gpt-5-mini",
-        "gpt-5-nano": "gpt-5-nano",
         # O-series reasoning models
         "o1": "o1",
         "o1-mini": "o1-mini",
+        # DeepInfra models (Qwen)
+        "qwen-72b": "Qwen/Qwen2.5-72B-Instruct",
+        "qwen-7b": "Qwen/Qwen2.5-7B-Instruct",
+        "Qwen/Qwen2.5-72B-Instruct": "Qwen/Qwen2.5-72B-Instruct",
+        "Qwen/Qwen2.5-7B-Instruct": "Qwen/Qwen2.5-7B-Instruct",
         "o3-mini": "o3-mini",
         # Google Gemini models (2025)
         "gemini": "gemini-2.5-flash",  # Default - agentic use (250 RPD free)
@@ -275,11 +276,15 @@ class ModelRegistry:
             return "openai"
         elif "BAAI/" in resolved or "intfloat/" in resolved or "sentence-transformers/" in resolved:
             return "huggingface"
+        elif "qwen" in resolved.lower() or "Qwen/" in resolved:
+            return "deepinfra"
+        elif "llama" in resolved.lower() or "meta-llama/" in resolved:
+            return "deepinfra"
         else:
             # Cannot auto-detect provider - user must specify explicitly
             raise ValueError(
                 f"Unable to auto-detect provider for model '{resolved}' (type: {model_type}).\n"
-                f"Supported providers: anthropic, openai, google, voyage, huggingface\n"
+                f"Supported providers: anthropic, openai, google, voyage, huggingface, deepinfra\n"
                 f"Please set '{model_type}_provider' explicitly in config.json"
             )
 

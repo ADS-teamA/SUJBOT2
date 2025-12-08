@@ -18,6 +18,7 @@ import logging
 from typing import Any, Dict, Iterator, List
 
 import anthropic
+from langsmith.wrappers import wrap_anthropic
 
 from .base import BaseProvider, ProviderResponse
 
@@ -52,7 +53,7 @@ class AnthropicProvider(BaseProvider):
         if not any(pattern in model.lower() for pattern in ["claude", "haiku", "sonnet"]):
             raise ValueError(f"Invalid Claude model: {model}")
 
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._client = wrap_anthropic(anthropic.Anthropic(api_key=api_key))
         self.model = model
 
         logger.info(f"AnthropicProvider initialized: model={model}")
@@ -82,15 +83,22 @@ class AnthropicProvider(BaseProvider):
         Returns:
             ProviderResponse with content, usage, etc.
         """
-        response = self._client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages,
-            tools=tools if tools else None,
+        # Build kwargs dynamically - only include tools if provided
+        create_kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system,
+            "messages": messages,
             **kwargs,
-        )
+        }
+
+        # Only add tools parameter if tools are provided (not None and not empty list)
+        # Empty list or None should NOT be passed to Anthropic API (causes BadRequestError)
+        if tools and len(tools) > 0:
+            create_kwargs["tools"] = tools
+
+        response = self._client.messages.create(**create_kwargs)
 
         return ProviderResponse(
             content=[
@@ -140,15 +148,22 @@ class AnthropicProvider(BaseProvider):
             >>>         if event.type == "content_block_delta":
             >>>             print(event.delta.text)
         """
-        return self._client.messages.stream(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages,
-            tools=tools if tools else None,
+        # Build kwargs dynamically - only include tools if provided
+        stream_kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system,
+            "messages": messages,
             **kwargs,
-        )
+        }
+
+        # Only add tools parameter if tools are provided (not None and not empty list)
+        # Empty list or None should NOT be passed to Anthropic API (causes BadRequestError)
+        if tools and len(tools) > 0:
+            stream_kwargs["tools"] = tools
+
+        return self._client.messages.stream(**stream_kwargs)
 
     def supports_feature(self, feature: str) -> bool:
         """

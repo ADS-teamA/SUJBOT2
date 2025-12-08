@@ -79,3 +79,13 @@ data_test/*.pdf
 data_legacy/
 
 # Note: output/ is now tracked - contains indexed documents for testing
+
+# Backup files
+*.bak
+*.backup
+results_all/
+
+# Generated data folders
+benchmarks/
+clean_text/
+vector_db/

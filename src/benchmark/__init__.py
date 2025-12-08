@@ -5,6 +5,6 @@ Evaluates retrieval quality on standardized datasets (PrivacyQA, CUAD, MAUD).
 """
 
 from .config import BenchmarkConfig
-from .runner import BenchmarkRunner
+from .models import QueryResult, BenchmarkResult
 
-__all__ = ["BenchmarkConfig", "BenchmarkRunner"]
+__all__ = ["BenchmarkConfig", "QueryResult", "BenchmarkResult"]

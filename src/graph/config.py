@@ -5,12 +5,17 @@ Defines settings for entity extraction, relationship extraction,
 graph storage backends, and integration with the RAG pipeline.
 """
 
+import json
+import logging
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Set
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 from .models import EntityType, RelationshipType
+
+logger = logging.getLogger(__name__)
 
 
 class GraphBackend(Enum):
@@ -206,8 +211,9 @@ class EntityDeduplicationConfig:
     """
     Configuration for entity deduplication during indexing.
 
-    Three-layer deduplication strategy:
+    Four-layer deduplication strategy:
     - Layer 1 (Exact): Fast exact match on (type, normalized_value) - <1ms
+    - Layer 1.5 (Alias): Alias map lookup for canonical names - <1ms
     - Layer 2 (Semantic): Embedding similarity for variants - 50-200ms
     - Layer 3 (Acronym): Acronym expansion + fuzzy match - 100-500ms
     """
@@ -217,6 +223,11 @@ class EntityDeduplicationConfig:
 
     # Layer 1: Exact match (always enabled if master enabled)
     exact_match_enabled: bool = True
+
+    # Layer 1.5: Alias-based resolution (fast ontology lookup)
+    alias_map_path: Optional[str] = None  # Path to entity_aliases.json
+    alias_map: Dict[str, str] = field(default_factory=dict)  # Loaded alias map
+    enable_entity_linker: bool = False  # Enable LLM-based disambiguation when multiple matches
 
     # Layer 2: Embedding-based similarity
     use_embeddings: bool = False
@@ -235,7 +246,7 @@ class EntityDeduplicationConfig:
     create_uniqueness_constraints: bool = True
 
     def __post_init__(self) -> None:
-        """Validate configuration values after initialization."""
+        """Validate configuration values and load alias map."""
         if not (0.0 <= self.similarity_threshold <= 1.0):
             raise ValueError(
                 f"similarity_threshold must be in [0.0, 1.0], got {self.similarity_threshold}"
@@ -251,10 +262,101 @@ class EntityDeduplicationConfig:
                 f"embedding_batch_size must be positive, got {self.embedding_batch_size}"
             )
 
+        # Load alias map if path provided and map is empty
+        if self.alias_map_path and not self.alias_map:
+            self.alias_map = self._load_alias_map(self.alias_map_path)
+
+    def _load_alias_map(self, path: str) -> Dict[str, str]:
+        """
+        Load entity alias map from JSON file.
+
+        Expected format (metadata keys prefixed with _ are skipped):
+        {
+            "_comment": "Description of the file",
+            "_updated": "2024-12-01",
+            "canonical_name": ["alias1", "alias2", ...],
+            ...
+        }
+
+        Returns inverted map: alias -> canonical_name (all keys lowercased)
+
+        Note:
+            - Keys starting with "_" are treated as metadata and skipped
+            - All lookups are case-insensitive (keys stored in lowercase)
+            - Canonical name is automatically included as an alias to itself
+        """
+        alias_path = Path(path)
+        if not alias_path.exists():
+            logger.warning(
+                f"Alias map file not found: {path}. "
+                f"Alias-based entity deduplication will be disabled."
+            )
+            return {}
+
+        try:
+            with open(alias_path, "r", encoding="utf-8") as f:
+                raw_map = json.load(f)
+
+            # Invert: canonical -> aliases becomes alias -> canonical
+            inverted: Dict[str, str] = {}
+            skipped_metadata = 0
+            skipped_invalid = 0
+
+            for canonical, aliases in raw_map.items():
+                # Skip metadata keys (e.g., _comment, _updated)
+                if canonical.startswith("_"):
+                    skipped_metadata += 1
+                    continue
+
+                # Validate that aliases is a list
+                if not isinstance(aliases, list):
+                    logger.warning(
+                        f"Skipping malformed alias entry for '{canonical}': "
+                        f"expected list, got {type(aliases).__name__}"
+                    )
+                    skipped_invalid += 1
+                    continue
+
+                # Map canonical to itself (for consistency)
+                inverted[canonical.lower()] = canonical
+
+                # Map all aliases to canonical
+                for alias in aliases:
+                    if isinstance(alias, str):
+                        inverted[alias.lower()] = canonical
+                    else:
+                        logger.warning(
+                            f"Skipping non-string alias for '{canonical}': {alias}"
+                        )
+
+            logger.info(
+                f"Loaded {len(inverted)} alias mappings from {path} "
+                f"(skipped {skipped_metadata} metadata keys)"
+            )
+            return inverted
+
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"Invalid JSON in alias map file {path}: {e}. "
+                f"Alias-based entity deduplication will be disabled."
+            )
+            return {}
+        except (IOError, OSError, PermissionError) as e:
+            logger.error(
+                f"Failed to read alias map file {path}: {e}. "
+                f"Alias-based entity deduplication will be disabled."
+            )
+            return {}
+        except UnicodeDecodeError as e:
+            logger.error(
+                f"Encoding error in alias map file {path}: {e}. "
+                f"Ensure file is UTF-8 encoded. Alias-based deduplication disabled."
+            )
+            return {}
+
     @classmethod
     def from_env(cls) -> "EntityDeduplicationConfig":
         """Load deduplication config from environment variables."""
-        import os
 
         custom_acronyms = {}
         acronym_str = os.getenv("KG_DEDUP_CUSTOM_ACRONYMS", "")
@@ -265,8 +367,24 @@ class EntityDeduplicationConfig:
                     acro, expansion = pair.split(":", 1)
                     custom_acronyms[acro.strip()] = expansion.strip()
 
+        # Default alias map path with existence check and logging
+        default_alias_path = os.getenv("KG_ALIAS_MAP_PATH", "config/entity_aliases.json")
+        alias_path = Path(default_alias_path)
+
+        if alias_path.exists():
+            alias_map_path = default_alias_path
+        else:
+            logger.info(
+                f"Alias map file not found at {default_alias_path}. "
+                f"Alias-based entity deduplication will be disabled. "
+                f"Set KG_ALIAS_MAP_PATH to override."
+            )
+            alias_map_path = None
+
         return cls(
             enabled=os.getenv("KG_DEDUPLICATE_ENTITIES", "true").lower() == "true",
+            alias_map_path=alias_map_path,
+            enable_entity_linker=os.getenv("KG_ENABLE_ENTITY_LINKER", "false").lower() == "true",
             use_embeddings=os.getenv("KG_DEDUP_USE_EMBEDDINGS", "false").lower() == "true",
             similarity_threshold=float(os.getenv("KG_DEDUP_SIMILARITY_THRESHOLD", "0.90")),
             use_acronym_expansion=os.getenv("KG_DEDUP_USE_ACRONYM_EXPANSION", "false").lower()
@@ -308,7 +426,13 @@ class GraphStorageConfig:
 @dataclass
 class KnowledgeGraphConfig:
     """
-    Complete configuration for Knowledge Graph pipeline.
+    Complete configuration for Knowledge Graph pipeline (internal use).
+
+    NOTE: This is the INTERNAL configuration class used by the KG pipeline.
+    For JSON config file validation, see src/config_schema.py::KnowledgeGraphConfig.
+    The two classes serve different purposes:
+    - config_schema.py: Validates user-provided config.json (flat structure)
+    - This class: Rich internal representation with nested sub-configs
 
     Usage:
         # Default configuration
@@ -345,6 +469,7 @@ class KnowledgeGraphConfig:
     enable_cross_document_relationships: bool = False  # Expensive, for multi-doc graphs
 
     # Performance settings
+    batch_size: int = 10  # Chunks per Graphiti batch (parallel processing)
     max_retries: int = 3  # Retry failed extractions
     retry_delay: float = 1.0  # seconds
     timeout: int = 300  # seconds per extraction batch
@@ -352,6 +477,17 @@ class KnowledgeGraphConfig:
     # Logging
     verbose: bool = True
     log_path: Optional[str] = "./logs/kg_extraction.log"
+
+    def __post_init__(self):
+        """Validate configuration on construction."""
+        if self.batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.max_retries < 0:
+            raise ValueError(f"max_retries must be >= 0, got {self.max_retries}")
+        if self.retry_delay < 0:
+            raise ValueError(f"retry_delay must be >= 0, got {self.retry_delay}")
+        if self.timeout < 1:
+            raise ValueError(f"timeout must be >= 1, got {self.timeout}")
 
     @classmethod
     def from_env(cls) -> "KnowledgeGraphConfig":

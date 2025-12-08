@@ -1,21 +1,20 @@
 """
-Claude Agent SDK RAG CLI
+Agent shared utilities and configuration.
 
-A pragmatic, production-ready agent for document retrieval and analysis.
+This module provides shared configuration, tools, and providers
+used by both the legacy single-agent system (deprecated) and the
+new multi-agent system.
 
-Architecture:
-- 27 RAG tools organized in 3 tiers (basic, advanced, analysis)
-- Hybrid search with BM25 + FAISS + RRF fusion
-- Knowledge graph integration
-- Smart token management for adaptive tool output sizing
-- Streaming responses via Claude SDK with prompt caching
+Modules:
+- config: Shared configuration (AgentConfig)
+- tools: 15 RAG tools (filtered_search and similarity_search unified into search)
+- providers: LLM provider abstractions (Anthropic, OpenAI, Google)
+- graph_loader/graph_adapter: Knowledge graph integration
 
-Usage:
-    python -m src.agent.cli --vector-store vector_db
+Note: AgentCore is deprecated. Use src.multi_agent.runner.MultiAgentRunner instead.
 """
 
-from .agent_core import AgentCore
 from .config import AgentConfig
 
-__version__ = "1.0.0"
-__all__ = ["AgentConfig", "AgentCore"]
+__version__ = "2.0.0"  # Multi-agent system
+__all__ = ["AgentConfig"]

@@ -101,10 +101,30 @@ class DocumentSection:
     content_length: int
 
     # Unstructured.io metadata (used for type-based filtering)
+    element_type: Optional[str] = None  # Element type: Title, NarrativeText, ListItem, etc.
     element_category: Optional[str] = None  # Element category from Unstructured
 
     # PHASE 2: Summaries
     summary: Optional[str] = None  # 150-char generic summary
+
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        # Validate character range consistency
+        if self.char_end < self.char_start:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': char_end ({self.char_end}) "
+                f"< char_start ({self.char_start})"
+            )
+        # Validate depth (must be >= 1 for all sections)
+        if self.depth < 1:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': depth ({self.depth}) must be >= 1"
+            )
+        # Validate level (must be >= 0)
+        if self.level < 0:
+            raise ValueError(
+                f"DocumentSection '{self.section_id}': level ({self.level}) must be >= 0"
+            )
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
@@ -140,10 +160,6 @@ class TableData:
     page_number: int
 
     def to_dict(self) -> Dict:
-        bbox_data = self.bbox
-        if hasattr(bbox_data, "to_dict"):
-            bbox_data = bbox_data.to_dict()
-
         """Convert to dictionary for serialization."""
         return {
             "table_id": self.table_id,
@@ -151,7 +167,7 @@ class TableData:
             "num_rows": self.num_rows,
             "num_cols": self.num_cols,
             "data": self.data,
-            "bbox": bbox_data,
+            "bbox": self.bbox,
             "page_number": self.page_number,
         }
 
@@ -201,6 +217,33 @@ class ExtractedDocument:
     extraction_method: str = "unstructured_detectron2"
     config: Optional[Dict] = None
 
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        # Validate num_sections matches actual sections list
+        if self.num_sections != len(self.sections):
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': num_sections ({self.num_sections}) "
+                f"!= len(sections) ({len(self.sections)})"
+            )
+        # Validate num_tables matches actual tables list
+        if self.num_tables != len(self.tables):
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': num_tables ({self.num_tables}) "
+                f"!= len(tables) ({len(self.tables)})"
+            )
+        # Validate hierarchy_depth is positive if sections exist
+        if self.sections and self.hierarchy_depth < 1:
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': hierarchy_depth ({self.hierarchy_depth}) "
+                f"must be >= 1 when sections exist"
+            )
+        # Validate total_chars is non-negative
+        if self.total_chars < 0:
+            raise ValueError(
+                f"ExtractedDocument '{self.document_id}': total_chars ({self.total_chars}) "
+                f"must be >= 0"
+            )
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
@@ -234,9 +277,16 @@ class ExtractedDocument:
 
 @dataclass
 class ExtractionConfig:
-    """Configuration for Unstructured extraction."""
+    """Configuration for document extraction (Unstructured or Gemini)."""
 
-    # Model configuration
+    # Backend selection: "auto" checks GOOGLE_API_KEY, falls back to unstructured
+    extraction_backend: str = "auto"  # "gemini", "unstructured", "auto"
+    gemini_model: str = "gemini-2.5-flash"  # Gemini model to use
+    gemini_fallback_to_unstructured: bool = True  # Fall back to Unstructured on Gemini failure
+    gemini_max_output_tokens: int = 65536  # Max output tokens for Gemini
+    gemini_file_size_threshold_mb: float = 10.0  # File size threshold for chunked extraction
+
+    # Unstructured model configuration
     strategy: str = "hi_res"  # "hi_res", "fast", "ocr_only"
     model: str = "detectron2_mask_rcnn"  # "detectron2_mask_rcnn" (most accurate), "yolox" (faster)
 
@@ -245,7 +295,7 @@ class ExtractionConfig:
     detect_language_per_element: bool = True
 
     # Table extraction
-    infer_table_structure: bool = False
+    infer_table_structure: bool = True
     extract_images: bool = False
     include_page_breaks: bool = False  # PageBreaks don't contain structural content
 
@@ -272,7 +322,7 @@ class ExtractionConfig:
     summary_model: str = "gpt-4o-mini"
     summary_max_chars: int = 150
     summary_style: str = "generic"
-    extract_tables: bool = False
+    extract_tables: bool = True
 
     @classmethod
     def from_env(cls) -> "ExtractionConfig":
@@ -325,25 +375,27 @@ class ExtractionConfig:
             )
 
         return cls(
+            # Backend selection
+            extraction_backend=os.getenv("EXTRACTION_BACKEND", "gemini"),
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            gemini_fallback_to_unstructured=get_bool_env("GEMINI_FALLBACK_TO_UNSTRUCTURED", True),
+            gemini_max_output_tokens=get_int_env("GEMINI_MAX_OUTPUT_TOKENS", 65536),
+            gemini_file_size_threshold_mb=get_float_env("GEMINI_FILE_SIZE_THRESHOLD_MB", 10.0),
+            # Unstructured settings
             strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
             model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),
-            
-            # --- OPRAVA 1: Pevný seznam jazyků ---
             languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),
-            
             detect_language_per_element=get_bool_env("UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT", True),
-            infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", False),
+            infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", True),
             extract_images=get_bool_env("UNSTRUCTURED_EXTRACT_IMAGES", False),
             filter_rotated_text=get_bool_env("FILTER_ROTATED_TEXT", True),
             rotation_method=os.getenv("ROTATION_METHOD", "bbox_orientation"),
             rotation_min_angle=min_angle,
             rotation_max_angle=max_angle,
             enable_generic_hierarchy=get_bool_env("ENABLE_GENERIC_HIERARCHY", True),
-            
-            # --- OPRAVA 2: Pevný seznam signálů hierarchie ---
-            # Původně: ",".join(cls.hierarchy_signals) -> Způsobovalo AttributeError
-            hierarchy_signals=os.getenv("HIERARCHY_SIGNALS", "type,font_size,spacing,numbering,parent_id").split(","),
-            
+            hierarchy_signals=os.getenv(
+                "HIERARCHY_SIGNALS", "type,font_size,spacing,numbering,parent_id"
+            ).split(","),
             hierarchy_clustering_eps=get_float_env("HIERARCHY_CLUSTERING_EPS", 0.15),
             hierarchy_clustering_min_samples=get_int_env("HIERARCHY_CLUSTERING_MIN_SAMPLES", 2),
             generate_markdown=get_bool_env("GENERATE_MARKDOWN", True),
@@ -517,8 +569,11 @@ def analyze_bbox_orientation(element: Element) -> Tuple[Optional[float], bool]:
     return (None, False)
 
 
-def filter_rotated_elements(elements: List[Element], min_angle: float = 25.0,
-                            max_angle: float = 65.0) -> List[Element]:
+def filter_rotated_elements(
+    elements: List[Element],
+    min_angle: float = 25.0,
+    max_angle: float = 65.0
+) -> List[Element]:
     """
     Filter out rotated text elements.
 
@@ -824,6 +879,47 @@ class UnstructuredExtractor:
         # Extract tables
         tables = self._extract_tables(elements)
 
+        # PHASE 2: Generate summaries (hierarchical document summary from section summaries)
+        if self.config.generate_summaries:
+            from src.summary_generator import SummaryGenerator
+            from src.config import SummarizationConfig, get_config
+
+            # Load summarization config from config.json
+            root_config = get_config()
+            summary_config = SummarizationConfig.from_config(root_config.summarization)
+
+            summary_gen = SummaryGenerator(config=summary_config)
+
+            # Generate section summaries
+            section_summaries = []
+            for section in sections:
+                if section.content and len(section.content.strip()) > 50:  # Min length threshold
+                    try:
+                        section.summary = summary_gen.generate_section_summary(
+                            section.content, section.title or ""
+                        )
+                        section_summaries.append(section.summary)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to generate summary for section '{section.title}': {e}"
+                        )
+                        section.summary = None
+
+            # Generate hierarchical document summary from section summaries (NOT full text)
+            # This follows CLAUDE.md constraint: "ALWAYS generate from section summaries"
+            if section_summaries:
+                try:
+                    document_summary = summary_gen.generate_document_summary(
+                        section_summaries=section_summaries
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to generate document summary: {e}")
+                    document_summary = "(Document summary unavailable)"
+            else:
+                document_summary = "(No section summaries available)"
+        else:
+            document_summary = None
+
         # Generate outputs
         full_text = "\n\n".join(str(elem) for elem in elements if hasattr(elem, '__str__'))
         markdown = self._generate_markdown(sections) if self.config.generate_markdown else ""
@@ -849,7 +945,7 @@ class UnstructuredExtractor:
             num_tables=len(tables),
             total_chars=len(full_text),
             title=self._extract_title(sections),
-            document_summary=None,  # PHASE 2: Hierarchical summary
+            document_summary=document_summary,  # PHASE 2: Hierarchical summary
             extraction_method=f"unstructured_{getattr(self.config, 'model', 'yolox')}",
             config=self.config.__dict__ if hasattr(self.config, '__dict__') else {},
         )
@@ -887,7 +983,7 @@ class UnstructuredExtractor:
         model = getattr(self.config, 'model', 'yolox')
         languages = getattr(self.config, 'languages', ['ces', 'eng'])
         include_page_breaks = getattr(self.config, 'include_page_breaks', False)
-        infer_table_structure = getattr(self.config, 'infer_table_structure', False)
+        infer_table_structure = getattr(self.config, 'infer_table_structure', True)
         extract_images = getattr(self.config, 'extract_images', False)
 
         logger.info(f"Partitioning {file_suffix} document with strategy={strategy}")
@@ -1049,6 +1145,15 @@ class UnstructuredExtractor:
             logger.error(f"Unexpected error during partition: {e}", exc_info=True)
             raise
 
+    def _partition_pdf(self, pdf_path: Path) -> List[Element]:
+        """
+        Run Unstructured partition_pdf (deprecated - use _partition_document instead).
+
+        Kept for backward compatibility.
+        """
+        logger.warning("_partition_pdf is deprecated, use _partition_document instead")
+        return self._partition_document(pdf_path)
+
     def _validate_page_boundary_hierarchy(self, sections: List[DocumentSection]) -> None:
         """
         Validate parent-child relationships across page boundaries.
@@ -1162,6 +1267,7 @@ class UnstructuredExtractor:
             if elem_category == "Title":
                 title = text.strip()
             else:
+                # NarrativeText and other content - no title, only content
                 title = ""
 
             section_id = f"sec_{i + 1}"

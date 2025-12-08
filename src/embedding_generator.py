@@ -83,7 +83,9 @@ class EmbeddingGenerator:
             logger.info(f"Embedding cache enabled: max_size={self._cache_max_size}")
 
         # Initialize model based on type
-        if "voyage" in self.model_name.lower() or "kanon" in self.model_name.lower():
+        if "deepinfra" in self.model_name.lower() or "qwen" in self.model_name.lower():
+            self._init_deepinfra_model()
+        elif "voyage" in self.model_name.lower() or "kanon" in self.model_name.lower():
             self._init_voyage_model()
         elif self.model_name.startswith("text-embedding"):
             self._init_openai_model()
@@ -118,6 +120,38 @@ class EmbeddingGenerator:
         self.dimensions = 1024
 
         logger.info(f"Voyage AI model initialized: {self.model_name} ({self.dimensions}D)")
+
+    def _init_deepinfra_model(self):
+        """Initialize DeepInfra embedding model (Qwen3-Embedding-8B)."""
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "openai package required for DeepInfra. "
+                "Install with: uv pip install openai"
+            )
+
+        api_key = os.environ.get("DEEPINFRA_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "DEEPINFRA_API_KEY environment variable required for DeepInfra models. "
+                "Get your key at: https://deepinfra.com/"
+            )
+
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepinfra.com/v1/openai",
+            timeout=60,
+            max_retries=3,
+        )
+        self.model_type = "deepinfra"
+
+        # Qwen3-Embedding-8B uses 4096 dimensions
+        self.dimensions = 4096
+
+        # Mask API key for logging
+        masked_key = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "***"
+        logger.info(f"DeepInfra model initialized: {self.model_name} ({self.dimensions}D, key={masked_key})")
 
     def _init_openai_model(self):
         """Initialize OpenAI embedding model."""
@@ -270,7 +304,9 @@ class EmbeddingGenerator:
 
         logger.info(f"Embedding {len(texts)} texts...")
 
-        if self.model_type == "voyage":
+        if self.model_type == "deepinfra":
+            embeddings = self._embed_deepinfra(texts)
+        elif self.model_type == "voyage":
             embeddings = self._embed_voyage(texts)
         elif self.model_type == "openai":
             embeddings = self._embed_openai(texts)
@@ -387,6 +423,35 @@ class EmbeddingGenerator:
 
         return np.array(all_embeddings, dtype=np.float32)
 
+    def _embed_deepinfra(self, texts: List[str]) -> np.ndarray:
+        """Embed texts using DeepInfra API (OpenAI-compatible)."""
+        all_embeddings = []
+
+        # Process in batches
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i : i + self.batch_size]
+
+            logger.debug(
+                f"Processing batch {i//self.batch_size + 1}/{(len(texts)-1)//self.batch_size + 1}"
+            )
+
+            response = self.client.embeddings.create(
+                model=self.model_name, input=batch, encoding_format="float"
+            )
+
+            # Track cost (DeepInfra uses same format as OpenAI)
+            self.tracker.track_embedding(
+                provider="deepinfra",
+                model=self.model_name,
+                tokens=response.usage.total_tokens,
+                operation="embedding",
+            )
+
+            batch_embeddings = [data.embedding for data in response.data]
+            all_embeddings.extend(batch_embeddings)
+
+        return np.array(all_embeddings, dtype=np.float32)
+
     def _embed_openai(self, texts: List[str]) -> np.ndarray:
         """Embed texts using OpenAI API."""
         all_embeddings = []
@@ -457,23 +522,57 @@ class EmbeddingGenerator:
 
         logger.info(f"Embedding Layer {layer}: {len(chunks)} chunks")
 
-        # Extract texts - always use 'content' field
-        # For Layer 3, this includes SAC summary (58% DRM reduction!)
-        texts = [chunk.content for chunk in chunks]
+        # Extract texts with breadcrumb path prefix
+        # Format: [section_path > section_title]\n\n{chunk.content}
+        # This improves retrieval by adding hierarchical location context
+        texts = []
+        for chunk in chunks:
+            # Build breadcrumb from metadata
+            breadcrumb_parts = []
+            if hasattr(chunk, "metadata") and chunk.metadata:
+                if chunk.metadata.section_path:
+                    breadcrumb_parts.append(chunk.metadata.section_path)
+                if (
+                    chunk.metadata.section_title
+                    and chunk.metadata.section_title != chunk.metadata.section_path
+                ):
+                    breadcrumb_parts.append(chunk.metadata.section_title)
 
-        # Filter empty texts
+            # Construct embedding text: [breadcrumb]\n\ncontent
+            if breadcrumb_parts:
+                breadcrumb = " > ".join(breadcrumb_parts)
+                text = f"[{breadcrumb}]\n\n{chunk.content}"
+            else:
+                text = chunk.content
+
+            texts.append(text)
+
+        # Find valid (non-empty) texts
         valid_indices = [i for i, text in enumerate(texts) if text.strip()]
         valid_texts = [texts[i] for i in valid_indices]
 
         if not valid_texts:
             logger.warning(f"Layer {layer}: No valid texts to embed")
-            return np.array([])
+            # Return zero vectors for all chunks to maintain 1:1 mapping
+            return np.zeros((len(chunks), self.dimensions), dtype=np.float32)
 
-        # Generate embeddings
-        embeddings = self.embed_texts(valid_texts)
+        # Generate embeddings only for valid texts
+        valid_embeddings = self.embed_texts(valid_texts)
+
+        # Create full embedding array with zeros for empty chunks
+        # This maintains 1:1 mapping between chunks and embeddings
+        embeddings = np.zeros((len(chunks), self.dimensions), dtype=np.float32)
+        for idx, valid_idx in enumerate(valid_indices):
+            embeddings[valid_idx] = valid_embeddings[idx]
+
+        if len(valid_indices) < len(chunks):
+            logger.warning(
+                f"Layer {layer}: {len(chunks) - len(valid_indices)} empty chunks "
+                f"(filled with zero vectors)"
+            )
 
         logger.info(
-            f"Layer {layer} embeddings generated: " f"{len(embeddings)} vectors, {self.dimensions}D"
+            f"Layer {layer} embeddings generated: {len(embeddings)} vectors, {self.dimensions}D"
         )
 
         return embeddings

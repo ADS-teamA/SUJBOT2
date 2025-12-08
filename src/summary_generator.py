@@ -3,7 +3,8 @@ PHASE 2: Generic Summary Generation
 
 Based on Reuter et al., 2024 (Summary-Augmented Chunking):
 - Generic summaries OUTPERFORM expert-guided summaries
-- Optimal length: 150 characters (±20 tolerance)
+- Section summaries: 150 characters (±20 tolerance)
+- Document summaries: 100-1000 characters (describes document and sections)
 - Models: Claude Sonnet 4.5 (default), Claude Haiku 4.5, or gpt-4o-mini
 
 Supports:
@@ -11,12 +12,14 @@ Supports:
 - OpenAI: gpt-4o-mini, gpt-4o (via OpenAI API)
 
 Configuration is loaded from centralized config.py.
+Prompts are loaded from prompts/ directory as I/O.
 """
 
 import logging
 import os
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 # Import centralized configuration
 try:
@@ -62,7 +65,8 @@ class SummaryGenerator:
         self.model = resolve_model_alias(self.config.model)
 
         # Extract config values for convenience
-        self.max_chars = self.config.max_chars
+        self.max_chars = self.config.max_chars  # For section summaries
+        self.document_max_chars = self.config.document_max_chars  # For document summaries
         self.tolerance = self.config.tolerance
         self.max_workers = self.config.max_workers
         self.min_text_length = self.config.min_text_length
@@ -73,6 +77,11 @@ class SummaryGenerator:
         self.use_batch_api = self.config.use_batch_api
         self.batch_api_poll_interval = self.config.batch_api_poll_interval
         self.batch_api_timeout = self.config.batch_api_timeout
+
+        # Load prompts from files
+        self.prompts_dir = Path(__file__).parent.parent / "prompts"
+        self.document_summary_prompt_template = self._load_prompt("document_summary.txt")
+        self.section_summary_prompt_template = self._load_prompt("section_summary.txt")
 
         # Initialize cost tracker
         self.tracker = get_global_tracker()
@@ -92,8 +101,34 @@ class SummaryGenerator:
 
         logger.info(
             f"SummaryGenerator initialized: provider={self.provider}, "
-            f"model={self.model}, max_chars={self.max_chars}"
+            f"model={self.model}, section_max_chars={self.max_chars}, "
+            f"document_max_chars={self.document_max_chars}"
         )
+
+    def _load_prompt(self, filename: str) -> str:
+        """
+        Load prompt template from prompts/ directory.
+
+        Args:
+            filename: Prompt filename (e.g., "document_summary.txt")
+
+        Returns:
+            Prompt template as string
+
+        Raises:
+            FileNotFoundError: If prompt file doesn't exist
+        """
+        prompt_path = self.prompts_dir / filename
+        try:
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except FileNotFoundError:
+            logger.error(f"Prompt file not found: {prompt_path}")
+            raise FileNotFoundError(
+                f"Prompt template '{filename}' not found in {self.prompts_dir}.\n"
+                f"Expected location: {prompt_path}\n"
+                f"Make sure prompts are extracted to prompts/ directory."
+            )
 
     def _init_claude(self, api_key: Optional[str]):
         """Initialize Anthropic Claude client using centralized factory."""
@@ -127,7 +162,7 @@ class SummaryGenerator:
             section_summaries: List of section summaries (hierarchical mode)
 
         Returns:
-            Generic summary (~150 chars)
+            Generic summary (100-1000 chars, describes document and sections)
         """
 
         # Mode 1: Hierarchical summarization (RECOMMENDED)
@@ -153,15 +188,20 @@ class SummaryGenerator:
 Summarize the following document text. Focus on extracting the most important entities,
 core purpose, and key topics.
 
-CRITICAL: The summary MUST be EXACTLY {self.max_chars} characters or less (current limit: {self.max_chars} chars).
-This is a hard constraint. The summary should be optimized for providing context to smaller text chunks.
+CRITICAL CONSTRAINTS:
+- The summary MUST be EXACTLY {self.max_chars} characters or less (current limit: {self.max_chars} chars).
+- This is a hard constraint. The summary should be optimized for providing context to smaller text chunks.
+
+LANGUAGE REQUIREMENT: Your summary MUST be in the SAME LANGUAGE as the document text below.
+If the document is in Czech, respond in Czech. If in English, respond in English.
+Match the document language exactly - do NOT translate.
 
 Output only the summary text, nothing else.
 
 Document:
 {text_preview}
 
-Summary (max {self.max_chars} characters):"""
+Summary (max {self.max_chars} characters, same language as document):"""
 
             try:
                 if self.provider == "claude":
@@ -224,26 +264,14 @@ Summary (max {self.max_chars} characters):"""
             section_summaries: List of section-level summaries
 
         Returns:
-            Document-level summary
+            Document-level summary (100-1000 chars)
         """
 
         # Combine section summaries
         combined_text = "\n".join(f"- {s}" for s in section_summaries)
 
-        prompt = f"""You are an expert document summarizer.
-
-You are given summaries of different sections from a document.
-Create a unified document-level summary that captures the main theme and purpose.
-
-CRITICAL: The summary MUST be EXACTLY {self.max_chars} characters or less (current limit: {self.max_chars} chars).
-This is a hard constraint. The summary should be optimized for providing global context to text chunks.
-
-Output only the summary text, nothing else.
-
-Section summaries:
-{combined_text}
-
-Document summary (max {self.max_chars} characters):"""
+        # Use template prompt from file
+        prompt = self.document_summary_prompt_template.format(combined_text=combined_text)
 
         try:
             if self.provider == "claude":
@@ -251,25 +279,27 @@ Document summary (max {self.max_chars} characters):"""
             else:  # openai
                 summary = self._generate_with_openai(prompt)
 
-            # Check length and retry if too long
-            if len(summary) > self.max_chars + self.tolerance:
+            # Check length and retry if too long (document summaries can be up to 1000 chars)
+            if len(summary) > self.document_max_chars + self.tolerance:
                 logger.warning(
-                    f"Summary too long ({len(summary)} chars), regenerating with stricter limit"
+                    f"Document summary too long ({len(summary)} chars), regenerating with stricter limit"
                 )
                 # Retry with stricter limit
-                target_chars = int(self.max_chars * 0.9)
+                target_chars = int(self.document_max_chars * 0.9)
                 prompt_strict = f"""CRITICAL: Summarize in EXACTLY {target_chars} characters or LESS.
+
+LANGUAGE REQUIREMENT: Respond in the SAME LANGUAGE as the section summaries below.
 
 {combined_text}
 
-Summary (STRICT LIMIT: {target_chars} characters):"""
+Summary (STRICT LIMIT: {target_chars} characters, same language as content):"""
 
                 if self.provider == "claude":
                     summary = self._generate_with_claude(prompt_strict)
                 else:
                     summary = self._generate_with_openai(prompt_strict)
 
-                summary = summary[: self.max_chars]  # Hard truncate
+                summary = summary[: self.document_max_chars]  # Hard truncate
 
             logger.debug(f"Generated hierarchical document summary: {len(summary)} chars")
             return summary
@@ -310,16 +340,16 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
 
         Uses temperature and max_tokens from config unless overridden.
         """
-        # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
-        # GPT-5 models only support temperature=1.0 (default)
-        # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast, deterministic tasks
+        # O-series models use max_completion_tokens instead of max_tokens
+        # O-series models only support temperature=1.0 (default)
+        # O-series uses reasoning mode by default, set reasoning_effort="minimal" for fast, deterministic tasks
         # Valid values: "minimal" (fastest), "low", "medium" (default), "high"
         tokens_param = max_tokens or self.max_tokens
-        if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
+        if self.model.startswith(("o1", "o3", "o4")):
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=1.0,  # GPT-5 only supports default temperature
+                temperature=1.0,  # O-series only supports default temperature
                 max_completion_tokens=tokens_param,
                 reasoning_effort="minimal",  # Fast mode for simple tasks (summarization doesn't need deep reasoning)
             )
@@ -383,10 +413,12 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
         prompt = f"""CRITICAL: Summarize this document in EXACTLY {target_chars} characters or LESS.
 Be extremely concise.
 
+LANGUAGE REQUIREMENT: Respond in the SAME LANGUAGE as the document text below.
+
 Document:
 {text_preview}
 
-Summary (STRICT LIMIT: {target_chars} characters):"""
+Summary (STRICT LIMIT: {target_chars} characters, same language as document):"""
 
         try:
             if self.provider == "claude":
@@ -417,15 +449,12 @@ Summary (STRICT LIMIT: {target_chars} characters):"""
 
         title_context = f"Section title: {section_title}\n\n" if section_title else ""
 
-        prompt = f"""Summarize this document section concisely.
-
-{title_context}Section content:
-{text_preview}
-
-CRITICAL: Provide a summary that is EXACTLY {self.max_chars} characters or less (current limit: {self.max_chars} chars).
-Focus on the main topic and key information. This is a hard constraint.
-
-Summary (max {self.max_chars} characters):"""
+        # Use template prompt from file
+        prompt = self.section_summary_prompt_template.format(
+            title_context=title_context,
+            text_preview=text_preview,
+            max_chars=self.max_chars
+        )
 
         try:
             if self.provider == "claude":
@@ -482,31 +511,28 @@ Summary (max {self.max_chars} characters):"""
             text_preview = text[:2000]
             title_context = f"Section title: {title}\n\n" if title else ""
 
-            prompt = f"""Summarize this document section concisely.
-
-{title_context}Section content:
-{text_preview}
-
-CRITICAL: Provide a summary that is EXACTLY {self.max_chars} characters or less (current limit: {self.max_chars} chars).
-Focus on the main topic and key information. This is a hard constraint.
-
-Summary (max {self.max_chars} characters):"""
+            # Use template prompt from file
+            prompt = self.section_summary_prompt_template.format(
+                title_context=title_context,
+                text_preview=text_preview,
+                max_chars=self.max_chars
+            )
 
             # Build request body with model-specific parameters
-            # GPT-5 and O-series models use max_completion_tokens instead of max_tokens
-            # GPT-5 models only support temperature=1.0 (default)
-            # GPT-5 uses reasoning mode by default, set reasoning_effort="minimal" for fast tasks
+            # O-series models use max_completion_tokens instead of max_tokens
+            # O-series models only support temperature=1.0 (default)
+            # O-series uses reasoning mode by default, set reasoning_effort="minimal" for fast tasks
             # Valid values: "minimal" (fastest), "low", "medium", "high"
             body = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
             }
 
-            if self.model.startswith(("gpt-5", "o1-", "o3-", "o4-")):
-                # GPT-5/o-series parameters
+            if self.model.startswith(("o1", "o3", "o4")):
+                # O-series reasoning models require different parameters
                 body["max_completion_tokens"] = self.max_tokens
-                body["temperature"] = 1.0  # GPT-5 only supports default temperature
-                body["reasoning_effort"] = "minimal"  # Fast mode for simple tasks (summarization doesn't need deep reasoning)
+                body["temperature"] = 1.0  # O-series requires temperature=1.0
+                body["reasoning_effort"] = "minimal"  # Fast mode for summarization
             else:
                 # GPT-4 and earlier parameters
                 body["max_tokens"] = self.max_tokens
@@ -617,6 +643,10 @@ CRITICAL CONSTRAINTS:
 - Output MUST be valid JSON array
 - Preserve the exact order and index numbers
 
+LANGUAGE REQUIREMENT: Each summary MUST be in the SAME LANGUAGE as its section content.
+If the content is in Czech, respond in Czech. If in English, respond in English.
+Match the document language exactly - do NOT translate.
+
 Input sections (JSON):
 {sections_json}
 
@@ -627,7 +657,7 @@ Output format (JSON array):
   ...
 ]
 
-Generate summaries (MUST be valid JSON):"""
+Generate summaries (MUST be valid JSON, same language as content):"""
 
         try:
             # Generate with LLM

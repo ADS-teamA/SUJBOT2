@@ -1,0 +1,31 @@
+<svg
+    width="512"
+    height="512"
+    viewBox="0 0 512 512"
+    xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Atom + Paragraph Icon -->
+  <g transform="translate(256 256)" stroke="currentColor" fill="none" stroke-linecap="round">
+
+    <!-- Orbitals (thicker) -->
+    <ellipse rx="185" ry="110" stroke-width="16" />
+    <ellipse rx="185" ry="110" stroke-width="16" transform="rotate(60)" />
+    <ellipse rx="185" ry="110" stroke-width="16" transform="rotate(-60)" />
+
+    <!-- Electrons (3 atoms evenly distributed at 0°, 120°, 240°) -->
+    <circle r="20" cx="185" cy="0" fill="currentColor" stroke="none" />
+    <circle r="20" cx="-92.5" cy="160" fill="currentColor" stroke="none" />
+    <circle r="20" cx="-92.5" cy="-160" fill="currentColor" stroke="none" />
+
+    <!-- Paragraph symbol § -->
+    <text
+      x="0"
+      y="35"
+      font-size="140"
+      font-weight="bold"
+      fill="currentColor"
+      text-anchor="middle"
+      font-family="serif"
+    >§</text>
+  </g>
+</svg>

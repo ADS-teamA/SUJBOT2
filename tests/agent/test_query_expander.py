@@ -21,12 +21,12 @@ class TestQueryExpanderInitialization:
         with patch("openai.OpenAI") as mock_openai:
             expander = QueryExpander(
                 provider="openai",
-                model="gpt-5-nano",
+                model="gpt-4o-mini",
                 openai_api_key="sk-test-key"
             )
 
             assert expander.provider == "openai"
-            assert expander.model == "gpt-5-nano"
+            assert expander.model == "gpt-4o-mini"
             mock_openai.assert_called_once_with(api_key="sk-test-key")
 
     def test_init_anthropic_success(self):
@@ -45,7 +45,7 @@ class TestQueryExpanderInitialization:
     def test_init_missing_openai_key(self):
         """Test initialization fails without OpenAI API key."""
         with pytest.raises(ValueError, match="openai_api_key required"):
-            QueryExpander(provider="openai", model="gpt-5-nano")
+            QueryExpander(provider="openai", model="gpt-4o-mini")
 
     def test_init_missing_anthropic_key(self):
         """Test initialization fails without Anthropic API key."""
@@ -65,7 +65,7 @@ class TestQueryExpanderInitialization:
         """Test initialization fails gracefully when openai package is missing."""
         with patch("openai.OpenAI", side_effect=ImportError):
             with pytest.raises(ImportError, match="openai package required"):
-                QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+                QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
 
 
 class TestQueryExpansionOptimization:
@@ -74,7 +74,7 @@ class TestQueryExpansionOptimization:
     def test_skip_expansion_when_num_expands_0(self):
         """Test that expansion is skipped when num_expansions=0 (optimization)."""
         with patch("openai.OpenAI"):
-            expander = QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+            expander = QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
 
             # Mock the LLM call to ensure it's NOT called
             expander._generate_expansions_llm = Mock()
@@ -97,7 +97,7 @@ class TestQueryExpansionOptimization:
             mock_client = Mock()
             mock_openai_class.return_value = mock_client
 
-            expander = QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+            expander = QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
             expander.client = mock_client
 
             # Mock OpenAI response
@@ -118,7 +118,7 @@ class TestQueryExpansionOptimization:
             assert "Query variation 1" in result.expanded_queries
             assert result.num_expansions == 2  # 2 queries total
             assert result.expansion_method == "llm"
-            assert result.model_used == "gpt-5-nano"
+            assert result.model_used == "gpt-4o-mini"
 
     def test_expansion_filters_duplicate_original(self):
         """Test that expansion filters out original query if LLM repeats it."""
@@ -126,7 +126,7 @@ class TestQueryExpansionOptimization:
             mock_client = Mock()
             mock_openai_class.return_value = mock_client
 
-            expander = QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+            expander = QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
             expander.client = mock_client
 
             # Mock OpenAI response with duplicate original query
@@ -156,7 +156,7 @@ class TestQueryExpansionBasic:
 
             expander = QueryExpander(
                 provider="openai",
-                model="gpt-5-nano",
+                model="gpt-4o-mini",
                 openai_api_key="sk-test"
             )
             expander.client = mock_client
@@ -179,7 +179,7 @@ class TestQueryExpansionBasic:
         assert len(result.expanded_queries) == 4  # Original + 3 expansions
         assert "test query" in result.expanded_queries
         assert result.expansion_method == "llm"
-        assert result.model_used == "gpt-5-nano"
+        assert result.model_used == "gpt-4o-mini"
 
     def test_expand_strips_numbering(self, mock_openai_expander):
         """Test that LLM numbering is stripped from expansions."""
@@ -207,7 +207,7 @@ class TestQueryExpansionWarnings:
     def test_warning_logged_when_num_expands_exceeds_threshold(self, caplog):
         """Test warning is logged when num_expands > warn_threshold."""
         with patch("openai.OpenAI"):
-            expander = QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+            expander = QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
 
             # Mock LLM to return immediately
             expander._generate_expansions_llm = Mock(return_value=["query1", "query2"])
@@ -230,7 +230,7 @@ class TestQueryExpansionErrorHandling:
             mock_client = Mock()
             mock_openai_class.return_value = mock_client
 
-            expander = QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+            expander = QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
             expander.client = mock_client
 
             yield expander, mock_client
@@ -259,7 +259,7 @@ class TestPromptConstruction:
     def test_prompt_includes_num_expansions(self):
         """Test that prompt includes correct num_expansions count."""
         with patch("openai.OpenAI"):
-            expander = QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+            expander = QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
 
             prompt = expander._build_expansion_prompt("test query", num_expansions=5)
 
@@ -269,7 +269,7 @@ class TestPromptConstruction:
     def test_prompt_uses_multi_question_strategy(self):
         """Test that prompt uses multi-question generation strategy."""
         with patch("openai.OpenAI"):
-            expander = QueryExpander(provider="openai", model="gpt-5-nano", openai_api_key="sk-test")
+            expander = QueryExpander(provider="openai", model="gpt-4o-mini", openai_api_key="sk-test")
 
             prompt = expander._build_expansion_prompt("test", num_expansions=3)
 
@@ -290,7 +290,7 @@ class TestCostTracking:
 
             expander = QueryExpander(
                 provider="openai",
-                model="gpt-5-nano",
+                model="gpt-4o-mini",
                 openai_api_key="sk-test"
             )
             expander.client = mock_client
@@ -316,7 +316,7 @@ class TestCostTracking:
 
             # Verify cost tracking was called
             mock_tracker.track_llm.assert_called_once_with(
-                "openai", "gpt-5-nano", 100, 50
+                "openai", "gpt-4o-mini", 100, 50
             )
 
     def test_cost_tracking_continues_on_error(self, mock_openai_expander, caplog):
@@ -348,7 +348,7 @@ class TestExpansionResult:
             expanded_queries=["test", "query1", "query2"],
             num_expansions=3,
             expansion_method="llm",
-            model_used="gpt-5-nano",
+            model_used="gpt-4o-mini",
             cost_estimate=0.001
         )
 
@@ -356,34 +356,34 @@ class TestExpansionResult:
         assert len(result.expanded_queries) == 3
         assert result.num_expansions == 3
         assert result.expansion_method == "llm"
-        assert result.model_used == "gpt-5-nano"
+        assert result.model_used == "gpt-4o-mini"
         assert result.cost_estimate == 0.001
 
 
-class TestGPT5Compatibility:
-    """Test GPT-5 specific compatibility issues."""
+class TestOSeriesCompatibility:
+    """Test O-series (o1, o3, o4) specific compatibility issues."""
 
     @pytest.fixture
-    def mock_openai_expander(self):
-        """Create QueryExpander with mocked OpenAI client."""
+    def mock_openai_o_series_expander(self):
+        """Create QueryExpander with mocked OpenAI client for O-series model."""
         with patch("openai.OpenAI") as mock_openai_class:
             mock_client = Mock()
             mock_openai_class.return_value = mock_client
 
             expander = QueryExpander(
                 provider="openai",
-                model="gpt-5-nano",
+                model="o1-mini",  # O-series model
                 openai_api_key="sk-test"
             )
             expander.client = mock_client
 
             yield expander, mock_client
 
-    def test_gpt5_empty_response_handling(self, mock_openai_expander, caplog):
-        """Test handling when GPT-5 returns empty/None content (known GPT-5 issue)."""
-        expander, mock_client = mock_openai_expander
+    def test_empty_response_handling(self, mock_openai_o_series_expander, caplog):
+        """Test handling when LLM returns empty/None content."""
+        expander, mock_client = mock_openai_o_series_expander
 
-        # Mock GPT-5 returning empty content (known issue with gpt-5-nano)
+        # Mock LLM returning empty content
         mock_response = Mock()
         mock_response.choices = [Mock(message=Mock(content=""))]  # Empty string
         mock_response.usage = Mock(prompt_tokens=100, completion_tokens=0)
@@ -401,9 +401,9 @@ class TestGPT5Compatibility:
         assert len(result.expanded_queries) == 1  # Only original
         assert result.expanded_queries[0] == "test query"
 
-    def test_gpt5_uses_max_completion_tokens(self, mock_openai_expander):
-        """Test that GPT-5 models use max_completion_tokens instead of max_tokens."""
-        expander, mock_client = mock_openai_expander
+    def test_o_series_uses_max_completion_tokens(self, mock_openai_o_series_expander):
+        """Test that O-series models use max_completion_tokens instead of max_tokens."""
+        expander, mock_client = mock_openai_o_series_expander
 
         # Mock valid response
         mock_response = Mock()
@@ -419,9 +419,9 @@ class TestGPT5Compatibility:
         assert "max_tokens" not in call_kwargs
         assert call_kwargs["max_completion_tokens"] == 300
 
-    def test_gpt5_no_temperature_parameter(self, mock_openai_expander):
-        """Test that GPT-5 models don't set temperature (only default 1.0 supported)."""
-        expander, mock_client = mock_openai_expander
+    def test_o_series_no_temperature_parameter(self, mock_openai_o_series_expander):
+        """Test that O-series models don't set temperature (only default 1.0 supported)."""
+        expander, mock_client = mock_openai_o_series_expander
 
         # Mock valid response
         mock_response = Mock()
@@ -565,7 +565,7 @@ class TestPartialExpansion:
 
             expander = QueryExpander(
                 provider="openai",
-                model="gpt-5-nano",
+                model="gpt-4o-mini",
                 openai_api_key="sk-test"
             )
             expander.client = mock_client

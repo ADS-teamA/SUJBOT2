@@ -1,0 +1,13 @@
+Generate 3 items for this query. Do NOT use <think> tags. Output directly.
+
+Query: {query}
+
+Output format (EXACTLY):
+HYDE: [2-3 sentence hypothetical answer using domain terminology]
+EXP1: [Alternative phrasing 1]
+EXP2: [Alternative phrasing 2]
+
+Rules:
+- Same language as query
+- No explanations, just the 3 items
+- Start immediately with "HYDE:"
