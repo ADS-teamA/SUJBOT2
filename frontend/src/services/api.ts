@@ -32,6 +32,13 @@ export interface LoginResponse {
   message: string;
 }
 
+export interface SpendingInfo {
+  total_spent_czk: number;
+  spending_limit_czk: number;
+  remaining_czk: number;
+  reset_at: string | null;
+}
+
 export class ApiService {
   /**
    * Get headers for JSON requests
@@ -119,6 +126,48 @@ export class ApiService {
     }
   }
 
+  // Simple cache for spending data (prevents duplicate requests)
+  private spendingCache: { data: SpendingInfo | null; timestamp: number } = {
+    data: null,
+    timestamp: 0,
+  };
+  private spendingCacheTTL = 2000; // 2 seconds cache
+
+  /**
+   * Get current user's spending information
+   */
+  async getSpending(): Promise<SpendingInfo> {
+    // Return cached data if fresh (within TTL)
+    const now = Date.now();
+    if (this.spendingCache.data && now - this.spendingCache.timestamp < this.spendingCacheTTL) {
+      return this.spendingCache.data;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/settings/spending`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch spending: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Update cache
+    this.spendingCache = { data, timestamp: now };
+
+    return data;
+  }
+
+  /**
+   * Invalidate spending cache (call after message is sent)
+   */
+  invalidateSpendingCache(): void {
+    this.spendingCache.timestamp = 0;
+  }
+
   /**
    * Stream chat response using Server-Sent Events (SSE)
    * @param message - Current user message
@@ -167,7 +216,36 @@ export class ApiService {
     }
 
     if (!response.ok) {
-      // Yield error event for HTTP errors (4xx, 5xx)
+      // Handle 402 Payment Required (spending limit exceeded) specially
+      if (response.status === 402) {
+        try {
+          const errorData = await response.json();
+          yield {
+            event: 'error',
+            data: {
+              error: errorData.detail?.message_en || 'Spending limit exceeded',
+              type: 'SpendingLimitExceeded',
+              status: response.status,
+              total_spent_czk: errorData.detail?.total_spent_czk,
+              spending_limit_czk: errorData.detail?.spending_limit_czk,
+              message_cs: errorData.detail?.message_cs,
+              message_en: errorData.detail?.message_en,
+            }
+          };
+        } catch {
+          yield {
+            event: 'error',
+            data: {
+              error: 'Spending limit exceeded. Contact administrator.',
+              type: 'SpendingLimitExceeded',
+              status: response.status
+            }
+          };
+        }
+        return;
+      }
+
+      // Yield error event for other HTTP errors (4xx, 5xx)
       yield {
         event: 'error',
         data: {

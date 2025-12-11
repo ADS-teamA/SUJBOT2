@@ -40,6 +40,8 @@ function MainApp() {
     isStreaming,
     clarificationData,
     awaitingClarification,
+    spendingLimitError,
+    spendingRefreshTrigger,
     createConversation,
     selectConversation,
     deleteConversation,
@@ -50,6 +52,7 @@ function MainApp() {
     submitClarification,
     cancelClarification,
     cancelStreaming,
+    clearSpendingLimitError,
   } = useChat();
 
   useTheme();
@@ -144,6 +147,9 @@ function MainApp() {
           awaitingClarification={awaitingClarification}
           onSubmitClarification={submitClarification}
           onCancelClarification={cancelClarification}
+          spendingRefreshTrigger={spendingRefreshTrigger}
+          spendingLimitError={spendingLimitError}
+          onClearSpendingLimitError={clearSpendingLimitError}
         />
       </div>
     </div>

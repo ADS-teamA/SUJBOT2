@@ -80,7 +80,7 @@ class AdminQueries:
         """
         Get full user details (admin view).
 
-        Returns all fields including agent_variant.
+        Returns all fields including agent_variant and spending info.
 
         Args:
             user_id: User ID to fetch
@@ -97,7 +97,8 @@ class AdminQueries:
                 row = await conn.fetchrow(
                     """
                     SELECT id, email, full_name, is_active, is_admin,
-                           agent_variant, created_at, updated_at, last_login_at
+                           agent_variant, created_at, updated_at, last_login_at,
+                           spending_limit_czk, total_spent_czk, spending_reset_at
                     FROM auth.users
                     WHERE id = $1
                     """,
@@ -114,7 +115,8 @@ class AdminQueries:
         full_name: Optional[str] = None,
         is_admin: Optional[bool] = None,
         is_active: Optional[bool] = None,
-        agent_variant: Optional[str] = None
+        agent_variant: Optional[str] = None,
+        spending_limit_czk: Optional[float] = None
     ) -> bool:
         """
         Update user fields (admin operation).
@@ -128,6 +130,7 @@ class AdminQueries:
             is_admin: Admin privileges
             is_active: Account active status
             agent_variant: Model preference ('premium', 'cheap', 'local')
+            spending_limit_czk: Spending limit in CZK
 
         Returns:
             True if user was updated, False if not found
@@ -161,6 +164,10 @@ class AdminQueries:
         if agent_variant is not None:
             updates.append(f"agent_variant = ${param_idx}")
             params.append(agent_variant)
+            param_idx += 1
+        if spending_limit_czk is not None:
+            updates.append(f"spending_limit_czk = ${param_idx}")
+            params.append(spending_limit_czk)
             param_idx += 1
 
         if not updates:
@@ -309,10 +316,22 @@ class AdminQueries:
                         (SELECT COUNT(*) FROM auth.conversations) as total_conversations,
                         (SELECT COUNT(*) FROM auth.messages) as total_messages,
                         (SELECT COUNT(*) FROM auth.users
-                         WHERE last_login_at > NOW() - INTERVAL '24 hours') as users_last_24h
+                         WHERE last_login_at > NOW() - INTERVAL '24 hours') as users_last_24h,
+                        -- Spending statistics
+                        COALESCE((SELECT SUM(total_spent_czk) FROM auth.users), 0) as total_spent_czk
                     """
                 )
-                return dict(stats)
+                result = dict(stats)
+                # Calculate averages (avoid division by zero)
+                total_messages = result.get("total_messages", 0) or 1
+                total_conversations = result.get("total_conversations", 0) or 1
+                total_spent = float(result.get("total_spent_czk", 0) or 0)
+
+                result["avg_spent_per_message_czk"] = round(total_spent / total_messages, 4)
+                result["avg_spent_per_conversation_czk"] = round(total_spent / total_conversations, 4)
+                result["total_spent_czk"] = round(total_spent, 2)
+
+                return result
         except Exception as e:
             self._handle_db_error("get_system_stats", {}, e)
 

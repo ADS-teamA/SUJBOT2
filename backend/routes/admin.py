@@ -107,6 +107,10 @@ def _format_user_response(user: Dict) -> AdminUserResponse:
         created_at=user["created_at"].isoformat() if user.get("created_at") else "",
         updated_at=user["updated_at"].isoformat() if user.get("updated_at") else "",
         last_login_at=user["last_login_at"].isoformat() if user.get("last_login_at") else None,
+        # Spending fields
+        spending_limit_czk=float(user.get("spending_limit_czk", 500.0) or 500.0),
+        total_spent_czk=float(user.get("total_spent_czk", 0.0) or 0.0),
+        spending_reset_at=user["spending_reset_at"].isoformat() if user.get("spending_reset_at") else None,
     )
 
 
@@ -415,7 +419,8 @@ async def update_user(
             full_name=user_data.full_name,
             is_admin=user_data.is_admin,
             is_active=user_data.is_active,
-            agent_variant=user_data.agent_variant
+            agent_variant=user_data.agent_variant,
+            spending_limit_czk=user_data.spending_limit_czk
         )
 
         # Retrieve updated user
@@ -593,5 +598,51 @@ async def get_system_stats(
         total_conversations=stats["total_conversations"],
         total_messages=stats["total_messages"],
         users_last_24h=stats["users_last_24h"],
+        total_spent_czk=stats.get("total_spent_czk", 0.0),
+        avg_spent_per_message_czk=stats.get("avg_spent_per_message_czk", 0.0),
+        avg_spent_per_conversation_czk=stats.get("avg_spent_per_conversation_czk", 0.0),
         timestamp=datetime.now(timezone.utc).isoformat()
     )
+
+
+# =============================================================================
+# Spending Management Endpoints
+# =============================================================================
+
+@router.post("/users/{user_id}/spending/reset", status_code=status.HTTP_200_OK)
+async def reset_user_spending(
+    user_id: int,
+    admin: Dict = Depends(get_current_admin_user),
+    auth_queries: AuthQueries = Depends(get_auth_queries),
+    admin_queries: AdminQueries = Depends(get_admin_queries)
+):
+    """
+    Reset user's spending counter to zero.
+
+    Args:
+        user_id: User ID whose spending to reset
+
+    Returns:
+        Success message with reset timestamp
+
+    Raises:
+        HTTPException 404: User not found
+    """
+    # Check if user exists
+    user = await admin_queries.get_user_full(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Reset spending
+    await auth_queries.reset_user_spending(user_id)
+
+    logger.info(f"Admin {admin['id']} reset spending for user {user_id}")
+
+    return {
+        "message": "Spending reset successfully",
+        "user_id": user_id,
+        "reset_at": datetime.now(timezone.utc).isoformat()
+    }

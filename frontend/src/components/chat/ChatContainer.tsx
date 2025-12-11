@@ -8,12 +8,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ClarificationModal } from './ClarificationModal';
 import { cn } from '../../design-system/utils/cn';
 import type { Conversation, ClarificationData } from '../../types';
+import type { SpendingLimitError } from '../../hooks/useChat';
 
 interface ChatContainerProps {
   conversation: Conversation | undefined;
@@ -26,6 +28,9 @@ interface ChatContainerProps {
   awaitingClarification: boolean;
   onSubmitClarification: (response: string) => void;
   onCancelClarification: () => void;
+  spendingRefreshTrigger?: number;
+  spendingLimitError?: SpendingLimitError | null;
+  onClearSpendingLimitError?: () => void;
 }
 
 export function ChatContainer({
@@ -39,7 +44,11 @@ export function ChatContainer({
   awaitingClarification,
   onSubmitClarification,
   onCancelClarification,
+  spendingRefreshTrigger,
+  spendingLimitError,
+  onClearSpendingLimitError,
 }: ChatContainerProps) {
+  const { t, i18n } = useTranslation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [inputAnimated, setInputAnimated] = useState(false);
   const hasMessages = (conversation?.messages.length || 0) > 0;
@@ -120,6 +129,7 @@ export function ChatContainer({
                 onCancel={onCancelStreaming}
                 isStreaming={isStreaming}
                 disabled={false}
+                refreshSpendingTrigger={spendingRefreshTrigger}
               />
             </div>
           </WelcomeScreen>
@@ -222,6 +232,7 @@ export function ChatContainer({
             onCancel={onCancelStreaming}
             isStreaming={isStreaming}
             disabled={false}
+            refreshSpendingTrigger={spendingRefreshTrigger}
           />
         </div>
       )}
@@ -234,6 +245,57 @@ export function ChatContainer({
         onCancel={onCancelClarification}
         disabled={isStreaming}
       />
+
+      {/* Spending Limit Error Modal */}
+      {spendingLimitError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={onClearSpendingLimitError}
+          />
+          {/* Modal */}
+          <div className="relative bg-white dark:bg-accent-900 rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-accent-900 dark:text-accent-100">
+                  {t('chat.spendingLimitTitle')}
+                </h2>
+              </div>
+            </div>
+            <p className="text-accent-700 dark:text-accent-300 mb-4">
+              {i18n.language === 'cs'
+                ? spendingLimitError.message_cs
+                : spendingLimitError.message_en}
+            </p>
+            <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-4 mb-6">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-accent-600 dark:text-accent-400">
+                  {t('chat.spendingUsed')}:
+                </span>
+                <span className="font-semibold text-red-600 dark:text-red-400">
+                  {spendingLimitError.total_spent_czk.toFixed(2)} / {spendingLimitError.spending_limit_czk.toFixed(2)} Kč
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onClearSpendingLimitError}
+              className={cn(
+                'w-full py-3 px-4 rounded-xl font-medium',
+                'bg-accent-900 dark:bg-accent-100',
+                'text-white dark:text-accent-900',
+                'hover:bg-accent-800 dark:hover:bg-accent-200',
+                'transition-colors duration-200'
+              )}
+            >
+              {t('common.ok')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

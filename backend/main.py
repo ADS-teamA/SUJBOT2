@@ -51,6 +51,9 @@ from src.storage.postgres_adapter import PostgreSQLStorageAdapter
 # Import title generator service
 from backend.services.title_generator import title_generator
 
+# Import exchange rate service for spending tracking
+from backend.services.exchange_rate import get_usd_to_czk_rate, usd_to_czk
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -495,6 +498,25 @@ async def chat_stream(
             detail="Agent not initialized"
         )
 
+    # Check spending limit before processing
+    if auth_queries:
+        can_proceed = await auth_queries.check_spending_limit(user["id"])
+        if not can_proceed:
+            spending = await auth_queries.get_user_spending(user["id"])
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "spending_limit_exceeded",
+                    "total_spent_czk": spending["total_spent_czk"],
+                    "spending_limit_czk": spending["spending_limit_czk"],
+                    "message_cs": "Byl dosažen limit výdajů. Kontaktujte administrátora.",
+                    "message_en": "Spending limit reached. Contact administrator."
+                }
+            )
+
+    # Get exchange rate for cost conversion (cached for 24h)
+    exchange_rate = await get_usd_to_czk_rate()
+
     # Save user message to database immediately (before streaming)
     # Skip if regenerating (message already exists in database)
     generated_title = None
@@ -602,6 +624,31 @@ async def chat_stream(
                 except Exception as e:
                     logger.error(f"Failed to save assistant message: {e}", exc_info=True)
                     # Don't crash stream if database save fails - message was already sent to client
+
+            # Record spending for this message
+            if auth_queries and collected_metadata.get("cost"):
+                try:
+                    cost_usd = collected_metadata["cost"].get("total_cost", 0)
+                    cost_czk = usd_to_czk(cost_usd, exchange_rate)
+
+                    if cost_czk > 0:
+                        success = await auth_queries.add_spending(user["id"], cost_czk)
+                        if success:
+                            logger.info(
+                                f"Recorded spending for user {user['id']}: "
+                                f"${cost_usd:.6f} = {cost_czk:.2f} CZK"
+                            )
+                        else:
+                            logger.warning(
+                                f"User {user['id']} hit spending limit during request"
+                            )
+
+                        # Add CZK cost to metadata for frontend display
+                        collected_metadata["cost"]["total_cost_czk"] = cost_czk
+                        collected_metadata["cost"]["exchange_rate"] = exchange_rate
+                except Exception as e:
+                    logger.error(f"Failed to record spending: {e}", exc_info=True)
+                    # Don't crash stream if spending recording fails
 
         except asyncio.CancelledError:
             # Client disconnected (page refresh, navigation, tab close)

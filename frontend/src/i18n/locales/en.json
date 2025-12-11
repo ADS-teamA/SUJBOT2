@@ -41,7 +41,10 @@
     "emptyResponse": "Model returned empty response. This may indicate an API error. Try regenerating.",
     "perAgentBreakdown": "Per-agent breakdown",
     "tokensIn": "in",
-    "tokensOut": "out"
+    "tokensOut": "out",
+    "blocked": "Blocked",
+    "spendingLimitTitle": "Spending Limit Reached",
+    "spendingUsed": "Used"
   },
   "progress": {
     "planning": "Planning",
@@ -115,7 +118,8 @@
     "loading": "Loading...",
     "error": "Error",
     "verifyingSession": "Verifying session...",
-    "justNow": "Just now"
+    "justNow": "Just now",
+    "ok": "OK"
   },
   "language": {
     "switchTo": "Switch language",
@@ -137,7 +141,12 @@
       "totalConversations": "Total Conversations",
       "totalMessages": "Total Messages",
       "activeLast24h": "Active Last 24h",
-      "lastUpdated": "Last updated"
+      "lastUpdated": "Last updated",
+      "spendingSection": "Spending Statistics",
+      "spendingSubtitle": "LLM API cost tracking and averages",
+      "totalSpent": "Total Spent",
+      "avgPerMessage": "Avg. per Message",
+      "avgPerConversation": "Avg. per Conversation"
     },
     "health": {
       "title": "System Health",
@@ -172,7 +181,19 @@
       "roleAdmin": "Admin",
       "variantPremium": "Premium (Claude Opus/Sonnet)",
       "variantCheap": "Cheap (Claude Haiku)",
-      "variantLocal": "Local (Llama 3.1 70B)"
+      "variantLocal": "Local (Llama 3.1 70B)",
+      "spending": "Spent",
+      "spendingSection": "Spending Management",
+      "spendingLimit": "Spending Limit (CZK)",
+      "spendingLimitHelper": "Maximum amount the user can spend",
+      "currentSpending": "Current Spending",
+      "spendingResetAt": "Last Spending Reset",
+      "resetSpending": "Reset Spending",
+      "resetSpendingTitle": "Reset User Spending",
+      "resetSpendingConfirm": "Are you sure you want to reset spending for {{email}} to 0 CZK?",
+      "spendingResetSuccess": "Spending reset successfully",
+      "spendingResetError": "Failed to reset spending",
+      "blocked": "Blocked"
     }
   }
 }

@@ -89,6 +89,15 @@ class AgentVariantResponse(BaseModel):
     model: str = Field(..., description="Default model identifier for this variant")
 
 
+class SpendingResponse(BaseModel):
+    """User spending information."""
+
+    total_spent_czk: float = Field(..., ge=0, description="Total amount spent in CZK")
+    spending_limit_czk: float = Field(..., ge=0, description="Spending limit in CZK")
+    remaining_czk: float = Field(..., ge=0, description="Remaining budget in CZK")
+    reset_at: Optional[str] = Field(None, description="ISO timestamp of last reset")
+
+
 # =============================================================================
 # Admin API Models
 # =============================================================================
@@ -106,6 +115,10 @@ class AdminUserResponse(BaseModel):
     created_at: str
     updated_at: str
     last_login_at: Optional[str] = None
+    # Spending tracking
+    spending_limit_czk: Optional[float] = 500.0
+    total_spent_czk: float = 0.0
+    spending_reset_at: Optional[str] = None
 
 
 class AdminUserListResponse(BaseModel):
@@ -137,6 +150,9 @@ class AdminUserUpdateRequest(BaseModel):
     is_active: Optional[bool] = Field(None, description="Account active status")
     agent_variant: Optional[Literal["premium", "cheap", "local"]] = Field(
         None, description="Model preference"
+    )
+    spending_limit_czk: Optional[float] = Field(
+        None, ge=0, description="Spending limit in CZK"
     )
 
 
@@ -173,4 +189,8 @@ class AdminStatsResponse(BaseModel):
     total_conversations: int = Field(..., ge=0)
     total_messages: int = Field(..., ge=0)
     users_last_24h: int = Field(..., ge=0)
+    # Spending statistics
+    total_spent_czk: float = Field(default=0.0, ge=0)
+    avg_spent_per_message_czk: float = Field(default=0.0, ge=0)
+    avg_spent_per_conversation_czk: float = Field(default=0.0, ge=0)
     timestamp: str

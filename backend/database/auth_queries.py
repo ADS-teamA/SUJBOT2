@@ -397,7 +397,8 @@ class AuthQueries:
                 rows = await conn.fetch(
                     """
                     SELECT id, email, full_name, is_active, is_admin,
-                           created_at, updated_at, last_login_at
+                           agent_variant, spending_limit_czk, total_spent_czk,
+                           spending_reset_at, created_at, updated_at, last_login_at
                     FROM auth.users
                     ORDER BY created_at DESC
                     LIMIT $1 OFFSET $2
@@ -480,3 +481,172 @@ class AuthQueries:
                 logger.info(f"User {user_id} switched to variant: {variant}")
         except Exception as e:
             self._handle_db_error("update_agent_variant", {"user_id": user_id, "variant": variant}, e)
+
+    # =========================================================================
+    # Spending Tracking
+    # =========================================================================
+
+    async def get_user_spending(self, user_id: int) -> Dict:
+        """
+        Get user's current spending status.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dict with:
+                - total_spent_czk: Current total spending in CZK
+                - spending_limit_czk: Admin-set limit in CZK
+                - remaining_czk: Remaining budget (limit - spent)
+                - reset_at: ISO timestamp of last reset
+
+        Example:
+            >>> spending = await queries.get_user_spending(1)
+            >>> print(f"Spent: {spending['total_spent_czk']} / {spending['spending_limit_czk']} CZK")
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT spending_limit_czk, total_spent_czk, spending_reset_at
+                    FROM auth.users WHERE id = $1
+                    """,
+                    user_id
+                )
+                if not row:
+                    # Return defaults for non-existent user
+                    return {
+                        "total_spent_czk": 0.0,
+                        "spending_limit_czk": 500.0,
+                        "remaining_czk": 500.0,
+                        "reset_at": None
+                    }
+
+                limit = float(row["spending_limit_czk"] or 500.0)
+                spent = float(row["total_spent_czk"] or 0.0)
+
+                return {
+                    "total_spent_czk": spent,
+                    "spending_limit_czk": limit,
+                    "remaining_czk": max(0, limit - spent),
+                    "reset_at": row["spending_reset_at"].isoformat() if row["spending_reset_at"] else None
+                }
+        except Exception as e:
+            self._handle_db_error("get_user_spending", {"user_id": user_id}, e)
+
+    async def add_spending(self, user_id: int, cost_czk: float) -> bool:
+        """
+        Add spending to user's total.
+
+        Uses atomic UPDATE to prevent race conditions.
+        Will NOT update if doing so would exceed the limit.
+
+        Args:
+            user_id: User ID
+            cost_czk: Cost to add in CZK
+
+        Returns:
+            True if spending was added successfully
+            False if adding would exceed limit (spending NOT added)
+
+        Example:
+            >>> success = await queries.add_spending(1, 0.15)
+            >>> if not success:
+            ...     print("User has exceeded spending limit")
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                # Atomic update that checks limit
+                result = await conn.fetchval(
+                    """
+                    UPDATE auth.users
+                    SET total_spent_czk = total_spent_czk + $2,
+                        updated_at = NOW()
+                    WHERE id = $1
+                      AND (total_spent_czk + $2) <= spending_limit_czk
+                    RETURNING id
+                    """,
+                    user_id,
+                    cost_czk
+                )
+                if result is not None:
+                    logger.debug(f"Added {cost_czk:.2f} CZK spending for user {user_id}")
+                    return True
+                else:
+                    logger.warning(f"User {user_id} would exceed spending limit with +{cost_czk:.2f} CZK")
+                    return False
+        except Exception as e:
+            self._handle_db_error("add_spending", {"user_id": user_id, "cost_czk": cost_czk}, e)
+
+    async def check_spending_limit(self, user_id: int, estimated_cost_czk: float = 0.0) -> bool:
+        """
+        Check if user can make a request (hasn't exceeded limit).
+
+        Args:
+            user_id: User ID
+            estimated_cost_czk: Estimated cost of upcoming request (optional)
+
+        Returns:
+            True if user can proceed (under limit)
+            False if user has exceeded or would exceed limit
+
+        Example:
+            >>> if not await queries.check_spending_limit(user_id):
+            ...     raise HTTPException(status_code=402, detail="Spending limit exceeded")
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT spending_limit_czk, total_spent_czk
+                    FROM auth.users WHERE id = $1
+                    """,
+                    user_id
+                )
+                if not row:
+                    # User not found - allow (will fail on auth anyway)
+                    return True
+
+                limit = float(row["spending_limit_czk"] or 500.0)
+                spent = float(row["total_spent_czk"] or 0.0)
+
+                # Check if current spending + estimated would exceed limit
+                can_proceed = (spent + estimated_cost_czk) <= limit
+
+                if not can_proceed:
+                    logger.info(
+                        f"User {user_id} blocked: {spent:.2f}/{limit:.2f} CZK "
+                        f"(+{estimated_cost_czk:.2f} estimated)"
+                    )
+
+                return can_proceed
+        except Exception as e:
+            self._handle_db_error("check_spending_limit", {"user_id": user_id}, e)
+
+    async def reset_user_spending(self, user_id: int) -> None:
+        """
+        Reset user's total spending to zero.
+
+        Called by admin to reset a user's spending counter.
+
+        Args:
+            user_id: User ID
+
+        Example:
+            >>> await queries.reset_user_spending(1)
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE auth.users
+                    SET total_spent_czk = 0,
+                        spending_reset_at = NOW(),
+                        updated_at = NOW()
+                    WHERE id = $1
+                    """,
+                    user_id
+                )
+                logger.info(f"Reset spending for user {user_id}")
+        except Exception as e:
+            self._handle_db_error("reset_user_spending", {"user_id": user_id}, e)

@@ -16,6 +16,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
   ? import.meta.env.VITE_API_BASE_URL
   : 'http://localhost:8000';
 
+/**
+ * Get the API base URL (for use in custom API calls outside of dataProvider)
+ */
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 const httpClient = (url: string, options: fetchUtils.Options = {}) => {
   return fetchUtils.fetchJson(url, {
     ...options,
