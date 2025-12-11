@@ -116,8 +116,8 @@ class AdminUserResponse(BaseModel):
     updated_at: str
     last_login_at: Optional[str] = None
     # Spending tracking
-    spending_limit_czk: Optional[float] = 500.0
-    total_spent_czk: float = 0.0
+    spending_limit_czk: Optional[float] = Field(default=500.0, ge=0)
+    total_spent_czk: float = Field(default=0.0, ge=0)
     spending_reset_at: Optional[str] = None
 
 

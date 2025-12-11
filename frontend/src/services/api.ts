@@ -232,7 +232,8 @@ export class ApiService {
               message_en: errorData.detail?.message_en,
             }
           };
-        } catch {
+        } catch (parseError) {
+          console.error('Failed to parse 402 spending limit error response:', parseError);
           yield {
             event: 'error',
             data: {

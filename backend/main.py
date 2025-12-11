@@ -647,7 +647,16 @@ async def chat_stream(
                         collected_metadata["cost"]["total_cost_czk"] = cost_czk
                         collected_metadata["cost"]["exchange_rate"] = exchange_rate
                 except Exception as e:
-                    logger.error(f"Failed to record spending: {e}", exc_info=True)
+                    logger.error(
+                        f"Failed to record spending: {e}",
+                        exc_info=True,
+                        extra={
+                            "user_id": user["id"],
+                            "cost_usd": cost_usd,
+                            "cost_czk": cost_czk,
+                            "exchange_rate": exchange_rate
+                        }
+                    )
                     # Don't crash stream if spending recording fails
 
         except asyncio.CancelledError:

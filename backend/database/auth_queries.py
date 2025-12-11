@@ -514,7 +514,11 @@ class AuthQueries:
                     user_id
                 )
                 if not row:
-                    # Return defaults for non-existent user
+                    # Return defaults for non-existent user (log for debugging)
+                    logger.warning(
+                        f"Returning default spending for non-existent user {user_id}",
+                        extra={"user_id": user_id}
+                    )
                     return {
                         "total_spent_czk": 0.0,
                         "spending_limit_czk": 500.0,
@@ -604,8 +608,12 @@ class AuthQueries:
                     user_id
                 )
                 if not row:
-                    # User not found - allow (will fail on auth anyway)
-                    return True
+                    # Fail closed - block requests for unknown users
+                    logger.error(
+                        f"Spending check for non-existent user {user_id}",
+                        extra={"user_id": user_id}
+                    )
+                    return False
 
                 limit = float(row["spending_limit_czk"] or 500.0)
                 spent = float(row["total_spent_czk"] or 0.0)

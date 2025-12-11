@@ -6,7 +6,13 @@
  * - Active users
  * - Admin users
  * - Total conversations
+ * - Total messages
  * - Users active in last 24h
+ *
+ * Spending statistics (CZK):
+ * - Total spent across all users
+ * - Average spent per message
+ * - Average spent per conversation
  */
 
 import { useEffect, useState } from 'react';

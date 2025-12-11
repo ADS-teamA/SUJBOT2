@@ -42,8 +42,9 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
       const data = await apiService.getSpending();
       setSpending(data);
     } catch (error) {
-      // Silently ignore 429 (rate limit) - will retry on next trigger
+      // Log 429 (rate limit) but don't show error to user - will retry on next trigger
       if (error instanceof Error && error.message.includes('429')) {
+        console.warn('Rate limited when fetching spending, will retry on next trigger');
         return;
       }
       console.error('Failed to fetch spending:', error);

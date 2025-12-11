@@ -11,25 +11,37 @@ Usage:
     rate = await get_usd_to_czk_rate()
 
     # Convert USD to CZK
-    cost_czk = usd_to_czk(0.05, rate)  # ~1.18 CZK
+    cost_czk = usd_to_czk(0.05, rate)
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from typing import Optional
 
 import httpx
 
+from src.utils.cache import TTLCache
+
 logger = logging.getLogger(__name__)
 
-# Fallback rate if CNB API fails (approximate CZK/USD as of Dec 2024)
+# Fallback rate if CNB API fails (update periodically based on market rates)
 FALLBACK_RATE = 23.50
 
-# Cache: (rate, expiration_time)
-_rate_cache: Tuple[Optional[float], Optional[datetime]] = (None, None)
+# Sanity check bounds for USD/CZK rate (prevent corrupted data from CNB)
+RATE_MIN = 15.0
+RATE_MAX = 40.0
 
-# Cache duration: 24 hours
-CACHE_DURATION_HOURS = 24
+# Cache duration: 24 hours (86400 seconds)
+CACHE_DURATION_SECONDS = 24 * 3600
+
+# Thread-safe TTL cache for exchange rate (SSOT pattern from src/utils/cache.py)
+_rate_cache: TTLCache[float] = TTLCache(
+    ttl_seconds=CACHE_DURATION_SECONDS,
+    max_size=1,
+    name="exchange_rate"
+)
+
+# Cache key constant
+_CACHE_KEY = "usd_czk_rate"
 
 
 async def get_usd_to_czk_rate() -> float:
@@ -38,32 +50,40 @@ async def get_usd_to_czk_rate() -> float:
 
     Uses CNB (Czech National Bank) official rates.
     Falls back to hardcoded rate if API fails.
-    Caches the rate for 24 hours.
+    Caches the rate for 24 hours (thread-safe).
 
     Returns:
         Exchange rate (CZK per 1 USD)
     """
-    global _rate_cache
+    # Check cache first (thread-safe TTLCache)
+    cached_rate = _rate_cache.get(_CACHE_KEY)
+    if cached_rate is not None:
+        return cached_rate
 
-    # Check cache first
-    cached_rate, expiration = _rate_cache
-    if cached_rate is not None and expiration is not None:
-        if datetime.now() < expiration:
-            return cached_rate
-
-    # Fetch from CNB
+    # Fetch from CNB with specific exception handling
     try:
         rate = await _fetch_cnb_rate()
         if rate is not None:
-            # Cache the rate for 24 hours
-            _rate_cache = (rate, datetime.now() + timedelta(hours=CACHE_DURATION_HOURS))
-            logger.info(f"Fetched USD/CZK rate from CNB: {rate:.4f}")
-            return rate
-    except Exception as e:
-        logger.warning(f"Failed to fetch CNB exchange rate: {e}")
+            # Validate rate is within reasonable bounds
+            if not (RATE_MIN <= rate <= RATE_MAX):
+                logger.error(
+                    f"CNB rate {rate:.4f} outside expected range [{RATE_MIN}-{RATE_MAX}], "
+                    f"using fallback"
+                )
+            else:
+                # Cache the valid rate
+                _rate_cache.set(_CACHE_KEY, rate)
+                logger.info(f"Fetched USD/CZK rate from CNB: {rate:.4f}")
+                return rate
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error fetching CNB exchange rate: {e}")
+    except httpx.TimeoutException as e:
+        logger.error(f"Timeout fetching CNB exchange rate: {e}")
+    except ValueError as e:
+        logger.error(f"Failed to parse CNB exchange rate response: {e}")
 
-    # Use fallback
-    logger.warning(f"Using fallback USD/CZK rate: {FALLBACK_RATE}")
+    # Use fallback - log at ERROR level since this affects billing accuracy
+    logger.error(f"Using fallback USD/CZK rate: {FALLBACK_RATE}")
     return FALLBACK_RATE
 
 
@@ -80,6 +100,11 @@ async def _fetch_cnb_rate() -> Optional[float]:
 
     Returns:
         Exchange rate (CZK per 1 USD) or None if failed
+
+    Raises:
+        httpx.HTTPError: If HTTP request fails
+        httpx.TimeoutException: If request times out
+        ValueError: If response parsing fails
     """
     url = (
         "https://www.cnb.cz/en/financial-markets/foreign-exchange-market/"
@@ -97,6 +122,8 @@ async def _fetch_cnb_rate() -> Optional[float]:
                 parts = line.split("|")
                 if len(parts) >= 5:
                     amount = int(parts[2])  # Usually 1
+                    if amount <= 0:
+                        raise ValueError(f"Invalid amount in CNB response: {amount}")
                     rate = float(parts[4].replace(",", "."))
                     czk_per_usd = rate / amount
                     return czk_per_usd
@@ -128,6 +155,5 @@ def get_fallback_rate() -> float:
 
 def clear_rate_cache() -> None:
     """Clear the cached exchange rate (for testing)."""
-    global _rate_cache
-    _rate_cache = (None, None)
+    _rate_cache.clear()
     logger.debug("Exchange rate cache cleared")
