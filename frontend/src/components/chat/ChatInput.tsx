@@ -2,26 +2,62 @@
  * ChatInput Component - Message input textarea with send/stop button
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiService, type SpendingInfo } from '../../services/api';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   onCancel?: () => void;  // Cancel streaming
   isStreaming: boolean;   // Whether currently streaming
   disabled: boolean;      // Disabled for other reasons (not streaming)
+  refreshSpendingTrigger?: number; // Increment to refresh spending data
 }
 
-export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpendingTrigger }: ChatInputProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [message, setMessage] = useState('');
+  const [spending, setSpending] = useState<SpendingInfo | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Backend limit: 50,000 characters (see backend/models.py ChatRequest)
   const MAX_MESSAGE_LENGTH = 50000;
   const isMessageTooLong = message.length > MAX_MESSAGE_LENGTH;
+
+  // Calculate spending status for color coding
+  const spendingPercentage = spending
+    ? Math.min((spending.total_spent_czk / spending.spending_limit_czk) * 100, 100)
+    : 0;
+  const isBlocked = spending
+    ? spending.total_spent_czk >= spending.spending_limit_czk
+    : false;
+
+  // Fetch spending data with rate limit protection
+  const fetchSpending = useCallback(async () => {
+    try {
+      const data = await apiService.getSpending();
+      setSpending(data);
+    } catch (error) {
+      // Log 429 (rate limit) but don't show error to user - will retry on next trigger
+      if (error instanceof Error && error.message.includes('429')) {
+        console.warn('Rate limited when fetching spending, will retry on next trigger');
+        return;
+      }
+      console.error('Failed to fetch spending:', error);
+    }
+  }, []);
+
+  // Fetch spending on mount and when trigger changes
+  // Use a small delay to prevent simultaneous fetches from multiple ChatInput instances
+  useEffect(() => {
+    const delay = Math.random() * 100; // Random 0-100ms delay to stagger requests
+    const timeoutId = setTimeout(fetchSpending, delay);
+    return () => clearTimeout(timeoutId);
+  }, [fetchSpending, refreshSpendingTrigger]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -135,14 +171,17 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
             </button>
           )}
         </div>
-        {message.length > 0 && (
+        {/* Bottom row: character count (left) + user info (right) */}
+        <div className="mt-2 px-2 flex justify-between items-center text-xs">
+          {/* Character count - left side */}
           <div
             className={cn(
-              'mt-2 px-2 text-xs',
-              'text-right transition-colors duration-200',
-              isMessageTooLong
-                ? 'text-red-600 dark:text-red-400 font-medium'
-                : 'text-accent-500 dark:text-accent-500'
+              'transition-colors duration-200',
+              message.length === 0
+                ? 'invisible'
+                : isMessageTooLong
+                  ? 'text-red-600 dark:text-red-400 font-medium'
+                  : 'text-accent-500 dark:text-accent-500'
             )}
           >
             {isMessageTooLong && (
@@ -150,7 +189,37 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
             )}
             {message.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()} {t('chat.characters')}
           </div>
-        )}
+
+          {/* User email + spending - right side */}
+          <div className="text-right">
+            {user && (
+              <div className="text-accent-500 dark:text-accent-500 mb-0.5">
+                {user.email}
+              </div>
+            )}
+            {spending && (
+              <div
+                className={cn(
+                  'font-medium transition-colors duration-200',
+                  isBlocked
+                    ? 'text-red-600 dark:text-red-400'
+                    : spendingPercentage >= 90
+                      ? 'text-red-600 dark:text-red-400'
+                      : spendingPercentage >= 70
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-green-600 dark:text-green-400'
+                )}
+              >
+                {spending.total_spent_czk.toFixed(2)} / {spending.spending_limit_czk.toFixed(2)} Kč
+                {isBlocked && (
+                  <span className="ml-2 px-1.5 py-0.5 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded text-[10px]">
+                    {t('chat.blocked')}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </form>
   );

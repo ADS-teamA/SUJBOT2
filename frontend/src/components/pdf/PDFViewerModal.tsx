@@ -93,7 +93,7 @@ export function PDFViewerModal({
   const [scale, setScale] = useState(1.2);
   const [error, setError] = useState<string | null>(null);
   const [_isLoading, setIsLoading] = useState(true);
-  const [pdfData, setPdfData] = useState<{ data: ArrayBuffer } | null>(null);
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
   const [pageInputValue, setPageInputValue] = useState(String(initialPage));
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -170,7 +170,7 @@ export function PDFViewerModal({
 
         const arrayBuffer = await response.arrayBuffer();
         console.log('[PDFViewerModal] PDF fetched, size:', arrayBuffer.byteLength);
-        setPdfData({ data: arrayBuffer });
+        setPdfData(arrayBuffer);
       } catch (err) {
         console.error('[PDFViewerModal] PDF fetch error:', err);
         const message = err instanceof Error ? err.message : 'Nepodařilo se načíst PDF';

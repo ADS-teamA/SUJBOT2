@@ -42,7 +42,10 @@
     "emptyResponse": "Model vrátil prázdnou odpověď. Může jít o chybu API. Zkuste vygenerovat znovu.",
     "perAgentBreakdown": "Rozpad podle agentů",
     "tokensIn": "vstup",
-    "tokensOut": "výstup"
+    "tokensOut": "výstup",
+    "blocked": "Zablokován",
+    "spendingLimitTitle": "Dosažen limit výdajů",
+    "spendingUsed": "Utraceno"
   },
   "progress": {
     "planning": "Plánování",
@@ -116,7 +119,8 @@
     "loading": "Načítám...",
     "error": "Chyba",
     "verifyingSession": "Ověřuji relaci...",
-    "justNow": "Právě teď"
+    "justNow": "Právě teď",
+    "ok": "OK"
   },
   "language": {
     "switchTo": "Přepnout jazyk",
@@ -138,7 +142,12 @@
       "totalConversations": "Celkem konverzací",
       "totalMessages": "Celkem zpráv",
       "activeLast24h": "Aktivní za 24h",
-      "lastUpdated": "Naposledy aktualizováno"
+      "lastUpdated": "Naposledy aktualizováno",
+      "spendingSection": "Statistiky útrat",
+      "spendingSubtitle": "Sledování nákladů na LLM API a průměry",
+      "totalSpent": "Celkem utraceno",
+      "avgPerMessage": "Průměr na zprávu",
+      "avgPerConversation": "Průměr na konverzaci"
     },
     "health": {
       "title": "Stav systému",
@@ -173,7 +182,19 @@
       "roleAdmin": "Administrátor",
       "variantPremium": "Premium (Claude Opus/Sonnet)",
       "variantCheap": "Levný (Claude Haiku)",
-      "variantLocal": "Lokální (Llama 3.1 70B)"
+      "variantLocal": "Lokální (Llama 3.1 70B)",
+      "spending": "Utraceno",
+      "spendingSection": "Správa výdajů",
+      "spendingLimit": "Limit výdajů (Kč)",
+      "spendingLimitHelper": "Maximální částka, kterou může uživatel utratit",
+      "currentSpending": "Aktuální výdaje",
+      "spendingResetAt": "Poslední reset výdajů",
+      "resetSpending": "Resetovat výdaje",
+      "resetSpendingTitle": "Resetovat výdaje uživatele",
+      "resetSpendingConfirm": "Opravdu chcete resetovat výdaje uživatele {{email}} na 0 Kč?",
+      "spendingResetSuccess": "Výdaje byly úspěšně resetovány",
+      "spendingResetError": "Nepodařilo se resetovat výdaje",
+      "blocked": "Zablokován"
     }
   }
 }

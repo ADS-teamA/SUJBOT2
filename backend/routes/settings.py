@@ -8,7 +8,7 @@ Provides endpoints for managing user-specific settings:
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from ..models import AgentVariantRequest, AgentVariantResponse
+from ..models import AgentVariantRequest, AgentVariantResponse, SpendingResponse
 from ..middleware.auth import get_current_user
 from ..constants import VARIANT_CONFIG, DEFAULT_VARIANT, is_valid_variant
 from .auth import get_auth_queries
@@ -97,3 +97,30 @@ async def update_agent_variant(
         raise HTTPException(status_code=400, detail=str(e))
 
     return _build_variant_response(request.variant)
+
+
+@router.get("/spending", response_model=SpendingResponse)
+async def get_spending(current_user: dict = Depends(get_current_user)):
+    """
+    Get current user's spending information.
+
+    Returns:
+        SpendingResponse with spending details in CZK
+
+    Example response:
+        {
+            "total_spent_czk": 123.45,
+            "spending_limit_czk": 500.00,
+            "remaining_czk": 376.55,
+            "reset_at": "2024-12-01T00:00:00+00:00"
+        }
+    """
+    queries = get_auth_queries()
+    spending = await queries.get_user_spending(current_user["id"])
+
+    return SpendingResponse(
+        total_spent_czk=spending["total_spent_czk"],
+        spending_limit_czk=spending["spending_limit_czk"],
+        remaining_czk=spending["remaining_czk"],
+        reset_at=spending["reset_at"]
+    )

@@ -24,6 +24,14 @@ function getValidConversationIdFromUrl(): string | null {
   return null;
 }
 
+// Spending limit error data from 402 response
+export interface SpendingLimitError {
+  message_cs: string;
+  message_en: string;
+  total_spent_czk: number;
+  spending_limit_czk: number;
+}
+
 export function useChat() {
   const { isAuthenticated } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -34,6 +42,9 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
   const [awaitingClarification, setAwaitingClarification] = useState(false);
+  // Spending tracking
+  const [spendingLimitError, setSpendingLimitError] = useState<SpendingLimitError | null>(null);
+  const [spendingRefreshTrigger, setSpendingRefreshTrigger] = useState(0);
 
   // Sync URL with current conversation ID (for refresh persistence and shareable links)
   useEffect(() => {
@@ -667,6 +678,18 @@ export function useChat() {
             // Error occurred
             console.error('Stream error:', event.data);
 
+            // Handle spending limit exceeded error specially
+            if (event.data.type === 'SpendingLimitExceeded') {
+              setSpendingLimitError({
+                message_cs: event.data.message_cs || 'Byl dosažen limit výdajů.',
+                message_en: event.data.message_en || 'Spending limit reached.',
+                total_spent_czk: event.data.total_spent_czk || 0,
+                spending_limit_czk: event.data.spending_limit_czk || 0,
+              });
+              // Don't add error to message - show modal instead
+              break;
+            }
+
             if (currentMessageRef.current) {
               currentMessageRef.current.content += `\n\n[Error: ${event.data.error}]`;
             }
@@ -731,6 +754,9 @@ export function useChat() {
         currentMessageRef.current = null;
         currentToolCallsRef.current = new Map();
         abortControllerRef.current = null;  // Cleanup abort controller
+        // Invalidate spending cache and trigger refresh after each message
+        apiService.invalidateSpendingCache();
+        setSpendingRefreshTrigger((prev) => prev + 1);
       }
     },
     [isStreaming, createConversation, currentConversationId, conversations]
@@ -1124,12 +1150,21 @@ export function useChat() {
     }
   }, []);
 
+  /**
+   * Clear spending limit error (dismiss modal)
+   */
+  const clearSpendingLimitError = useCallback(() => {
+    setSpendingLimitError(null);
+  }, []);
+
   return {
     conversations,
     currentConversation,
     isStreaming,
     clarificationData,
     awaitingClarification,
+    spendingLimitError,
+    spendingRefreshTrigger,
     createConversation,
     selectConversation,
     deleteConversation,
@@ -1141,5 +1176,6 @@ export function useChat() {
     submitClarification,
     cancelClarification,
     cancelStreaming,
+    clearSpendingLimitError,
   };
 }
