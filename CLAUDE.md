@@ -408,10 +408,10 @@ Frontend supports CZ/EN language switching via react-i18next.
 **IMPORTANT:** When adding new backend API endpoints, you MUST update nginx routing!
 
 The nginx reverse proxy (`docker/nginx/reverse-proxy.conf`) routes requests based on URL patterns.
-New backend routes must be added to the location regex:
+New backend routes must be added to the location regex in the "Direct backend endpoints" section:
 
 ```nginx
-# Line ~129 in reverse-proxy.conf
+# In reverse-proxy.conf, find "# Direct backend endpoints" section
 location ~ ^/(health|docs|openapi.json|chat|models|clarify|auth|conversations|settings|documents) {
     proxy_pass http://backend;
     ...
@@ -419,10 +419,17 @@ location ~ ^/(health|docs|openapi.json|chat|models|clarify|auth|conversations|se
 ```
 
 **Checklist for new backend routes:**
-1. Create route in `backend/routes/` with `APIRouter(prefix="/newroute")`
-2. Register router in `backend/main.py`: `app.include_router(new_router)`
-3. **Add route to nginx regex** in `docker/nginx/reverse-proxy.conf`
-4. Reload nginx: `docker compose exec nginx nginx -s reload`
+1. Create route file in `backend/routes/` with `APIRouter(prefix="/newroute", tags=["newroute"])`
+2. Register router in `backend/main.py`:
+   - Add import: `from backend.routes.newroute import router as newroute_router`
+   - Add registration: `app.include_router(newroute_router)`
+3. (If needed) Add dependency setter function and call it in `main.py` lifespan handler
+4. **Add route to nginx regex** in `docker/nginx/reverse-proxy.conf`
+5. Reload nginx: `docker compose exec nginx nginx -s reload`
+
+**Alternative:** Routes prefixed with `/api/` are automatically proxied to backend (rewritten to remove `/api/` prefix). No nginx changes needed for `/api/*` routes.
+
+**Note:** Admin routes (`/admin/*`) have separate location blocks in nginx config (lines 149-174).
 
 **Symptom if forgotten:** Frontend receives HTML (`<!doctype...`) instead of JSON - nginx falls through to frontend catch-all and returns `index.html`.
 
