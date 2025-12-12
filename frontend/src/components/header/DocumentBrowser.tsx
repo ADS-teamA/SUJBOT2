@@ -8,7 +8,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { FileText, FolderOpen, X, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
-import { apiService, DocumentInfo } from '../../services/api';
+import { apiService } from '../../services/api';
+import type { DocumentInfo } from '../../types';
 import { useCitationContext } from '../../contexts/CitationContext';
 
 interface DocumentBrowserProps {

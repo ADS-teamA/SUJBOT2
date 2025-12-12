@@ -471,7 +471,7 @@ export class ApiService {
    * Get list of available documents
    */
   async getDocuments(): Promise<DocumentInfo[]> {
-    const response = await fetch(`${API_BASE_URL}/documents`, {
+    const response = await fetch(`${API_BASE_URL}/documents/`, {
       method: 'GET',
       headers: this.getHeaders(),
       credentials: 'include',
