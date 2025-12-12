@@ -403,6 +403,29 @@ Frontend supports CZ/EN language switching via react-i18next.
 - Use `gh` CLI for PRs: `gh pr create --title "..." --body "..."`
 - Update CLAUDE.md when making major architectural changes
 
+### Adding New Backend API Routes
+
+**IMPORTANT:** When adding new backend API endpoints, you MUST update nginx routing!
+
+The nginx reverse proxy (`docker/nginx/reverse-proxy.conf`) routes requests based on URL patterns.
+New backend routes must be added to the location regex:
+
+```nginx
+# Line ~129 in reverse-proxy.conf
+location ~ ^/(health|docs|openapi.json|chat|models|clarify|auth|conversations|settings|documents) {
+    proxy_pass http://backend;
+    ...
+}
+```
+
+**Checklist for new backend routes:**
+1. Create route in `backend/routes/` with `APIRouter(prefix="/newroute")`
+2. Register router in `backend/main.py`: `app.include_router(new_router)`
+3. **Add route to nginx regex** in `docker/nginx/reverse-proxy.conf`
+4. Reload nginx: `docker compose exec nginx nginx -s reload`
+
+**Symptom if forgotten:** Frontend receives HTML (`<!doctype...`) instead of JSON - nginx falls through to frontend catch-all and returns `index.html`.
+
 ### Model Selection
 
 - **Production:** `claude-sonnet-4-5`
@@ -467,5 +490,5 @@ curl -s "https://eu.api.smith.langchain.com/api/v1/runs/query" \
 
 ---
 
-**Last Updated:** 2025-12-01
+**Last Updated:** 2025-12-12
 **Version:** PHASE 1-7 + Multi-Agent + Graphiti KG + Gemini Extractor + Exception Hierarchy + SSOT Refactoring + LangSmith Evaluation
