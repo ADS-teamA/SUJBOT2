@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUJBOT2 Architecture Documentation</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: #0f3460;
+            --text-primary: #e6e6e6;
+            --text-secondary: #a0a0a0;
+            --accent: #e94560;
+            --accent-secondary: #0f4c75;
+            --code-bg: #0d1117;
+            --border: #30363d;
+            --success: #3fb950;
+            --warning: #d29922;
+            --info: #58a6ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            display: flex;
+        }
+
+        /* Navigation Sidebar */
+        nav {
+            width: 280px;
+            height: 100vh;
+            position: fixed;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        nav h1 {
+            font-size: 1.5rem;
+            color: var(--accent);
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        nav .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        nav ul {
+            list-style: none;
+        }
+
+        nav ul li {
+            margin: 5px 0;
+        }
+
+        nav ul li a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: block;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        nav ul li a:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        nav ul li.section-header {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 15px;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Main Content */
+        main {
+            margin-left: 280px;
+            padding: 40px 60px;
+            max-width: 1200px;
+            min-height: 100vh;
+        }
+
+        section {
+            margin-bottom: 60px;
+        }
+
+        h2 {
+            font-size: 2rem;
+            color: var(--accent);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h3 {
+            font-size: 1.4rem;
+            color: var(--info);
+            margin: 30px 0 15px 0;
+        }
+
+        h4 {
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            margin: 20px 0 10px 0;
+        }
+
+        p {
+            margin-bottom: 15px;
+            color: var(--text-secondary);
+        }
+
+        /* Code Blocks */
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        pre.diagram {
+            background: var(--bg-tertiary);
+            color: var(--info);
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        code {
+            font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: var(--accent);
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-primary);
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: rgba(233, 69, 96, 0.05);
+        }
+
+        /* Details/Collapsible */
+        details {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        summary {
+            padding: 15px 20px;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            border-radius: 8px 8px 0 0;
+        }
+
+        details[open] summary {
+            border-bottom: 1px solid var(--border);
+        }
+
+        details > div {
+            padding: 20px;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-right: 5px;
+        }
+
+        .badge-primary { background: var(--accent); color: white; }
+        .badge-secondary { background: var(--accent-secondary); color: white; }
+        .badge-success { background: var(--success); color: white; }
+        .badge-warning { background: var(--warning); color: black; }
+        .badge-info { background: var(--info); color: white; }
+
+        /* File Path */
+        .file-path {
+            font-family: monospace;
+            background: var(--code-bg);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--success);
+            display: inline-block;
+            margin: 5px 0;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin: 15px 0 15px 25px;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: rgba(88, 166, 255, 0.1);
+            border-left: 4px solid var(--info);
+            padding: 15px 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .warning-box {
+            background: rgba(210, 153, 34, 0.1);
+            border-left: 4px solid var(--warning);
+            padding: 15px 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            nav {
+                width: 240px;
+            }
+            main {
+                margin-left: 240px;
+                padding: 30px 40px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            nav {
+                display: none;
+            }
+            main {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+
+        /* Smooth scroll */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Anchor offset for fixed nav */
+        section[id] {
+            scroll-margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <h1>SUJBOT2</h1>
+        <p class="subtitle">Architecture Documentation</p>
+        <ul>
+            <li class="section-header">Overview</li>
+            <li><a href="#overview">System Overview</a></li>
+            <li><a href="#tech-stack">Technology Stack</a></li>
+
+            <li class="section-header">Indexing</li>
+            <li><a href="#indexing">Indexing Pipeline</a></li>
+            <li><a href="#phase1">Phase 1: Extraction</a></li>
+            <li><a href="#phase2">Phase 2: Summarization</a></li>
+            <li><a href="#phase3">Phase 3: Chunking</a></li>
+            <li><a href="#phase4">Phase 4: Embedding</a></li>
+            <li><a href="#phase5">Phase 5: Knowledge Graph</a></li>
+
+            <li class="section-header">Chat</li>
+            <li><a href="#chat-flow">Chat Flow</a></li>
+            <li><a href="#frontend">Frontend</a></li>
+            <li><a href="#backend">Backend API</a></li>
+            <li><a href="#streaming">SSE Streaming</a></li>
+
+            <li class="section-header">Multi-Agent</li>
+            <li><a href="#multi-agent">Multi-Agent System</a></li>
+            <li><a href="#orchestrator">Orchestrator</a></li>
+            <li><a href="#agents">Specialist Agents</a></li>
+            <li><a href="#workflow">LangGraph Workflow</a></li>
+
+            <li class="section-header">Retrieval</li>
+            <li><a href="#retrieval">RAG Retrieval</a></li>
+            <li><a href="#hyde">HyDE + Expansion Fusion</a></li>
+
+            <li class="section-header">Reference</li>
+            <li><a href="#tools">Tools Reference</a></li>
+            <li><a href="#config">Configuration</a></li>
+            <li><a href="#research">Research Papers</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <!-- SYSTEM OVERVIEW -->
+        <section id="overview">
+            <h2>System Overview</h2>
+            <p>SUJBOT2 is a production RAG (Retrieval-Augmented Generation) system for legal and technical documents with multi-agent orchestration. It processes Czech legal documents, nuclear safety regulations, and technical specifications.</p>
+
+            <pre class="diagram">
++-------------------+     +-------------------+     +-------------------+
+|                   |     |                   |     |                   |
+|   User Query      | --> |   Frontend        | --> |   Backend API     |
+|                   |     |   (React+Vite)    |     |   (FastAPI)       |
++-------------------+     +-------------------+     +-------------------+
+                                                              |
+                                                              v
++-------------------+     +-------------------+     +-------------------+
+|                   |     |                   |     |                   |
+|   Final Response  | <-- |   Orchestrator    | <-- |   Agent Adapter   |
+|   (Streaming)     |     |   (Routing+Synth) |     |                   |
++-------------------+     +-------------------+     +-------------------+
+                                   |
+                    +--------------+--------------+
+                    |              |              |
+                    v              v              v
+            +------------+  +------------+  +------------+
+            |  Extractor |  | Compliance |  |   Risk     |
+            |   Agent    |  |   Agent    |  |  Verifier  |
+            +------------+  +------------+  +------------+
+                    |              |              |
+                    v              v              v
+            +---------------------------------------------------+
+            |                                                   |
+            |   HyDE + Expansion Fusion Retrieval               |
+            |   (PostgreSQL pgvector - vectors.layer3)          |
+            |                                                   |
+            +---------------------------------------------------+
+            </pre>
+
+            <h3>Key Capabilities</h3>
+            <ul>
+                <li><strong>Document Indexing:</strong> 6-phase pipeline (extraction, summarization, chunking, embedding, KG, integration)</li>
+                <li><strong>Multi-Agent Orchestration:</strong> 8 autonomous agents with LLM-driven tool selection</li>
+                <li><strong>Advanced Retrieval:</strong> HyDE + Expansion Fusion with 3-layer embeddings</li>
+                <li><strong>Knowledge Graph:</strong> Graphiti temporal KG for entity relationships</li>
+                <li><strong>Real-time Streaming:</strong> SSE-based response streaming with progress events</li>
+            </ul>
+        </section>
+
+        <!-- TECHNOLOGY STACK -->
+        <section id="tech-stack">
+            <h2>Technology Stack</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Layer</th>
+                        <th>Technology</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Frontend</td>
+                        <td>React 18 + Vite + TypeScript</td>
+                        <td>Web UI with hot reload</td>
+                    </tr>
+                    <tr>
+                        <td>Backend</td>
+                        <td>FastAPI + Python 3.11+</td>
+                        <td>REST API + SSE streaming</td>
+                    </tr>
+                    <tr>
+                        <td>LLM Framework</td>
+                        <td>LangGraph + LangChain</td>
+                        <td>Multi-agent orchestration</td>
+                    </tr>
+                    <tr>
+                        <td>Vector Store</td>
+                        <td>PostgreSQL + pgvector</td>
+                        <td>4096-dim embeddings (Qwen3)</td>
+                    </tr>
+                    <tr>
+                        <td>Knowledge Graph</td>
+                        <td>Graphiti + Neo4j</td>
+                        <td>Temporal entity relationships</td>
+                    </tr>
+                    <tr>
+                        <td>Document Extraction</td>
+                        <td>Gemini 2.5 Flash / Unstructured</td>
+                        <td>PDF/DOCX parsing</td>
+                    </tr>
+                    <tr>
+                        <td>Embedding Model</td>
+                        <td>Qwen3-Embedding-8B (DeepInfra)</td>
+                        <td>4096-dimension vectors</td>
+                    </tr>
+                    <tr>
+                        <td>LLM Models</td>
+                        <td>Claude Sonnet 4.5 / GPT-4o-mini</td>
+                        <td>Agent reasoning</td>
+                    </tr>
+                    <tr>
+                        <td>Observability</td>
+                        <td>LangSmith</td>
+                        <td>Tracing, evaluation</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- INDEXING PIPELINE -->
+        <section id="indexing">
+            <h2>Indexing Pipeline</h2>
+            <p>Documents are processed through a 6-phase pipeline before being available for retrieval.</p>
+
+            <pre class="diagram">
+ Document (PDF/DOCX)
+        |
+        v
++------------------+
+| PHASE 1          |    Gemini 2.5 Flash / Unstructured
+| Extraction       | -> Structured sections with hierarchy
++------------------+
+        |
+        v
++------------------+
+| PHASE 2          |    LLM summarization (Claude/GPT)
+| Summarization    | -> Generic summaries (100-1000 chars)
++------------------+
+        |
+        v
++------------------+
+| PHASE 3          |    Token-aware chunking (512 tokens)
+| Chunking         | -> 3-layer chunks with SAC context
++------------------+
+        |
+        v
++------------------+
+| PHASE 4          |    Qwen3-Embedding-8B (DeepInfra)
+| Embedding        | -> PostgreSQL pgvector storage
++------------------+
+        |
+        v
++------------------+
+| PHASE 5A         |    Graphiti + GPT-4o-mini
+| KG Extraction    | -> Neo4j entities/relationships
++------------------+     (optional)
+        |
+        v
++------------------+
+| PHASE 5D         |    Graph-boosted retrieval
+| Integration      | -> Hybrid search scores
++------------------+     (optional)
+            </pre>
+
+            <p class="file-path">Entry point: run_pipeline.py</p>
+        </section>
+
+        <!-- PHASE 1: EXTRACTION -->
+        <section id="phase1">
+            <h3>Phase 1: Document Extraction</h3>
+            <p>Extracts structured content from documents (PDF, DOCX, PPTX, HTML) with hierarchical section detection.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Backend</th>
+                        <th>Use Case</th>
+                        <th>Features</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-primary">Gemini 2.5 Flash</span></td>
+                        <td>Primary (PDFs)</td>
+                        <td>Direct PDF upload, JSON response, chunked extraction for large docs</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-secondary">Unstructured.io</span></td>
+                        <td>Fallback (all formats)</td>
+                        <td>Element detection, parent-child hierarchy, language detection</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <details>
+                <summary>Key Files</summary>
+                <div>
+                    <p class="file-path">src/unified_extraction_pipeline.py</p>
+                    <p>Main extraction orchestrator - selects backend based on <code>EXTRACTION_BACKEND</code> env var.</p>
+
+                    <p class="file-path">src/gemini_extractor.py</p>
+                    <p>Gemini extraction with chunked processing for large PDFs, JSON repair strategies.</p>
+
+                    <p class="file-path">src/unstructured_extractor.py</p>
+                    <p>Unstructured.io extraction with element type detection and hierarchy building.</p>
+                </div>
+            </details>
+
+            <details>
+                <summary>Output Schema: DocumentSection</summary>
+                <div>
+<pre><code>class DocumentSection:
+    section_id: str          # "sec_1", "sec_2", etc.
+    title: str               # Section heading
+    content: str             # Section text content
+    level: int               # Heading level (1-6)
+    depth: int               # Nesting depth
+    parent_id: Optional[str] # Parent section ID
+    children_ids: List[str]  # Child section IDs
+    path: str                # Breadcrumb path
+    page_number: int         # Source page
+    summary: Optional[str]   # Added in Phase 2</code></pre>
+                </div>
+            </details>
+
+            <p class="file-path">Output: output/{doc_id}/phase1_extraction.json</p>
+        </section>
+
+        <!-- PHASE 2: SUMMARIZATION -->
+        <section id="phase2">
+            <h3>Phase 2: Summary Generation</h3>
+            <p>Generates generic summaries for documents and sections using LLM.</p>
+
+            <div class="info-box">
+                <strong>Research Note:</strong> Generic summaries OUTPERFORM expert-guided summaries for retrieval (Reuter et al., 2024). This is counterintuitive but validated.
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Summary Type</th>
+                        <th>Length</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Document Summary</td>
+                        <td>100-1000 chars</td>
+                        <td>Overview of entire document</td>
+                    </tr>
+                    <tr>
+                        <td>Section Summaries</td>
+                        <td>~150 chars</td>
+                        <td>Context for each section</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <details>
+                <summary>Key Files</summary>
+                <div>
+                    <p class="file-path">src/summary_generator.py</p>
+                    <p>LLM-based summary generation with Batch API support (50% cost savings).</p>
+
+                    <p class="file-path">prompts/document_summary.txt</p>
+                    <p class="file-path">prompts/section_summary.txt</p>
+                    <p>Prompt templates for summary generation.</p>
+                </div>
+            </details>
+
+            <p class="file-path">Output: output/{doc_id}/phase2_summaries.json</p>
+        </section>
+
+        <!-- PHASE 3: CHUNKING -->
+        <section id="phase3">
+            <h3>Phase 3: Multi-Layer Chunking</h3>
+            <p>Creates 3-layer chunk hierarchy with Summary-Augmented Chunking (SAC) for contextual retrieval.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Layer</th>
+                        <th>Granularity</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-info">Layer 1</span></td>
+                        <td>Document</td>
+                        <td>1 chunk per document (title + summary)</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-secondary">Layer 2</span></td>
+                        <td>Section</td>
+                        <td>1 chunk per section (with hierarchy)</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-primary">Layer 3</span></td>
+                        <td>Chunk</td>
+                        <td>Fine-grained chunks (512 tokens max)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning-box">
+                <strong>Critical Constraint:</strong> Chunks are limited to 512 tokens (tiktoken, text-embedding-3-large tokenizer). This is research-backed from LegalBench-RAG for legal documents. Changing this invalidates all vector stores!
+            </div>
+
+            <h4>Summary-Augmented Chunking (SAC)</h4>
+            <p>Each chunk is prepended with contextual information for better retrieval:</p>
+
+<pre><code># Chunk embedding_text format:
+[Document Title > Section Path > Section Title]
+
+{context summary}
+
+{raw_content}</code></pre>
+
+            <details>
+                <summary>Key Files</summary>
+                <div>
+                    <p class="file-path">src/multi_layer_chunker.py</p>
+                    <p>3-layer chunking with token-aware splitting (tiktoken).</p>
+
+                    <p class="file-path">src/contextual_retrieval.py</p>
+                    <p>LLM-generated context for each chunk (50-100 words).</p>
+                </div>
+            </details>
+
+            <details>
+                <summary>Chunk JSON Schema</summary>
+                <div>
+<pre><code>{
+  "chunk_id": "doc_L3_c1_sec_1",
+  "context": "SAC context summary (what chunk is about)",
+  "raw_content": "Actual text content from the document",
+  "embedding_text": "[breadcrumb]\n\ncontext\n\nraw_content",
+  "metadata": {
+    "chunk_id": "...",
+    "layer": 3,
+    "document_id": "...",
+    "section_id": "...",
+    "section_path": "...",
+    "page_number": 5
+  }
+}</code></pre>
+                </div>
+            </details>
+
+            <p class="file-path">Output: output/{doc_id}/phase3_chunks.json</p>
+        </section>
+
+        <!-- PHASE 4: EMBEDDING -->
+        <section id="phase4">
+            <h3>Phase 4: Embedding & Storage</h3>
+            <p>Generates vector embeddings and stores them in PostgreSQL with pgvector extension.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Embedding Model</th>
+                        <th>Dimensions</th>
+                        <th>Provider</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-primary">Qwen3-Embedding-8B</span></td>
+                        <td>4096</td>
+                        <td>DeepInfra (production)</td>
+                    </tr>
+                    <tr>
+                        <td>kanon-2</td>
+                        <td>1024</td>
+                        <td>Voyage AI (#1 MLEB 2025)</td>
+                    </tr>
+                    <tr>
+                        <td>text-embedding-3-large</td>
+                        <td>3072</td>
+                        <td>OpenAI</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>PostgreSQL Schema</h4>
+<pre><code>-- Schema: vectors
+-- Tables: layer1 (documents), layer2 (sections), layer3 (chunks)
+
+CREATE TABLE vectors.layer3 (
+    id SERIAL PRIMARY KEY,
+    chunk_id TEXT UNIQUE NOT NULL,
+    document_id TEXT NOT NULL,
+    section_id TEXT,
+    section_title TEXT,
+    section_path TEXT,
+    embedding VECTOR(4096),        -- Qwen3 embeddings
+    content TEXT,                  -- SAC-formatted text
+    content_tsv TSVECTOR,          -- Full-text search
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Cosine similarity query
+SELECT chunk_id, content,
+       1 - (embedding <=> $1::vector) AS similarity
+FROM vectors.layer3
+WHERE document_id = 'BZ_VR1'
+ORDER BY embedding <=> $1::vector
+LIMIT 10;</code></pre>
+
+            <details>
+                <summary>Key Files</summary>
+                <div>
+                    <p class="file-path">src/embedding_generator.py</p>
+                    <p>Batch embedding generation with LRU cache and cost tracking.</p>
+
+                    <p class="file-path">src/storage/postgres_adapter.py</p>
+                    <p>Async PostgreSQL adapter with asyncpg, metadata filtering, statistics.</p>
+                </div>
+            </details>
+        </section>
+
+        <!-- PHASE 5: KNOWLEDGE GRAPH -->
+        <section id="phase5">
+            <h3>Phase 5: Knowledge Graph (Optional)</h3>
+            <p>Extracts entities and relationships into a temporal knowledge graph using Graphiti.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Technology</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>KG Framework</td>
+                        <td>Graphiti</td>
+                        <td>Temporal knowledge graph with episodes</td>
+                    </tr>
+                    <tr>
+                        <td>Graph Database</td>
+                        <td>Neo4j</td>
+                        <td>Entity/relationship storage</td>
+                    </tr>
+                    <tr>
+                        <td>Extraction Model</td>
+                        <td>GPT-4o-mini</td>
+                        <td>Entity/relationship extraction</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <details>
+                <summary>Key Files</summary>
+                <div>
+                    <p class="file-path">src/graph/graphiti_extractor.py</p>
+                    <p>Graphiti integration - each chunk becomes an "episode" for extraction.</p>
+                </div>
+            </details>
+
+            <p class="file-path">Output: output/{doc_id}/{doc_id}_kg.json</p>
+        </section>
+
+        <!-- CHAT FLOW -->
+        <section id="chat-flow">
+            <h2>Chat Flow</h2>
+            <p>Complete request flow from user query to streaming response.</p>
+
+            <pre class="diagram">
+User types query
+      |
+      v
++------------------+
+| ChatInput.tsx    |  Frontend captures input
++------------------+
+      |
+      v
++------------------+
+| useChat.ts       |  sendMessage() - creates AbortController
++------------------+
+      |
+      | POST /chat/stream (SSE)
+      v
++------------------+
+| main.py          |  chat_stream() - FastAPI endpoint
++------------------+
+      |
+      | Save user message to DB
+      | Generate title if new conversation
+      v
++------------------+
+| agent_adapter.py |  stream_response() - AgentAdapter
++------------------+
+      |
+      v
++------------------+
+| runner.py        |  MultiAgentRunner.run_query()
++------------------+
+      |
+      | Initialize workflow, tools, checkpointing
+      v
++------------------+
+| orchestrator.py  |  PHASE 1: Route query
++------------------+  - Complexity scoring
+      |              - Agent sequence selection
+      |
+      v
++------------------+
+| Specialist       |  Execute agent sequence
+| Agents           |  (extractor, compliance, etc.)
++------------------+
+      |
+      | Tool calls to retrieval pipeline
+      v
++------------------+
+| fusion_retriever |  HyDE + Expansion Fusion
++------------------+
+      |
+      v
++------------------+
+| PostgreSQL       |  vectors.layer3 search
++------------------+
+      |
+      | Results back to agents
+      v
++------------------+
+| orchestrator.py  |  PHASE 2: Synthesize answer
++------------------+
+      |
+      | Stream text_delta events
+      v
++------------------+
+| useChat.ts       |  Collect streamed chunks
++------------------+  Update UI state
+      |
+      v
++------------------+
+| ChatMessage.tsx  |  Render response
++------------------+
+            </pre>
+        </section>
+
+        <!-- FRONTEND -->
+        <section id="frontend">
+            <h3>Frontend Architecture</h3>
+            <p>React + Vite application with TypeScript, hot reload development.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>File</th>
+                        <th>Responsibility</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>App</td>
+                        <td><code>App.tsx</code></td>
+                        <td>Router, health check, degraded mode</td>
+                    </tr>
+                    <tr>
+                        <td>ChatContainer</td>
+                        <td><code>components/chat/ChatContainer.tsx</code></td>
+                        <td>Message display, welcome screen</td>
+                    </tr>
+                    <tr>
+                        <td>ChatInput</td>
+                        <td><code>components/chat/ChatInput.tsx</code></td>
+                        <td>User input, send/cancel buttons</td>
+                    </tr>
+                    <tr>
+                        <td>ChatMessage</td>
+                        <td><code>components/chat/ChatMessage.tsx</code></td>
+                        <td>Message rendering, edit/regenerate</td>
+                    </tr>
+                    <tr>
+                        <td>useChat Hook</td>
+                        <td><code>hooks/useChat.ts</code></td>
+                        <td>State: conversations, messages, streaming</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <details>
+                <summary>useChat Hook State</summary>
+                <div>
+<pre><code>interface UseChatState {
+  conversations: Conversation[]
+  currentConversation: Conversation | undefined
+  isStreaming: boolean
+  streamingMessageId: string | null
+  clarificationData: ClarificationData | null
+}
+
+// Key functions
+sendMessage(message: string): Promise&lt;void&gt;
+editMessage(id: string, content: string): Promise&lt;void&gt;
+regenerateMessage(id: string): Promise&lt;void&gt;
+submitClarification(response: string): Promise&lt;void&gt;</code></pre>
+                </div>
+            </details>
+        </section>
+
+        <!-- BACKEND -->
+        <section id="backend">
+            <h3>Backend API</h3>
+            <p>FastAPI application with JWT authentication, rate limiting, and SSE streaming.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Method</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>/chat/stream</code></td>
+                        <td>POST</td>
+                        <td>Main chat endpoint (SSE streaming)</td>
+                    </tr>
+                    <tr>
+                        <td><code>/chat/clarify</code></td>
+                        <td>POST</td>
+                        <td>HITL clarification resume</td>
+                    </tr>
+                    <tr>
+                        <td><code>/conversations</code></td>
+                        <td>GET/POST</td>
+                        <td>List/create conversations</td>
+                    </tr>
+                    <tr>
+                        <td><code>/conversations/{id}/messages</code></td>
+                        <td>GET/POST</td>
+                        <td>Message history</td>
+                    </tr>
+                    <tr>
+                        <td><code>/auth/login</code></td>
+                        <td>POST</td>
+                        <td>JWT authentication</td>
+                    </tr>
+                    <tr>
+                        <td><code>/documents</code></td>
+                        <td>GET</td>
+                        <td>List indexed documents</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <details>
+                <summary>ChatRequest Schema</summary>
+                <div>
+<pre><code>class ChatRequest(BaseModel):
+    message: str              # User query
+    conversation_id: str      # Target conversation UUID
+    messages: List[Message]   # Conversation history
+    skip_save_user_message: bool = False  # For regeneration</code></pre>
+                </div>
+            </details>
+
+            <p class="file-path">backend/main.py</p>
+        </section>
+
+        <!-- STREAMING -->
+        <section id="streaming">
+            <h3>SSE Event Types</h3>
+            <p>Server-Sent Events emitted during chat streaming:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>When</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>tool_health</code></td>
+                        <td>Start</td>
+                        <td>Tool availability status</td>
+                    </tr>
+                    <tr>
+                        <td><code>title_update</code></td>
+                        <td>First message</td>
+                        <td>Generated conversation title</td>
+                    </tr>
+                    <tr>
+                        <td><code>progress</code></td>
+                        <td>Workflow init</td>
+                        <td>"Initializing multi-agent workflow..."</td>
+                    </tr>
+                    <tr>
+                        <td><code>agent_start</code></td>
+                        <td>Agent execution</td>
+                        <td>Agent name, description</td>
+                    </tr>
+                    <tr>
+                        <td><code>tool_call</code></td>
+                        <td>Tool invocation</td>
+                        <td>Tool name, parameters, result</td>
+                    </tr>
+                    <tr>
+                        <td><code>text_delta</code></td>
+                        <td>Response streaming</td>
+                        <td>Chunked response text</td>
+                    </tr>
+                    <tr>
+                        <td><code>tool_calls_summary</code></td>
+                        <td>End</td>
+                        <td>All tool executions</td>
+                    </tr>
+                    <tr>
+                        <td><code>cost_summary</code></td>
+                        <td>End</td>
+                        <td>Per-agent cost breakdown</td>
+                    </tr>
+                    <tr>
+                        <td><code>done</code></td>
+                        <td>Complete</td>
+                        <td>Final message ID</td>
+                    </tr>
+                    <tr>
+                        <td><code>clarification_needed</code></td>
+                        <td>HITL</td>
+                        <td>Question for user</td>
+                    </tr>
+                    <tr>
+                        <td><code>error</code></td>
+                        <td>Failure</td>
+                        <td>Error message</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- MULTI-AGENT SYSTEM -->
+        <section id="multi-agent">
+            <h2>Multi-Agent System</h2>
+            <p>LangGraph-based orchestration with 8 autonomous agents. Agents use LLM-driven tool selection (NOT hardcoded workflows).</p>
+
+            <pre class="diagram">
+                        +-------------------+
+                        |   ORCHESTRATOR    |
+                        |  (Routing+Synth)  |
+                        +-------------------+
+                                 |
+          +----------+-----------+-----------+----------+
+          |          |           |           |          |
+          v          v           v           v          v
+    +---------+ +---------+ +---------+ +---------+ +---------+
+    |Extractor| |Classifier| |Req.Ext.| |Compliance| |Risk Ver.|
+    +---------+ +---------+ +---------+ +---------+ +---------+
+          |          |           |           |          |
+          +----------+-----------+-----------+----------+
+                                 |
+                        +-------------------+
+                        |  Gap Synthesizer  |
+                        | Citation Auditor  |
+                        +-------------------+
+            </pre>
+
+            <div class="warning-box">
+                <strong>Critical Constraint:</strong> Agents are AUTONOMOUS - LLM decides tool calling sequence, NOT hardcoded code. No "step 1, step 2, step 3" logic in agent implementations.
+            </div>
+        </section>
+
+        <!-- ORCHESTRATOR -->
+        <section id="orchestrator">
+            <h3>Orchestrator Agent</h3>
+            <p>Single point of user communication with dual-phase execution.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Phase</th>
+                        <th>Purpose</th>
+                        <th>Output</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-primary">PHASE 1: Routing</span></td>
+                        <td>Analyze query, determine agent sequence</td>
+                        <td>complexity_score, query_type, agent_sequence</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">PHASE 2: Synthesis</span></td>
+                        <td>Generate final answer from agent outputs</td>
+                        <td>final_answer, citations</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Routing Analysis (Single LLM Call)</h4>
+<pre><code>{
+  "complexity_score": 65,           // 0-100
+  "query_type": "compliance",       // simple_search|cross_doc|compliance|risk|synthesis
+  "agent_sequence": ["extractor", "requirement_extractor", "compliance"],
+  "reasoning": "Query requires legal obligation extraction...",
+  "analysis": {
+    "is_follow_up": true,
+    "follow_up_rewrite": "What are the GDPR Article 17 deletion requirements?",
+    "vagueness_score": 0.3,         // 0.0-1.0
+    "needs_clarification": false,
+    "semantic_type": "compliance_check"
+  }
+}</code></pre>
+
+            <p class="file-path">src/multi_agent/agents/orchestrator.py</p>
+        </section>
+
+        <!-- AGENTS -->
+        <section id="agents">
+            <h3>Specialist Agents</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Role</th>
+                        <th>Purpose</th>
+                        <th>Key Tools</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Extractor</strong></td>
+                        <td>EXTRACT</td>
+                        <td>Document retrieval, chunk ranking</td>
+                        <td><code>search</code>, <code>graphiti_search</code>, <code>expand_context</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Classifier</strong></td>
+                        <td>CLASSIFY</td>
+                        <td>Content categorization, domain ID</td>
+                        <td>Analysis tools</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Requirement Extractor</strong></td>
+                        <td>EXTRACT</td>
+                        <td>Atomic legal obligation extraction</td>
+                        <td><code>hierarchical_search</code>, <code>definition_aligner</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Compliance</strong></td>
+                        <td>VERIFY</td>
+                        <td>Regulatory compliance verification</td>
+                        <td><code>graph_search</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Risk Verifier</strong></td>
+                        <td>VERIFY</td>
+                        <td>Risk assessment (5 categories)</td>
+                        <td><code>similarity_search</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Gap Synthesizer</strong></td>
+                        <td>SYNTHESIZE</td>
+                        <td>Gap analysis, completeness check</td>
+                        <td>Analysis tools</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Citation Auditor</strong></td>
+                        <td>AUDIT</td>
+                        <td>Citation validation</td>
+                        <td>Retrieval tools</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <details>
+                <summary>Agent Execution Dependencies</summary>
+                <div>
+                    <ul>
+                        <li><strong>Compliance queries:</strong> <code>extractor → requirement_extractor → compliance</code></li>
+                        <li><strong>Risk queries:</strong> <code>extractor → risk_verifier</code></li>
+                        <li><strong>Search queries:</strong> <code>extractor → [synthesis]</code></li>
+                        <li><strong>Complex queries:</strong> <code>extractor → classifier → [specialist agents] → gap_synthesizer</code></li>
+                    </ul>
+                </div>
+            </details>
+
+            <details>
+                <summary>BaseAgent Implementation</summary>
+                <div>
+                    <p class="file-path">src/multi_agent/core/agent_base.py</p>
+                    <p>All agents inherit from BaseAgent which provides:</p>
+                    <ul>
+                        <li><code>execute()</code> - Template method with error handling</li>
+                        <li><code>_run_autonomous_tool_loop()</code> - LLM-driven tool calling</li>
+                        <li><code>_build_agent_context()</code> - Token-optimized context</li>
+                        <li>Cost tracking, trajectory capture, early stopping</li>
+                    </ul>
+                </div>
+            </details>
+        </section>
+
+        <!-- WORKFLOW -->
+        <section id="workflow">
+            <h3>LangGraph Workflow</h3>
+            <p>State machine orchestration with checkpointing for resume/recovery.</p>
+
+            <details>
+                <summary>MultiAgentState Schema</summary>
+                <div>
+<pre><code>class MultiAgentState(TypedDict):
+    # Immutable (set once)
+    query: str                          # Original user query
+    conversation_history: List[Dict]    # Previous messages
+
+    # Routing outputs
+    complexity_score: int               # 0-100
+    query_type: QueryType               # Enum
+    agent_sequence: List[str]           # Agents to execute
+    unified_analysis: Dict              # Follow-up, vagueness, etc.
+
+    # Execution tracking
+    agent_outputs: Dict[str, Any]       # Results from each agent
+    tool_executions: List[Dict]         # Tool call history
+    errors: List[str]                   # Error log
+
+    # Results
+    final_answer: str                   # User-facing response
+    citations: List[str]                # Used chunk_ids</code></pre>
+                </div>
+            </details>
+
+            <p class="file-path">src/multi_agent/routing/workflow_builder.py</p>
+            <p class="file-path">src/multi_agent/core/state.py</p>
+        </section>
+
+        <!-- RETRIEVAL -->
+        <section id="retrieval">
+            <h2>RAG Retrieval</h2>
+            <p>HyDE + Expansion Fusion retrieval with parallel search for optimal performance.</p>
+        </section>
+
+        <!-- HYDE -->
+        <section id="hyde">
+            <h3>HyDE + Expansion Fusion Algorithm</h3>
+
+            <pre class="diagram">
+User Query: "What are the GDPR deletion requirements?"
+                    |
+                    v
+    +-------------------------------+
+    | LLM generates (single call):  |
+    |  - HyDE: Hypothetical doc     |
+    |  - EXP1: Paraphrase 1         |
+    |  - EXP2: Paraphrase 2         |
+    +-------------------------------+
+                    |
+     +--------------+--------------+
+     |              |              |
+     v              v              v
+ [HyDE emb]    [EXP1 emb]    [EXP2 emb]
+     |              |              |
+     v              v              v
++----------+  +----------+  +----------+
+| Search   |  | Search   |  | Search   |  (parallel, 3x speedup)
+| k*3=48   |  | k*3=48   |  | k*3=48   |
++----------+  +----------+  +----------+
+     |              |              |
+     v              v              v
+ [Scores 1]    [Scores 2]    [Scores 3]
+     |              |              |
+     +------+-------+-------+------+
+            |
+            v
+    +------------------+
+    | Min-Max Norm     |
+    | per result set   |
+    +------------------+
+            |
+            v
+    +------------------+
+    | Weighted Fusion  |
+    | 0.6*HyDE + 0.4*  |
+    | avg(exp0, exp1)  |
+    +------------------+
+            |
+            v
+    +------------------+
+    | Top-K Selection  |
+    | (default k=16)   |
+    +------------------+
+            </pre>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>hyde_weight</td>
+                        <td>0.6</td>
+                        <td>HyDE importance in fusion</td>
+                    </tr>
+                    <tr>
+                        <td>expansion_weight</td>
+                        <td>0.4</td>
+                        <td>Expansion queries combined weight</td>
+                    </tr>
+                    <tr>
+                        <td>default_k</td>
+                        <td>16</td>
+                        <td>Results returned</td>
+                    </tr>
+                    <tr>
+                        <td>candidates_multiplier</td>
+                        <td>3</td>
+                        <td>Retrieve 3x candidates before fusion</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <details>
+                <summary>Key Files</summary>
+                <div>
+                    <p class="file-path">src/retrieval/fusion_retriever.py</p>
+                    <p>Main retriever with parallel search and weighted fusion.</p>
+
+                    <p class="file-path">src/retrieval/hyde_expansion.py</p>
+                    <p>LLM generation of HyDE doc and expansions with caching.</p>
+
+                    <p class="file-path">src/retrieval/deepinfra_client.py</p>
+                    <p>DeepInfra API client for Qwen3 embeddings.</p>
+                </div>
+            </details>
+        </section>
+
+        <!-- TOOLS -->
+        <section id="tools">
+            <h2>Tools Reference</h2>
+            <p>14 tools available to agents for retrieval and analysis.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tool</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>search</code></td>
+                        <td><span class="badge badge-primary">Retrieval</span></td>
+                        <td>Hybrid BM25 + Dense search on layer3</td>
+                    </tr>
+                    <tr>
+                        <td><code>section_search</code></td>
+                        <td><span class="badge badge-primary">Retrieval</span></td>
+                        <td>Section-level search (layer2)</td>
+                    </tr>
+                    <tr>
+                        <td><code>graphiti_search</code></td>
+                        <td><span class="badge badge-primary">Retrieval</span></td>
+                        <td>Temporal knowledge graph search</td>
+                    </tr>
+                    <tr>
+                        <td><code>expand_context</code></td>
+                        <td><span class="badge badge-primary">Retrieval</span></td>
+                        <td>Context expansion around chunks</td>
+                    </tr>
+                    <tr>
+                        <td><code>get_document_info</code></td>
+                        <td><span class="badge badge-primary">Retrieval</span></td>
+                        <td>Document metadata and summary</td>
+                    </tr>
+                    <tr>
+                        <td><code>get_document_list</code></td>
+                        <td><span class="badge badge-primary">Retrieval</span></td>
+                        <td>List all indexed documents</td>
+                    </tr>
+                    <tr>
+                        <td><code>multi_doc_synthesizer</code></td>
+                        <td><span class="badge badge-secondary">Analysis</span></td>
+                        <td>Cross-document synthesis</td>
+                    </tr>
+                    <tr>
+                        <td><code>cluster_search</code></td>
+                        <td><span class="badge badge-secondary">Analysis</span></td>
+                        <td>Semantic clustering search</td>
+                    </tr>
+                    <tr>
+                        <td><code>definition_aligner</code></td>
+                        <td><span class="badge badge-secondary">Analysis</span></td>
+                        <td>Legal terminology alignment</td>
+                    </tr>
+                    <tr>
+                        <td><code>browse_sections</code></td>
+                        <td><span class="badge badge-info">Navigation</span></td>
+                        <td>Hierarchical section navigation</td>
+                    </tr>
+                    <tr>
+                        <td><code>browse_entities</code></td>
+                        <td><span class="badge badge-info">Navigation</span></td>
+                        <td>Entity browsing in KG</td>
+                    </tr>
+                    <tr>
+                        <td><code>get_tool_help</code></td>
+                        <td><span class="badge badge-warning">System</span></td>
+                        <td>Tool documentation</td>
+                    </tr>
+                    <tr>
+                        <td><code>list_available_tools</code></td>
+                        <td><span class="badge badge-warning">System</span></td>
+                        <td>Tool discovery</td>
+                    </tr>
+                    <tr>
+                        <td><code>get_stats</code></td>
+                        <td><span class="badge badge-warning">System</span></td>
+                        <td>System statistics</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p class="file-path">src/agent/tools/__init__.py</p>
+            <p class="file-path">src/agent/tools/*.py</p>
+        </section>
+
+        <!-- CONFIGURATION -->
+        <section id="config">
+            <h2>Configuration</h2>
+            <p>Two-file configuration system: <code>.env</code> for secrets, <code>config.json</code> for settings.</p>
+
+            <h3>.env (Secrets - gitignored)</h3>
+<pre><code># API Keys
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+DEEPINFRA_API_KEY=...
+
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/sujbot2
+POSTGRES_PASSWORD=...
+
+# Auth
+AUTH_SECRET_KEY=...
+
+# LangSmith (EU endpoint)
+LANGSMITH_API_KEY=lsv2_pt_...
+LANGSMITH_PROJECT_NAME=sujbot2-multi-agent
+LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
+
+# Extraction backend (auto|gemini|unstructured)
+EXTRACTION_BACKEND=auto</code></pre>
+
+            <h3>config.json (Settings - versioned)</h3>
+<pre><code>{
+  "retrieval": {
+    "method": "hyde_expansion_fusion",
+    "hyde_weight": 0.6,
+    "expansion_weight": 0.4
+  },
+  "storage": {
+    "backend": "postgresql"
+  },
+  "agent": {
+    "model": "claude-haiku-4-5"
+  },
+  "embedding": {
+    "model": "Qwen/Qwen3-Embedding-8B",
+    "dimensions": 4096
+  },
+  "chunking": {
+    "max_tokens": 512,
+    "enable_contextual": true
+  }
+}</code></pre>
+        </section>
+
+        <!-- RESEARCH -->
+        <section id="research">
+            <h2>Research References</h2>
+            <p>Critical research papers that inform system design. DO NOT contradict these findings.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Paper</th>
+                        <th>Finding</th>
+                        <th>Implementation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>LegalBench-RAG (Pipitone & Alami, 2024)</td>
+                        <td>500-char chunks optimal for legal docs</td>
+                        <td>512 token limit, RCTS strategy</td>
+                    </tr>
+                    <tr>
+                        <td>Summary-Augmented Chunking (Reuter et al., 2024)</td>
+                        <td>Generic summaries > expert terminology</td>
+                        <td>SAC context prepending, generic style</td>
+                    </tr>
+                    <tr>
+                        <td>Multi-Layer Embeddings (Lima, 2024)</td>
+                        <td>3-layer indexing: 2.3x essential chunks</td>
+                        <td>layer1/layer2/layer3 separation</td>
+                    </tr>
+                    <tr>
+                        <td>Contextual Retrieval (Anthropic, 2024)</td>
+                        <td>Context prepending: -58% drift</td>
+                        <td>SAC breadcrumb format</td>
+                    </tr>
+                    <tr>
+                        <td>HyDE (Gao et al., 2022)</td>
+                        <td>Hypothetical documents improve recall</td>
+                        <td>HyDE + Expansion Fusion</td>
+                    </tr>
+                    <tr>
+                        <td>HybridRAG (2024)</td>
+                        <td>Graph boosting improves precision</td>
+                        <td>Graphiti KG integration</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-box">
+                <strong>Note:</strong> Cohere reranking performs WORSE on legal documents. Use <code>ms-marco</code> or <code>bge-reranker</code> instead.
+            </div>
+        </section>
+
+        <footer style="margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; color: var(--text-secondary);">
+            <p>SUJBOT2 Architecture Documentation</p>
+            <p>Generated: December 2024</p>
+        </footer>
+    </main>
+
+    <script>
+        // Smooth scroll for anchor links
+        document.querySelectorAll('nav a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+
+        // Highlight current section in nav
+        const sections = document.querySelectorAll('section[id]');
+        const navLinks = document.querySelectorAll('nav a[href^="#"]');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.style.background = '';
+                link.style.color = 'var(--text-secondary)';
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.style.background = 'var(--bg-tertiary)';
+                    link.style.color = 'var(--text-primary)';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

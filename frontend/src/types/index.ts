@@ -11,6 +11,18 @@ export interface AgentProgress {
     status: 'running' | 'completed' | 'failed';
     timestamp: string;
   }>;
+  /** Whether response is still being streamed (stays true until done event) */
+  isStreaming?: boolean;
+}
+
+/**
+ * Document information for PDF browser
+ */
+export interface DocumentInfo {
+  document_id: string;
+  display_name: string;
+  filename: string;
+  size_bytes: number;
 }
 
 export interface ToolHealth {
@@ -122,6 +134,25 @@ export interface HealthStatus {
 // Citation System Types
 // ============================================================================
 
+/**
+ * Text selection from PDF for agent context.
+ * Captures user-selected text to be included in the next query.
+ */
+export interface TextSelection {
+  /** Selected text content */
+  text: string;
+  /** Source document ID */
+  documentId: string;
+  /** Human-readable document name */
+  documentName: string;
+  /** Starting page number (1-indexed) */
+  pageStart: number;
+  /** Ending page number (1-indexed) */
+  pageEnd: number;
+  /** Character count of selection */
+  charCount: number;
+}
+
 export interface CitationMetadata {
   chunkId: string;
   documentId: string;
@@ -140,12 +171,13 @@ export interface CitationContextValue {
   /** Currently active PDF viewer state */
   activePdf: {
     documentId: string;
+    documentName: string;
     page: number;
     chunkId?: string;
   } | null;
-  /** Open PDF viewer modal */
-  openPdf: (documentId: string, page?: number, chunkId?: string) => void;
-  /** Close PDF viewer modal */
+  /** Open PDF side panel */
+  openPdf: (documentId: string, documentName: string, page?: number, chunkId?: string) => void;
+  /** Close PDF side panel */
   closePdf: () => void;
   /** Fetch and cache metadata for chunk IDs */
   fetchCitationMetadata: (chunkIds: string[]) => Promise<void>;
@@ -155,4 +187,10 @@ export interface CitationContextValue {
   error: string | null;
   /** Clear error state */
   clearError: () => void;
+  /** Currently selected text from PDF for agent context */
+  selectedText: TextSelection | null;
+  /** Set selected text from PDF */
+  setSelectedText: (selection: TextSelection | null) => void;
+  /** Clear selected text */
+  clearSelection: () => void;
 }

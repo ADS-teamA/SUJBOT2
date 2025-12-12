@@ -177,8 +177,14 @@ async def lifespan(app: FastAPI):
     # Shutdown (cleanup)
     logger.info("Shutting down...")
 
-    if agent_adapter and hasattr(agent_adapter, 'runner'):
-        agent_adapter.runner.shutdown()
+    if agent_adapter:
+        # Shutdown cached variant runners (closes connection pools)
+        if hasattr(agent_adapter, 'shutdown_variant_runners'):
+            await agent_adapter.shutdown_variant_runners()
+
+        # Shutdown main runner
+        if hasattr(agent_adapter, 'runner'):
+            agent_adapter.runner.shutdown()
 
     if postgres_adapter:
         await postgres_adapter.close()
@@ -564,8 +570,25 @@ async def chat_stream(
                     for msg in request.messages
                 ]
 
+            # Format query with selected context (if provided)
+            # The agent will autonomously decide how to use this context
+            query = request.message
+            if request.selected_context:
+                ctx = request.selected_context
+                page_info = (
+                    f"page {ctx.page_start}"
+                    if ctx.page_start == ctx.page_end
+                    else f"pages {ctx.page_start}-{ctx.page_end}"
+                )
+                context_prefix = (
+                    f"[User has selected text from document '{ctx.document_name}' ({page_info}):\n"
+                    f"---\n{ctx.text}\n---]\n\n"
+                )
+                query = context_prefix + request.message
+                logger.debug(f"Added selected context from {ctx.document_name} ({len(ctx.text)} chars)")
+
             async for event in agent_adapter.stream_response(
-                query=request.message,
+                query=query,
                 conversation_id=request.conversation_id,
                 user_id=user["id"],
                 messages=message_history

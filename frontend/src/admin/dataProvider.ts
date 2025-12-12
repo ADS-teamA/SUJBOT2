@@ -9,7 +9,7 @@
  * - DELETE /admin/users/{id} → delete
  */
 
-import type { DataProvider } from 'react-admin';
+import type { DataProvider, Identifier } from 'react-admin';
 import { fetchUtils } from 'react-admin';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
@@ -108,9 +108,12 @@ export const dataProvider: DataProvider = {
       )
     );
 
-    const successIds = results
-      .filter((r): r is PromiseFulfilledResult<unknown> => r.status === 'fulfilled')
-      .map(r => r.value);
+    const successIds: Identifier[] = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        successIds.push(r.value as Identifier);
+      }
+    }
 
     const failures = results.filter(r => r.status === 'rejected');
     if (failures.length > 0) {
@@ -127,7 +130,7 @@ export const dataProvider: DataProvider = {
     // React Admin expects the full record back
     if (!params.previousData) {
       console.error('Delete called without previousData - returning minimal object');
-      return { data: { id: params.id } };
+      return { data: { id: params.id } as any };
     }
     return { data: params.previousData };
   },
@@ -141,9 +144,12 @@ export const dataProvider: DataProvider = {
       )
     );
 
-    const successIds = results
-      .filter((r): r is PromiseFulfilledResult<unknown> => r.status === 'fulfilled')
-      .map(r => r.value);
+    const successIds: Identifier[] = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        successIds.push(r.value as Identifier);
+      }
+    }
 
     const failures = results.filter(r => r.status === 'rejected');
     if (failures.length > 0) {

@@ -16,6 +16,24 @@ class ChatMessage(BaseModel):
     timestamp: Optional[str] = None
 
 
+class SelectedContext(BaseModel):
+    """Selected text from PDF for agent context.
+
+    When user selects text in the PDF viewer, this context is passed
+    to the agent to provide additional relevant information.
+    """
+
+    text: str = Field(
+        ...,
+        max_length=10000,
+        description="Selected text content (max 10K chars)",
+    )
+    document_id: str = Field(..., description="Source document ID")
+    document_name: str = Field(..., description="Human-readable document name")
+    page_start: int = Field(..., ge=1, description="Starting page number (1-indexed)")
+    page_end: int = Field(..., ge=1, description="Ending page number (1-indexed)")
+
+
 class ChatRequest(BaseModel):
     """Request to send a message to the agent."""
 
@@ -33,6 +51,10 @@ class ChatRequest(BaseModel):
     messages: Optional[List[ChatMessage]] = Field(
         None,
         description="Conversation history for context (last N messages)",
+    )
+    selected_context: Optional[SelectedContext] = Field(
+        None,
+        description="Selected text from PDF viewer for additional context",
     )
 
 

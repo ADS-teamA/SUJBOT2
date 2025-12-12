@@ -1,0 +1,442 @@
+% SUJBOT2 Pipeline Prezentace
+% Kompilace: xelatex presentation.tex (nebo pdflatex)
+\documentclass[aspectratio=169, 11pt]{beamer}
+
+% ============================================================================
+% BALÍČKY
+% ============================================================================
+\usepackage[czech]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usepackage{fontawesome5}
+\usepackage{xcolor}
+
+% ============================================================================
+% BARVY
+% ============================================================================
+\definecolor{activeblue}{HTML}{2563eb}
+\definecolor{inactivegray}{HTML}{9ca3af}
+\definecolor{textdark}{HTML}{1f2937}
+\definecolor{lightgray}{HTML}{f3f4f6}
+
+% ============================================================================
+% TÉMA - Minimalistické
+% ============================================================================
+\usetheme{default}
+\usecolortheme{default}
+
+% Odstranění navigačních symbolů
+\setbeamertemplate{navigation symbols}{}
+
+% Barvy
+\setbeamercolor{normal text}{fg=textdark}
+\setbeamercolor{frametitle}{fg=textdark}
+\setbeamercolor{title}{fg=textdark}
+\setbeamercolor{itemize item}{fg=activeblue}
+\setbeamercolor{itemize subitem}{fg=activeblue}
+
+% Fonty
+\setbeamerfont{frametitle}{size=\Large, series=\bfseries}
+\setbeamerfont{title}{size=\huge, series=\bfseries}
+
+% ============================================================================
+% PIPELINE VIZUALIZACE
+% ============================================================================
+% Použití: \setpipelinestep{1} až \setpipelinestep{5}
+% 0 = žádný krok aktivní (titulní slide, závěr)
+
+\newcommand{\currentpipelinestep}{0}
+\newcommand{\setpipelinestep}[1]{\renewcommand{\currentpipelinestep}{#1}}
+
+\newcommand{\drawpipeline}{%
+  \begin{tikzpicture}[
+    step/.style={
+      rectangle,
+      rounded corners=3pt,
+      minimum height=0.6cm,
+      minimum width=2cm,
+      font=\scriptsize\sffamily,
+      align=center
+    },
+    activestep/.style={
+      step,
+      fill=activeblue,
+      text=white,
+      font=\scriptsize\sffamily\bfseries
+    },
+    inactivestep/.style={
+      step,
+      fill=lightgray,
+      text=inactivegray
+    },
+    arrow/.style={
+      ->,
+      >=stealth,
+      color=inactivegray,
+      thick
+    }
+  ]
+    % Pozice kroků
+    \def\stepwidth{2.4cm}
+
+    % Krok 1: Extrakce
+    \ifnum\currentpipelinestep=1
+      \node[activestep] (s1) at (0,0) {Extrakce};
+    \else
+      \node[inactivestep] (s1) at (0,0) {Extrakce};
+    \fi
+
+    % Krok 2: Chunking
+    \ifnum\currentpipelinestep=2
+      \node[activestep] (s2) at (\stepwidth,0) {Chunking};
+    \else
+      \node[inactivestep] (s2) at (\stepwidth,0) {Chunking};
+    \fi
+
+    % Krok 3: Knowledge Graph
+    \ifnum\currentpipelinestep=3
+      \node[activestep] (s3) at (2*\stepwidth,0) {Knowledge Graph};
+    \else
+      \node[inactivestep] (s3) at (2*\stepwidth,0) {Knowledge Graph};
+    \fi
+
+    % Krok 4: Chat
+    \ifnum\currentpipelinestep=4
+      \node[activestep] (s4) at (3*\stepwidth,0) {Multi-agent};
+    \else
+      \node[inactivestep] (s4) at (3*\stepwidth,0) {Multi-agent};
+    \fi
+
+    % Krok 5: Tools
+    \ifnum\currentpipelinestep=5
+      \node[activestep] (s5) at (4*\stepwidth,0) {Tools};
+    \else
+      \node[inactivestep] (s5) at (4*\stepwidth,0) {Tools};
+    \fi
+
+    % Šipky mezi kroky
+    \draw[arrow] (s1) -- (s2);
+    \draw[arrow] (s2) -- (s3);
+    \draw[arrow] (s3) -- (s4);
+    \draw[arrow] (s4) -- (s5);
+  \end{tikzpicture}%
+}
+
+% Header template s pipeline
+\setbeamertemplate{headline}{%
+  \ifnum\currentpipelinestep>0
+    \vskip10pt
+    \hfill\drawpipeline\hfill\null
+    \vskip5pt
+    \begin{beamercolorbox}[wd=\paperwidth, ht=0.5pt]{separation line}
+      \color{lightgray}\rule{\paperwidth}{0.5pt}
+    \end{beamercolorbox}
+  \fi
+}
+
+% Footline s číslem slidu
+\setbeamertemplate{footline}{%
+  \hfill%
+  \usebeamercolor[fg]{page number in head/foot}%
+  \usebeamerfont{page number in head/foot}%
+  \insertframenumber\,/\,\inserttotalframenumber%
+  \hspace*{10pt}\vskip10pt%
+}
+
+% ============================================================================
+% METADATA
+% ============================================================================
+\title{SUJBOT2}
+\subtitle{RAG systém pro právní a technické dokumenty}
+\author{Tým A}
+\date{\today}
+\institute{Projekt ADS}
+
+% ============================================================================
+% DOKUMENT
+% ============================================================================
+\begin{document}
+
+% ----------------------------------------------------------------------------
+% TITULNÍ SLIDE
+% ----------------------------------------------------------------------------
+\setpipelinestep{0}
+\begin{frame}[plain]
+  \vfill
+  \centering
+  {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle}
+
+  \vskip0.5cm
+  {\large\color{inactivegray}\insertsubtitle}
+
+  \vskip1.5cm
+
+  % Mini pipeline přehled
+  \begin{tikzpicture}[
+    minibox/.style={
+      rectangle,
+      rounded corners=2pt,
+      minimum height=0.5cm,
+      minimum width=1.8cm,
+      fill=lightgray,
+      text=textdark,
+      font=\tiny\sffamily
+    }
+  ]
+    \node[minibox] (m1) at (0,0) {Extrakce};
+    \node[minibox] (m2) at (2.2cm,0) {Chunking};
+    \node[minibox] (m3) at (4.4cm,0) {KG};
+    \node[minibox] (m4) at (6.6cm,0) {Multi-agent};
+    \node[minibox] (m5) at (8.8cm,0) {Tools};
+
+    \draw[->, >=stealth, color=inactivegray] (m1) -- (m2);
+    \draw[->, >=stealth, color=inactivegray] (m2) -- (m3);
+    \draw[->, >=stealth, color=inactivegray] (m3) -- (m4);
+    \draw[->, >=stealth, color=inactivegray] (m4) -- (m5);
+  \end{tikzpicture}
+
+  \vskip1.5cm
+  {\small\color{inactivegray}\insertauthor{} · \insertdate}
+  \vfill
+\end{frame}
+
+% ============================================================================
+% SEKCE 1: EXTRAKCE
+% ============================================================================
+\setpipelinestep{1}
+
+\begin{frame}{Extrakce dokumentů}
+  \begin{itemize}
+    \item PDF dokumenty → strukturovaný text
+    \item Gemini API pro komplexní dokumenty
+    \item Zachování hierarchie (sekce, podsekce)
+    \item Metadata extrakce (autor, datum, verze)
+  \end{itemize}
+
+  \vfill
+  % Placeholder pro diagram/obrázek
+  \centering
+  \textcolor{inactivegray}{\textit{[Diagram extrakčního procesu]}}
+\end{frame}
+
+\begin{frame}{Extrakce -- Technické detaily}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Vstup}
+      \begin{itemize}
+        \item PDF, DOCX, TXT
+        \item Scany (OCR)
+        \item Tabulky, obrázky
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{Výstup}
+      \begin{itemize}
+        \item Strukturovaný JSON
+        \item Hierarchie sekcí
+        \item Čistý text
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================================
+% SEKCE 2: CHUNKING
+% ============================================================================
+\setpipelinestep{2}
+
+\begin{frame}{Chunking}
+  \begin{itemize}
+    \item Token-aware chunking (512 tokenů)
+    \item Zachování kontextu mezi chunky
+    \item Summary-Augmented Chunking (SAC)
+    \item Multi-layer embeddings (dokument/sekce/chunk)
+  \end{itemize}
+
+  \vfill
+  \centering
+  \textcolor{inactivegray}{\textit{[Vizualizace chunking procesu]}}
+\end{frame}
+
+\begin{frame}{Chunking -- SAC metoda}
+  \textbf{Summary-Augmented Chunking}
+
+  \vskip0.5cm
+
+  \begin{enumerate}
+    \item Generování kontextového shrnutí pro každý chunk
+    \item Prepend shrnutí během embeddingu
+    \item Strip shrnutí během retrieval
+  \end{enumerate}
+
+  \vskip0.5cm
+
+  \textbf{Výsledek:} -58\% context drift (Anthropic, 2024)
+\end{frame}
+
+% ============================================================================
+% SEKCE 3: KNOWLEDGE GRAPH
+% ============================================================================
+\setpipelinestep{3}
+
+\begin{frame}{Knowledge Graph}
+  \begin{itemize}
+    \item Graphiti temporální knowledge graph
+    \item Entity a relace z dokumentů
+    \item PostgreSQL + Neo4j backend
+    \item Kombinace s vektorovým vyhledáváním
+  \end{itemize}
+
+  \vfill
+  \centering
+  \textcolor{inactivegray}{\textit{[Ukázka knowledge grafu]}}
+\end{frame}
+
+\begin{frame}{Knowledge Graph -- Architektura}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Entity}
+      \begin{itemize}
+        \item Osoby
+        \item Organizace
+        \item Dokumenty
+        \item Termíny
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{Relace}
+      \begin{itemize}
+        \item Citace
+        \item Definice
+        \item Časové vazby
+        \item Hierarchie
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================================
+% SEKCE 4: MULTI-AGENT CHAT
+% ============================================================================
+\setpipelinestep{4}
+
+\begin{frame}{Multi-agent systém}
+  \begin{itemize}
+    \item Orchestrátor + specializovaní agenti
+    \item LangGraph workflow
+    \item Autonomní rozhodování (ne hardcoded)
+    \item Human-in-the-loop podpora
+  \end{itemize}
+
+  \vfill
+  \centering
+  \textcolor{inactivegray}{\textit{[Diagram multi-agent architektury]}}
+\end{frame}
+
+\begin{frame}{Agenti}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item \textbf{Extractor} -- extrakce informací
+        \item \textbf{Classifier} -- klasifikace dotazů
+        \item \textbf{Compliance} -- právní analýza
+        \item \textbf{Risk Verifier} -- ověření rizik
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item \textbf{Comparator} -- porovnání dokumentů
+        \item \textbf{Timeline} -- časové analýzy
+        \item \textbf{Summarizer} -- sumarizace
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================================
+% SEKCE 5: TOOLS
+% ============================================================================
+\setpipelinestep{5}
+
+\begin{frame}{Tools}
+  \begin{itemize}
+    \item RAG vyhledávání (HyDE + Expansion Fusion)
+    \item Graph search
+    \item Multi-document synthesizer
+    \item Timeline tool
+  \end{itemize}
+
+  \vfill
+  \centering
+  \textcolor{inactivegray}{\textit{[Přehled dostupných tools]}}
+\end{frame}
+
+\begin{frame}{Tools -- Retrieval pipeline}
+  \textbf{HyDE + Expansion Fusion}
+
+  \vskip0.5cm
+
+  \begin{enumerate}
+    \item \textbf{HyDE} -- Hypothetical Document Embeddings
+    \item \textbf{Query Expansion} -- rozšíření dotazu
+    \item \textbf{Fusion} -- kombinace výsledků
+    \item \textbf{Reranking} -- přeřazení (ms-marco)
+  \end{enumerate}
+
+  \vskip0.5cm
+
+  Váhy: HyDE 60\%, Expansion 40\%
+\end{frame}
+
+% ============================================================================
+% ZÁVĚR
+% ============================================================================
+\setpipelinestep{0}
+
+\begin{frame}{Shrnutí}
+  \centering
+
+  \begin{tikzpicture}[
+    summarybox/.style={
+      rectangle,
+      rounded corners=3pt,
+      minimum height=0.7cm,
+      minimum width=2cm,
+      fill=activeblue,
+      text=white,
+      font=\small\sffamily
+    }
+  ]
+    \node[summarybox] (m1) at (0,0) {Extrakce};
+    \node[summarybox] (m2) at (2.5cm,0) {Chunking};
+    \node[summarybox] (m3) at (5cm,0) {KG};
+    \node[summarybox] (m4) at (7.5cm,0) {Multi-agent};
+    \node[summarybox] (m5) at (10cm,0) {Tools};
+
+    \draw[->, >=stealth, color=activeblue, thick] (m1) -- (m2);
+    \draw[->, >=stealth, color=activeblue, thick] (m2) -- (m3);
+    \draw[->, >=stealth, color=activeblue, thick] (m3) -- (m4);
+    \draw[->, >=stealth, color=activeblue, thick] (m4) -- (m5);
+  \end{tikzpicture}
+
+  \vskip1.5cm
+
+  \begin{itemize}
+    \item Production-ready RAG systém
+    \item Založeno na výzkumných papers
+    \item LangSmith observability
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \vfill
+  \centering
+  {\Huge\color{textdark} Děkuji za pozornost}
+
+  \vskip1cm
+  {\large\color{inactivegray} Otázky?}
+  \vfill
+\end{frame}
+
+\end{document}

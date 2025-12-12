@@ -13,6 +13,8 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ClarificationModal } from './ClarificationModal';
+import { SelectionIndicator } from './SelectionIndicator';
+import { useCitationContext } from '../../contexts/CitationContext';
 import { cn } from '../../design-system/utils/cn';
 import type { Conversation, ClarificationData } from '../../types';
 import type { SpendingLimitError } from '../../hooks/useChat';
@@ -20,7 +22,13 @@ import type { SpendingLimitError } from '../../hooks/useChat';
 interface ChatContainerProps {
   conversation: Conversation | undefined;
   isStreaming: boolean;
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, addUserMessage?: boolean, selectedContext?: {
+    text: string;
+    documentId: string;
+    documentName: string;
+    pageStart: number;
+    pageEnd: number;
+  } | null) => void;
   onEditMessage: (messageId: string, newContent: string) => void;
   onRegenerateMessage: (messageId: string) => void;
   onCancelStreaming: () => void;
@@ -49,11 +57,30 @@ export function ChatContainer({
   onClearSpendingLimitError,
 }: ChatContainerProps) {
   const { t, i18n } = useTranslation();
+  const { selectedText, clearSelection } = useCitationContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [inputAnimated, setInputAnimated] = useState(false);
   const hasMessages = (conversation?.messages.length || 0) > 0;
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Wrapper that includes selected context and clears selection after send
+  const handleSendMessage = (message: string) => {
+    const context = selectedText ? {
+      text: selectedText.text,
+      documentId: selectedText.documentId,
+      documentName: selectedText.documentName,
+      pageStart: selectedText.pageStart,
+      pageEnd: selectedText.pageEnd,
+    } : null;
+
+    onSendMessage(message, true, context);
+
+    // Auto-clear selection after sending (per user requirement)
+    if (selectedText) {
+      clearSelection();
+    }
+  };
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -121,11 +148,18 @@ export function ChatContainer({
           hasMessages ? 'overflow-y-auto' : 'overflow-hidden'
         )}>
         {!hasMessages ? (
-          <WelcomeScreen onPromptClick={onSendMessage}>
+          <WelcomeScreen onPromptClick={handleSendMessage}>
             {/* ChatInput as child - in natural document flow */}
             <div style={{ animation: 'fadeInScale 0.6s ease-out' }}>
+              {/* Selection indicator above input */}
+              {selectedText && (
+                <SelectionIndicator
+                  selection={selectedText}
+                  onClear={clearSelection}
+                />
+              )}
               <ChatInput
-                onSend={onSendMessage}
+                onSend={handleSendMessage}
                 onCancel={onCancelStreaming}
                 isStreaming={isStreaming}
                 disabled={false}
@@ -227,8 +261,15 @@ export function ChatContainer({
               : undefined
           }
         >
+          {/* Selection indicator above input */}
+          {selectedText && (
+            <SelectionIndicator
+              selection={selectedText}
+              onClear={clearSelection}
+            />
+          )}
           <ChatInput
-            onSend={onSendMessage}
+            onSend={handleSendMessage}
             onCancel={onCancelStreaming}
             isStreaming={isStreaming}
             disabled={false}

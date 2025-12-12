@@ -1,7 +1,13 @@
 {
   "header": {
     "tagline": "Legal & Technical Document Intelligence",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "browseDocuments": "Browse documents"
+  },
+  "documentBrowser": {
+    "title": "Available Documents",
+    "loadError": "Failed to load documents",
+    "noDocuments": "No documents available"
   },
   "login": {
     "email": "Email",
@@ -63,6 +69,8 @@
     "synthesizingDesc": "Combining information from sources",
     "generatingReport": "Generating Report",
     "generatingReportDesc": "Creating final response",
+    "generatingResponse": "Generating Response",
+    "generatingResponseDesc": "Writing final answer",
     "processing": "Processing",
     "processingDesc": "Working on your request",
     "activeTools": "Active Tools",
@@ -125,6 +133,27 @@
     "switchTo": "Switch language",
     "czech": "Čeština",
     "english": "English"
+  },
+  "pdfPanel": {
+    "close": "Close document (Esc)",
+    "page": "Page",
+    "pages": "Pages",
+    "loading": "Loading PDF...",
+    "rendering": "Rendering...",
+    "zoomIn": "Zoom in (+)",
+    "zoomOut": "Zoom out (-)",
+    "error401": "Session expired. Please log in again.",
+    "error403": "You do not have permission to view this document.",
+    "error404": "Document not found.",
+    "error500": "Server temporarily unavailable.",
+    "errorGeneric": "Error loading PDF"
+  },
+  "selection": {
+    "charactersSelected": "{{count}} characters selected",
+    "page": "page",
+    "pages": "pages",
+    "clearSelection": "Clear selection",
+    "clear": "Clear"
   },
   "admin": {
     "login": {

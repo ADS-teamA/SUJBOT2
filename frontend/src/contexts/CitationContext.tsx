@@ -1,13 +1,12 @@
 /**
  * Citation Context Provider
  *
- * Manages citation metadata cache and PDF viewer modal state.
+ * Manages citation metadata cache, PDF side panel state, and text selection.
  * Provides batch fetching with debouncing for efficiency.
  */
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import type { CitationMetadata, CitationContextValue } from '../types';
-import { PDFViewerModal } from '../components/pdf/PDFViewerModal';
+import type { CitationMetadata, CitationContextValue, TextSelection } from '../types';
 
 // API base URL from environment
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -22,12 +21,16 @@ export function CitationProvider({ children }: CitationProviderProps) {
   // Citation metadata cache
   const [citationCache, setCitationCache] = useState<Map<string, CitationMetadata>>(new Map());
 
-  // PDF viewer state
+  // PDF side panel state
   const [activePdf, setActivePdf] = useState<{
     documentId: string;
+    documentName: string;
     page: number;
     chunkId?: string;
   } | null>(null);
+
+  // Selected text from PDF for agent context
+  const [selectedText, setSelectedText] = useState<TextSelection | null>(null);
 
   // Per-citation loading state (tracks which chunk IDs are currently being fetched)
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
@@ -153,17 +156,24 @@ export function CitationProvider({ children }: CitationProviderProps) {
   }, []);
 
   /**
-   * Open PDF viewer modal.
+   * Open PDF side panel.
    */
-  const openPdf = useCallback((documentId: string, page: number = 1, chunkId?: string) => {
-    setActivePdf({ documentId, page, chunkId });
+  const openPdf = useCallback((documentId: string, documentName: string, page: number = 1, chunkId?: string) => {
+    setActivePdf({ documentId, documentName, page, chunkId });
   }, []);
 
   /**
-   * Close PDF viewer modal.
+   * Close PDF side panel.
    */
   const closePdf = useCallback(() => {
     setActivePdf(null);
+  }, []);
+
+  /**
+   * Clear selected text from PDF.
+   */
+  const clearSelection = useCallback(() => {
+    setSelectedText(null);
   }, []);
 
   const contextValue: CitationContextValue = {
@@ -175,22 +185,15 @@ export function CitationProvider({ children }: CitationProviderProps) {
     loadingIds,
     error,
     clearError,
+    selectedText,
+    setSelectedText,
+    clearSelection,
   };
 
   return (
     <CitationContext.Provider value={contextValue}>
       {children}
-
-      {/* PDF Viewer Modal - rendered at root level */}
-      {activePdf && (
-        <PDFViewerModal
-          isOpen={true}
-          documentId={activePdf.documentId}
-          initialPage={activePdf.page}
-          chunkContent={activePdf.chunkId ? citationCache.get(activePdf.chunkId)?.content ?? undefined : undefined}
-          onClose={closePdf}
-        />
-      )}
+      {/* PDF side panel is now rendered in App.tsx for proper layout integration */}
     </CitationContext.Provider>
   );
 }

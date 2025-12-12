@@ -21,6 +21,7 @@ interface AdminUser {
 }
 
 let cachedUser: AdminUser | null = null;
+let checkAuthPromise: Promise<void> | null = null;
 
 export const authProvider: AuthProvider = {
   login: async ({ username, password }) => {
@@ -61,22 +62,39 @@ export const authProvider: AuthProvider = {
   },
 
   checkAuth: async () => {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Not authenticated');
+    // Return cached user if available (prevents redundant /auth/me calls)
+    if (cachedUser) {
+      return Promise.resolve();
     }
 
-    const user = await response.json();
-
-    if (!user.is_admin) {
-      throw new Error('Admin privileges required');
+    // Deduplicate concurrent checkAuth calls (React Admin can call multiple times on mount)
+    if (checkAuthPromise) {
+      return checkAuthPromise;
     }
 
-    cachedUser = user;
-    return Promise.resolve();
+    checkAuthPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/me`, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error('Not authenticated');
+        }
+
+        const user = await response.json();
+
+        if (!user.is_admin) {
+          throw new Error('Admin privileges required');
+        }
+
+        cachedUser = user;
+      } finally {
+        checkAuthPromise = null;
+      }
+    })();
+
+    return checkAuthPromise;
   },
 
   checkError: async (error) => {
@@ -137,6 +155,6 @@ export const authProvider: AuthProvider = {
         throw new Error('Unable to determine permissions');
       }
     }
-    return cachedUser.is_admin ? 'admin' : 'user';
+    return cachedUser?.is_admin ? 'admin' : 'user';
   },
 };

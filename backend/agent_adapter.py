@@ -134,6 +134,10 @@ class AgentAdapter:
         # TODO: In production, use Redis or database for multi-instance deployments
         self._pending_clarifications: Dict[str, Dict[str, Any]] = {}
 
+        # Cache for variant-specific runners to avoid creating new connection pools per request
+        # Key: variant name, Value: initialized MultiAgentRunner
+        self._variant_runners: Dict[str, MultiAgentRunner] = {}
+
         # Store current model
         self.current_model = model or multi_agent_config.get("orchestrator", {}).get("model", "claude-sonnet-4-5-20250929")
 
@@ -229,6 +233,81 @@ class AgentAdapter:
         """
         return self.runner.get_tool_health()
 
+    async def _get_variant_runner(self, variant: str) -> MultiAgentRunner:
+        """
+        Get or create a cached runner for the specified variant.
+
+        Caches runners to avoid creating new connection pools per request,
+        which would cause connection exhaustion and asyncio errors.
+
+        Args:
+            variant: Agent variant ('premium', 'cheap', or 'local')
+
+        Returns:
+            Initialized MultiAgentRunner for the variant
+        """
+        # Check cache first
+        if variant in self._variant_runners:
+            logger.debug(f"Using cached runner for variant '{variant}'")
+            return self._variant_runners[variant]
+
+        # Create new runner for this variant
+        logger.info(f"Creating runner for variant '{variant}'...")
+
+        project_root = Path(__file__).parent.parent
+        config_path = project_root / "config.json"
+
+        with open(config_path) as f:
+            full_config = json.load(f)
+            multi_agent_config = full_config.get("multi_agent", {})
+
+        # Apply variant overrides
+        multi_agent_config = self._apply_variant_overrides(variant, multi_agent_config)
+
+        # Build runner config with variant models
+        runner_config = {
+            "api_keys": {
+                "anthropic_api_key": self.config.anthropic_api_key,
+                "openai_api_key": self.config.openai_api_key,
+                "google_api_key": self.config.google_api_key,
+                "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
+            },
+            "vector_store_path": str(self.config.vector_store_path),
+            "models": full_config.get("models", {}),
+            "storage": full_config.get("storage", {}),
+            "agent_tools": full_config.get("agent_tools", {}),
+            "knowledge_graph": full_config.get("knowledge_graph", {}),
+            "neo4j": full_config.get("neo4j", {}),
+            "multi_agent": multi_agent_config,
+        }
+
+        # Create and initialize runner
+        new_runner = MultiAgentRunner(runner_config)
+        await new_runner.initialize()
+
+        # Cache for reuse
+        self._variant_runners[variant] = new_runner
+        logger.info(f"Created and cached runner for variant '{variant}'")
+
+        return new_runner
+
+    async def shutdown_variant_runners(self) -> None:
+        """
+        Shutdown all cached variant runners.
+
+        Should be called during application shutdown to properly close
+        all connection pools.
+        """
+        for variant, runner in self._variant_runners.items():
+            try:
+                logger.info(f"Shutting down cached runner for variant '{variant}'...")
+                await runner.async_shutdown()
+            except Exception as e:
+                logger.warning(f"Error shutting down runner for variant '{variant}': {e}")
+
+        self._variant_runners.clear()
+        logger.info("All cached variant runners shut down")
+
     async def stream_response(
         self,
         query: str,
@@ -270,7 +349,7 @@ class AgentAdapter:
         reset_global_tracker()
         tracker = get_global_tracker()
 
-        # Load user's variant and create runner with variant-specific config
+        # Load user's variant and get cached runner
         variant = "premium"  # default
         runner_to_use = self.runner  # default to existing runner
 
@@ -281,41 +360,9 @@ class AgentAdapter:
                 variant = await queries.get_agent_variant(user_id)
                 logger.info(f"User {user_id} variant: {variant}")
 
-                # Create runner with variant-specific models for ALL variants
-                # (including premium - OPUS_TIER_AGENTS need Opus model override)
-                # Load config and apply variant overrides
-                project_root = Path(__file__).parent.parent
-                config_path = project_root / "config.json"
-
-                with open(config_path) as f:
-                    full_config = json.load(f)
-                    multi_agent_config = full_config.get("multi_agent", {})
-
-                # Apply variant overrides
-                multi_agent_config = self._apply_variant_overrides(variant, multi_agent_config)
-
-                # Build runner config with variant models
-                runner_config = {
-                    "api_keys": {
-                        "anthropic_api_key": self.config.anthropic_api_key,
-                        "openai_api_key": self.config.openai_api_key,
-                        "google_api_key": self.config.google_api_key,
-                        "deepinfra_api_key": os.getenv("DEEPINFRA_API_KEY"),
-                    },
-                    "vector_store_path": str(self.config.vector_store_path),
-                    "models": full_config.get("models", {}),
-                    "storage": full_config.get("storage", {}),
-                    "agent_tools": full_config.get("agent_tools", {}),
-                    "knowledge_graph": full_config.get("knowledge_graph", {}),
-                    "neo4j": full_config.get("neo4j", {}),
-                    "multi_agent": multi_agent_config,
-                }
-
-                # Create fresh runner with variant config
-                new_runner = MultiAgentRunner(runner_config)
-                await new_runner.initialize()
-                runner_to_use = new_runner  # Only assign after successful init
-                logger.info(f"Created fresh runner with variant '{variant}'")
+                # Get or create cached runner for this variant
+                # This avoids creating new connection pools per request
+                runner_to_use = await self._get_variant_runner(variant)
 
             except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
                 # Config file issues - log as warning and fall back

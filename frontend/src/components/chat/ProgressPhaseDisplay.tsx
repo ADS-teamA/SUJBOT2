@@ -83,6 +83,13 @@ const PHASE_MAP: Record<string, PhaseConfig> = {
     color: 'text-violet-600',
     darkColor: 'dark:text-violet-400',
   },
+  synthesizing: {
+    nameKey: 'progress.generatingResponse',
+    descKey: 'progress.generatingResponseDesc',
+    icon: '✍️',
+    color: 'text-emerald-600',
+    darkColor: 'dark:text-emerald-400',
+  },
 };
 
 // Fallback for unknown agents
