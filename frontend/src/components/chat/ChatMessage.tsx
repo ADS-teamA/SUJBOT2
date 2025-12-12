@@ -209,8 +209,8 @@ export function ChatMessage({
             </div>
           ) : (
             <>
-              {/* Agent progress for assistant messages - only show if currentAgent exists */}
-              {!isUser && message.agentProgress?.currentAgent && (
+              {/* Agent progress for assistant messages - show while streaming or agent active */}
+              {!isUser && (message.agentProgress?.currentAgent || message.agentProgress?.isStreaming) && (
                 <div className="mb-4">
                   <ProgressPhaseDisplay progress={message.agentProgress} />
                 </div>

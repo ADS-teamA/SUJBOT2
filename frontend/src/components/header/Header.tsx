@@ -2,13 +2,15 @@
  * Header Component - Top navigation with sidebar control
  */
 
-import { Menu, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { Menu, LogOut, FolderOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 import { useHover } from '../../design-system/animations/hooks/useHover';
 import { useAuth } from '../../contexts/AuthContext';
 import { AgentVariantSelector } from './AgentVariantSelector';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { DocumentBrowser } from './DocumentBrowser';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -25,9 +27,13 @@ export function Header({
   // Authentication
   const { logout } = useAuth();
 
+  // Document browser state
+  const [documentBrowserOpen, setDocumentBrowserOpen] = useState(false);
+
   // Animation hooks
   const hamburgerHover = useHover({ scale: true });
   const logoutHover = useHover({ scale: true });
+  const documentHover = useHover({ scale: true });
 
   return (
     <header className={cn(
@@ -119,6 +125,29 @@ export function Header({
         <div className="flex items-center gap-3">
           {/* Language switcher */}
           <LanguageSwitcher />
+
+          {/* Document browser */}
+          <div className="relative">
+            <button
+              onClick={() => setDocumentBrowserOpen(!documentBrowserOpen)}
+              {...documentHover.hoverProps}
+              style={documentHover.style}
+              className={cn(
+                'p-2 rounded-lg',
+                'text-accent-700 dark:text-accent-300',
+                'hover:bg-accent-100 dark:hover:bg-accent-800',
+                'transition-all duration-700',
+                documentBrowserOpen && 'bg-accent-100 dark:bg-accent-800'
+              )}
+              title={t('header.browseDocuments')}
+            >
+              <FolderOpen size={20} className="transition-all duration-700" />
+            </button>
+            <DocumentBrowser
+              isOpen={documentBrowserOpen}
+              onClose={() => setDocumentBrowserOpen(false)}
+            />
+          </div>
 
           {/* Agent variant selector */}
           <AgentVariantSelector />

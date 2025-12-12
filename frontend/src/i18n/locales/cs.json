@@ -1,7 +1,13 @@
 {
   "header": {
     "tagline": "Inteligentní analýza právních a technických dokumentů",
-    "signOut": "Odhlásit se"
+    "signOut": "Odhlásit se",
+    "browseDocuments": "Procházet dokumenty"
+  },
+  "documentBrowser": {
+    "title": "Dostupné dokumenty",
+    "loadError": "Nepodařilo se načíst dokumenty",
+    "noDocuments": "Žádné dokumenty nejsou k dispozici"
   },
   "login": {
     "email": "E-mail",
@@ -64,6 +70,8 @@
     "synthesizingDesc": "Kombinuji informace ze zdrojů",
     "generatingReport": "Generování reportu",
     "generatingReportDesc": "Vytvářím finální odpověď",
+    "generatingResponse": "Generování odpovědi",
+    "generatingResponseDesc": "Píši finální odpověď",
     "processing": "Zpracování",
     "processingDesc": "Pracuji na vašem požadavku",
     "activeTools": "Aktivní nástroje",
@@ -126,6 +134,27 @@
     "switchTo": "Přepnout jazyk",
     "czech": "Čeština",
     "english": "English"
+  },
+  "pdfPanel": {
+    "close": "Zavřít dokument (Esc)",
+    "page": "Strana",
+    "pages": "Strany",
+    "loading": "Načítám PDF...",
+    "rendering": "Renderuji...",
+    "zoomIn": "Přiblížit (+)",
+    "zoomOut": "Oddálit (-)",
+    "error401": "Relace vypršela. Přihlaste se prosím znovu.",
+    "error403": "Nemáte oprávnění zobrazit tento dokument.",
+    "error404": "Dokument nebyl nalezen.",
+    "error500": "Server je dočasně nedostupný.",
+    "errorGeneric": "Chyba při načítání PDF"
+  },
+  "selection": {
+    "charactersSelected": "{{count}} znaků vybráno",
+    "page": "strana",
+    "pages": "strany",
+    "clearSelection": "Zrušit výběr",
+    "clear": "Zrušit"
   },
   "admin": {
     "login": {

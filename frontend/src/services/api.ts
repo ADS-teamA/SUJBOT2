@@ -39,6 +39,13 @@ export interface SpendingInfo {
   reset_at: string | null;
 }
 
+export interface DocumentInfo {
+  document_id: string;
+  display_name: string;
+  filename: string;
+  size_bytes: number;
+}
+
 export class ApiService {
   /**
    * Get headers for JSON requests
@@ -175,13 +182,21 @@ export class ApiService {
    * @param skipSaveUserMessage - Skip saving user message (for regenerate)
    * @param messageHistory - Optional last N messages for conversation context
    * @param abortSignal - Optional AbortSignal for cancellation (e.g., on page refresh)
+   * @param selectedContext - Optional selected text from PDF for additional context
    */
   async *streamChat(
     message: string,
     conversationId?: string,
     skipSaveUserMessage?: boolean,
     messageHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    selectedContext?: {
+      text: string;
+      document_id: string;
+      document_name: string;
+      page_start: number;
+      page_end: number;
+    } | null
   ): AsyncGenerator<SSEEvent, void, unknown> {
     let response;
     try {
@@ -194,6 +209,7 @@ export class ApiService {
           conversation_id: conversationId,
           skip_save_user_message: skipSaveUserMessage || false,
           messages: messageHistory,  // Conversation history for context
+          selected_context: selectedContext || null,  // Selected text from PDF
         }),
         signal: abortSignal,  // Allow cancellation on page refresh/unmount
       });
@@ -446,6 +462,23 @@ export class ApiService {
 
     if (!response.ok) {
       throw new Error(`Health check failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get list of available documents
+   */
+  async getDocuments(): Promise<DocumentInfo[]> {
+    const response = await fetch(`${API_BASE_URL}/documents/`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch documents: ${response.status}`);
     }
 
     return response.json();

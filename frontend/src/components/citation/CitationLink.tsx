@@ -30,10 +30,10 @@ export function CitationLink({ chunkId }: CitationLinkProps) {
 
   const metadata = citationCache.get(chunkId);
 
-  // Handle click - open PDF viewer
+  // Handle click - open PDF side panel
   const handleClick = () => {
     if (metadata?.pdfAvailable) {
-      openPdf(metadata.documentId, metadata.pageNumber ?? 1, chunkId);
+      openPdf(metadata.documentId, metadata.documentName, metadata.pageNumber ?? 1, chunkId);
     }
   };
 

@@ -284,9 +284,16 @@ export function useChat() {
    * Send a message and stream the response
    * @param content - The message content to send
    * @param addUserMessage - Whether to add a new user message (false for regenerate/edit)
+   * @param selectedContext - Optional selected text from PDF for additional context
    */
   const sendMessage = useCallback(
-    async (content: string, addUserMessage: boolean = true) => {
+    async (content: string, addUserMessage: boolean = true, selectedContext?: {
+      text: string;
+      documentId: string;
+      documentName: string;
+      pageStart: number;
+      pageEnd: number;
+    } | null) => {
       if (isStreaming || !content.trim()) {
         return;
       }
@@ -349,7 +356,8 @@ export function useChat() {
           currentAgent: 'orchestrator', // Start with orchestrator immediately
           currentMessage: 'Initializing...',
           completedAgents: [],
-          activeTools: []
+          activeTools: [],
+          isStreaming: true // Keep indicator visible until done event
         }
       };
       currentToolCallsRef.current = new Map();
@@ -390,13 +398,23 @@ export function useChat() {
             content: msg.content
           }));
 
+        // Format selected context for API (convert camelCase to snake_case)
+        const apiSelectedContext = selectedContext ? {
+          text: selectedContext.text,
+          document_id: selectedContext.documentId,
+          document_name: selectedContext.documentName,
+          page_start: selectedContext.pageStart,
+          page_end: selectedContext.pageEnd,
+        } : null;
+
         // Stream response from backend with abort signal for page refresh handling
         for await (const event of apiService.streamChat(
           content,
           conversation.id,
           !addUserMessage,  // Skip saving user message when regenerating/editing (already exists)
           messageHistory,   // Pass conversation history for context
-          abortControllerRef.current.signal  // Allow cancellation on page refresh
+          abortControllerRef.current.signal,  // Allow cancellation on page refresh
+          apiSelectedContext  // Pass selected text from PDF for additional context
         )) {
           // Handle tool health check (first event)
           if (event.event === 'tool_health') {
@@ -510,12 +528,12 @@ export function useChat() {
           else if (event.event === 'text_delta') {
             // Append text delta
             if (currentMessageRef.current) {
-              // Mark all agents as completed when text starts arriving
-              if (currentMessageRef.current.agentProgress && currentMessageRef.current.agentProgress.currentAgent) {
+              // Transition to synthesizing phase when text starts arriving
+              if (currentMessageRef.current.agentProgress && currentMessageRef.current.agentProgress.currentAgent && currentMessageRef.current.agentProgress.currentAgent !== 'synthesizing') {
                 currentMessageRef.current.agentProgress.completedAgents.push(
                   currentMessageRef.current.agentProgress.currentAgent
                 );
-                currentMessageRef.current.agentProgress.currentAgent = null;
+                currentMessageRef.current.agentProgress.currentAgent = 'synthesizing';
                 currentMessageRef.current.agentProgress.currentMessage = null;
                 currentMessageRef.current.agentProgress.activeTools = [];
               }
@@ -672,7 +690,11 @@ export function useChat() {
               );
             }
           } else if (event.event === 'done') {
-            // Stream completed
+            // Stream completed - mark streaming as finished
+            if (currentMessageRef.current?.agentProgress) {
+              currentMessageRef.current.agentProgress.isStreaming = false;
+              currentMessageRef.current.agentProgress.currentAgent = null;
+            }
             break;
           } else if (event.event === 'error') {
             // Error occurred
@@ -996,7 +1018,11 @@ export function useChat() {
               );
             }
           } else if (event.event === 'done') {
-            // Stream completed
+            // Stream completed - mark streaming as finished
+            if (currentMessageRef.current?.agentProgress) {
+              currentMessageRef.current.agentProgress.isStreaming = false;
+              currentMessageRef.current.agentProgress.currentAgent = null;
+            }
             break;
           } else if (event.event === 'error') {
             // Error occurred

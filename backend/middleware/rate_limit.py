@@ -109,6 +109,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     ROUTE_LIMITS = {
         "/auth/login": 10,      # Brute force protection
         "/auth/register": 5,    # Slow account creation abuse
+        "/auth/me": 120,        # Session validation (React Admin calls frequently)
+        "/auth/logout": 30,     # Logout endpoint
         "/chat/stream": 30,     # Moderate chat usage
         "/citations": 300,      # High limit for citation lookups (UI triggers many)
     }
