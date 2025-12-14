@@ -940,6 +940,154 @@ class IndexingConfig(BaseModel):
     )
 
 
+# ============================================================================
+# SSOT Configuration - Centralized Settings (PHASE: SSOT Refactoring)
+# ============================================================================
+
+class ModelRegistryConfig(BaseModel):
+    """
+    Model registry configuration - SSOT for all model aliases.
+
+    Provides centralized mapping from short aliases to full model identifiers.
+    Used by ModelRegistry class which reads from this config.
+    """
+
+    llm_models: dict[str, str] = Field(
+        ...,
+        description="LLM model aliases (e.g., 'haiku' -> 'claude-haiku-4-5-20251001')"
+    )
+    embedding_models: dict[str, str] = Field(
+        ...,
+        description="Embedding model aliases (e.g., 'bge-m3' -> 'BAAI/bge-m3')"
+    )
+    reranker_models: dict[str, str] = Field(
+        ...,
+        description="Reranker model aliases (e.g., 'sota' -> 'BAAI/bge-reranker-large')"
+    )
+    embedding_dimensions: dict[str, int] = Field(
+        ...,
+        description="Embedding dimensions per model (e.g., 'Qwen/Qwen3-Embedding-8B' -> 4096)"
+    )
+
+
+class TimeoutDefaultsConfig(BaseModel):
+    """Timeout defaults in seconds - SSOT for all timeout values."""
+
+    api_request: int = Field(60, ge=1, description="Default API request timeout")
+    ollama_request: int = Field(30, ge=1, description="Ollama/local model request timeout")
+    graph_query: int = Field(60, ge=1, description="Graph database query timeout")
+    postgres_command: int = Field(60, ge=1, description="PostgreSQL command timeout")
+    batch_api_poll: int = Field(30, ge=1, description="Batch API polling interval")
+
+
+class RetriesDefaultsConfig(BaseModel):
+    """Retry defaults - SSOT for all retry configurations."""
+
+    api_max_retries: int = Field(3, ge=1, le=10, description="Max retries for API calls")
+    postgres_max_retries: int = Field(5, ge=1, le=10, description="Max retries for PostgreSQL")
+
+
+class PoolSizesDefaultsConfig(BaseModel):
+    """Connection pool size defaults - SSOT for all pool configurations."""
+
+    postgres: int = Field(20, ge=1, description="PostgreSQL connection pool size")
+    neo4j: int = Field(50, ge=1, description="Neo4j connection pool size")
+
+
+class BatchSizesDefaultsConfig(BaseModel):
+    """Batch processing size defaults - SSOT for all batch operations."""
+
+    entity_extraction: int = Field(20, ge=1, description="Entity extraction batch size")
+    relationship_extraction: int = Field(10, ge=1, description="Relationship extraction batch size")
+    embedding: int = Field(64, ge=1, description="Embedding batch size")
+    context_generation: int = Field(20, ge=1, description="Context generation batch size")
+    neo4j_operations: int = Field(1000, ge=1, description="Neo4j bulk operations batch size")
+    graph_builder: int = Field(500, ge=1, description="Graph builder batch size")
+
+
+class RetrievalDefaultsConfig(BaseModel):
+    """Retrieval defaults - SSOT for retrieval parameters."""
+
+    layer_default_k: dict[str, int] = Field(
+        default_factory=lambda: {"1": 3, "2": 5, "3": 10},
+        description="Default k per layer (keys are layer numbers as strings)"
+    )
+    candidates_multiplier: int = Field(4, ge=1, description="Candidates multiplier for reranking")
+    rrf_k: int = Field(60, ge=1, description="RRF k parameter for fusion")
+
+
+class MaxWorkersDefaultsConfig(BaseModel):
+    """Maximum worker thread defaults - SSOT for parallel processing."""
+
+    summarization: int = Field(20, ge=1, description="Max workers for summarization")
+    context_generation: int = Field(10, ge=1, description="Max workers for context generation")
+    entity_extraction: int = Field(10, ge=1, description="Max workers for entity extraction")
+    relationship_extraction: int = Field(10, ge=1, description="Max workers for relationship extraction")
+
+
+class CacheDefaultsConfig(BaseModel):
+    """Cache configuration defaults - SSOT for all cache settings."""
+
+    embedding_cache_max_size: int = Field(1000, ge=100, description="Max size of embedding cache")
+    token_manager_max_tokens_per_chunk: int = Field(600, ge=100, description="Max tokens per chunk in token manager")
+
+
+class DefaultsConfig(BaseModel):
+    """
+    Centralized default values - SSOT for all hardcoded defaults.
+
+    This section consolidates all default values that were previously
+    scattered across multiple Python files as hardcoded constants.
+    """
+
+    timeouts: TimeoutDefaultsConfig = Field(default_factory=TimeoutDefaultsConfig)
+    retries: RetriesDefaultsConfig = Field(default_factory=RetriesDefaultsConfig)
+    pool_sizes: PoolSizesDefaultsConfig = Field(default_factory=PoolSizesDefaultsConfig)
+    batch_sizes: BatchSizesDefaultsConfig = Field(default_factory=BatchSizesDefaultsConfig)
+    retrieval: RetrievalDefaultsConfig = Field(default_factory=RetrievalDefaultsConfig)
+    max_workers: MaxWorkersDefaultsConfig = Field(default_factory=MaxWorkersDefaultsConfig)
+    cache: CacheDefaultsConfig = Field(default_factory=CacheDefaultsConfig)
+
+
+class AgentVariantModelConfig(BaseModel):
+    """Single agent variant configuration (premium/cheap/local)."""
+
+    display_name: str = Field(..., description="Human-readable variant name")
+    opus_model: str = Field(..., description="Model for opus-tier agents")
+    default_model: str = Field(..., description="Model for other agents")
+
+
+class AgentVariantsConfig(BaseModel):
+    """
+    Agent variant tier configuration - SSOT for tiered model selection.
+
+    Previously hardcoded in backend/constants.py as VARIANT_CONFIG.
+    Used by multi-agent orchestrator for dynamic model selection.
+    """
+
+    opus_tier_agents: list[str] = Field(
+        ...,
+        description="Agents that use opus_model instead of default_model"
+    )
+    variants: dict[str, AgentVariantModelConfig] = Field(
+        ...,
+        description="Variant configurations keyed by variant name"
+    )
+    default_variant: str = Field(
+        "cheap",
+        description="Default variant when lookup fails or user has no preference"
+    )
+    deepinfra_supported_models: list[str] = Field(
+        default_factory=list,
+        description="List of DeepInfra-supported models for validation"
+    )
+
+
+# ============================================================================
+# End of SSOT Configuration
+# ============================================================================
+
+
 class PipelineConfig(BaseModel):
     """General pipeline configuration."""
 
@@ -989,6 +1137,20 @@ class RootConfig(BaseModel):
     cli: CLIConfig
     pipeline: PipelineConfig
     indexing: IndexingConfig = Field(default_factory=IndexingConfig)
+
+    # SSOT Configuration sections (optional for backwards compatibility)
+    model_registry: Optional[ModelRegistryConfig] = Field(
+        default=None,
+        description="Centralized model aliases - SSOT for ModelRegistry"
+    )
+    defaults: DefaultsConfig = Field(
+        default_factory=DefaultsConfig,
+        description="Centralized default values - SSOT for hardcoded defaults"
+    )
+    agent_variants: Optional[AgentVariantsConfig] = Field(
+        default=None,
+        description="Agent variant tier configuration - SSOT for backend/constants.py"
+    )
 
     def _is_placeholder(self, value: Optional[str]) -> bool:
         """

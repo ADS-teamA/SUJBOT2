@@ -227,11 +227,13 @@ class MultiAgentRunner:
                     return
 
                 logger.info("Loading PostgreSQL vector store adapter...")
+                # SSOT: Default dimensions must match current embedding model (Qwen3-Embedding-8B = 4096)
+                # Previously was 3072 (OpenAI legacy) which would cause vector store incompatibility
                 vector_store = await load_vector_store_adapter(
                     backend="postgresql",
                     connection_string=connection_string,
                     pool_size=storage_config.get("postgresql", {}).get("pool_size", 20),
-                    dimensions=storage_config.get("postgresql", {}).get("dimensions", 3072)
+                    dimensions=storage_config.get("postgresql", {}).get("dimensions", 4096)
                 )
                 logger.info("PostgreSQL adapter loaded successfully")
 
