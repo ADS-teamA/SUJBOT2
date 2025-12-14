@@ -408,7 +408,7 @@ class MultiAgentRunner:
             agent_tools_config = self.config.get("agent_tools", {})
             tool_config = ToolConfig(
                 default_k=agent_tools_config.get("default_k", 6),
-                enable_reranking=agent_tools_config.get("enable_reranking", True),
+                enable_reranking=agent_tools_config.get("enable_reranking", False),  # SSOT: config.json default
                 reranker_candidates=agent_tools_config.get("reranker_candidates", 50),
                 reranker_model=agent_tools_config.get("reranker_model", "bge-reranker-large"),
                 enable_graph_boost=agent_tools_config.get("enable_graph_boost", True),

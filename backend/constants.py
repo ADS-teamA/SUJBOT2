@@ -14,7 +14,7 @@ SSOT Architecture:
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +131,21 @@ def _ensure_config_loaded() -> None:
 
         _config_loaded = True
 
-    except Exception as e:
-        logger.warning(
-            "Failed to load agent variants from config: %s. Using built-in defaults.",
+    except ImportError as e:
+        # Config module not available - expected during testing or isolated execution
+        logger.info(
+            "Config module not available: %s. Using built-in defaults.",
             e,
+        )
+        _load_builtin_defaults()
+        _config_loaded = True
+
+    except (KeyError, AttributeError, TypeError) as e:
+        # Config schema mismatch - log with traceback for debugging
+        logger.warning(
+            "Config schema error in agent_variants section: %s. Using built-in defaults.",
+            e,
+            exc_info=True,
         )
         _load_builtin_defaults()
         _config_loaded = True
@@ -152,32 +163,8 @@ def reload_constants() -> None:
 
 
 # =============================================================================
-# Public Accessor Properties (ensure config is loaded before access)
+# Public Getter Functions
 # =============================================================================
-
-@property
-def OPUS_TIER_AGENTS() -> frozenset[str]:
-    """Get opus-tier agents set (loads from config on first access)."""
-    _ensure_config_loaded()
-    return _OPUS_TIER_AGENTS
-
-
-@property
-def VARIANT_CONFIG() -> dict[str, dict[str, str]]:
-    """Get variant configuration dict (loads from config on first access)."""
-    _ensure_config_loaded()
-    return _VARIANT_CONFIG
-
-
-@property
-def DEFAULT_VARIANT() -> str:
-    """Get default variant name (loads from config on first access)."""
-    _ensure_config_loaded()
-    return _DEFAULT_VARIANT
-
-
-# Module-level compatibility - these get loaded on first function call
-# For direct access, use the getter functions below
 
 def get_opus_tier_agents() -> frozenset[str]:
     """Get the set of opus-tier agents."""
@@ -276,44 +263,6 @@ def get_variant_display_name(variant: str) -> str:
 #   from backend.constants import OPUS_TIER_AGENTS, VARIANT_CONFIG, DEFAULT_VARIANT
 #
 # New code should use the getter functions instead.
-
-class _LazyConstant:
-    """Descriptor for lazy-loaded module constants."""
-
-    def __init__(self, getter: Any):
-        self._getter = getter
-        self._name = getter.__name__
-
-    def __get__(self, obj: Any, objtype: Any = None) -> Any:
-        return self._getter()
-
-
-class _ConstantsModule:
-    """Module-like object with lazy-loaded constants."""
-
-    @property
-    def OPUS_TIER_AGENTS(self) -> frozenset[str]:
-        return get_opus_tier_agents()
-
-    @property
-    def VARIANT_CONFIG(self) -> dict[str, dict[str, str]]:
-        return get_variant_config()
-
-    @property
-    def DEFAULT_VARIANT(self) -> str:
-        return get_default_variant()
-
-    @property
-    def DEEPINFRA_SUPPORTED_MODELS(self) -> frozenset[str]:
-        return get_deepinfra_supported_models()
-
-
-# For backward compatibility, we need to support direct imports like:
-#   from backend.constants import OPUS_TIER_AGENTS
-#
-# Since Python doesn't support lazy module-level constants directly,
-# we initialize them on module load (first import).
-# This is a compromise - ideally code would use getter functions.
 
 # Initialize on first import to support direct attribute access
 _ensure_config_loaded()

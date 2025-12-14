@@ -180,9 +180,18 @@ def _ensure_config_loaded():
 
         _config_loaded = True
 
-    except Exception as e:
-        # Config loading failed - use defaults
-        logger.warning(f"Failed to load config for ModelRegistry: {e}, using built-in defaults")
+    except ImportError as e:
+        # Config module not available - expected during testing
+        logger.info(f"Config module not available: {e}. Using built-in model registry.")
+        _load_builtin_defaults()
+        _config_loaded = True
+
+    except (KeyError, AttributeError, TypeError) as e:
+        # Config schema mismatch - log with traceback for debugging
+        logger.warning(
+            f"Model registry config schema error: {e}. Using built-in defaults.",
+            exc_info=True,
+        )
         _load_builtin_defaults()
         _config_loaded = True
 

@@ -417,8 +417,17 @@ def _ensure_config_loaded():
             _layer_default_k = {int(k): v for k, v in raw_k.items()}
             logger.debug(f"layer_default_k loaded from config: {_layer_default_k}")
         _config_loaded = True
-    except Exception as e:
-        logger.debug(f"Could not load layer_default_k from config: {e}. Using built-in defaults.")
+    except ImportError as e:
+        # Config module not available - expected during testing
+        logger.debug(f"Config module not available: {e}. Using built-in layer_default_k.")
+        _config_loaded = True
+
+    except (KeyError, AttributeError, TypeError, ValueError) as e:
+        # Config schema mismatch or invalid values - log at WARNING level
+        logger.warning(
+            f"layer_default_k config error: {e}. Using built-in defaults.",
+            exc_info=True,
+        )
         _config_loaded = True
 
 
