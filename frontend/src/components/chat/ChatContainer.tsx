@@ -13,7 +13,6 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ClarificationModal } from './ClarificationModal';
-import { SelectionIndicator } from './SelectionIndicator';
 import { useCitationContext } from '../../contexts/CitationContext';
 import { cn } from '../../design-system/utils/cn';
 import type { Conversation, ClarificationData } from '../../types';
@@ -151,19 +150,14 @@ export function ChatContainer({
           <WelcomeScreen onPromptClick={handleSendMessage}>
             {/* ChatInput as child - in natural document flow */}
             <div style={{ animation: 'fadeInScale 0.6s ease-out' }}>
-              {/* Selection indicator above input */}
-              {selectedText && (
-                <SelectionIndicator
-                  selection={selectedText}
-                  onClear={clearSelection}
-                />
-              )}
               <ChatInput
                 onSend={handleSendMessage}
                 onCancel={onCancelStreaming}
                 isStreaming={isStreaming}
                 disabled={false}
                 refreshSpendingTrigger={spendingRefreshTrigger}
+                selectedText={selectedText}
+                onClearSelection={clearSelection}
               />
             </div>
           </WelcomeScreen>
@@ -261,19 +255,14 @@ export function ChatContainer({
               : undefined
           }
         >
-          {/* Selection indicator above input */}
-          {selectedText && (
-            <SelectionIndicator
-              selection={selectedText}
-              onClear={clearSelection}
-            />
-          )}
           <ChatInput
             onSend={handleSendMessage}
             onCancel={onCancelStreaming}
             isStreaming={isStreaming}
             disabled={false}
             refreshSpendingTrigger={spendingRefreshTrigger}
+            selectedText={selectedText}
+            onClearSelection={clearSelection}
           />
         </div>
       )}

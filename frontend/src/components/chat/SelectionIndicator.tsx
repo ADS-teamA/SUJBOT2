@@ -1,10 +1,10 @@
 /**
  * SelectionIndicator Component
  *
- * Displays information about selected text from PDF that will be
- * included as context in the next message to the agent.
+ * Displays a minimalist pill/chip showing selected text info from PDF.
+ * Shows: line count, document name, and close button.
  *
- * Shows: character count, document name, page range, and clear button.
+ * Design: Neutral gray oval chip, centered above chat input.
  */
 
 import { X, FileText } from 'lucide-react';
@@ -20,48 +20,74 @@ interface SelectionIndicatorProps {
 export function SelectionIndicator({ selection, onClear }: SelectionIndicatorProps) {
   const { t } = useTranslation();
 
-  // Format page range display
-  const pageDisplay = selection.pageStart === selection.pageEnd
-    ? `${t('selection.page', 'page')} ${selection.pageStart}`
-    : `${t('selection.pages', 'pages')} ${selection.pageStart}-${selection.pageEnd}`;
+  // Calculate line count (filter out empty lines)
+  const lineCount = selection.text
+    .split('\n')
+    .filter(line => line.trim()).length || 1;
+
+  // Format document name (replace underscores with spaces)
+  const documentName = selection.documentName.replace(/_/g, ' ');
 
   return (
-    <div
-      className={cn(
-        'flex items-center gap-3 px-4 py-2',
-        'bg-blue-50 dark:bg-blue-900/20',
-        'border-b border-blue-200 dark:border-blue-800',
-        'text-sm'
-      )}
-    >
-      {/* Icon */}
-      <FileText size={16} className="text-blue-500 dark:text-blue-400 flex-shrink-0" />
+    <div className="max-w-4xl mx-auto px-6 pt-1 pb-2">
+      <div
+        className={cn(
+          'inline-flex items-center gap-2 px-3 py-1.5',
+          'bg-gray-100 dark:bg-gray-800',
+          'text-gray-700 dark:text-gray-300',
+          'rounded-full text-sm',
+          'shadow-sm border border-gray-200 dark:border-gray-700'
+        )}
+        style={{
+          animation: 'chipIn 0.2s ease-out',
+        }}
+      >
+        {/* Document icon */}
+        <FileText size={14} className="text-gray-500 dark:text-gray-400 flex-shrink-0" />
 
-      {/* Selection info */}
-      <div className="flex-1 min-w-0">
-        <span className="text-blue-700 dark:text-blue-300 font-medium">
-          {t('selection.charactersSelected', '{{count}} characters selected', { count: selection.charCount })}
+        {/* Line count */}
+        <span className="font-medium">
+          {t('selection.lines', { count: lineCount })}
         </span>
-        <span className="text-blue-600 dark:text-blue-400 mx-2">|</span>
-        <span className="text-blue-600 dark:text-blue-400 truncate">
-          {selection.documentName.replace(/_/g, ' ')} ({pageDisplay})
+
+        {/* Separator */}
+        <span className="text-gray-400 dark:text-gray-500">•</span>
+
+        {/* Document name */}
+        <span className="truncate max-w-[200px]" title={documentName}>
+          {documentName}
         </span>
+
+        {/* Close button */}
+        <button
+          onClick={onClear}
+          className={cn(
+            'ml-1 p-0.5 rounded-full',
+            'text-gray-500 dark:text-gray-400',
+            'hover:bg-gray-200 dark:hover:bg-gray-700',
+            'hover:text-gray-700 dark:hover:text-gray-200',
+            'transition-colors duration-150'
+          )}
+          title={t('selection.clearSelection', 'Clear selection')}
+          aria-label={t('selection.clearSelection', 'Clear selection')}
+        >
+          <X size={14} />
+        </button>
       </div>
 
-      {/* Clear button */}
-      <button
-        onClick={onClear}
-        className={cn(
-          'flex items-center gap-1.5 px-2 py-1 rounded',
-          'text-blue-600 dark:text-blue-400',
-          'hover:bg-blue-100 dark:hover:bg-blue-800/40',
-          'transition-colors duration-150'
-        )}
-        title={t('selection.clearSelection', 'Clear selection')}
-      >
-        <X size={14} />
-        <span className="text-xs">{t('selection.clear', 'Clear')}</span>
-      </button>
+      {/* Animation keyframes */}
+      <style>{`
+        @keyframes chipIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95) translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

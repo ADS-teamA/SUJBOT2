@@ -149,11 +149,9 @@
     "errorGeneric": "Error loading PDF"
   },
   "selection": {
-    "charactersSelected": "{{count}} characters selected",
-    "page": "page",
-    "pages": "pages",
-    "clearSelection": "Clear selection",
-    "clear": "Clear"
+    "lines_one": "{{count}} line",
+    "lines_other": "{{count}} lines",
+    "clearSelection": "Clear selection"
   },
   "admin": {
     "login": {
