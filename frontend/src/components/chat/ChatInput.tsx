@@ -200,6 +200,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
                 {selectedText.documentName.replace(/_/g, ' ')}
               </span>
               <button
+                type="button"
                 onClick={onClearSelection}
                 className={cn(
                   'p-0.5 rounded-full -mr-0.5',
@@ -209,6 +210,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
                   'transition-colors duration-150'
                 )}
                 title={t('selection.clearSelection')}
+                aria-label={t('selection.clearSelection')}
               >
                 <X size={10} />
               </button>
