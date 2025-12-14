@@ -1,0 +1,1170 @@
+{
+  "document_id": "263/2016 Sb.",
+  "source_path": "data/Sb_2016_263_2024-01-01_IZ.pdf",
+  "num_sections": 116,
+  "hierarchy_depth": 6,
+  "num_roots": 1,
+  "num_tables": 0,
+  "sections": [
+    {
+      "section_id": "sec_1",
+      "title": "ÚVODNÍ USTANOVENÍ",
+      "content": "",
+      "level": 1,
+      "depth": 1,
+      "path": "ČÁST PRVNÍ",
+      "page_number": 1,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_2",
+      "title": "ÚVODNÍ USTANOVENÍ",
+      "content": "",
+      "level": 2,
+      "depth": 2,
+      "path": "ČÁST PRVNÍ > HLAVA I",
+      "page_number": 1,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_3",
+      "title": "Předmět úpravy",
+      "content": "",
+      "level": 3,
+      "depth": 3,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1",
+      "page_number": 1,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_4",
+      "title": "",
+      "content": "",
+      "level": 4,
+      "depth": 4,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1",
+      "page_number": 1,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_5",
+      "title": "",
+      "content": "Tento zákon zapracovává příslušné předpisy Evropského společenství pro atomovou energii (dále jen „Euratom“)1\n) a Evropské unie2\n), zároveň navazuje na přímo použitelné předpisy Euratomu3\n) \na Evropské unie4\n) a upravuje\na)   podmínky mírového využívání jaderné energie,\nb)   podmínky vykonávání činností v rámci expozičních situací,\nc)   nakládání s radioaktivním odpadem a vyhořelým jaderným palivem,\nd)   schvalování typu některých výrobků v oblasti mírového využívání jaderné energie a ionizu jícího záření a podmínky přepravy radioaktivní nebo štěpné látky, radioaktivního odpadu \nnebo vyhořelého jaderného paliva,\ne)   monitorování radiační situace,\nf)   zvládání radiační mimořádné události,\ng)   podmínky zabezpečení jaderného zařízení, jaderného materiálu a zdroje ionizujícího záření \n(dále jen „zabezpečení“),\nh)   požadavky k zajištění nešíření jaderných zbraní a\ni)   výkon státní správy v oblasti mírového využívání jaderné energie a ionizujícího záření.",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1)",
+      "page_number": 1,
+      "content_length": 968
+    },
+    {
+      "section_id": "sec_6",
+      "title": "",
+      "content": "podmínky mírového využívání jaderné energie,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > a)",
+      "page_number": 1,
+      "content_length": 44
+    },
+    {
+      "section_id": "sec_7",
+      "title": "",
+      "content": "podmínky vykonávání činností v rámci expozičních situací,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > b)",
+      "page_number": 1,
+      "content_length": 57
+    },
+    {
+      "section_id": "sec_8",
+      "title": "",
+      "content": "nakládání s radioaktivním odpadem a vyhořelým jaderným palivem,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > c)",
+      "page_number": 1,
+      "content_length": 63
+    },
+    {
+      "section_id": "sec_9",
+      "title": "",
+      "content": "schvalování typu některých výrobků v oblasti mírového využívání jaderné energie a ionizu jícího záření a podmínky přepravy radioaktivní nebo štěpné látky, radioaktivního odpadu \nnebo vyhořelého jaderného paliva,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > d)",
+      "page_number": 1,
+      "content_length": 211
+    },
+    {
+      "section_id": "sec_10",
+      "title": "",
+      "content": "monitorování radiační situace,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > e)",
+      "page_number": 1,
+      "content_length": 30
+    },
+    {
+      "section_id": "sec_11",
+      "title": "",
+      "content": "zvládání radiační mimořádné události,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > f)",
+      "page_number": 1,
+      "content_length": 37
+    },
+    {
+      "section_id": "sec_12",
+      "title": "",
+      "content": "podmínky zabezpečení jaderného zařízení, jaderného materiálu a zdroje ionizujícího záření \n(dále jen „zabezpečení“),",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > g)",
+      "page_number": 1,
+      "content_length": 116
+    },
+    {
+      "section_id": "sec_13",
+      "title": "",
+      "content": "požadavky k zajištění nešíření jaderných zbraní a",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > h)",
+      "page_number": 1,
+      "content_length": 49
+    },
+    {
+      "section_id": "sec_14",
+      "title": "",
+      "content": "výkon státní správy v oblasti mírového využívání jaderné energie a ionizujícího záření.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (1) > i)",
+      "page_number": 1,
+      "content_length": 87
+    },
+    {
+      "section_id": "sec_15",
+      "title": "",
+      "content": "Tento zákon se nevztahuje na expoziční situace v důsledku ozáření z\na)   minerální vody, která pochází z přírodního léčivého zdroje nebo zdroje přírodní minerální \nvody, o nichž bylo vydáno osvědčení o zdroji podle jiného právního předpisu,\nb)   vody určené k lidské spotřebě ze zdroje pro individuální zásobování s denní kapacitou \nv průměru nižší než 10 m3 nebo zásobující méně než 50 osob, pokud není tato voda dodá vána v rámci podnikatelské činnosti nebo služby pro veřejnost,\nc)   přírodního pozadí.",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (2)",
+      "page_number": 2,
+      "content_length": 505
+    },
+    {
+      "section_id": "sec_16",
+      "title": "",
+      "content": "minerální vody, která pochází z přírodního léčivého zdroje nebo zdroje přírodní minerální \nvody, o nichž bylo vydáno osvědčení o zdroji podle jiného právního předpisu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (2) > a)",
+      "page_number": 2,
+      "content_length": 167
+    },
+    {
+      "section_id": "sec_17",
+      "title": "",
+      "content": "vody určené k lidské spotřebě ze zdroje pro individuální zásobování s denní kapacitou \nv průměru nižší než 10 m3 nebo zásobující méně než 50 osob, pokud není tato voda dodá vána v rámci podnikatelské činnosti nebo služby pro veřejnost,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (2) > b)",
+      "page_number": 2,
+      "content_length": 235
+    },
+    {
+      "section_id": "sec_18",
+      "title": "",
+      "content": "přírodního pozadí.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 1 > § 1 > (2) > c)",
+      "page_number": 2,
+      "content_length": 18
+    },
+    {
+      "section_id": "sec_19",
+      "title": "Vymezení některých pojmů",
+      "content": "",
+      "level": 3,
+      "depth": 3,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2",
+      "page_number": 2,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_20",
+      "title": "",
+      "content": "",
+      "level": 4,
+      "depth": 4,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2",
+      "page_number": 2,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_21",
+      "title": "",
+      "content": "Pro účely tohoto zákona se rozumí\na)   výchozím materiálem\n1.   uran, zahrnující směs izotopů, vyskytující se v přírodě,\n2.   uran ochuzený o izotop 235U,\n3.   thorium,\n4.   položka uvedená v bodech 1 až 3 ve formě kovu, slitiny, chemické sloučeniny nebo \nkoncentrátu, nebo\n5.   materiál obsahující prvek uvedený v bodech 1 až 3,\nb)   zvláštním štěpným materiálem\n1.   izotop 239Pu,\n2.   izotop 233U,\n3.   uran obohacený izotopy 235U nebo 233U, nebo\n4.   materiál obsahující radionuklid uvedený v bodech 1 až 3, není-li výchozím \nmateriálem,\nc)   jaderným materiálem výchozí materiál, zvláštní štěpný materiál a jiný štěpný materiál, který \nje významný z hlediska zajištění nešíření jaderných zbraní,\nd)   vybranou položkou v jaderné oblasti materiál, zařízení a technologie, včetně softwaru, na vrhované a vyráběné k využití v jaderné oblasti,\ne)   položkou dvojího použití v jaderné oblasti materiál, zařízení a technologie, včetně softwa ru, které nejsou navrhovány a vyráběny k využití v jaderné oblasti, ale jsou v této oblasti \npoužitelné,\nf)   jadernou položkou jaderný materiál, vybraná položka v jaderné oblasti, položka dvojího \npoužití v jaderné oblasti nebo jiná položka v jaderné oblasti, která je významná z hlediska \nzajištění nešíření jaderných zbraní,\ng)   transferem přemístění radioaktivního odpadu, vyhořelého jaderného paliva nebo jaderné \npoložky mezi Českou republikou a jiným členským státem Euratomu nebo naopak prová děné v rámci obchodního styku s cílem jejich dodání na trh.",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1)",
+      "page_number": 2,
+      "content_length": 1502
+    },
+    {
+      "section_id": "sec_22",
+      "title": "",
+      "content": "výchozím materiálem\n1.   uran, zahrnující směs izotopů, vyskytující se v přírodě,\n2.   uran ochuzený o izotop 235U,\n3.   thorium,\n4.   položka uvedená v bodech 1 až 3 ve formě kovu, slitiny, chemické sloučeniny nebo \nkoncentrátu, nebo\n5.   materiál obsahující prvek uvedený v bodech 1 až 3,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > a)",
+      "page_number": 2,
+      "content_length": 290
+    },
+    {
+      "section_id": "sec_23",
+      "title": "",
+      "content": "uran, zahrnující směs izotopů, vyskytující se v přírodě,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > a) > 1.",
+      "page_number": 2,
+      "content_length": 56
+    },
+    {
+      "section_id": "sec_24",
+      "title": "",
+      "content": "uran ochuzený o izotop 235U,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > a) > 2.",
+      "page_number": 2,
+      "content_length": 28
+    },
+    {
+      "section_id": "sec_25",
+      "title": "",
+      "content": "thorium,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > a) > 3.",
+      "page_number": 2,
+      "content_length": 8
+    },
+    {
+      "section_id": "sec_26",
+      "title": "",
+      "content": "položka uvedená v bodech 1 až 3 ve formě kovu, slitiny, chemické sloučeniny nebo \nkoncentrátu, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > a) > 4.",
+      "page_number": 2,
+      "content_length": 99
+    },
+    {
+      "section_id": "sec_27",
+      "title": "",
+      "content": "materiál obsahující prvek uvedený v bodech 1 až 3,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > a) > 5.",
+      "page_number": 2,
+      "content_length": 50
+    },
+    {
+      "section_id": "sec_28",
+      "title": "",
+      "content": "zvláštním štěpným materiálem\n1.   izotop 239Pu,\n2.   izotop 233U,\n3.   uran obohacený izotopy 235U nebo 233U, nebo\n4.   materiál obsahující radionuklid uvedený v bodech 1 až 3, není-li výchozím \nmateriálem,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > b)",
+      "page_number": 2,
+      "content_length": 206
+    },
+    {
+      "section_id": "sec_29",
+      "title": "",
+      "content": "izotop 239Pu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > b) > 1.",
+      "page_number": 2,
+      "content_length": 13
+    },
+    {
+      "section_id": "sec_30",
+      "title": "",
+      "content": "izotop 233U,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > b) > 2.",
+      "page_number": 2,
+      "content_length": 12
+    },
+    {
+      "section_id": "sec_31",
+      "title": "",
+      "content": "uran obohacený izotopy 235U nebo 233U, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > b) > 3.",
+      "page_number": 2,
+      "content_length": 43
+    },
+    {
+      "section_id": "sec_32",
+      "title": "",
+      "content": "materiál obsahující radionuklid uvedený v bodech 1 až 3, není-li výchozím \nmateriálem,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > b) > 4.",
+      "page_number": 2,
+      "content_length": 86
+    },
+    {
+      "section_id": "sec_33",
+      "title": "",
+      "content": "jaderným materiálem výchozí materiál, zvláštní štěpný materiál a jiný štěpný materiál, který \nje významný z hlediska zajištění nešíření jaderných zbraní,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > c)",
+      "page_number": 2,
+      "content_length": 153
+    },
+    {
+      "section_id": "sec_34",
+      "title": "",
+      "content": "vybranou položkou v jaderné oblasti materiál, zařízení a technologie, včetně softwaru, na vrhované a vyráběné k využití v jaderné oblasti,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > d)",
+      "page_number": 2,
+      "content_length": 138
+    },
+    {
+      "section_id": "sec_35",
+      "title": "",
+      "content": "položkou dvojího použití v jaderné oblasti materiál, zařízení a technologie, včetně softwa ru, které nejsou navrhovány a vyráběny k využití v jaderné oblasti, ale jsou v této oblasti \npoužitelné,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > e)",
+      "page_number": 2,
+      "content_length": 195
+    },
+    {
+      "section_id": "sec_36",
+      "title": "",
+      "content": "jadernou položkou jaderný materiál, vybraná položka v jaderné oblasti, položka dvojího \npoužití v jaderné oblasti nebo jiná položka v jaderné oblasti, která je významná z hlediska \nzajištění nešíření jaderných zbraní,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > f)",
+      "page_number": 2,
+      "content_length": 217
+    },
+    {
+      "section_id": "sec_37",
+      "title": "",
+      "content": "transferem přemístění radioaktivního odpadu, vyhořelého jaderného paliva nebo jaderné \npoložky mezi Českou republikou a jiným členským státem Euratomu nebo naopak prová děné v rámci obchodního styku s cílem jejich dodání na trh.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (1) > g)",
+      "page_number": 2,
+      "content_length": 228
+    },
+    {
+      "section_id": "sec_38",
+      "title": "",
+      "content": "Pro účely tohoto zákona se rozumí",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2)",
+      "page_number": 2,
+      "content_length": 33
+    },
+    {
+      "section_id": "sec_39",
+      "title": "",
+      "content": "ionizujícím zářením přenos energie v podobě částic nebo elektromagnetických vln vlnové \ndélky nižší nebo rovnající se 100 nm s frekvencí vyšší nebo rovnající se 3 x 1015 Hz, který je \nschopen vytvářet ionty,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > a)",
+      "page_number": 3,
+      "content_length": 207
+    },
+    {
+      "section_id": "sec_40",
+      "title": "",
+      "content": "radioaktivní látkou jakákoliv látka, která obsahuje radionuklid nebo je jím kontaminovaná \nv míře, která z hlediska možného ozáření vyžaduje regulaci podle tohoto zákona,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > b)",
+      "page_number": 3,
+      "content_length": 170
+    },
+    {
+      "section_id": "sec_41",
+      "title": "",
+      "content": "zdrojem ionizujícího záření\n1.   radioaktivní látka a předmět nebo zařízení ji obsahující nebo uvolňující, nebo\n2.   generátor záření, kterým je zařízení způsobilé generovat ionizující záření,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > c)",
+      "page_number": 3,
+      "content_length": 192
+    },
+    {
+      "section_id": "sec_42",
+      "title": "",
+      "content": "radioaktivní látka a předmět nebo zařízení ji obsahující nebo uvolňující, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > c) > 1.",
+      "page_number": 3,
+      "content_length": 78
+    },
+    {
+      "section_id": "sec_43",
+      "title": "",
+      "content": "generátor záření, kterým je zařízení způsobilé generovat ionizující záření,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > c) > 2.",
+      "page_number": 3,
+      "content_length": 75
+    },
+    {
+      "section_id": "sec_44",
+      "title": "",
+      "content": "radionuklidovým zdrojem zdroj ionizujícího záření obsahující radioaktivní látku, u nějž \nsoučet podílů aktivit radionuklidů a zprošťovacích úrovní aktivit pro tyto radionuklidy je \nvětší než 1 a současně součet podílů hmotnostních aktivit radionuklidů a zprošťovacích \núrovní hmotnostních aktivit pro tyto radionuklidy je větší než 1,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > d)",
+      "page_number": 3,
+      "content_length": 334
+    },
+    {
+      "section_id": "sec_45",
+      "title": "",
+      "content": "expoziční situací všechny v úvahu připadající okolnosti vedoucí k vystavení fyzické osoby \nnebo životního prostředí ionizujícímu záření; expoziční situací je\n1.   plánovaná expoziční situace, která je spojena se záměrným využíváním zdroje \nionizujícího záření,\n2.   nehodová expoziční situace, která může nastat při plánované expoziční situaci nebo \nbýt vyvolána svévolným činem a vyžaduje přijetí okamžitých opatření k odvrácení \nnebo omezení důsledků, nebo\n3.   existující expoziční situace, která již existuje v době, kdy se rozhoduje o její regulaci, \nvčetně dlouhodobě trvajícího následku nehodové expoziční situace nebo ukončené \nčinnosti v rámci plánované expoziční situace,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > e)",
+      "page_number": 3,
+      "content_length": 681
+    },
+    {
+      "section_id": "sec_46",
+      "title": "",
+      "content": "plánovaná expoziční situace, která je spojena se záměrným využíváním zdroje \nionizujícího záření,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > e) > 1.",
+      "page_number": 3,
+      "content_length": 97
+    },
+    {
+      "section_id": "sec_47",
+      "title": "",
+      "content": "nehodová expoziční situace, která může nastat při plánované expoziční situaci nebo \nbýt vyvolána svévolným činem a vyžaduje přijetí okamžitých opatření k odvrácení \nnebo omezení důsledků, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > e) > 2.",
+      "page_number": 3,
+      "content_length": 192
+    },
+    {
+      "section_id": "sec_48",
+      "title": "",
+      "content": "existující expoziční situace, která již existuje v době, kdy se rozhoduje o její regulaci, \nvčetně dlouhodobě trvajícího následku nehodové expoziční situace nebo ukončené \nčinnosti v rámci plánované expoziční situace,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > e) > 3.",
+      "page_number": 3,
+      "content_length": 217
+    },
+    {
+      "section_id": "sec_49",
+      "title": "",
+      "content": "radiační činností\n1.   činnost s umělým zdrojem ionizujícího záření v rámci plánované expoziční situace \nvčetně poskytování služeb v kontrolovaném pásmu pracoviště IV. kategorie, nebo\n2.   činnost, při které je přírodní radionuklid v rámci plánovaných expozičních situací \nvyužíván pro své radioaktivní, štěpné nebo množivé charakteristiky včetně činnosti \nsouvisející se získáváním radioaktivního nerostu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > f)",
+      "page_number": 3,
+      "content_length": 406
+    },
+    {
+      "section_id": "sec_50",
+      "title": "",
+      "content": "činnost s umělým zdrojem ionizujícího záření v rámci plánované expoziční situace \nvčetně poskytování služeb v kontrolovaném pásmu pracoviště IV. kategorie, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > f) > 1.",
+      "page_number": 3,
+      "content_length": 160
+    },
+    {
+      "section_id": "sec_51",
+      "title": "",
+      "content": "činnost, při které je přírodní radionuklid v rámci plánovaných expozičních situací \nvyužíván pro své radioaktivní, štěpné nebo množivé charakteristiky včetně činnosti \nsouvisející se získáváním radioaktivního nerostu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > f) > 2.",
+      "page_number": 3,
+      "content_length": 217
+    },
+    {
+      "section_id": "sec_52",
+      "title": "",
+      "content": "radiační ochranou systém technických a organizačních opatření k omezení ozáření fyzické \nosoby a k ochraně životního prostředí před účinky ionizujícího záření,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > g)",
+      "page_number": 3,
+      "content_length": 159
+    },
+    {
+      "section_id": "sec_53",
+      "title": "",
+      "content": "spotřebním výrobkem s přidaným radionuklidem výrobek, který lze prodat nebo dát k di spozici veřejnosti bez zvláštní regulace nebo kontroly po prodeji, a který\n1.   obsahuje radionuklid záměrně do něj přidaný,\n2.   obsahuje radionuklid záměrně v něm vytvořený aktivací, nebo\n3.   generuje ionizující záření.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > h)",
+      "page_number": 3,
+      "content_length": 307
+    },
+    {
+      "section_id": "sec_54",
+      "title": "",
+      "content": "obsahuje radionuklid záměrně do něj přidaný,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > h) > 1.",
+      "page_number": 3,
+      "content_length": 44
+    },
+    {
+      "section_id": "sec_55",
+      "title": "",
+      "content": "obsahuje radionuklid záměrně v něm vytvořený aktivací, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > h) > 2.",
+      "page_number": 3,
+      "content_length": 59
+    },
+    {
+      "section_id": "sec_56",
+      "title": "",
+      "content": "generuje ionizující záření.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (2) > h) > 3.",
+      "page_number": 3,
+      "content_length": 27
+    },
+    {
+      "section_id": "sec_57",
+      "title": "",
+      "content": "Pro účely tohoto zákona se rozumí\na)   ozářením vystavení fyzické osoby ionizujícímu záření s výjimkou ozáření z přírodního po zadí,\nb)   profesním ozářením ozáření v souvislosti s výkonem práce při činnosti v rámci plánované \nexpoziční situace,\nc)   lékařským ozářením ozáření v rámci\n1.   vyšetření nebo léčby pacienta,",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3)",
+      "page_number": 3,
+      "content_length": 321
+    },
+    {
+      "section_id": "sec_58",
+      "title": "",
+      "content": "ozářením vystavení fyzické osoby ionizujícímu záření s výjimkou ozáření z přírodního po zadí,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > a)",
+      "page_number": 3,
+      "content_length": 93
+    },
+    {
+      "section_id": "sec_59",
+      "title": "",
+      "content": "profesním ozářením ozáření v souvislosti s výkonem práce při činnosti v rámci plánované \nexpoziční situace,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > b)",
+      "page_number": 3,
+      "content_length": 107
+    },
+    {
+      "section_id": "sec_60",
+      "title": "",
+      "content": "lékařským ozářením ozáření v rámci\n1.   vyšetření nebo léčby pacienta,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > c)",
+      "page_number": 3,
+      "content_length": 70
+    },
+    {
+      "section_id": "sec_61",
+      "title": "",
+      "content": "vyšetření nebo léčby pacienta,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > c) > 1.",
+      "page_number": 3,
+      "content_length": 30
+    },
+    {
+      "section_id": "sec_62",
+      "title": "",
+      "content": "pracovnělékařských služeb a preventivní zdravotní péče,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > c) > 2.",
+      "page_number": 4,
+      "content_length": 55
+    },
+    {
+      "section_id": "sec_63",
+      "title": "",
+      "content": "dobrovolné účasti zdravých fyzických osob nebo pacientů na lékařském ověřování \nnezavedené metody spojené s lékařským ozářením, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > c) > 3.",
+      "page_number": 4,
+      "content_length": 132
+    },
+    {
+      "section_id": "sec_64",
+      "title": "",
+      "content": "poskytování pomoci fyzické osobě podstupující lékařské ozáření podle § 64 odst. 1,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > c) > 4.",
+      "page_number": 4,
+      "content_length": 82
+    },
+    {
+      "section_id": "sec_65",
+      "title": "",
+      "content": "havarijním ozářením ozáření jiné než zasahující osoby v důsledku nehodové expoziční si tuace a ozáření zasahující osoby při nehodové expoziční situaci,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > d)",
+      "page_number": 4,
+      "content_length": 151
+    },
+    {
+      "section_id": "sec_66",
+      "title": "",
+      "content": "ozářením obyvatel všechna ozáření s výjimkou profesního ozáření, lékařského ozáření a ha varijního ozáření při nehodové expoziční situaci nebo v jejím důsledku,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > e)",
+      "page_number": 4,
+      "content_length": 160
+    },
+    {
+      "section_id": "sec_67",
+      "title": "",
+      "content": "ozářením z přírodního pozadí vystavení fyzické osoby ionizujícímu záření\n1.   způsobené radionuklidem obsaženým přirozeně v lidském těle,\n2.   způsobené kosmickým zářením, které je běžné na zemském povrchu,\n3.   způsobené radionuklidem přítomným v lidskou činností neporušené zemské kůře, \nnebo\n4.   z přírodního zdroje záření, které není modifikováno lidskou činností,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > f)",
+      "page_number": 4,
+      "content_length": 369
+    },
+    {
+      "section_id": "sec_68",
+      "title": "",
+      "content": "způsobené radionuklidem obsaženým přirozeně v lidském těle,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > f) > 1.",
+      "page_number": 4,
+      "content_length": 59
+    },
+    {
+      "section_id": "sec_69",
+      "title": "",
+      "content": "způsobené kosmickým zářením, které je běžné na zemském povrchu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > f) > 2.",
+      "page_number": 4,
+      "content_length": 63
+    },
+    {
+      "section_id": "sec_70",
+      "title": "",
+      "content": "způsobené radionuklidem přítomným v lidskou činností neporušené zemské kůře, \nnebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > f) > 3.",
+      "page_number": 4,
+      "content_length": 82
+    },
+    {
+      "section_id": "sec_71",
+      "title": "",
+      "content": "z přírodního zdroje záření, které není modifikováno lidskou činností,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > f) > 4.",
+      "page_number": 4,
+      "content_length": 69
+    },
+    {
+      "section_id": "sec_72",
+      "title": "",
+      "content": "potenciálním ozářením ozáření, o němž se nepředpokládá, že nastane, ale které může na stat jako důsledek události pravděpodobnostní povahy,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > g)",
+      "page_number": 4,
+      "content_length": 139
+    },
+    {
+      "section_id": "sec_73",
+      "title": "",
+      "content": "nelékařským ozářením záměrné ozáření fyzické osoby pro účely zobrazování, jehož hlav ním cílem není přínos pro zdraví ozářené fyzické osoby; nelékařským ozářením je\n1.   nelékařské ozáření lékařským radiologickým vybavením, zejména pro účely \npřistěhování, pojištění, hodnocení fyzického vývoje dětí a mladistvých ke sportovní \na taneční kariéře, vyšetření k určení věku, identifikace věcí skrytých v lidském těle \nnebo pro účely zaměstnání, kromě pracovnělékařských služeb, nebo\n2.   nelékařské ozáření jiným zdrojem ionizujícího záření, zejména pro zjišťování věcí \nskrytých na lidském těle nebo na něm upevněných, pro odhalování skrytých osob \njako součást detekční kontroly nákladu nebo pro jiné bezpečnostní účely,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > h)",
+      "page_number": 4,
+      "content_length": 719
+    },
+    {
+      "section_id": "sec_74",
+      "title": "",
+      "content": "nelékařské ozáření lékařským radiologickým vybavením, zejména pro účely \npřistěhování, pojištění, hodnocení fyzického vývoje dětí a mladistvých ke sportovní \na taneční kariéře, vyšetření k určení věku, identifikace věcí skrytých v lidském těle \nnebo pro účely zaměstnání, kromě pracovnělékařských služeb, nebo",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > h) > 1.",
+      "page_number": 4,
+      "content_length": 309
+    },
+    {
+      "section_id": "sec_75",
+      "title": "",
+      "content": "nelékařské ozáření jiným zdrojem ionizujícího záření, zejména pro zjišťování věcí \nskrytých na lidském těle nebo na něm upevněných, pro odhalování skrytých osob \njako součást detekční kontroly nákladu nebo pro jiné bezpečnostní účely,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > h) > 2.",
+      "page_number": 4,
+      "content_length": 234
+    },
+    {
+      "section_id": "sec_76",
+      "title": "",
+      "content": "jednotlivcem z obyvatelstva fyzická osoba vystavená ozáření obyvatel,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > i)",
+      "page_number": 4,
+      "content_length": 69
+    },
+    {
+      "section_id": "sec_77",
+      "title": "",
+      "content": "reprezentativní osobou jednotlivec z obyvatelstva zastupující modelovou skupinu fyzic kých osob, které jsou z daného zdroje a danou cestou nejvíce ozařovány.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 2 > (3) > j)",
+      "page_number": 4,
+      "content_length": 157
+    },
+    {
+      "section_id": "sec_78",
+      "title": "",
+      "content": "",
+      "level": 4,
+      "depth": 4,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3",
+      "page_number": 4,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_79",
+      "title": "",
+      "content": "Pro účely tohoto zákona se rozumí\na)   radiačním pracovníkem každá fyzická osoba vystavená profesnímu ozáření,\nb)   zasahující osobou fyzická osoba, které jsou stanoveny úkoly v rámci nehodové expoziční \nsituace a která by mohla být vystavena ozáření při provádění opatření v rámci odezvy na \nradiační mimořádnou událost,\nc)   optimalizací radiační ochrany iterativní proces k dosažení a udržení takové úrovně radiační \nochrany, aby ozáření fyzické osoby a životního prostředí bylo tak nízké, jakého lze rozum ně dosáhnout při uvážení všech hospodářských a společenských hledisek,\nd)   činností související se získáváním radioaktivního nerostu\n1.   průzkum ložiska radioaktivního nerostu v etapě podrobného a těžebního \nprůzkumu,\n2.   dobývání radioaktivních nerostů,",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1)",
+      "page_number": 4,
+      "content_length": 767
+    },
+    {
+      "section_id": "sec_80",
+      "title": "",
+      "content": "radiačním pracovníkem každá fyzická osoba vystavená profesnímu ozáření,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > a)",
+      "page_number": 4,
+      "content_length": 71
+    },
+    {
+      "section_id": "sec_81",
+      "title": "",
+      "content": "zasahující osobou fyzická osoba, které jsou stanoveny úkoly v rámci nehodové expoziční \nsituace a která by mohla být vystavena ozáření při provádění opatření v rámci odezvy na \nradiační mimořádnou událost,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > b)",
+      "page_number": 4,
+      "content_length": 205
+    },
+    {
+      "section_id": "sec_82",
+      "title": "",
+      "content": "optimalizací radiační ochrany iterativní proces k dosažení a udržení takové úrovně radiační \nochrany, aby ozáření fyzické osoby a životního prostředí bylo tak nízké, jakého lze rozum ně dosáhnout při uvážení všech hospodářských a společenských hledisek,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > c)",
+      "page_number": 4,
+      "content_length": 253
+    },
+    {
+      "section_id": "sec_83",
+      "title": "",
+      "content": "činností související se získáváním radioaktivního nerostu\n1.   průzkum ložiska radioaktivního nerostu v etapě podrobného a těžebního \nprůzkumu,\n2.   dobývání radioaktivních nerostů,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d)",
+      "page_number": 4,
+      "content_length": 181
+    },
+    {
+      "section_id": "sec_84",
+      "title": "",
+      "content": "průzkum ložiska radioaktivního nerostu v etapě podrobného a těžebního \nprůzkumu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 1.",
+      "page_number": 4,
+      "content_length": 80
+    },
+    {
+      "section_id": "sec_85",
+      "title": "",
+      "content": "dobývání radioaktivních nerostů,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 2.",
+      "page_number": 4,
+      "content_length": 32
+    },
+    {
+      "section_id": "sec_86",
+      "title": "",
+      "content": "přeprava radioaktivních nerostů,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 3.",
+      "page_number": 5,
+      "content_length": 32
+    },
+    {
+      "section_id": "sec_87",
+      "title": "",
+      "content": "úprava a zušlechťování radioaktivních nerostů,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 4.",
+      "page_number": 5,
+      "content_length": 46
+    },
+    {
+      "section_id": "sec_88",
+      "title": "",
+      "content": "nakládání s uranovým koncentrátem,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 5.",
+      "page_number": 5,
+      "content_length": 34
+    },
+    {
+      "section_id": "sec_89",
+      "title": "",
+      "content": "shromažďování těžebních odpadů na odvalech a odkalištích, které vznikly při \nhornické činnosti během získávání radioaktivního nerostu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 6.",
+      "page_number": 5,
+      "content_length": 134
+    },
+    {
+      "section_id": "sec_90",
+      "title": "",
+      "content": "provoz dekontaminačních stanic provozovaných důlních děl,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 7.",
+      "page_number": 5,
+      "content_length": 57
+    },
+    {
+      "section_id": "sec_91",
+      "title": "",
+      "content": "čištění průmyslových odpadních vod z pracovišť, která jsou součástí technologie \núpravy radioaktivních nerostů,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 8.",
+      "page_number": 5,
+      "content_length": 111
+    },
+    {
+      "section_id": "sec_92",
+      "title": "",
+      "content": "těžba radioaktivního nerostu chemickým loužením,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 9.",
+      "page_number": 5,
+      "content_length": 48
+    },
+    {
+      "section_id": "sec_93",
+      "title": "",
+      "content": "zpracování loužicích roztoků sloužících k dobývání radioaktivního nerostu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 10.",
+      "page_number": 5,
+      "content_length": 74
+    },
+    {
+      "section_id": "sec_94",
+      "title": "",
+      "content": "čištění důlních vod z uzavřených ložisek radioaktivního nerostu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 11.",
+      "page_number": 5,
+      "content_length": 64
+    },
+    {
+      "section_id": "sec_95",
+      "title": "",
+      "content": "sanace a rekultivace následků činností souvisejících se získáváním radioaktivního \nnerostu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > d) > 12.",
+      "page_number": 5,
+      "content_length": 91
+    },
+    {
+      "section_id": "sec_96",
+      "title": "",
+      "content": "činností zvláště důležitou z hlediska radiační ochrany činnost zajišťující plnění požadavků \nna radiační ochranu stanovených tímto zákonem, používání technických a organizačních \nopatření a postupů bezpečného provozu zdrojů ionizujícího záření a pracovišť s nimi nebo \nspočívající v provádění hodnocení vlastností zdrojů ionizujícího záření anebo řízení služeb \nvýznamných z hlediska radiační ochrany,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > e)",
+      "page_number": 5,
+      "content_length": 401
+    },
+    {
+      "section_id": "sec_97",
+      "title": "",
+      "content": "osobní dozimetrií kalibrace zařízení určeného k osobnímu monitorování, odečet nebo vý klad jím zaznamenaných hodnot, měření radioaktivity v lidském těle nebo biologických \nvzorcích anebo posuzování dávek.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (1) > f)",
+      "page_number": 5,
+      "content_length": 204
+    },
+    {
+      "section_id": "sec_98",
+      "title": "",
+      "content": "Pro účely tohoto zákona se rozumí\na)   radioaktivním odpadem věc, která je radioaktivní látkou nebo předmětem nebo zařízením \nji obsahujícím nebo jí kontaminovaným, pro kterou se nepředpokládá další využití a která \nnesplňuje podmínky stanovené tímto zákonem pro uvolňování radioaktivní látky z praco viště,\nb)   nakládáním s radioaktivním odpadem všechny činnosti, které souvisí se shromažďováním, \ntříděním, zpracováním, úpravou, skladováním a ukládáním radioaktivního odpadu, s vý jimkou přepravy mimo prostor zařízení, ve kterém jsou tyto činnosti vykonávány,\nc)   úložištěm radioaktivního odpadu prostor, objekt nebo zařízení sloužící k ukládání ra dioaktivního odpadu,\nd)   vyhořelým jaderným palivem ozářené jaderné palivo, které bylo trvale vyjmuto z aktivní \nzóny jaderného reaktoru,\ne)   jaderným zařízením\n1.   stavba nebo provozní celek, jehož součástí je jaderný reaktor využívající štěpnou \nřetězovou reakci nebo jinou řetězovou jadernou reakci,\n2.   sklad vyhořelého jaderného paliva,\n3.   sklad čerstvého jaderného paliva, pokud není součástí jiného jaderného zařízení,\n4.   obohacovací závod, závod na výrobu jaderného paliva nebo závod na přepracování \nvyhořelého jaderného paliva,\n5.   sklad radioaktivního odpadu, s výjimkou zařízení pro skladování radioaktivních \nodpadů, které je součástí jiného jaderného zařízení nebo jiného pracoviště, kde se \nvykonává radiační činnost,\n6.   úložiště radioaktivního odpadu, s výjimkou úložiště obsahujícího výlučně přírodní \nradionuklidy,",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2)",
+      "page_number": 5,
+      "content_length": 1497
+    },
+    {
+      "section_id": "sec_99",
+      "title": "",
+      "content": "radioaktivním odpadem věc, která je radioaktivní látkou nebo předmětem nebo zařízením \nji obsahujícím nebo jí kontaminovaným, pro kterou se nepředpokládá další využití a která \nnesplňuje podmínky stanovené tímto zákonem pro uvolňování radioaktivní látky z praco viště,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > a)",
+      "page_number": 5,
+      "content_length": 268
+    },
+    {
+      "section_id": "sec_100",
+      "title": "",
+      "content": "nakládáním s radioaktivním odpadem všechny činnosti, které souvisí se shromažďováním, \ntříděním, zpracováním, úpravou, skladováním a ukládáním radioaktivního odpadu, s vý jimkou přepravy mimo prostor zařízení, ve kterém jsou tyto činnosti vykonávány,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > b)",
+      "page_number": 5,
+      "content_length": 250
+    },
+    {
+      "section_id": "sec_101",
+      "title": "",
+      "content": "úložištěm radioaktivního odpadu prostor, objekt nebo zařízení sloužící k ukládání ra dioaktivního odpadu,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > c)",
+      "page_number": 5,
+      "content_length": 105
+    },
+    {
+      "section_id": "sec_102",
+      "title": "",
+      "content": "vyhořelým jaderným palivem ozářené jaderné palivo, které bylo trvale vyjmuto z aktivní \nzóny jaderného reaktoru,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > d)",
+      "page_number": 5,
+      "content_length": 112
+    },
+    {
+      "section_id": "sec_103",
+      "title": "",
+      "content": "jaderným zařízením\n1.   stavba nebo provozní celek, jehož součástí je jaderný reaktor využívající štěpnou \nřetězovou reakci nebo jinou řetězovou jadernou reakci,\n2.   sklad vyhořelého jaderného paliva,\n3.   sklad čerstvého jaderného paliva, pokud není součástí jiného jaderného zařízení,\n4.   obohacovací závod, závod na výrobu jaderného paliva nebo závod na přepracování \nvyhořelého jaderného paliva,\n5.   sklad radioaktivního odpadu, s výjimkou zařízení pro skladování radioaktivních \nodpadů, které je součástí jiného jaderného zařízení nebo jiného pracoviště, kde se \nvykonává radiační činnost,\n6.   úložiště radioaktivního odpadu, s výjimkou úložiště obsahujícího výlučně přírodní \nradionuklidy,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > e)",
+      "page_number": 5,
+      "content_length": 699
+    },
+    {
+      "section_id": "sec_104",
+      "title": "",
+      "content": "stavba nebo provozní celek, jehož součástí je jaderný reaktor využívající štěpnou \nřetězovou reakci nebo jinou řetězovou jadernou reakci,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > e) > 1.",
+      "page_number": 5,
+      "content_length": 137
+    },
+    {
+      "section_id": "sec_105",
+      "title": "",
+      "content": "sklad vyhořelého jaderného paliva,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > e) > 2.",
+      "page_number": 5,
+      "content_length": 34
+    },
+    {
+      "section_id": "sec_106",
+      "title": "",
+      "content": "sklad čerstvého jaderného paliva, pokud není součástí jiného jaderného zařízení,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > e) > 3.",
+      "page_number": 5,
+      "content_length": 80
+    },
+    {
+      "section_id": "sec_107",
+      "title": "",
+      "content": "obohacovací závod, závod na výrobu jaderného paliva nebo závod na přepracování \nvyhořelého jaderného paliva,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > e) > 4.",
+      "page_number": 5,
+      "content_length": 108
+    },
+    {
+      "section_id": "sec_108",
+      "title": "",
+      "content": "sklad radioaktivního odpadu, s výjimkou zařízení pro skladování radioaktivních \nodpadů, které je součástí jiného jaderného zařízení nebo jiného pracoviště, kde se \nvykonává radiační činnost,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > e) > 5.",
+      "page_number": 5,
+      "content_length": 190
+    },
+    {
+      "section_id": "sec_109",
+      "title": "",
+      "content": "úložiště radioaktivního odpadu, s výjimkou úložiště obsahujícího výlučně přírodní \nradionuklidy,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > e) > 6.",
+      "page_number": 5,
+      "content_length": 96
+    },
+    {
+      "section_id": "sec_110",
+      "title": "",
+      "content": "úplným vyřazením uvedení jaderného zařízení, pracoviště III. kategorie nebo pracoviště \nIV. kategorie do stavu umožňujícího jeho využití k jinému účelu nebo využití území, \nv němž se nacházelo, bez omezení,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > f)",
+      "page_number": 6,
+      "content_length": 206
+    },
+    {
+      "section_id": "sec_111",
+      "title": "",
+      "content": "vyřazováním z provozu administrativní a technické činnosti, jejichž cílem je úplné vyřazení \nnebo vyřazení jaderného zařízení, pracoviště III. kategorie nebo pracoviště IV. kategorie \ns omezením k použití k dalším činnostem souvisejícím s využíváním jaderné energie nebo \nčinnostem v rámci expozičních situací,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > g)",
+      "page_number": 6,
+      "content_length": 310
+    },
+    {
+      "section_id": "sec_112",
+      "title": "",
+      "content": "uzavřením úložiště radioaktivního odpadu dokončení všech činností souvisejících s naklá dáním s radioaktivním odpadem a jeho uvedení do stavu, který bude dlouhodobě bezpeč ný.",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 3 > (2) > h)",
+      "page_number": 6,
+      "content_length": 175
+    },
+    {
+      "section_id": "sec_113",
+      "title": "",
+      "content": "",
+      "level": 4,
+      "depth": 4,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 4",
+      "page_number": 6,
+      "content_length": 0
+    },
+    {
+      "section_id": "sec_114",
+      "title": "",
+      "content": "Pro účely tohoto zákona se rozumí\na)   radiační mimořádnou událostí událost, která vede nebo může vést k překročení limitů ozá ření a která vyžaduje opatření, jež by zabránila jejich překročení nebo zhoršování situace \nz pohledu zajištění radiační ochrany,\nb)   radiační mimořádnou událostí prvního stupně radiační mimořádná událost zvládnutelná \nsilami a prostředky obsluhy nebo pracovníků vykonávajících práci v aktuální směně osoby, \npři jejíž činnosti radiační mimořádná událost vznikla,\nc)   radiační nehodou radiační mimořádná událost nezvládnutelná silami a prostředky obsluhy \nnebo pracovníků vykonávajících práci v aktuální směně osoby, při jejíž činnosti radiační \nmimořádná událost vznikla, nebo vzniklá v důsledku nálezu, zneužití nebo ztráty radionu klidového zdroje, která nevyžaduje zavedení neodkladných ochranných opatření pro ob yvatelstvo,\nd)   radiační havárií radiační mimořádná událost nezvládnutelná silami a prostředky obsluhy \nnebo pracovníků vykonávajících práci v aktuální směně osoby, při jejíž činnosti radiační \nmimořádná událost vznikla, nebo vzniklá v důsledku nálezu, zneužití nebo ztráty radionu klidového zdroje, která vyžaduje zavedení neodkladných ochranných opatření pro obyva telstvo,\ne)   zvládáním radiační mimořádné události systém postupů a opatření k zajištění\n1.   analýzy a hodnocení radiační mimořádné události, kterou je analýza v úvahu \npřipadajících radiačních mimořádných událostí a hodnocení jejich dopadů,\n2.   připravenosti k odezvě na radiační mimořádnou událost,\n3.   odezvy na radiační mimořádnou událost a\n4.   nápravy stavu po radiační havárii,\nf)   vnitřním prostorem prostor, v němž je umístěn nebo skladován jaderný materiál I. katego rie,\ng)   životně důležitým prostorem prostor, v němž jsou umístěny systémy a zařízení důležité \nz hlediska jaderné bezpečnosti,\nh)   chráněným prostorem prostor, v němž se nalézá jaderný materiál II. kategorie, vnitřní pro stor nebo životně důležitý prostor,\ni)   střeženým prostorem prostor, v němž se nalézá jaderný materiál III. kategorie, nebo chrá něný prostor,",
+      "level": 5,
+      "depth": 5,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 4 > (1)",
+      "page_number": 6,
+      "content_length": 2064
+    },
+    {
+      "section_id": "sec_115",
+      "title": "",
+      "content": "radiační mimořádnou událostí událost, která vede nebo může vést k překročení limitů ozá ření a která vyžaduje opatření, jež by zabránila jejich překročení nebo zhoršování situace \nz pohledu zajištění radiační ochrany,",
+      "level": 6,
+      "depth": 6,
+      "path": "ČÁST PRVNÍ > HLAVA I > Díl 2 > § 4 > (1) > a)",
+      "page_number": 6,
+      "content_length": 217
+    },
+    {
+      "section_id": "sec_116",
+      "title": "",
+      "content": "radiační mimořádnou událostí prvního stupně radiační mimořádná událost zvládnutelná \nsilami a prostředky obsluhy nebo pracovníků vykonávajících práci v aktuální směně osoby, \npři jejíž činnosti radiační mimořádná událost vznikla,",
+      "level": 6,
+      "depth": 6,
+      "path": "",
+      "page_number": 6,
+      "content_length": 229
+    }
+  ]
+}
