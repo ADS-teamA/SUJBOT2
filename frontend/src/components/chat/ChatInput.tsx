@@ -3,11 +3,12 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Square } from 'lucide-react';
+import { Send, Square, FileText, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService, type SpendingInfo } from '../../services/api';
+import type { TextSelection } from '../../types';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -15,11 +16,18 @@ interface ChatInputProps {
   isStreaming: boolean;   // Whether currently streaming
   disabled: boolean;      // Disabled for other reasons (not streaming)
   refreshSpendingTrigger?: number; // Increment to refresh spending data
+  selectedText?: TextSelection | null;  // Selected text from PDF
+  onClearSelection?: () => void;  // Clear selection callback
 }
 
-export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpendingTrigger }: ChatInputProps) {
+export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpendingTrigger, selectedText, onClearSelection }: ChatInputProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+
+  // Calculate line count for selection (filter out empty lines)
+  const selectionLineCount = selectedText
+    ? selectedText.text.split('\n').filter(line => line.trim()).length || 1
+    : 0;
   const [message, setMessage] = useState('');
   const [spending, setSpending] = useState<SpendingInfo | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -171,27 +179,48 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
             </button>
           )}
         </div>
-        {/* Bottom row: character count (left) + user info (right) */}
-        <div className="mt-2 px-2 flex justify-between items-center text-xs">
-          {/* Character count - left side */}
-          <div
-            className={cn(
-              'transition-colors duration-200',
-              message.length === 0
-                ? 'invisible'
-                : isMessageTooLong
-                  ? 'text-red-600 dark:text-red-400 font-medium'
-                  : 'text-accent-500 dark:text-accent-500'
-            )}
-          >
-            {isMessageTooLong && (
-              <span className="mr-2">⚠️ {t('chat.messageTooLong')} -</span>
-            )}
-            {message.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()} {t('chat.characters')}
-          </div>
+        {/* Bottom row: selection chip (left) + user info (right) */}
+        <div className="mt-2 flex justify-between items-center text-xs">
+          {/* Selection chip - left side */}
+          {selectedText && onClearSelection ? (
+            <div
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2 py-0.5',
+                'bg-gray-100 dark:bg-gray-800',
+                'text-gray-600 dark:text-gray-400',
+                'rounded-full',
+                'border border-gray-200 dark:border-gray-700'
+              )}
+              style={{ animation: 'chipIn 0.15s ease-out' }}
+            >
+              <FileText size={10} className="text-gray-400 dark:text-gray-500" />
+              <span>{t('selection.lines', { count: selectionLineCount })}</span>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
+              <span className="truncate max-w-[120px]" title={selectedText.documentName}>
+                {selectedText.documentName.replace(/_/g, ' ')}
+              </span>
+              <button
+                type="button"
+                onClick={onClearSelection}
+                className={cn(
+                  'p-0.5 rounded-full -mr-0.5',
+                  'text-gray-400 dark:text-gray-500',
+                  'hover:bg-gray-200 dark:hover:bg-gray-700',
+                  'hover:text-gray-600 dark:hover:text-gray-300',
+                  'transition-colors duration-150'
+                )}
+                title={t('selection.clearSelection')}
+                aria-label={t('selection.clearSelection')}
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ) : (
+            <div />
+          )}
 
           {/* User email + spending - right side */}
-          <div className="text-right">
+          <div className="text-right flex-shrink-0">
             {user && (
               <div className="text-accent-500 dark:text-accent-500 mb-0.5">
                 {user.email}
@@ -220,6 +249,14 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
             )}
           </div>
         </div>
+
+        {/* Animation keyframes for selection chip */}
+        <style>{`
+          @keyframes chipIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+          }
+        `}</style>
       </div>
     </form>
   );

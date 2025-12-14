@@ -150,11 +150,10 @@
     "errorGeneric": "Chyba při načítání PDF"
   },
   "selection": {
-    "charactersSelected": "{{count}} znaků vybráno",
-    "page": "strana",
-    "pages": "strany",
-    "clearSelection": "Zrušit výběr",
-    "clear": "Zrušit"
+    "lines_one": "{{count}} řádek",
+    "lines_few": "{{count}} řádky",
+    "lines_other": "{{count}} řádků",
+    "clearSelection": "Zrušit výběr"
   },
   "admin": {
     "login": {
