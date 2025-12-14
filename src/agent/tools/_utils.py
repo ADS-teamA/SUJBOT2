@@ -396,6 +396,40 @@ _DeepInfraClient = None
 _FusionRetriever = None
 _FusionConfig = None
 
+# Lazy-loaded config (avoid circular imports)
+_config_loaded = False
+_layer_default_k: dict = {1: 3, 2: 5, 3: 10}  # Built-in fallback
+
+
+def _ensure_config_loaded():
+    """Lazy load layer_default_k from config.json (SSOT)."""
+    global _config_loaded, _layer_default_k
+
+    if _config_loaded:
+        return
+
+    try:
+        from src.config import get_config
+        config = get_config()
+        if config.defaults and config.defaults.retrieval:
+            # Config has string keys ("1", "2", "3"), convert to int
+            raw_k = config.defaults.retrieval.layer_default_k
+            _layer_default_k = {int(k): v for k, v in raw_k.items()}
+            logger.debug(f"layer_default_k loaded from config: {_layer_default_k}")
+        _config_loaded = True
+    except ImportError as e:
+        # Config module not available - expected during testing
+        logger.debug(f"Config module not available: {e}. Using built-in layer_default_k.")
+        _config_loaded = True
+
+    except (KeyError, AttributeError, TypeError, ValueError) as e:
+        # Config schema mismatch or invalid values - log at WARNING level
+        logger.warning(
+            f"layer_default_k config error: {e}. Using built-in defaults.",
+            exc_info=True,
+        )
+        _config_loaded = True
+
 
 def _ensure_fusion_retriever_imported():
     """Lazy import FusionRetriever dependencies to avoid circular imports."""
@@ -425,8 +459,9 @@ def create_fusion_retriever(
     vector_store,
     config,
     layer: int = 3,
-    hyde_weight: float = 0.6,
-    expansion_weight: float = 0.4,
+    original_weight: float = 0.5,
+    hyde_weight: float = 0.25,
+    expansion_weight: float = 0.25,
 ):
     """
     SSOT factory for FusionRetriever initialization.
@@ -436,10 +471,11 @@ def create_fusion_retriever(
 
     Args:
         vector_store: PostgreSQL vector store instance
-        config: Tool config object (may have hyde_weight, expansion_weight, default_k)
+        config: Tool config object (may have original_weight, hyde_weight, expansion_weight, default_k)
         layer: Layer number (2=sections, 3=chunks). Affects default_k.
-        hyde_weight: Weight for HyDE component (default: 0.6)
-        expansion_weight: Weight for expansion component (default: 0.4)
+        original_weight: Weight for original query component (default: 0.5)
+        hyde_weight: Weight for HyDE component (default: 0.25)
+        expansion_weight: Weight for expansion component (default: 0.25)
 
     Returns:
         Initialized FusionRetriever instance
@@ -458,13 +494,17 @@ def create_fusion_retriever(
     if not _ensure_fusion_retriever_imported():
         raise ImportError("Failed to import retrieval module (DeepInfraClient, FusionRetriever)")
 
+    # Load layer_default_k from config (SSOT: config.json -> defaults.retrieval.layer_default_k)
+    _ensure_config_loaded()
+
     # Determine default_k based on layer
     # Layer 3 (chunks): higher k (10) because chunks are smaller
     # Layer 2 (sections): lower k (5) because sections are larger
-    layer_default_k = {2: 5, 3: 10}
-    default_k = layer_default_k.get(layer, 10)
+    # Layer 1 (documents): lower k (3) because documents are largest
+    default_k = _layer_default_k.get(layer, 10)
 
     # Get config values with fallbacks
+    actual_original_weight = getattr(config, "original_weight", original_weight)
     actual_hyde_weight = getattr(config, "hyde_weight", hyde_weight)
     actual_expansion_weight = getattr(config, "expansion_weight", expansion_weight)
     actual_default_k = getattr(config, "default_k", default_k)
@@ -474,6 +514,7 @@ def create_fusion_retriever(
 
     # Create fusion config
     fusion_config = _FusionConfig(
+        original_weight=actual_original_weight,
         hyde_weight=actual_hyde_weight,
         expansion_weight=actual_expansion_weight,
         default_k=actual_default_k,
@@ -488,7 +529,7 @@ def create_fusion_retriever(
 
     logger.info(
         f"FusionRetriever initialized (layer={layer}, default_k={actual_default_k}, "
-        f"hyde_weight={actual_hyde_weight}, expansion_weight={actual_expansion_weight})"
+        f"w_orig={actual_original_weight}, w_hyde={actual_hyde_weight}, w_exp={actual_expansion_weight})"
     )
 
     return retriever

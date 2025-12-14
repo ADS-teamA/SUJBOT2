@@ -38,6 +38,8 @@ import fitz
 import google.generativeai as genai
 from pydantic import BaseModel, Field
 
+from src.cost_tracker import PRICING
+
 logger = logging.getLogger(__name__)
 
 
@@ -159,19 +161,11 @@ class LLMAgent:
     """
     Zapouzdřuje volání LLM a nyní také sleduje náklady na tokeny.
 
-    NOTE: Pricing accurate as of 2025-01. Update according to https://ai.google.dev/pricing
+    Pricing is centralized in cost_tracker.py (SSOT).
     """
 
-    MODEL_PRICING = {
-        "models/gemini-2.5-flash": {
-            "input": 0.30,  # USD per 1M tokens
-            "output": 0.60
-        },
-        "default": {
-            "input": 0.50,
-            "output": 1.50
-        }
-    }
+    # Default pricing fallback (used when model not found in PRICING)
+    _DEFAULT_PRICING = {"input": 0.50, "output": 1.50}
 
     def __init__(self, api_key: Optional[str] = None, model_name: str = "models/gemini-2.5-flash"):
         # Accept API key as parameter (preferably from centralized config)
@@ -187,7 +181,12 @@ class LLMAgent:
 
         self.model_name = model_name
         self.model = genai.GenerativeModel(self.model_name)
-        self.pricing = self.MODEL_PRICING.get(self.model_name, self.MODEL_PRICING["default"])
+
+        # Get pricing from centralized PRICING dict (SSOT: cost_tracker.py)
+        # Model name format: "models/gemini-2.5-flash" -> "gemini-2.5-flash"
+        short_model_name = model_name.replace("models/", "")
+        google_pricing = PRICING.get("google", {})
+        self.pricing = google_pricing.get(short_model_name, self._DEFAULT_PRICING)
 
         logger.info(f"LLM Agent (Gemini) initialized with model: {self.model_name}")
 

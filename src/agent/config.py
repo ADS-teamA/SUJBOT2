@@ -91,7 +91,8 @@ class ToolConfig:
 
     # Retrieval settings
     default_k: int = 6
-    enable_reranking: bool = True
+    # SSOT: Must match config.json:agent_tools.enable_reranking (default: false)
+    enable_reranking: bool = False
     reranker_candidates: int = 50
     reranker_model: str = "bge-reranker-large"  # SOTA accuracy (was: ms-marco-mini)
 

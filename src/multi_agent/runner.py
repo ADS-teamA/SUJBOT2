@@ -227,11 +227,13 @@ class MultiAgentRunner:
                     return
 
                 logger.info("Loading PostgreSQL vector store adapter...")
+                # SSOT: Default dimensions must match current embedding model (Qwen3-Embedding-8B = 4096)
+                # Previously was 3072 (OpenAI legacy) which would cause vector store incompatibility
                 vector_store = await load_vector_store_adapter(
                     backend="postgresql",
                     connection_string=connection_string,
                     pool_size=storage_config.get("postgresql", {}).get("pool_size", 20),
-                    dimensions=storage_config.get("postgresql", {}).get("dimensions", 3072)
+                    dimensions=storage_config.get("postgresql", {}).get("dimensions", 4096)
                 )
                 logger.info("PostgreSQL adapter loaded successfully")
 
@@ -406,7 +408,7 @@ class MultiAgentRunner:
             agent_tools_config = self.config.get("agent_tools", {})
             tool_config = ToolConfig(
                 default_k=agent_tools_config.get("default_k", 6),
-                enable_reranking=agent_tools_config.get("enable_reranking", True),
+                enable_reranking=agent_tools_config.get("enable_reranking", False),  # SSOT: config.json default
                 reranker_candidates=agent_tools_config.get("reranker_candidates", 50),
                 reranker_model=agent_tools_config.get("reranker_model", "bge-reranker-large"),
                 enable_graph_boost=agent_tools_config.get("enable_graph_boost", True),
