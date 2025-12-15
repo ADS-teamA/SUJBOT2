@@ -136,8 +136,8 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
               type="button"
               onClick={handleCancel}
               className={cn(
-                'flex-shrink-0',
-                'w-10 h-10 rounded-xl',
+                'flex-shrink-0 self-end',
+                'w-12 h-12 rounded-xl',
                 'bg-red-600 dark:bg-red-500',
                 'text-white',
                 'hover:bg-red-700 dark:hover:bg-red-600',
@@ -148,7 +148,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
               )}
               title={t('chat.stop')}
             >
-              <Square size={16} fill="currentColor" />
+              <Square size={20} fill="currentColor" />
             </button>
           ) : (
             /* Send button - shown when not streaming */
@@ -156,16 +156,12 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
               type="submit"
               disabled={disabled || !message.trim() || isMessageTooLong}
               className={cn(
-                'flex-shrink-0',
-                'w-10 h-10 rounded-xl',
-                'bg-accent-900 dark:bg-accent-100',
-                'text-accent-50 dark:text-accent-900',
-                'hover:bg-accent-800 dark:hover:bg-accent-200',
-                'hover:scale-105 active:scale-95',
-                'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100',
-                'transition-all duration-200',
-                'flex items-center justify-center',
-                'shadow-md hover:shadow-lg'
+                'flex-shrink-0 p-2',
+                'text-accent-900 dark:text-accent-100',
+                'hover:text-accent-700 dark:hover:text-accent-300',
+                'hover:scale-110 active:scale-95',
+                'disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100',
+                'transition-all duration-200'
               )}
               title={
                 disabled
@@ -175,7 +171,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, refreshSpen
                   : t('chat.placeholder')
               }
             >
-              <Send size={18} />
+              <Send size={22} />
             </button>
           )}
         </div>

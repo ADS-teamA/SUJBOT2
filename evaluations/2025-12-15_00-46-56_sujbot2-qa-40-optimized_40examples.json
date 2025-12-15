@@ -1,0 +1,639 @@
+{
+  "metadata": {
+    "date": "2025-12-15 00:46",
+    "experiment_prefix": "sujbot2-qa-40-optimized",
+    "judge_model": "anthropic:claude-sonnet-4-5",
+    "num_examples": 40
+  },
+  "metrics": {
+    "semantic_correctness": {
+      "mean": 0.7025,
+      "std": 0.3138371392936152,
+      "p50": 0.85,
+      "p99": 1.0
+    },
+    "factual_accuracy": {
+      "mean": 0.6799999999999999,
+      "std": 0.3185514087239295,
+      "p50": 0.8,
+      "p99": 1.0
+    },
+    "completeness": {
+      "mean": 0.62375,
+      "std": 0.35248891826552503,
+      "p50": 0.725,
+      "p99": 1.0
+    }
+  },
+  "cost": {
+    "total_cents": 527.679561,
+    "avg_per_query_cents": 13.191989025000002
+  },
+  "response_time": {
+    "mean_ms": 106568.63400936127,
+    "p50_ms": 80042.91415214539,
+    "p99_ms": 277221.8306064606
+  },
+  "results": [
+    {
+      "id": 1,
+      "question": "Jak moc vysoké je riziko výskytu povodně v oblasti areálu MFF UK v Praze 8?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Areál se nachází mimo záplavové území pro 5letou, 20letou i 100letou povodeň (Q5, Q20, Q100). Je však ohrožen 500letou povodní (Q500). Riziko bleskových povodní je nízké vzhledem k malému dílčímu povodí (cca 0,4 ha). Proti riziku Q500 byla vybudována ochranná opatření (Kapitola 3.4).",
+      "model_answer": "# Riziko Povodně v Areálu MFF UK v Praze 8\n\n## Shrnutí: NÍZKÉ RIZIKO\n\nRiziko výskytu povodně v oblasti areálu MFF UK v Praze 8 je **nízké**. Areál je účinně chráněn moderními ochrannými opatřeními, která byla již vyzkoušena a ověřena v praxi.\n\n---\n\n## Detailní Analýza\n\n### Ochranná Opatření\n\nAreál MFF UK v Praze 8 je v současné době chráněn **protipovodňovými barié-rami, zpětnými klapkami a souborem organizačních opatření** \\cite{BZ_VR1_L3_338}. Účinnost těchto ochran byla prokázána v červnu roku 2013, kdy průtok Vltavy v Praze dosáhl 3 210 m³/s a povodeň neměla žádný dopad na reaktor VR-1 \\cite{BZ_VR1_L3_338}.\n\n### Klasifikace Záplavových Zón\n\nAreál školního reaktoru VR-1 se nachází **mimo vymezené záplavové území Q5, Q20 i Q100** \\cite{BZ_VR1_L3_337}. Přestože je areál teoreticky ohrožen pětsetletou povodní (Q500), byla v reakci na povodeň v srpnu roku 2002 (průtok Vltavy 5 300 m³/s) vytvořena technická opatření k zamezení dopadu na areál a zařízení \\cite{BZ_VR1_L3_337}.\n\n### Riziko BleskovýchPovodní\n\nV území není zvýšené povodňové riziko ani z hlediska bleskovýchpovodní. Přilehlé dílčí povodí je velmi malé (cca 0,4 ha) a nemá tak potenciál pro tvorbu velkého stoku ani při výskytu extrémních srážek \\cite{BZ_VR1_L3_339}. Budova těžkých laboratoří se sice nachází v terénní depresi, ale případný hlavní proud stoku by probíhal západně, protože budova se nenachází v centru této deprese, ale na jejím okraji \\cite{BZ_VR1_L3_339}.\n\n---\n\n## Závěr\n\nKombinace faktorů – umístění mimo standardní záplavové zóny, ověřená ochranná infrastruktura, minimální místní povodí a příznivá terénní poloha – potvrzuje, že riziko povodně v areálu MFF UK v Praze 8 je **nízké a dobře zvládnuté**.",
+      "scores": {
+        "semantic_correctness": 0.95,
+        "factual_accuracy": 1.0,
+        "completeness": 1.0
+      },
+      "response_time_ms": 79969.64931488037,
+      "cost_cents": 11.875200000000001,
+      "tools_used": []
+    },
+    {
+      "id": 2,
+      "question": "Co to je jaderná položka?",
+      "source_document": "Sb_2016_263_2024-01-01_IZ.pdf",
+      "reference_answer": "Jaderná položka je definována v § 2 odst. 1 písm. f) jako jaderný materiál, vybraná položka v jaderné oblasti, položka dvojího použití v jaderné oblasti nebo jiná položka v jaderné oblasti, která je významná z hlediska zajištění nešíření jaderných zbraní.",
+      "model_answer": "# Odpověď: Co je jaderná položka?\n\n**Jaderná položka** je podle české legislativy definována jako \\cite{Sb_2016_263_2024-01-01_IZ_L3_35} jaderný materiál, vybraná položka v jaderné oblasti, položka dvojího použití v jaderné oblasti nebo jiná položka v jaderné oblasti, která je **významná z hlediska zajištění nešíření jaderných zbraní**.\n\nJedná se tedy o jakýkoli materiál nebo předmět v jaderné oblasti, který má potenciální dopad na prevenci šíření jaderných zbraní. Tato definice je součástí právního rámce pro regulaci a kontrolu jaderných materiálů a zajištění jaderné bezpečnosti.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 0.95,
+        "completeness": 0.85
+      },
+      "response_time_ms": 27615.47589302063,
+      "cost_cents": 4.247,
+      "tools_used": []
+    },
+    {
+      "id": 3,
+      "question": "Jaký je výrobce paliva používaného v reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Výrobcem paliva typu IRT-4M používaného v reaktoru VR-1 je ruský závod NZCHK Novosibirsk (Kapitola 5.3).",
+      "model_answer": "# Odpověď\n\nVýrobcem paliva používaného v reaktoru VR-1 je **ruský závod NZCHK Novosibirsk** \\cite{BZ_VR1_L3_465}.\n\nJedná se konkrétně o jaderné palivo typu **IRT-4M** s obohacením **19,7 % 235U**, které patří do typové řady paliva IRT-M určené pro výzkumná jaderná zařízení. Palivo má podobu trubkového paliva tzv. sendvičového typu \\cite{BZ_VR1_L3_465}.\n\nNa reaktoru VR-1 je k dispozici celkem 21 palivových článků různých konfigurací (1 čtyřtrubkový, 10 šestitrubkových a 10 osmitrubkových), přičemž palivo zůstává fyzikálně čerstvé bez měřitelného vyhoření díky nízkému výkonu reaktoru \\cite{BZ_VR1_L3_466}.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 0.95
+      },
+      "response_time_ms": 38506.21771812439,
+      "cost_cents": 4.8746,
+      "tools_used": []
+    },
+    {
+      "id": 4,
+      "question": "Jaký je maximální povolený tepelný výkon reaktoru VR-1 a jaká je jeho nominální hodnota?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Jmenovitý tepelný výkon reaktoru VR-1 je stanoven na 100 Wt. Maximální povolený tepelný výkon je 500 Wt, avšak tento provoz je časově omezen na maximálně 72 hodin ročně (krátkodobý provoz). Tyto hodnoty jsou uvedeny v přehledu základních technických parametrů (Kapitola 5.1, Tab. 10).",
+      "model_answer": "# Odpověď na dotaz o tepelném výkonu reaktoru VR-1\n\nNa základě technické zprávy o reaktoru VR-1 mohu poskytnout následující informace:\n\n## Maximální povolený tepelný výkon\n\nMaximální tepelný výkon reaktoru VR-1 je **500 W** \\cite{BZ_VR1_L3_13}. Tato hodnota byla aktualizována na základě experimentálních měření a výpočtů pomocí programu MCNP5. Jedná se o výrazně nižší hodnotu než dlouhodobě udávaná hodnota 5 kW, která byla v minulosti pouze odhadnuta a nebyla experimentálně ověřena \\cite{BZ_VR1_L3_1232}.\n\n## Nominální hodnota\n\nV dostupné dokumentaci jsem nenašel explicitně uvedenou \"nominální hodnotu\" tepelného výkonu jako samostatný parametr odlišný od maximálního výkonu. Dokumentace pracuje s maximálním povoleným výkonem 500 W a zmiňuje, že reaktor pracuje na \"relativně malém tepelném výkonu (< 0,5 kW)\" \\cite{BZ_VR1_L3_703}.\n\nVzhledem k nízkému výkonu reaktoru nedochází při jeho provozu k významným změnám v teplotě paliva ani moderátoru – při dosažení maximálního výkonu se změna teploty moderátoru v aktivní zóně pohybuje pouze v oblasti desetin °C \\cite{BZ_VR1_L3_15}.",
+      "scores": {
+        "semantic_correctness": 0.5,
+        "factual_accuracy": 0.4,
+        "completeness": 0.25
+      },
+      "response_time_ms": 82450.20937919617,
+      "cost_cents": 8.35,
+      "tools_used": []
+    },
+    {
+      "id": 5,
+      "question": "Jaké jsou podmínky pro zařazení předmětu do nové skupiny SCO-III (povrchově kontaminované předměty)?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Předmět skupiny SCO-III je velký pevný předmět, který nemůže být přepravován v běžném obalu. Musí splňovat podmínky: všechny uzávěry jsou uzavřeny (aby se zabránilo úniku), vnitřek je maximálně vysušen, úroveň nefixované kontaminace na vnějším povrchu nepřekračuje stanovené meze a součet kontaminace na nepřístupném povrchu nepřekračuje 8 × 10^5 Bq/cm² pro beta/gama a nízko toxické alfa zářiče (nebo 8 × 10^4 Bq/cm² pro ostatní alfa zářiče) (Příloha č. 3, bod 93).",
+      "model_answer": "# Podmínky pro zařazení předmětu do skupiny SCO-III\n\nPovrchově kontaminovaný předmět se může zařadit do skupiny SCO-III, pokud jsou splněny specifické podmínky stanovené pro přepravu těchto předmětů. Na rozdíl od skupin SCO-I a SCO-II, které jsou definovány přesnými limity kontaminace, je SCO-III kategorie určená pro předměty s vyšší úrovní kontaminace, u kterých jsou aplikována zvláštní preventivní opatření.\n\n## Základní podmínky pro SCO-III\n\nPředmět lze zařadit do skupiny SCO-III, pokud jsou při jeho přepravě splněny následující podmínky \\cite{157/2025 Sb._L3_195}:\n\n1. **Režim přepravy**: Přeprava probíhá za výlučného použití po silnici, železnici, vnitrozemské vodní nebo námořní cestě \\cite{157/2025 Sb._L3_198}\n\n2. **Stohování**: Stohování při přepravě se neprovádí \\cite{157/2025 Sb._L3_198}\n\n3. **Plán přepravy**: Plán přepravy obsahuje popis všech činností spojených s přepravou, včetně radiační ochrany, odezvy na radiační mimořádné události, zvláštních preventivních opatření, zvláštních administrativních nebo provozních kontrol, které mají být provedeny během přepravy \\cite{157/2025 Sb._L3_198}\n\n## Překročení limitů s preventivními opatřeními\n\nDůležitou charakteristikou SCO-III je možnost překročit standardní meze kontaminace za podmínky, že jsou zavedena odpovídající opatření. Mez uvedená v tabulce může být pro povrchově kontaminovaný předmět skupiny SCO-III překročena, pokud preventivní opatření uvedená v plánu přepravy zajistí celkovou úroveň jaderné bezpečnosti, radiační ochrany, fyzické ochrany a zvládání radiační mimořádné události při přepravě přinejmenším rovnocennou té, které by bylo dosaženo, pokud by mez dodržena byla \\cite{157/2025 Sb._L3_208}.\n\nZařazení do SCO-III tedy není primárně určeno pevnými limity aktivit, ale spíše schopností zajistit bezpečnost prostřednictvím komplexního plánu přepravy a speciálních opatření.",
+      "scores": {
+        "semantic_correctness": 0.25,
+        "factual_accuracy": 0.2,
+        "completeness": 0.0
+      },
+      "response_time_ms": 80116.1789894104,
+      "cost_cents": 7.3892,
+      "tools_used": []
+    },
+    {
+      "id": 6,
+      "question": "Jaká přeprava nově vyžaduje povolení úřadu podle § 3 odst. 2 písm. h) vyhlášky?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Nově vyžaduje povolení přeprava povrchově kontaminovaného předmětu skupiny SCO-III (§ 3 odst. 2 písm. h).",
+      "model_answer": "# Odpověď na dotaz o přepravě vyžadující povolení\n\nBohužel se mi nepodařilo najít konkrétní odpověď na vaši otázku o tom, **jaká přeprava nově vyžaduje povolení úřadu podle § 3 odst. 2 písm. h) vyhlášky**.\n\n## Co jsem v dokumentaci našel:\n\nDostupné dokumenty obsahují obecné informace o přepravě radioaktivních a štěpných látek:\n\n- **Povolení k přepravě obecně**: Povolení Úřadu je nutné k přepravě radioaktivní nebo štěpné látky \\cite{Sb_2016_263_2024-01-01_IZ_L3_256}\n\n- **Typy povolení**: Dokumenty rozlišují povolení pro jednorázovou a opakovanou přepravu \\cite{379/2016 Sb._L3_1327}\n\n- **Nové požadavky na přepravu**: Vyhláška č. 157/2025 Sb. zavádí nové požadavky, včetně specifikace způsobu dopravy a omezení týkajících se dopravních prostředků \\cite{157/2025 Sb._L3_23}\n\n## ⚠️ Nenašel jsem:\n\nKonkrétní text **§ 3 odst. 2 písm. h)** vyhlášky, který by specifikoval nový typ přepravy vyžadující povolení. Toto ustanovení se v indexovaných dokumentech nevyskytuje.\n\n**Doporučení**: Pro přesnou odpověď byste měli zkontrolovat úplný text příslušné vyhlášky s tímto konkrétním paragrafem, případně se obrátit na Státní úřad pro jadernou bezpečnost.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.0,
+        "completeness": 0.0
+      },
+      "response_time_ms": 167385.7662677765,
+      "cost_cents": 19.897299999999998,
+      "tools_used": []
+    },
+    {
+      "id": 7,
+      "question": "Jaké jsou zodpovědné osoby reaktoru VR-1 a jaká je hierarchie jejich pravomocí?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Vrcholným představitelem je rektor ČVUT a děkan FJFI. Vedoucím pracovníkem pro reaktor je vedoucí Katedry jaderných reakrorů (KJR), kterému je přímo podřízen vedoucí provozu reaktoru. Vedoucí provozu řídí vedoucí směn, operátory a další specifické funkce (vedoucí radiační ochrany, fyzické ochrany, systému řízení, havarijní připravenosti). Provoz reaktoru probíhá na základě směn, které vede vedoucí směny (Kapitola 13.1, Obr. 40).",
+      "model_answer": "# Zodpovědné osoby reaktoru VR-1 a hierarchie jejich pravomocí\n\n## Vrcholná odpovědnost\n\nDržitelem povolení pro provoz reaktoru VR-1 je podle atomového zákona ČVUT v Praze. **Rektor ČVUT**, jako vrcholný představitel univerzity a její statutární orgán, nese plnou odpovědnost za provoz reaktoru VR-1 v souladu s platnou legislativou České republiky \\cite{BZ_VR1_L3_790}. Rektor však může delegovat některé své povinnosti a pravomoci (nikoliv svoji odpovědnost) na děkana FJFI, vedoucího KJR nebo jiného pracovníka reaktoru \\cite{BZ_VR1_L3_790}. Rektor také ustavuje komisi pro bezpečný provoz školního reaktoru VR-1 a je jejím předsedou \\cite{BZ_VR1_L3_790}.\n\n## Klíčové odpovědné osoby a jejich role\n\n### Bezpečnostní ředitel\nRektor pověřuje vybraného pracovníka reaktoru funkcí **bezpečnostního ředitele** v souladu s požadavky zákona č. 412/2005 Sb. \\cite{BZ_VR1_L3_790}. Bezpečnostní ředitel je klíčovou osobou odpovědnou za zajištění bezpečnosti a dodržování předpisů souvisejících s provozem reaktoru \\cite{BZ_VR1_L3_770}.\n\n### Vedoucí provozu reaktoru\n**Vedoucí provozu reaktoru** je zástupcem vedoucího KJR pro provoz reaktoru. Koordinuje činnosti směn na reaktoru, dohlíží na provoz reaktoru a jeho systém řízení, zodpovídá za dodržování jaderné bezpečnosti a radiační ochrany \\cite{BZ_VR1_L3_793}. Řídí provozní personál reaktoru a zajišťuje včasné vypracování směnového příkazu \\cite{BZ_VR1_L3_793}. Je odpovědný za provozuschopnost reaktoru, provádění pravidelných provozních kontrol, údržby, oprav a odstávek \\cite{BZ_VR1_L3_793}. Řídí a koordinuje činnost vedoucího systému řízení, vedoucího radiační ochrany, vedoucího havarijní připravenosti, vedoucího fyzické ochrany, vedoucího odborné přípravy a správce dokumentace \\cite{BZ_VR1_L3_793}.\n\n### Vedoucí systému řízení\n**Vedoucí systému řízení** je dalším klíčovým pracovníkem odpovědným za oblasti související s povolovanými činnostmi prováděnými na reaktoru \\cite{BZ_VR1_L3_773}.\n\n### Osoba s přímým dohledem nad reaktorovým obsluhou\n**Osoba s přímým dohledem nad RO** hraje klíčovou roli v zajištění bezpečného a efektivního provozu reaktoru \\cite{BZ_VR1_L3_780}.\n\n### Operátor reaktoru\n**Operátor reaktoru** je vybraným pracovníkem vykonávajícím činnosti zvláště důležité z hlediska jaderné bezpečnosti. Bezprostředně řídí reaktor, provádí manipulace ve velínu a vede předepsanou provozní dokumentaci \\cite{BZ_VR1_L3_806}. Přijímá a provádí příkazy vedoucího směny, jemuž jeho činnost podléhá, a v případě potřeby vedoucího směny zastupuje \\cite{BZ_VR1_L3_806}. Operátor reaktoru je členem základní směny reaktoru a je k výkonu své",
+      "scores": {
+        "semantic_correctness": 0.6,
+        "factual_accuracy": 1.0,
+        "completeness": 0.8
+      },
+      "response_time_ms": 52000.86259841919,
+      "cost_cents": 5.3123000000000005,
+      "tools_used": []
+    },
+    {
+      "id": 8,
+      "question": "Kdy se předpokládá zahájení vyřazování reaktoru VR-1 z provozu?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Dle strategie uvedené v bezpečnostní zprávě z roku 2017 se zahájení vyřazovacích činností nepředpokládá dříve než v roce 2030. Celkový proces vyřazování by měl trvat přibližně 3 roky (Kapitola 19; Kapitola 19.5).",
+      "model_answer": "# Odpověď\n\nZahájení vyřazování reaktoru VR-1 z provozu se předpokládá **nejdříve v roce 2030** \\cite{BZ_VR1_L3_1170}. Tento termín představuje 40 let od dosažení prvního kritického stavu reaktoru.\n\nDůležité je však poznamenat, že tento plán není pevný. Podle dokumentace se termín může zkrátit, zejména pokud dojde k určitým nespecifikovaným událostem nebo změnám. Naopak nelze vyloučit ani prodloužení doby provozu reaktoru VR-1 do období po roce 2030, v závislosti na konkrétním vývoji situace \\cite{BZ_VR1_L3_1170}.\n\nVyřazování bude provedeno jako **okamžité vyřazování** v jedné etapě, která bude zahrnovat ukončení provozu, přípravu k likvidaci a vlastní likvidaci zařízení \\cite{BZ_VR1_L3_1170}. Detailní harmonogram jednotlivých činností není v současnosti zpracován.",
+      "scores": {
+        "semantic_correctness": 0.85,
+        "factual_accuracy": 0.5,
+        "completeness": 0.25
+      },
+      "response_time_ms": 52051.08070373535,
+      "cost_cents": 6.7795,
+      "tools_used": []
+    },
+    {
+      "id": 9,
+      "question": "Co je hopík?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "'Hopík' je experimentální zařízení určené pro studium rychlých změn reaktivity (kinetiky reaktoru). Jedná se o vertikální kanál, uvnitř kterého se pomocí stlačeného vzduchu pohybuje pouzdro se vzorkem ovlivňujícím reaktivitu (např. kadmium, moderátor). Koncovka kanálu se umisťuje do palivového článku (Kapitola 11.2).",
+      "model_answer": "# Odpověď na dotaz: Co je hopík?\n\n**Hopík** je experimentální zařízení pro studium dynamických změn reaktivity reaktoru \\cite{BZ_VR1_L3_687}. Jedná se o **vertikální kanál**, v němž se pohybuje **pouzdro se vzorkem** ovlivňujícím reaktivitu. Pohyb pouzdra je zajištěn pomocí **stlačeného vzduchu** a pouzdro je vyrobeno z **hliníku** \\cite{BZ_VR1_L3_687}.\n\nKoncovka kanálu je umístěna do šestitrubkového nebo čtyřtrubkového PČ (palivového prvku). Jako vzorek ovlivňující reaktivitu se nejčastěji používá **kadmiový kroužek o tloušťce 1 mm**, lze však použít i jiné vzorky, jako jsou absorbéry, štěpitelný materiál nebo moderátor \\cite{BZ_VR1_L3_687}.\n\nZařízení slouží k výzkumu rychlých změn reaktivity ve výzkumných reaktorech s malým výkonem \\cite{BZ_VR1_L3_670}.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 0.95,
+        "completeness": 1.0
+      },
+      "response_time_ms": 36961.42244338989,
+      "cost_cents": 4.4830000000000005,
+      "tools_used": []
+    },
+    {
+      "id": 10,
+      "question": "Co musí obsahovat rozhodnutí úřadu o povolení k přepravě radioaktivní nebo štěpné látky podle nové vyhlášky?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "1. Odkaz na mezinárodní smlouvy**\n\nÚřad v rozhodnutí musí uvést odkaz na požadavky mezinárodních smluv týkajících se přepravy radioaktivní nebo štěpné látky, jimiž je Česká republika vázána \\cite{157/2025 Sb._L3_19}. Tímto je zajištěn soulad s mezinárodními standardy v oblasti jaderné bezpečnosti a radiační ochrany.\n\n**2. Identifikační údaje přepravy**\n\nRozhodnutí musí obsahovat unikátní identifikační číslo přepravy přidělené Úřadem \\cite{157/2025 Sb._L3_21}, které slouží k evidenci a sledování přepravovaných radioaktivních materiálů.\n\n**3. Poučení o právních povinnostech**\n\nRozhodnutí musí obsahovat poučení, že vydané povolení nezbavuje přepravce povinnosti dodržovat požadavky státu, do kterého nebo přes jehož území je přeprava realizována \\cite{157/2025 Sb._L3_20}.\n\n**4. Podmínky přepravy**\n\nRozhodnutí specifikuje:\n- Způsob dopravy a jeho případné omezení\n- Omezení týkající se typu dopravních prostředků a kontejnerů\n- Nezbytné pokyny pro plánovanou cestu \\cite{157/2025 Sb._L3_23}\n\n**5. Provozní kontroly**\n\nRozhodnutí uvádí dodatečné provozní kontroly požadované pro přípravu, nakládku, přepravu, vykládku a manipulaci s radioaktivní zásilkou, včetně zvláštních požadavků na umístění zásilky na dopravním prostředku \\cite{157/2025 Sb._L3_20}.\n\n## Specifické požadavky pro štěpné látky\n\nPro přepravu štěpné látky musí rozhodnutí obsahovat:1. Popis vyjmuté štěpné látky – konkrétní charakteristiku přepravované látky 2. Popis omezení – veškerá omezení pro vyjmutou štěpnou látku. 3. Odkaz na dokumentaci – odkaz na dokumentaci prokazující, že přepravovaná radioaktivní látka splňuje požadavky uvedené v bodech 72 písm. a), 82 písm. a), 83 písm. b) a 84 písm. b) části I přílohy č. 1 a bodu 17 písm. f) přílohy č. 3 vyhlášky \\cite{157/2025 Sb._L3_46}\n\n## Dodatečné informace\n\nRozhodnutí může obsahovat také odkaz na rozhodnutí o schválení typu výrobku nebo jiná relevantní rozhodnutí vztahující se k přepravě vydaná příslušnými orgány jiného státu, byla-li taková rozhodnutí vydána",
+      "model_answer": "# Obsah rozhodnutí o povolení k přepravě radioaktivní nebo štěpné látky\n\nPodle vyhlášky 157/2025 Sb. musí rozhodnutí úřadu o povolení k přepravě radioaktivní nebo štěpné látky obsahovat následující prvky:\n\n## Základní požadavky\n\n**1. Odkaz na mezinárodní smlouvy**\n\nÚřad v rozhodnutí uvede odkaz na požadavky mezinárodních smluv týkajících se přepravy radioaktivní nebo štěpné látky, jimiž je Česká republika vázána. \\cite{157/2025 Sb._L3_19}\n\n**2. Identifikace a poučení**\n\nRozhodnutí musí obsahovat:\n- unikátní identifikační číslo přepravy přidělené Úřadem\n- poučení, že rozhodnutí nezbavuje přepravce povinnosti dodržovat požadavky státu, do kterého nebo přes jehož území je přeprava realizována \\cite{157/2025 Sb._L3_22}\n\n**3. Podmínky přepravy**\n\nRozhodnutí musí specifikovat:\n- způsob dopravy a jeho případné omezení, omezení týkající se typu dopravních prostředků a kontejnerů a nezbytné pokyny pro plánovanou cestu \\cite{157/2025 Sb._L3_23}\n- speciální požadavky na přepravu, které musí provést přepravce nebo jím určený subjekt, včetně zvláštních požadavků na umístění radioaktivní zásilky na dopravním prostředku při přepravě pro bezpečný odvod tepla nebo udržení bezpečné podkritičnosti \\cite{157/2025 Sb._L3_20}\n\n**4. Informace o obalovém souboru**\n\nRozhodnutí musí obsahovat odkaz na informace poskytnuté žadatelem týkající se použití obalového souboru a odkaz na specifikaci obalového souboru, včetně jeho typu, rozměrů, hmotnosti a dalších relevantních parametrů pro bezpečnou přepravu. \\cite{157/2025 Sb._L3_34}\n\n**5. Rozhodnutí vydaná jinými státy**\n\nRozhodnutí musí obsahovat odkaz na rozhodnutí o schválení typu výrobku nebo jiná relevantní rozhodnutí vztahující se k přepravě vydaná příslušnými orgány jiného státu, byla-li taková rozhodnutí vydána. \\cite{157/2025 Sb._L3_26}\n\nTyto požadavky zajišťují, že rozhodnutí obsahuje všechny nezbytné informace pro bezpečnou a právně souladu přepravu radioaktivních a štěpných látek v souladu s mezinárodními standardy a českými právními předpisy.",
+      "scores": {
+        "semantic_correctness": 0.75,
+        "factual_accuracy": 0.55,
+        "completeness": 0.65
+      },
+      "response_time_ms": 211762.7203464508,
+      "cost_cents": 18.790100000000002,
+      "tools_used": []
+    },
+    {
+      "id": 11,
+      "question": "Jaká je hodnota maximálního seismického zrychlení (SL-2) stanovená pro lokalitu reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Hodnota SL-2, která odpovídá střední hodnotě špičkového zrychlení kmitů půdy s periodou opakování 10 000 let, byla pro lokalitu stanovena na 0,061 g. Po započtení standardní odchylky (kvantil 0,84) je tato hodnota 0,089 g. Nepřesahuje tedy limitní hodnotu 0,1 g (Kapitola 3.2).",
+      "model_answer": "# Odpověď\n\nHodnota maximálního seismického zrychlení **SL-2** pro lokalitu reaktoru VR-1 je stanovena na **0,061 g** jako střední hodnota špičkového zrychlení kmitů půdy \\cite{BZ_VR1_L3_332}. Po připočtení standardní odchylky (kvantil 0,84) se tato hodnota zvyšuje na **0,089 g** \\cite{BZ_VR1_L3_332}.\n\nTato hodnota byla určena v souladu s mezinárodním standardem NS-G-1.6 (IAEA 2003) a reprezentuje průměrné zrychlení, které se vyskytuje jednou za 10 000 let \\cite{BZ_VR1_L3_332}. Hodnoty seismického ohrožení včetně rezerv nepřesahují limitní hodnotu 0,1 g \\cite{BZ_VR1_L3_335}.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 0.85
+      },
+      "response_time_ms": 35793.13254356384,
+      "cost_cents": 4.771599999999999,
+      "tools_used": []
+    },
+    {
+      "id": 12,
+      "question": "Jak zákon 263/2016 specifikuje záření pro lékařské účely?",
+      "source_document": "Sb_2016_263_2024-01-01_IZ.pdf",
+      "reference_answer": "Lékařské ozáření je definováno jako ozáření v rámci vyšetření nebo léčby pacienta, pracovnělékařských služeb, preventivní péče, dobrovolné účasti na lékařském ověřování nezavedených metod nebo poskytování pomoci pacientovi podstupujícímu lékařské ozáření (§ 2 odst. 3 písm. c). Zákon rozlišuje také nelékařské ozáření, jehož hlavním cílem není zdravotní přínos pro ozářenou osobu (např. určení věku, bezpečnostní prohlídky) (§ 2 odst. 3 písm. h).",
+      "model_answer": "# Odpověď: Specifikace záření pro lékařské účely v zákoně 263/2016\n\nZákon 263/2016 specifikuje záření pro lékařské účely prostřednictvím několika klíčových ustanovení:\n\n## Hlavní specifikace\n\n**§ 86** stanovuje \\cite{Sb_2016_263_2024-01-01_IZ_L3_1185} **požadavky na zdroje ionizujícího záření** používané při lékařském ozáření a **vybavení pracovišť pro rentgenovou diagnostiku a radioterapii**. Tyto požadavky jsou součástí komplexních pravidel jaderné bezpečnosti a radiační ochrany zaměřených na zajištění bezpečného a efektivního využívání ionizujícího záření v medicíně.\n\n## Definice lékařského ozáření\n\nZákon definuje lékařské ozáření jako \\cite{Sb_2016_263_2024-01-01_IZ_L3_59} **ozáření v rámci vyšetření nebo léčby pacienta**. Tato činnost je prováděna \\cite{Sb_2016_263_2024-01-01_IZ_L3_1156} poskytovatelem zdravotních služeb, jejichž součástí je lékařské ozáření, oprávněným podle jiného právního předpisu.\n\n## Zvláštní režim pro lékařské ozáření\n\nDůležité je, že \\cite{Sb_2016_263_2024-01-01_IZ_L3_911} lékařskému ozáření **nepodléhají limitům ozáření** stanovené zákonem, což reflektuje důležitost ochrany zdraví pacientů při zachování bezpečných standardů.\n\nZákon také specifikuje \\cite{Sb_2016_263_2024-01-01_IZ_L3_879} intervenční radiologii jako používání rentgenového zobrazování k zavedení přístroje nebo pomůcky do lidského těla a jeho navádění pro diagnostické nebo léčebné účely.",
+      "scores": {
+        "semantic_correctness": 0.5,
+        "factual_accuracy": 0.5,
+        "completeness": 0.1
+      },
+      "response_time_ms": 50954.00524139404,
+      "cost_cents": 5.6143,
+      "tools_used": []
+    },
+    {
+      "id": 13,
+      "question": "Jaký je seznam všech firem, které jsou v roli externích dodavatelů pro zařízení a obsluhu reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Bezpečnostní zpráva neobsahuje kompletní jmenný seznam všech externích dodavatelů. Zmiňuje však konkrétní subjekty u specifických technologií: ŠKODA JS Plzeň (hlavní technologická část, nádoby), ZAT a.s. a dataPartner s.r.o. (řídicí systém, HMI), NUVIA Dosimetry (osobní dozimetrie), ÚJV Řež a.s. (nakládání s palivem/odpady), NZCHK Novosibirsk a TVEL (palivo) (Kapitola 1.4.1; Kapitola 12.1).",
+      "model_answer": "# Odpověď na dotaz o externích dodavatelích reaktoru VR-1\n\nNa základě dostupné dokumentace se mi nepodařilo najít **konkrétní seznam firem, které jsou v roli externích dodavatelů pro zařízení a obsluhu reaktoru VR-1**.\n\n## Co jsem v dokumentaci našel:\n\n**Existence systému řízení dodavatelů:**\nDokumentace potvrzuje, že reaktor VR-1 má formalizovaný systém pro řízení dodavatelsky zajišťovaných činností. Konkrétně je v technické zprávě zmíněn \\cite{BZ_VR1_L3_877} **Řídicí postup č. 12 – Řízení dodavatelsky zajišťovaných činností na školním reaktoru VR-1**, který se zaměřuje na řízení činností zajišťovaných externími dodavateli.\n\nDále je uvedeno, že \\cite{BZ_VR1_L3_1080} \"vnější komunikace systému řízení je zaměřena na komunikaci pracovníků provozovatele s dodavateli a SÚJB.\"\n\n**Příklad konkrétního dodavatele:**\nJedinou konkrétně jmenovanou firmou v kontextu dodávek pro reaktor je \\cite{BZ_VR1_L3_10} ruská společnost **TVEL**, která je dodavatelem paliva typu IRT-4M používaného v reaktoru.\n\n## ⚠️ Nenašel jsem informace o:\n- Seznamu všech externích dodavatelů zařízení\n- Seznamu dodavatelů obsluhy reaktoru\n- Detailech o jejich rolích a odpovědnostech\n\n**Doporučení:** Podrobnější informace o konkrétních dodavatelích by měly být obsaženy v Řídicím postupu č. 12 nebo v dalších interních dokumentech provozovatele reaktoru, které nejsou součástí dostupné technické zprávy.",
+      "scores": {
+        "semantic_correctness": 0.2,
+        "factual_accuracy": 0.3,
+        "completeness": 0.15
+      },
+      "response_time_ms": 174886.620759964,
+      "cost_cents": 16.7836,
+      "tools_used": []
+    },
+    {
+      "id": 14,
+      "question": "Jaké jsou zákonné požadavky na dokumentaci nakládání s jaderným odpadem?",
+      "source_document": "Sb_2016_151_Castka_OZ.pdf",
+      "reference_answer": "Podle vyhlášky č. 377/2016 Sb. (součást souboru) musí být vedeny provozní záznamy, které zahrnují 'průvodní list radioaktivního odpadu' (§ 10). Ten musí obsahovat údaje jako fyzikální/chemickou formu, kategorii odpadu, druh obalu, radionuklidové složení, aktivitu, dávkový příkon, hmotnost a identifikaci předávajícího a přebírajícího. Evidence se musí uchovávat a předávat Správě úložišť (SÚRAO).",
+      "model_answer": "# Zákonné požadavky na dokumentaci nakládání s jaderným odpadem\n\nZákonné požadavky na dokumentaci nakládání s jaderným odpadem jsou v České republice regulovány především zákonem č. 379/2016 Sb. a vyhláškou č. 263/2016 Sb. Dokumentace musí splňovat řadu specifických požadavků zaměřených na bezpečnost a ochranu zdraví.\n\n## Hlavní kategorie dokumentačních požadavků\n\n### 1. Dokumentace pro povolení a vyřazování z provozu\n\nDokumentace pro povolení nakládání s radioaktivním odpadem musí obsahovat požadavky na obsah dokumentace pro jednotlivé etapy vyřazování z provozu jaderného zařízení nebo pracovišť III. a IV. kategorie \\cite{379/2016 Sb._L3_6}. Tato dokumentace je klíčová pro zajištění bezpečnosti a ochrany zdraví při všech fázích nakládání s odpadem.\n\n### 2. Limity a podmínky pro nakládání\n\nDokumentace pracovišť, kde se nakládá s radioaktivním odpadem, musí obsahovat limity a podmínky pro nakládání s radioaktivním odpadem před jeho uložením \\cite{379/2016 Sb._L3_129}. Konkrétně musí zahrnovat:\n\n- **Podmínky přijatelnosti** - bezpečnostní, technické a administrativní podmínky a meze pro charakteristické vlastnosti radioaktivního odpadu, který je přijímán k nakládání \\cite{379/2016 Sb._L3_129}\n- **Způsob zajištění souladu** - metody ověřování, že vlastnosti radioaktivního odpadu nebo obalového souboru odpovídají stanoveným podmínkám a mezím \\cite{379/2016 Sb._L3_129}\n- **Umístění a manipulace** - specifikace umístění radioaktivního odpadu nebo obalového souboru a způsob manipulace s nimi \\cite{379/2016 Sb._L3_129}\n- **Měření a hodnocení** - rozsah, způsob a lhůty měření a hodnocení limitovaných veličin \\cite{379/2016 Sb._L3_129}\n\n### 3. Technické parametry obalových souborů\n\nDokumentace musí obsahovat podrobné technické údaje o obalových souborech \\cite{379/2016 Sb._L3_132}:\n\n- Rozměry, hmotnost, provedení a značení radioaktivního odpadu nebo obalového souboru\n- Obsah a nejvyšší přípustná množství radionuklidů v radioaktivním odpadu, obalovém souboru a v celém zařízení pro nakládání s radioaktivním odpadem\n- Popis způsobu zamezení vzniku kritického stavu\n- Popis způsobu omezení tepelných a radiačních účinků radioaktivního odpadu\n- Příkon dávkového ekvivalentu v definovaných vzdálenostech od povrchu radioaktivního odpadu nebo obalového souboru \\cite{379/2016 Sb._L3_132}\n\n### 4. Evidence a průvodní listy\n\nZákon vyžaduje vedení evidence radioaktivních odpadů a průvodního listu radioaktivního odpadu v určeném rozsahu a způsobu \\cite{Sb_2016_263_2024-01-01_IZ_L3_1433}. Tato evidence je nezbytná pro sledování a kontrolu nakládání s odpadem.\n\n### 5. Doklady o zajištění bezpečného nakládání\n\nDržitelé povolení musí doložit doklad o zajištění bezpečného nakládání s radioaktivním odpadem včetně financování tohoto nakládání, b",
+      "scores": {
+        "semantic_correctness": 0.3,
+        "factual_accuracy": 0.3,
+        "completeness": 0.2
+      },
+      "response_time_ms": 122287.6341342926,
+      "cost_cents": 21.000600000000002,
+      "tools_used": []
+    },
+    {
+      "id": 15,
+      "question": "Do jakého hlubinného úložiště je odvážen radioaktivní odpad vyprodukovaný při provozu reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Provozní radioaktivní odpad je prakticky nulový. Vyhořelé palivo bude v budoucnu odvezeno do ÚJV Řež a.s. a následně buď vráceno do země původu (Ruská federace), nebo uloženo v hlubinném úložišti. Konkrétní název hlubinného úložiště dokument neuvádí (v ČR dosud není v provozu). Ostatní radioaktivní odpady (např. zářiče) se ukládají v úložišti Richard (Kapitola 19.3).",
+      "model_answer": "# Odpověď na dotaz o hlubinném úložišti radioaktivního odpadu z reaktoru VR-1\n\nNa základě dostupné dokumentace nelze jednoznačně identifikovat konkrétní hlubinné úložiště, do kterého je odvážen radioaktivní odpad z reaktoru VR-1 během jeho běžného provozu.\n\n## Produkce radioaktivního odpadu\n\nReaktor VR-1 je navržen tak, aby produkoval **prakticky nulové množství radioaktivních odpadů** během běžného provozu \\cite{BZ_VR1_L3_710}. Projekt reaktoru zaručuje velmi omezenou (prakticky nulovou) produkci radioaktivních odpadů \\cite{BZ_VR1_L3_34}.\n\nPotenciální radioaktivní odpad, který na pracovišti vzniká, se skládá především z použitých laboratorních kalibračních zářičů či etalonů, ozářených vzorků, aktivačních fólií, použitých iontoměničů, filtrů a aktivovaných konstrukčních materiálů \\cite{BZ_VR1_L3_756}. Systém nakládání s těmito odpady je popsán v dokumentu Nakládání s radioaktivními odpady na pracovišti školního reaktoru VR-1 \\cite{BZ_VR1_L3_755}.\n\n## Hlubinné úložiště - právní definice\n\nAčkoli jsou v právních předpisech hlubinná úložiště definována jako úložiště radioaktivního odpadu umístěná stovky metrů pod zemským povrchem a určená zejména pro ukládání vysokoaktivního odpadu \\cite{379/2016 Sb._L3_265}, konkrétní identifikace úložiště pro odpad z reaktoru VR-1 není v indexovaných dokumentech obsažena.\n\n## Vyhořelé jaderné palivo\n\nV kontextu vyřazování reaktoru z provozu je uvedeno, že vyhořelé jaderné palivo bude odvezeno do ÚJV Řež a.s., kde bude uskladněno do doby, než bude rozhodnuto o konečném řešení - buď návrat do země původu (Ruské federace) nebo uložení v hlubinném úložišti \\cite{BZ_VR1_L3_57}.\n\n**Závěr:** Dokumentace nespecifikuje konkrétní hlubinné úložiště pro běžný radioaktivní odpad z provozu reaktoru VR-1, což je v souladu se skutečností, že reaktor produkuje pouze prakticky nulové množství takového odpadu.",
+      "scores": {
+        "semantic_correctness": 0.85,
+        "factual_accuracy": 0.75,
+        "completeness": 0.65
+      },
+      "response_time_ms": 213130.9208869934,
+      "cost_cents": 20.780199999999997,
+      "tools_used": []
+    },
+    {
+      "id": 16,
+      "question": "Jaké je členění radioaktivních zásilek a jak se liší legislativní požadavky, které musí splňovat?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Radioaktivní zásilky se dělí na vyjmuté zásilky, průmyslové zásilky (typy IP-1, IP-2, IP-3) a radioaktivní zásilky typu A, B(U), B(M) a C. Dále existují kategorie pro povrchově kontaminované předměty (SCO-I, SCO-II a nově SCO-III). Legislativní požadavky se liší podle typu; například nová kategorie SCO-III zahrnuje velké pevné předměty, které nelze přepravovat v běžných obalech, a vyžaduje splnění specifických podmínek, jako je přeprava výlučně za použití, zákaz stohování a schválený plán přepravy (Příloha č. 1, Příloha č. 4, bod 20 a 93).",
+      "model_answer": "# Členění a legislativní požadavky radioaktivních zásilek\n\nRadioaktivní zásilky se dělí do několika kategorií podle obsahu radioaktivní látky a jejich přepravních charakteristik. Legislativa stanovuje specifické požadavky pro každou kategorii.\n\n## Hlavní kategorie radioaktivních zásilek\n\n### 1. Vyjmuté zásilky (Excepted Packages)\n\nVyjmutá zásilka je nejnižší kategorie radioaktivních zásilek. \\cite{379/2016 Sb._L3_892} Radioaktivní zásilka se klasifikuje jako vyjmutá zásilka, pokud obsahuje radioaktivní látku, jejíž aktivita nepřekračuje meze uvedené v tabulce č. 4. Tyto zásilky jsou označovány jako UN 2910 RADIOAKTIVNÍ LÁTKA, VYJMUTÁ ZÁSILKA.\n\n**Specifické požadavky na vyjmuté zásilky:**\n\n- \\cite{379/2016 Sb._L3_909} Radioaktivní zásilka si musí udržet svůj radioaktivní obsah za běžných podmínek přepravy\n- \\cite{379/2016 Sb._L3_910} Vyjmutá zásilka musí být označena nápisem „RADIOAKTIVNÍ\" („RADIOACTIVE\")\n- \\cite{379/2016 Sb._L3_907} Musí být dodrženy meze aktivity uvedené ve sloupci „Meze pro radioaktivní zásilku\" v tabulce č. 4\n\n### 2. Radioaktivní zásilka typu A\n\n\\cite{379/2016 Sb._L3_922} Radioaktivní zásilka obsahující radioaktivní nebo štěpnou látku se klasifikuje jako radioaktivní zásilka typu A, pokud jsou dodrženy požadavky bodů 29 a 30. Tato kategorie je určena pro zásilky s omezeným množstvím radioaktivní látky.\n\n### 3. Další typy zásilek\n\n\\cite{379/2016 Sb._L3_891} Množství radioaktivní nebo štěpné látky v radioaktivní zásilce nesmí překročit meze stanovené pro daný typ radioaktivní zásilky v bodech 22 až 33 vyhlášky. Legislativa rozlišuje mezi typy B a C pro zásilky s vyšším obsahem radioaktivní látky.\n\n## Přepravní kategorie\n\nRadioaktivní zásilky se dále třídí do tří přepravních kategorií podle jejich radiačních charakteristik:\n\n\\cite{379/2016 Sb._L3_1071} Kategorie radioaktivní zásilky jsou: **I-BÍLÁ (I-WHITE), II-ŽLUTÁ (II-YELLOW), nebo III-ŽLUTÁ (III-YELLOW)**.\n\n**Kritéria pro zařazení do kategorií:**\n\n\\cite{379/2016 Sb._L3_1000} Splňuje-li přepravní index požadavky pro zařazení do jedné z kategorií, ale maximální příkon dávkového ekvivalentu na vnějším povrchu odpovídá svojí hodnotou kategorii jiné, zařadí se radioaktivní zásilka do vyšší z obou kategorií; kategorie I-BÍLÁ se považuje za kategorii nejnižší.\n\n\\cite{379/2016 Sb._L3_1002} Radioaktivní zásilka přepravovaná za zvláštních podmínek se zařadí do kategorie III-ŽLUTÁ s výjimkou bodu 30.\n\n## Legislativní požadavky podle typu\n\nLegislativa rozlišuje mezi požadavky na základě klasifikace:\n\n- **Vyjmuté zásilky**: Minimální požadavky na označení a balení\n- **Typ A**: Středně",
+      "scores": {
+        "semantic_correctness": 0.45,
+        "factual_accuracy": 0.5,
+        "completeness": 0.3
+      },
+      "response_time_ms": 252000.57768821716,
+      "cost_cents": 34.38144,
+      "tools_used": []
+    },
+    {
+      "id": 17,
+      "question": "Je z pohledu zákona 263/2016 budova těžkých laboratoří MFF UK, V Holešovičkách 2, 180 00, jaderným zařízením?",
+      "source_document": "Sb_2016_263_2024-01-01_IZ.pdf",
+      "reference_answer": "Ano, podle § 2 odst. 2 písm. e) zákona č. 263/2016 Sb. se za jaderné zařízení považuje stavba nebo provozní celek, jehož součástí je jaderný reaktor. Jelikož je v hale budovy těžkých laboratoří umístěn školní reaktor VR-1 (jak potvrzuje Bezpečnostní zpráva VR-1), spadá tato stavba pod definici jaderného zařízení.",
+      "model_answer": "# Odpověď na dotaz: Je budova těžkých laboratoří MFF UK jaderným zařízením?\n\n## Shrnutí\n\n**Ano, budova těžkých laboratoří MFF UK v Holešovičkách 2, 180 00 Praha je z pohledu zákona 263/2016 jaderným zařízením.**\n\n---\n\n## Detailní zdůvodnění\n\n### Právní definice jaderného zařízení\n\nPodle § 3(2)e)1. zákona č. 263/2016 Sb. o jaderné bezpečnosti a radiační ochraně je jaderným zařízením \\cite{Sb_2016_263_2024-01-01_IZ_L3_104} **\"stavba nebo provozní celek, jehož součástí je jaderný reaktor využívající štěpnou řetězovou reakci nebo jinou řetězovou jadernou reakci\"**.\n\n### Faktické splnění definice\n\nBudova těžkých laboratoří splňuje tuto definici na základě následujících faktů:\n\n1. **Umístění reaktoru**: \\cite{BZ_VR1_L3_4} \"Pracoviště reaktoru se nachází v těžkých laboratořích areálu Trója, Matematicko-fyzikální fakulty Univerzity Karlovy (MFF UK) v ulici V Holešovičkách.\"\n\n2. **Typ reaktoru**: \\cite{BZ_VR1_L3_634} \"Školní reaktor VR-1 je lehkovodní reaktor bazénového typu s obohaceným uranem.\"\n\n3. **Schopnost řetězové reakce**: Reaktor VR-1 je \\cite{BZ_VR1_L3_6} \"výzkumným jaderným zařízením\" a \\cite{BZ_VR1_L3_421} \"Bazénové uspořádání reaktoru umožňuje jednoduchý a rychlý přístup k aktivní zóně, snadné zakládání a vyjímání různých experimentálních vzorků a detektorů\" – což potvrzuje jeho schopnost provádět řetězovou jadernou reakci.\n\n### Závěr\n\nBudova těžkých laboratoří MFF UK obsahuje jaderný reaktor VR-1 s obohaceným uranem, který je schopen provádět štěpnou řetězovou reakci. Tímto splňuje všechny znaky právní definice jaderného zařízení podle zákona 263/2016 a je tedy z pohledu tohoto zákona **jaderným zařízením**.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 0.75,
+        "completeness": 0.95
+      },
+      "response_time_ms": 237993.12496185303,
+      "cost_cents": 59.016569000000004,
+      "tools_used": []
+    },
+    {
+      "id": 18,
+      "question": "K čemu se využívá zkouška volným pádem a v čem spočívá?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Zkouška volným pádem (Příloha č. 1, bod 22) slouží k prokázání schopnosti radioaktivní zásilky přestát normální podmínky přepravy. Vzorek musí padat na terč tak, aby poškození bylo co největší. Výška pádu závisí na hmotnosti obalového souboru: 1,2 m pro hmotnost < 5 000 kg, 0,9 m pro 5 000–10 000 kg, 0,6 m pro 10 000–15 000 kg a 0,3 m pro hmotnost ≥ 15 000 kg.",
+      "model_answer": "# Zkouška volným pádem – Účel a Princip\n\n**Účel zkoušky:**\n\nZkouška volným pádem se využívá k prokázání schopnosti obalových souborů typu D a S odolávat normálním podmínkám přepravy radioaktivních zásilek \\cite{379/2016 Sb._L3_779}. Jedná se o klíčový test zajišťující bezpečnost při manipulaci s radioaktivními odpady a vyhořelým jaderným palivem.\n\n**Princip zkoušky:**\n\nZkouška spočívá v tom, že vzorek musí padat na terč tak, aby poškození zkoušených bezpečnostních prvků bylo co největší \\cite{379/2016 Sb._L3_779}. Terč pro pádové zkoušky musí mít plochý vodorovný povrch takové povahy, aby poškození vzorku po nárazu nebylo významně zvýšeno odporem terče k posunutí nebo deformaci \\cite{379/2016 Sb._L3_774}.\n\n**Konkrétní podmínky:**\n\nVýška pádu se určuje podle hmotnosti radioaktivní zásilky a měří se od nejnižšího bodu vzorku k hornímu povrchu terče \\cite{379/2016 Sb._L3_780}. Pro specifické typy obalů se provádí volný pád na jednotlivé části:\n\n- Pro pravoúhlé tvary z vláknité lepenky nebo dřeva (do 50 kg): pád na každý roh z výšky **0,3 m** \\cite{379/2016 Sb._L3_781}\n- Pro válcové tvary z vláknité lepenky (do 100 kg): pád na každou čtvrtinu hrany základny z výšky **0,3 m** \\cite{379/2016 Sb._L3_782}\n\nPro každý pád musí být použit samostatný vzorek.",
+      "scores": {
+        "semantic_correctness": 0.6,
+        "factual_accuracy": 0.4,
+        "completeness": 0.65
+      },
+      "response_time_ms": 58169.62385177612,
+      "cost_cents": 5.6572,
+      "tools_used": []
+    },
+    {
+      "id": 19,
+      "question": "Posuzuje dokumentace reaktoru všechny aspekty klimatických a meteorologických jevů, které vyjmenovává vyhláška 378/2016 Sb.?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Ano, Bezpečnostní zpráva v kapitole 3.7 a příloze L (Odborný posudek podle vyhlášky 378/2016 Sb.) posuzuje jevy vyžadované legislativou, včetně teploty, srážek, větru, stability atmosféry a extrémních jevů jako jsou přívalové deště, bouřky, blesky a tornáda (u kterých uvádí nulový výskyt).",
+      "model_answer": "# Posouzení pokrytí klimatických a meteorologických jevů v dokumentaci reaktoru\n\n## Shrnutí\n\nDokumentace reaktoru VR-1 **NESPLŇUJE v plném rozsahu** požadavky vyhlášky č. 379/2016 Sb. na posouzení všech klimatických a meteorologických jevů. Analýza identifikuje **3 kritické regulační mezery** a neúplné pokrytí dalších aspektů.\n\n---\n\n## Detailní Posouzení\n\n### Pokryté aspekty\n\nDokumentace BZ_VR1 kapitola 3.7 obsahuje údaje o následujících jevech:\n\n1. **Úhrny atmosférických srážek** – Dokumentace uvádí průměrné měsíční a roční úhrny srážek za období 1987-2016 (518 mm ročně s maximem 77 mm v červenci) \\cite{BZ_VR1_L3_363}\n\n2. **Průměrné roční a měsíční teploty vzduchu** – Zaznamenány průměrné teploty (10,4 °C ročně, maximum 20,5 °C v červenci, minimum 0,7 °C v lednu) \\cite{BZ_VR1_L3_363}\n\n3. **Větrné podmínky** – Analýza větrů ukazuje, že 96,3 % větrů dosahuje rychlosti 0,0–7,5 m/s, s výskytem větrů >12,5 m/s v 0,3 % případů \\cite{BZ_VR1_L3_363}\n\n4. **Výskyt bouřek a extrémních jevů** – Dokumentace uvádí průměrně 20,4 dní s bouřkou ročně a prakticky vylučuje tornáda a tropické cyklóny \\cite{BZ_VR1_L3_363}\n\n5. **Sněhové podmínky** – Zaznamenán průměrný roční počet dní s výškou nového sněhu nad 10 cm: 0,2 dne \\cite{BZ_VR1_L3_372}\n\n### Kritické regulační mezery\n\nVyhláška č. 379/2016 Sb. § 10 „Klimatické a meteorologické jevy\" vyžaduje posouzení následujících aspektů:\n\n**❌ Gap 1: Led, námraza, mráz**\n- Požadavek: Vyhláška 379/2016 Sb. § 10 výslovně požaduje posouzení „ledu, námrazy, mrazu\" \\cite{379/2016 Sb._L3_384}\n- Aktuální stav: BZ_VR1 tyto jevy explicitně neanalyzuje\n- Dopad: Neúplné posouzení klimatických vlivů na bezpečnost reaktoru\n- Akce: Doplnit analýzu výskytu ledu, námrazy a mrazu s údaji o počtu dní s mrazem\n\n**❌ Gap 2: Teplotní inverze a jejich vliv na rozptyl radioaktivních látek**\n- Požadavek: § 16 odst. a) bodu 1 vyhlášky 379/2016 Sb. požaduje posouzení „inverzních stavů a výskytu nepříznivých podmínek pro rozptyl radioaktivních látek\" \\cite{379/2016 Sb._L3_421}\n- Aktuální stav: BZ_VR1 neobsahuje explicitní analýzu teplotních inverzí nebo jejich vlivu na disperzní podmínky\n- Dopad: Nedostatečné hodnocení rizik rozptylu radioaktivních látek v nepříznivých meteorologických podmínkách\n- Akce: Doplnit analýzu frekv",
+      "scores": {
+        "semantic_correctness": 0.2,
+        "factual_accuracy": 0.1,
+        "completeness": 0.5
+      },
+      "response_time_ms": 292846.0099697113,
+      "cost_cents": 47.373677,
+      "tools_used": []
+    },
+    {
+      "id": 20,
+      "question": "Jakým způsobem je zajištěn odvod tepla (chlazení) z aktivní zóny reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Odvod tepla uvolněného při štěpení v aktivní zóně je zajištěn přirozenou konvekcí (samovolným prouděním) demineralizované vody, která slouží jako moderátor a chladivo. Vzhledem k nízkému výkonu reaktoru (do 500 Wt) není nucené chlazení potřeba. Cirkulační čerpadla slouží pouze k zajištění pohybu vody pro úpravu její kvality a omezení koroze, nikoliv pro odvod tepla (Kapitola 6.1; Kapitola 10.2).",
+      "model_answer": "# Odvod tepla z aktivní zóny reaktoru VR-1\n\nOdvod tepla z aktivní zóny reaktoru VR-1 je zajištěn primárně **přirozenou konvekcí** demineralizované vody, která slouží jako moderátor a chladivo.\n\n## Princip přirozené cirkulace\n\n\\cite{BZ_VR1_L3_421} Přirozená konvekce je hlavním mechanismem odvodu tepla. Voda se ohřívá teplem produkovaným štěpením uranu v aktivní zóně, následně stoupá v bazénu vzhůru, kde se ochlazuje a klesá po stranách bazénu dolů pod aktivní zónu. Tímto způsobem se při stacionárním provozu reaktoru na stálém výkonu ustálí proudění závislé na výkonu reaktoru. \\cite{BZ_VR1_L3_498}\n\n## Dostatečnost přirozené konvekce\n\nVzhledem k velmi nízkému výkonu reaktoru VR-1 je přirozená konvekce zcela dostatečná. \\cite{BZ_VR1_L3_15} Při dosažení maximálního výkonu reaktoru se změna teploty moderátoru v aktivní zóně pohybuje v oblasti desetin °C. Teplota moderátoru v reaktorové nádobě odpovídá teplotě okolního prostředí (přibližně 20 °C).\n\n## Podpůrný systém cirkulace\n\nPřestože přirozená konvekce postačuje pro chlazení, \\cite{BZ_VR1_L3_15} je v obou reaktorových nádobách zajištěna cirkulace moderátoru pomocí **ponorných oběhových čerpadel**. Tato čerpadla slouží především k **zvýšení korozní ochrany palivových článků** a zajišťují nepřetržitou cirkulaci demineralizované vody. \\cite{BZ_VR1_L3_598}\n\n## Bezpečnost systému\n\nZ hlediska bezpečnosti je systém velmi robustní. \\cite{BZ_VR1_L3_503} V případě úplné ztráty primárního chladiva (moderátoru) dojde při provozu k zastavení štěpné řetězové reakce, protože aktivní zóna je navržena tak, aby byla v chladivu ponořena. Případná ztráta průtoku v cirkulačním oběhu nemá vliv na bezpečný provoz reaktoru a chlazení aktivní zóny.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 0.95,
+        "completeness": 0.95
+      },
+      "response_time_ms": 150122.12753295898,
+      "cost_cents": 13.111999999999998,
+      "tools_used": []
+    },
+    {
+      "id": 21,
+      "question": "Jaká voda se používá v reaktoru VR-1 a je tato voda pitná?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "V reaktoru se používá lehká demineralizovaná voda (H2O), která plní funkci moderátoru, reflektoru, chladiva a biologického stínění. Tato voda není pitná. Ačkoliv jde o chemicky čistou vodu, její pití je v reaktorové hale striktně zakázáno z důvodu vymezení kontrolovaného pásma a možného rizika. Pitná voda je k dispozici v šatně mimo kontrolované pásmo (Kapitola 10.2).",
+      "model_answer": "# Odpověď na dotaz: Jaká voda se používá v reaktoru VR-1 a je tato voda pitná?\n\nV reaktoru VR-1 se používá **lehká demineralizovaná voda** \\cite{BZ_VR1_L3_421}, která slouží jako moderátor neutronů, reflektor, biologické stínění a zároveň jako chladivo. Tato voda je vyráběna pomocí dvoustupňové demineralizace na demineralizační stanici MIX 250 PP, která je umístěna v přízemí haly reaktoru \\cite{BZ_VR1_L3_577}.\n\nDemineralizovaná voda používaná v reaktoru musí splňovat přísné kvalitativní požadavky. Kvalita je sledována pravidelnými rozbory, které jsou zaznamenány jako součást výsledku provozní kontroly \\cite{BZ_VR1_L3_596}. Současně musí být v nádobách dostatečné množství demineralizované vody v rozmezí limitů stanovených v příslušných dokumentech.\n\n**Pokud jde o pitnost vody:** V dostupných dokumentech o reaktoru VR-1 není explicitně uvedeno, zda je tato demineralizovaná voda pitná či nikoliv. Obecně je však demineralizovaná voda **nepitná** z hlediska zdravotního, neboť jí chybí nezbytné minerály pro lidský organismus. Navíc v reaktorové hale je pití vody z vodního hospodářství reaktoru **striktně zakázáno** z důvodů vymezení kontrolovaného pásma \\cite{BZ_VR1_L3_580}.",
+      "scores": {
+        "semantic_correctness": 0.75,
+        "factual_accuracy": 0.9,
+        "completeness": 0.75
+      },
+      "response_time_ms": 151521.49963378906,
+      "cost_cents": 15.790500000000002,
+      "tools_used": []
+    },
+    {
+      "id": 22,
+      "question": "Má ČVUT v Praze povinnost na základě zákona 18/1997 Sb. sjednat pojištění vzniku povinnosti k náhradě jaderné škody?",
+      "source_document": "Sb_1997_18_2017-01-01_IZ.pdf",
+      "reference_answer": "Zákon č. 18/1997 Sb. v § 36 obecně ukládá držiteli povolení povinnost sjednat pojištění. Avšak odstavec 2 umožňuje Ministerstvu financí stanovit výjimku a určit jiné finanční zajištění, což se často týká státních organizací, aby se šetřily státní prostředky. ČVUT jako veřejná vysoká škola podléhá tomuto režimu, tedy povinnost má, ale může být kryta jiným způsobem než komerčním pojištěním.",
+      "model_answer": "# Odpověď na dotaz: Povinnost pojištění jaderné škody pro ČVUT v Praze\n\n## Shrnutí\n\n**Ano, ČVUT v Praze má povinnost na základě zákona 18/1997 Sb. sjednat pojištění vzniku povinnosti k náhradě jaderné škody.** Tato povinnost vyplývá ze statusu ČVUT jako držitele povolení k provozu školního reaktoru VR-1.\n\n---\n\n## Právní základ povinnosti\n\nPodle § 36 odst. 1 zákona č. 18/1997 Sb. (Atomový zákon) je **\"Držitel povolení podle § 33 je povinen sjednat pojištění své vzniku povinnosti k náhradě jaderné škody s pojistitelem oprávněným podle zvláštního zákona\"** \\cite{18/1997 Sb._L3_11}, pokud není stanoveno jiné finanční zajištění.\n\nČVUT v Praze splňuje podmínku být držitelem povolení, neboť je **\"Držitelem povolení k provozu školního reaktoru VR-1\"** \\cite{BZ_VR1_L3_4}. Tímto statusem se na ČVUT vztahuje povinnost sjednat pojištění.\n\n---\n\n## Klíčové požadavky na pojištění\n\nPojištění musí splňovat následující podmínky:\n\n1. **Pojistitel musí být oprávněný** - Pojištění musí být sjednáno s pojistitelem oprávněným podle zvláštního zákona (zákona o pojišťovnictví) \\cite{18/1997 Sb._L3_11}\n\n2. **Oddělené pojištění pro každé zařízení** - Podle § 36 odst. 4 se \"pojištění uzavírá nebo jiné finanční zajištění se stanoví zvlášť pro každé jaderné zařízení\" \\cite{18/1997 Sb._L3_14}\n\n3. **Možnost výjimky** - Ministerstvo financí může v dohodě s Úřadem a Ministerstvem průmyslu a obchodu stanovit formou rozhodnutí výjimku, u které se namísto pojištění vyžaduje jiné finanční zajištění \\cite{18/1997 Sb._L3_12}. Tato výjimka však musí být výslovně udělena.\n\n---\n\n## Závěr\n\nČVUT v Praze je právně vázána povinností sjednat pojištění vzniku povinnosti k náhradě jaderné škody. Tato povinnost je **povinná** a vztahuje se na všechny držitele povolení k provozu jaderných zařízení, pokud pro ně není výslovně udělena výjimka Ministerstvem financí.",
+      "scores": {
+        "semantic_correctness": 0.75,
+        "factual_accuracy": 0.85,
+        "completeness": 0.5
+      },
+      "response_time_ms": 200458.6250782013,
+      "cost_cents": 43.91237500000001,
+      "tools_used": []
+    },
+    {
+      "id": 23,
+      "question": "Co je dojička?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Zařízení 'Dojička' slouží k detekci a studiu zpožděných neutronů. Skládá se z transportní trubice vedoucí do aktivní zóny a měřicí nádoby s detektory v parafínu. Vzorek (např. uran) je aktivován v reaktoru a následně transportován k detektorům pro měření (Kapitola 11.2).",
+      "model_answer": "# Odpověď: Co je dojička?\n\n**Dojička** je experimentální zařízení reaktoru VR-1 určené pro detekci a studium zpožděných neutronů \\cite{BZ_VR1_L3_685}. \n\nZařízení je instalováno v reaktorové nádobě H01 a skládá se z následujících komponent:\n\n- **Krokovací motor** – zajišťuje pohyb vzorku\n- **Válcová nádoba vyplněná parafinem** – obsahuje pozice pro detektory neutronů sloužící k měření aktivovaných vzorků\n- **Transportní trubice** – vede od měřicí nádoby až do aktivní zóny reaktoru\n\nPozice, na kterou je zasunuta koncovka transportní trubice, se liší podle konfigurace aktivní zóny. Ozařovaný vzorek je zavěšen na lanku. V dojičce je možné ozařovat zkrácený proutek EK-10 nebo ampule s připravenými vzorky obsahující štěpný nebo štěpitelný materiál \\cite{BZ_VR1_L3_685}.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 1.0
+      },
+      "response_time_ms": 31667.027711868286,
+      "cost_cents": 4.417699999999999,
+      "tools_used": []
+    },
+    {
+      "id": 24,
+      "question": "Z čeho se skládá systém řízení reaktivity (regulační systém) reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Regulační systém reaktoru se skládá z 5 až 7 absorpčních tyčí typu UR-70. Tyto tyče obsahují kadmiový absorbátor (Cd). Podle funkce se dělí na bezpečnostní (3 ks), regulační (2 ks) a případně experimentální tyče (Kapitola 5.2; Kapitola 5.5; Tab. 10).",
+      "model_answer": "# Systém řízení reaktivity reaktoru VR-1\n\nSystém řízení reaktivity reaktoru VR-1 se skládá primárně z **absorpčních tyčí**, které řídí štěpnou řetězovou reakci v reaktoru.\n\n## Komponenty systému\n\nNa reaktoru VR-1 je k dispozici celkem **5 až 7 absorpčních tyčí** typu UR-70 \\cite{BZ_VR1_L3_496}. Tyče jsou konstrukčně shodné, ale liší se svou funkcí určovanou způsobem zapojení do ovládacího zařízení \\cite{BZ_VR1_L3_189}.\n\nSystém se dělí na **tři funkční typy tyčí**:\n\n1. **Bezpečnostní tyče (B1, B2, B3)** – Tři tyče, které jsou za standardního provozu vytaženy do horních koncových poloh. Po odpojení napájení magnetů spadnou do aktivní zóny a zastaví štěpnou řetězovou reakci \\cite{BZ_VR1_L3_31}.\n\n2. **Regulační tyče (R1, R2)** – Dvě tyče, které řídí štěpnou reakci. V automatickém režimu je automatický regulátor zapojen na tyč R1 \\cite{BZ_VR1_L3_496}.\n\n3. **Experimentální tyče (E1, E2)** – Jedna, dvě nebo žádná tyč podle konfigurace aktivní zóny. Slouží ke kompenzaci vlivu experimentálního zařízení na reaktivitu \\cite{BZ_VR1_L3_496}.\n\n## Konstrukce absorpční tyče\n\nAbsorpční část tyče je složena z **hliníkové vložky s navinutým kadmiovým plechem** o tloušťce 1 mm, uzavřené v ocelové trubce. Délka tyče je 2205 mm, vnější průměr ocelové trubky je 24,5 mm a průměr kadmiového absorbátoru je 20 mm \\cite{BZ_VR1_L3_497}.\n\nSystém řízení reaktivity je tedy založen na mechanickém řízení polohy těchto absorpčních tyčí, které regulují neutronový tok a zajišťují bezpečný provoz reaktoru.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 1.0
+      },
+      "response_time_ms": 94542.50955581665,
+      "cost_cents": 8.8477,
+      "tools_used": []
+    },
+    {
+      "id": 25,
+      "question": "Existují nějaká omezení pro materiály použité při experimentech na reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Ano, na experimentech není povoleno používat materiály, které jsou otěrné, kapalné či těkavé bez speciálního zapouzdření (např. v polyetylenových ampulích), aby se zabránilo kontaminaci reaktoru. Dále je zakázáno vkládat materiály, u kterých by aktivací vznikaly radionuklidy s dlouhým poločasem rozpadu (např. kobalt-60). Neznámé vzorky musí projít krátkým předozářením na nízkém výkonu (Kapitola 11.4).",
+      "model_answer": "# Omezení materiálů pro experimenty na reaktoru VR-1\n\nAno, existují specifická omezení pro materiály používané při experimentech na reaktoru VR-1. Tato omezení jsou podrobně popsána v technické dokumentaci reaktoru.\n\n## Zakázané materiály\n\nV experimentech na reaktoru VR-1 není povoleno bez speciálních opatření používat materiály, které jsou otěrné, kapalné či těkavé a které by mohly způsobit kontaminaci experimentálního vybavení reaktoru (stěny ozařovacích kanálů, moderátor apod.) \\cite{BZ_VR1_L3_694}. \n\nV případě vzorků, u kterých by hrozilo nebezpečí kontaminace, je nutné takové vzorky vhodným způsobem zapouzdřit, například do polyetylenových ampulí nebo pytlíčků \\cite{BZ_VR1_L3_694}.\n\nDále není povoleno vkládat do reaktoru materiály, u kterých by aktivací došlo k produkci radionuklidů s dlouhým poločasem rozpadu (např. kobalt 60Co s poločasem 5,3 roku) \\cite{BZ_VR1_L3_694}.\n\n## Bezpečnostní postupy\n\nV případě ozařovacího experimentu se vzorkem o neznámém složení je nutné nejdřív vykonat krátké předozáření na nízkém výkonu, aby se ověřilo, jaké radionuklidy budou produkovány \\cite{BZ_VR1_L3_694}.\n\nTato omezení zajišťují bezpečnost provozu reaktoru a ochranu experimentálního vybavení před nežádoucí kontaminací.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 1.0
+      },
+      "response_time_ms": 43666.22090339661,
+      "cost_cents": 4.7022,
+      "tools_used": []
+    },
+    {
+      "id": 26,
+      "question": "Jaký typ jaderného paliva se používá v reaktoru VR-1 a jaké je jeho obohacení?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "V reaktoru VR-1 se používá jaderné palivo typu IRT-4M. Jedná se o palivovou směs ve formě disperze Al + UO2. Obohacení paliva izotopem uranu 235 (235U) je 19,7 %. Geometrie paliva je trubková se čtvercovým průřezem (Kapitola 5.1, Tab. 10; Kapitola 5.3).",
+      "model_answer": "# Odpověď\n\nV reaktoru VR-1 se používá jaderné palivo typu **IRT-4M** s obohacením **19,7 % ²³⁵U** \\cite{BZ_VR1_L3_471}. \n\nJedná se o trubkové palivo tzv. sendvičového typu vyráběné ruským závodem NZCHK Novosibirsk \\cite{BZ_VR1_L3_465}. Palivový článek IRT-4M může být sestaven ze čtyř, šesti nebo osmi palivových trubek, přičemž na reaktoru VR-1 je k dispozici celkem 1 čtyřtrubkový, 10 šestitrubkových a 10 osmitrubkových palivových článků \\cite{BZ_VR1_L3_465}. Standardně je aktivní zóna reaktoru VR-1 tvořena 16-20 palivovými články typu IRT-4M s uvedeným obohacením \\cite{BZ_VR1_L3_471}.",
+      "scores": {
+        "semantic_correctness": 0.9,
+        "factual_accuracy": 0.75,
+        "completeness": 0.7
+      },
+      "response_time_ms": 32253.76868247986,
+      "cost_cents": 5.021400000000001,
+      "tools_used": []
+    },
+    {
+      "id": 27,
+      "question": "Jaké jsou požadavky na schválení typu pro radioaktivní látku v obalovém souboru typu B(M) z hlediska teploty?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Schválení typu je vyžadováno pro radioaktivní látku v obalovém souboru typu B(M), který není konstruován pro rozsah teplot od -40 °C do +70 °C nebo který je konstruován tak, aby bylo umožněno občasné kontrolované větrání (§ 3 odst. 2 písm. d).",
+      "model_answer": "# Požadavky na schválení typu pro obalový soubor B(M) z hlediska teploty\n\n## Shrnutí\n\nPožadavky na schválení typu pro radioaktivní látku v obalovém souboru typu B(M) z hlediska teploty se liší v závislosti na tom, zda je obalový soubor konstruován pro standardní teplotní rozsah nebo mimo něj.\n\n## Detailní analýza\n\n### Standardní teplotní rozsah\n\nPokud je obalový soubor typu B(M) **konstruován pro rozsah teplot od -40 °C do +70 °C**, splňuje základní teplotní požadavky bez dodatečných podmínek \\cite{157/2025 Sb._L3_58}.\n\n### Mimo standardní rozsah nebo s větráním\n\nPokud obalový soubor B(M) **není konstruován pro rozsah -40 °C do +70 °C** nebo je konstruován s možností **občasného kontrolovaného větrání**, musí rozhodnutí o schválení typu obsahovat následující prvky \\cite{157/2025 Sb._L3_58}:\n\n1. **Výčet nesplněných požadavků na B(U)** – Rozhodnutí musí specifikovat, které požadavky na obalové soubory typu B(U) obalový soubor B(M) nesplňuje \\cite{Sb_2016_263_2024-01-01_IZ_L3_1617}.\n\n2. **Rozsah okolních teplot** – Rozhodnutí musí jasně definovat **rozsah okolních teplot, pro které byla přeprava povolena** \\cite{157/2025 Sb._L3_60}.\n\n### Praktická aplikace\n\nPřed každou přepravou radioaktivní zásilky typu B(M) musí být dosažen rovnovážný stav, při kterém je možné prokázat splnění požadavků na teplotu a tlak podle rozhodnutí o schválení typu obalového souboru \\cite{379/2016 Sb._L3_945}.\n\nV případě mezinárodní přepravy může být občasná ventilace radioaktivní zásilky typu B(M) povolena pouze v případě, že to stanoví Úřad v rozhodnutí o schválení typu nebo Úřad a příslušný orgán státu, kterého se přeprava týká \\cite{379/2016 Sb._L3_657}.\n\n---\n\n**Komplexnost odpovědi:** Vysoká (65 bodů) – odpověď zahrnuje podmíněné požadavky a specifické teplotní parametry relevantní pro regulaci přepravy radioaktivních materiálů.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 0.9,
+        "completeness": 1.0
+      },
+      "response_time_ms": 104962.84461021423,
+      "cost_cents": 11.1554,
+      "tools_used": []
+    },
+    {
+      "id": 28,
+      "question": "Z jakého materiálu jsou vyrobeny nádoby reaktoru H01 a H02 a jaké jsou jejich rozměry?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Reaktorové nádoby H01 a H02 jsou vyrobeny z nerezové oceli 08CH18N10T. Mají průměr 2300 mm, výšku 4720 mm, tloušťku stěny 15 mm a tloušťku dna 20 mm (Kapitola 5.2.1; Tab. 10).",
+      "model_answer": "# Odpověď na dotaz o nádobách reaktoru H01 a H02\n\nNádoby reaktoru H01 a H02 jsou vyrobeny z **nerezové oceli 08CH18N10T** \\cite{BZ_VR1_L3_429}. \n\nJejich rozměry jsou následující:\n- **Výška**: 4720 mm\n- **Vnitřní průměr**: 2300 mm\n- **Tloušťka stěn**: 15 mm\n- **Tloušťka dna**: 20 mm\n\n\\cite{BZ_VR1_L3_429}\n\nKaždá nádoba má objem přibližně **17 m³** a hmotnost **5000 kg** \\cite{BZ_VR1_L3_429}. Nádoby jsou celosvařované, jejich dno tvoří klenutý výlisek a horní část je tvořena přírubovým lemem s 7 okny \\cite{BZ_VR1_L3_429}.\n\nKonstrukčně jsou obě nádoby shodné, s tím rozdílem, že nádoba H01 má navíc průchodky pro radiální a tangenciální kanál \\cite{BZ_VR1_L3_429}.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 1.0
+      },
+      "response_time_ms": 33021.1021900177,
+      "cost_cents": 5.1594999999999995,
+      "tools_used": []
+    },
+    {
+      "id": 29,
+      "question": "Jak se mění požadavky na přepravní index pro radioaktivní zásilku SCO-I v kontejneru?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Pokud je radioaktivní zásilka SCO-I přepravována v kontejneru nebo nebalená, přepravní index se určí vynásobením nejvyšší hladiny záření ve vzdálenosti 1 m od nákladu (v mSv/h) hodnotou 100. Pro rudy a koncentráty uranu/thoria lze použít alternativní faktory (Příloha č. 4, bod 23).",
+      "model_answer": "# Odpověď: Změny požadavků na přepravní index pro SCO-I v kontejneru\n\n## Shrnutí\n\nPřepravní index pro radioaktivní zásilku skupiny SCO-I (nebalený předmět) v kontejneru se určuje podle stanoveného postupu a podléhá specifickým mezím. Dokumentace obsahuje pravidla pro jeho výpočet a maximální přípustné hodnoty.\n\n## Podrobné zjištění\n\n### Určení přepravního indexu\n\nPřepravní index pro radioaktivní zásilku, kontejner, přepravní obalový soubor, nebalenou látku skupiny LSA-I nebo nebalený předmět skupiny SCO-I je **číslo odvozené podle stanoveného postupu** \\cite{379/2016 Sb._L3_982}.\n\nPro kontejner, přepravní obalový soubor nebo dopravní prostředek se přepravní index určí **jako součet přepravních indexů radioaktivních zásilek v nich obsažených, nebo přímým měřením příkonu dávkového ekvivalentu** \\cite{379/2016 Sb._L3_993}.\n\n### Maximální meze\n\nKlíčová omezení pro přepravní index jsou:\n\n- **Přepravní index radioaktivní zásilky nebo přepravního obalového souboru nesmí překročit hodnotu 10** (s výjimkou dodávky přepravované za výlučného použití) \\cite{379/2016 Sb._L3_995}\n\n- **Příkon dávkového ekvivalentu na vnějším povrchu nesmí překročit 2 mSv/h** \\cite{379/2016 Sb._L3_997}\n\n### Zaokrouhlování malých hodnot\n\nPokud je naměřený přepravní index **menší nebo roven 0,05, může být považován za rovný 0** \\cite{379/2016 Sb._L3_1005}.\n\n### Nakládka a skladování\n\nPro nakládku kontejnerů platí, že **celkový součet přepravních indexů nesmí překročit hodnoty uvedené v tabulce č. 6** (s výjimkou přepravy za výlučného použití) \\cite{379/2016 Sb._L3_1125}.\n\n---\n\n⚠️ **Poznámka:** Dotaz se ptá na *změny* požadavků, ale dostupná dokumentace obsahuje aktuální pravidla bez explicitního popisu historických změn. Pokud potřebujete informace o konkrétních změnách v čase, doporučuji upřesnit časové období nebo konkrétní verzi vyhlášky.",
+      "scores": {
+        "semantic_correctness": 0.3,
+        "factual_accuracy": 0.3,
+        "completeness": 0.0
+      },
+      "response_time_ms": 54303.364753723145,
+      "cost_cents": 4.922600000000001,
+      "tools_used": []
+    },
+    {
+      "id": 30,
+      "question": "Jaké události jsou v havarijním plánu reaktoru VR-1 klasifikovány jako radiační mimořádné události prvního stupně?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Mezi radiační mimořádné události prvního stupně (RMU 1. stupně) patří: 1) selhání řídicího systému reaktoru doprovázené nekontrolovaným zvýšením výkonu, 2) poškození palivových článků nebo neutronového zdroje, 3) únik vody z vodního hospodářství reaktoru, a 4) ztráta kontroly nad zdrojem ionizujícího záření (Kapitola 1.9.4).",
+      "model_answer": "# Radiační mimořádné události prvního stupně v havarijním plánu reaktoru VR-1\n\n## Shrnutí\n\nV havarijním plánu reaktoru VR-1 jsou radiační mimořádné události prvního stupně klasifikovány v sekci 1.9.4 \"Připravenost k odezvě na radiační mimořádnou událost\" \\cite{BZ_VR1_L3_266}. Podle analýz provedených na pracovišti reaktoru jsou definovány čtyři radiační mimořádné události prvního stupně \\cite{BZ_VR1_L3_265}.\n\n## Konkrétní klasifikované události\n\nMezi radiační mimořádné události prvního stupně se řadí následující scénáře:\n\n1. **Únik vody z vodního hospodářství reaktoru** \\cite{BZ_VR1_L3_269}\n\n2. **Selhání řídicího systému reaktoru doprovázené nekontrolovaným zvýšením výkonu** \\cite{BZ_VR1_L3_267}\n\n## Právní definice a charakteristika\n\nPodle platné legislativy se radiační mimořádnou událostí prvního stupně rozumí **radiační mimořádná událost zvládnutelná silami a prostředky obsluhy nebo pracovníků vykonávajících práci v aktuální směně osoby, při jejíž činnosti radiační mimořádná událost vznikla** \\cite{Sb_2016_263_2024-01-01_IZ_L3_120}.\n\n## Organizační zajištění\n\nZpůsob zajištění (technicky i organizačně) zvládání radiačních mimořádných událostí reaktoru je podrobně popsán ve vnitřním havarijním plánu reaktoru, který je pravidelně aktualizován a zohledňuje požadavky platné legislativy \\cite{BZ_VR1_L3_264}.\n\n---\n\n**Poznámka:** Extractor lokalizoval správnou sekci dokumentu (BZ_VR1_L3_266), která obsahuje úvodní text \"Mezi radiační mimořádné události prvního stupně se řadí:\", avšak úplný seznam všech čtyř klasifikovaných událostí není v dostupných výstupech obsažen. Uvedené dvě konkrétní události (únik vody a selhání řídicího systému) jsou identifikovány z dalších částí havarijního plánu.",
+      "scores": {
+        "semantic_correctness": 0.5,
+        "factual_accuracy": 0.5,
+        "completeness": 0.5
+      },
+      "response_time_ms": 163580.4557800293,
+      "cost_cents": 19.045700000000004,
+      "tools_used": []
+    },
+    {
+      "id": 31,
+      "question": "Jaká je přesná délka protipovodňových bariér chránících areál MFF UK v Praze 8?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Bezpečnostní zpráva uvádí, že areál MFF UK je účinně chráněn protipovodňovými bariérami a zpětnými klapkami, jejichž funkčnost byla prokázána v roce 2013. Dokument však neuvádí konkrétní číselný údaj o přesné délce těchto bariér (Kapitola 3.4).",
+      "model_answer": "# Odpověď na dotaz\n\nV dostupných dokumentech jsem nenašel konkrétní údaj o přesné délce protipovodňových bariér chránících areál MFF UK v Praze 8.\n\nDokumenty potvrzují, že \\cite{BZ_VR1_L3_338} areál MFF UK v Praze 8 je účinně chráněn protipovodňovými barié-rami, zpětnými klapkami a souborem organizačních opatření. Účinnost těchto ochran byla prokázána v červnu roku 2013, kdy při průtoku Vltavy v Praze 3210 m³/s povodeň neměla žádný dopad na reaktor VR-1.\n\nPřestože jsou v dokumentech zmíněna technická opatření přijatá po povodni v roce 2002, konkrétní rozměry (délka v metrech) těchto protipovodňových bariér nejsou v indexovaných dokumentech uvedeny.\n\n⚠️ **Nenašel jsem informace o:**\n- Přesné délce protipovodňových bariér v metrech\n- Technických specifikacích rozměrů jednotlivých bariér\n\nPokud potřebujete tyto údaje, doporučuji kontaktovat přímo správu MFF UK nebo vyhledat detailní technickou dokumentaci k povodňovým opatřením.",
+      "scores": {
+        "semantic_correctness": 0.95,
+        "factual_accuracy": 0.95,
+        "completeness": 0.85
+      },
+      "response_time_ms": 68129.58407402039,
+      "cost_cents": 8.279499999999999,
+      "tools_used": []
+    },
+    {
+      "id": 32,
+      "question": "Jaký je přesný vzorec pro výpočet bezpečné podkritičnosti pro zásilku obsahující uran obohacený o izotop U235 s vnější délkou nejkratší strany vyšší než 10 cm a jaké jsou jeho důležité hodnoty?",
+      "source_document": "Sb_2025_157_PZZ.pdf",
+      "reference_answer": "Podle novely vyhlášky (Příloha č. 1, bod 74) se pro výpočet indexu bezpečné podkritičnosti (CSI) u radioaktivní zásilky obsahující štěpné látky používá vzorec: CSI = 50 × 5 × ((m235U / Z) + (most / 280)), kde m235U je hmotnost U-235 v gramech, most je hmotnost ostatních štěpných nuklidů a Z jsou hodnoty z tabulky č. 2 (např. 2200 pro uran obohacený do 1,5 %, 850 pro do 5 %, 450 pro do 100 %). Hodnota 10 je klíčová jako limitní hodnota CSI pro jednotlivou radioaktivní zásilku, která má být přepravována v rámci specifických výjimek. Pokud by vypočtený CSI překročil 10, zásilka nesplňuje podmínky pro tuto konkrétní výjimku a musela by být hodnocena podle přísnějších pravidel nebo přepravována za výlučného použití (kde je limit CSI na zásilku vyšší, obvykle 50, nebo neomezený v závislosti na druhu dopravy).",
+      "model_answer": "# Vzorec pro výpočet bezpečné podkritičnosti uranu obohaceného o U-235\n\n## Přesný vzorec\n\nPro zásilky obsahující uran obohacený o izotop U-235 se index bezpečné podkritičnosti (CSI) vypočte podle následujícího vzorce:\n\n**CSI = 50 × 2 × (m₂₃₅U / Z + m_ost / 280)**\n\nkde:\n- **m₂₃₅U** je hmotnost ²³⁵U v radioaktivní zásilce v gramech\n- **m_ost** je hmotnost ostatních štěpných radionuklidů v radioaktivní zásilce v gramech\n- **Z** jsou hodnoty uvedené v tabulce č. 2 \\cite{379/2016 Sb._L3_687}\n\n## Důležité hodnoty a omezení\n\n**Maximální přípustná hodnota CSI:** Index bezpečné podkritičnosti radioaktivní zásilky nesmí překročit hodnotu **10** \\cite{379/2016 Sb._L3_687}.\n\n**Specifické hodnoty pro různé konfigurace:** Hodnoty Z v tabulce č. 2 se liší v závislosti na fyzických vlastnostech zásilky, včetně vnější délky nejkratší strany. Tabulka č. 2 poskytuje konkrétní hodnoty Z pro výpočet indexu bezpečné podkritičnosti podle bodu 74 vyhlášky \\cite{379/2016 Sb._L3_694}.\n\n## Dokumentační požadavky\n\nPro obalový soubor obsahující štěpnou látku je nutné uvést:\n- Hodnotu indexu bezpečné podkritičnosti (CSI)\n- Odkaz na dokumentaci, která prokazuje bezpečnou podkritičnost radioaktivní zásilky\n- Zvláštní vlastnosti relevantní pro hodnocení kritičnosti \\cite{157/2025 Sb._L3_35}\n\n⚠️ **Poznámka:** Extractor nenalezl v dostupných dokumentech konkrétní tabulku č. 2 s hodnotami Z pro vaši specifickou konfiguraci (vnější délka nejkratší strany > 10 cm). Pro přesné určení hodnoty Z je nutné konzultovat úplné znění tabulky č. 2 v příloze vyhlášky č. 379/2016 Sb.",
+      "scores": {
+        "semantic_correctness": 0.5,
+        "factual_accuracy": 0.3,
+        "completeness": 0.4
+      },
+      "response_time_ms": 44192.7592754364,
+      "cost_cents": 4.9951,
+      "tools_used": []
+    },
+    {
+      "id": 33,
+      "question": "Jak zákon 263/2016 Sb. upravuje podmínky pro příjemce evropských dotací z fondu mírového užívání jaderné energie?",
+      "source_document": "Sb_2016_263_2024-01-01_IZ.pdf",
+      "reference_answer": "V textu zákona č. 263/2016 Sb. se nenachází specifická úprava podmínek pro 'příjemce evropských dotací z fondu mírového užívání jaderné energie'. Zákon upravuje dotace v souvislosti s radonem (§ 103) a likvidací starých zátěží (§ 114), nikoliv obecné evropské dotační tituly pro energetiku.",
+      "model_answer": "# Podmínky pro příjemce evropských dotací z fondu mírového užívání jaderné energie\n\nZákon č. 263/2016 Sb. upravuje podmínky pro příjemce evropských dotací z fondu mírového užívání jaderné energie prostřednictvím § 103, který stanovuje komplexní rámec pro poskytování a administraci těchto dotací.\n\n## Základní rámec a účel\n\nZákon se zaměřuje na regulaci mírového využívání jaderné energie a radiační ochrany \\cite{Sb_2016_263_2024-01-01_IZ_L3_1}. Dotace mohou být poskytovány osobám, které vykonávají činnosti v oblasti jaderné bezpečnosti a radiační ochrany, včetně těch financovaných z veřejných prostředků na výzkum a vývoj, včetně prostředků z fondů Evropské unie nebo Euratomu \\cite{Sb_2016_263_2024-01-01_IZ_L3_607}.\n\n## Podmínky poskytnutí dotace\n\nPodle § 103 odstavec 2 může být dotace poskytnuta na základě žádosti, která musí dokládat skutečnosti uvedené v odstavci 1 \\cite{Sb_2016_263_2024-01-01_IZ_L3_1350}. Poskytnutí dotace zprostředkovává kraj a jeho orgán v přenesené působnosti \\cite{Sb_2016_263_2024-01-01_IZ_L3_1351}.\n\n## Prováděcí předpisy\n\nZákon stanoví, že prováděcí právní předpis musí specifikovat \\cite{Sb_2016_263_2024-01-01_IZ_L3_1354}:\n\n- **Podmínky poskytnutí dotace** podle základního ustanovení \\cite{Sb_2016_263_2024-01-01_IZ_L3_1355}\n- **Postup při přijímání žádostí** o poskytnutí dotace \\cite{Sb_2016_263_2024-01-01_IZ_L3_1356}\n- **Postup při zprostředkování dotace krajem** \\cite{Sb_2016_263_2024-01-01_IZ_L3_1357}\n- **Náležitosti žádosti a lhůty** pro její podání \\cite{Sb_2016_263_2024-01-01_IZ_L3_1358}\n\n## Závěr\n\nZákon 263/2016 Sb. tedy vytváří právní rámec pro poskytování evropských dotací v oblasti mírového užívání jaderné energie, přičemž konkrétní podmínky a procedury jsou delegovány na prováděcí právní předpisy. Klíčovým prvkem je role krajů jako zprostředkovatelů a požadavek na dokumentaci skutečností relevantních pro posouzení oprávněnosti příjemce.",
+      "scores": {
+        "semantic_correctness": 0.0,
+        "factual_accuracy": 0.1,
+        "completeness": 0.0
+      },
+      "response_time_ms": 115634.23085212708,
+      "cost_cents": 7.7658000000000005,
+      "tools_used": []
+    },
+    {
+      "id": 34,
+      "question": "Co jsou bublinky?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "'Bublinky' jsou experimentální zařízení pro simulaci vlivu bublinkového varu na reaktivitu. Do aktivní zóny je vháněn stlačený vzduch přes speciální koncovky, čímž se simulují dutiny v moderátoru (Kapitola 11.2).",
+      "model_answer": "# Odpověď: Co jsou bublinky?\n\n**Bublinky** jsou experimentální zařízení reaktoru VR-1, které slouží k simulaci vlivu bublinkového varu na reaktivitu \\cite{BZ_VR1_L3_686}. \n\nSystém se skládá z následujících komponent:\n- **Řídicí jednotka** – slouží k regulaci průtoku vzduchu\n- **Vedení stlačeného vzduchu** – přivádí stlačený vzduch do systému\n- **Dvě koncovky se vzduchovacími kamínky** – umístěny v nosné desce AZ, přičemž standardně je jedna koncovka umístěna pod palivovým článkem a druhá pod obrysovou maketou \\cite{BZ_VR1_L3_686}\n\nPřívod stlačeného vzduchu je zajišťován z centrálního rozvodu stlačeného vzduchu nebo kompresorem \\cite{BZ_VR1_L3_686}. Toto zařízení se používá také pro studium dutinového koeficientu reaktivity \\cite{BZ_VR1_L3_669}, což je klíčové pro pochopení chování reaktoru za různých provozních podmínek.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 1.0,
+        "completeness": 1.0
+      },
+      "response_time_ms": 39276.4732837677,
+      "cost_cents": 4.5632,
+      "tools_used": []
+    },
+    {
+      "id": 35,
+      "question": "Jaká povolení v rámci své odborné činnosti SÚJB může vystavit a jak vysoké jsou s tím související poplatky?",
+      "source_document": "Sb_2016_263_2024-01-01_IZ.pdf",
+      "reference_answer": "SÚJB vydává povolení k umístění, výstavbě, spouštění (fyzikálnímu i energetickému), provozu a vyřazování jaderných zařízení. Sazby poplatků za žádost jsou stanoveny v § 39 takto: umístění max. 30 mil. Kč, výstavba max. 150 mil. Kč, první spouštění a provoz max. 60 mil. Kč, jednotlivé etapy vyřazování max. 60 mil. Kč. Dále se platí udržovací poplatek za výkon kontroly činnosti držitelů povolení ve výši max. 4 mil. Kč měsíčně.",
+      "model_answer": "# Povolení a poplatky SÚJB\n\nNa základě dokumentace jsem identifikoval následující informace o povolení a poplatcích, které SÚJB vystavuje v rámci své odborné činnosti:\n\n## Typy poplatků\n\nSÚJB vybírá dva hlavní typy poplatků na svou odbornou činnost:\n\n1. **Poplatek za žádost** – vybírán při podání žádosti o vydání povolení \\cite{Sb_2016_263_2024-01-01_IZ_L3_576}\n\n2. **Udržovací poplatek** – vzniká prvním dnem kalendářního měsíce, ve kterém nabylo rozhodnutí o vydání povolení právní moci \\cite{Sb_2016_263_2024-01-01_IZ_L3_602}\n\n## Výše poplatků\n\nDokumentace specifikuje maximální sazby poplatku za žádost podle typu činnosti:\n\n- **Kategorie b)**: nejvýše **150 000 000 Kč** \\cite{Sb_2016_263_2024-01-01_IZ_L3_612}\n- **Kategorie c)**: nejvýše **60 000 000 Kč** \\cite{Sb_2016_263_2024-01-01_IZ_L3_613}\n\n## Splatnost a poplatník\n\nPoplatek za žádost je splatný do 30 dnů ode dne podání žádosti o povolení \\cite{Sb_2016_263_2024-01-01_IZ_L3_618}. Poplatníkem je žadatel o vydání povolení \\cite{Sb_2016_263_2024-01-01_IZ_L3_578}.\n\n## Osvobození od poplatků\n\nSkutečnosti rozhodné pro osvobození od poplatků na odbornou činnost Úřadu musí poplatník doložit při podání žádosti o vydání povolení nebo na výzvu Úřadu \\cite{Sb_2016_263_2024-01-01_IZ_L3_608}.\n\n---\n\n⚠️ **Poznámka**: Dokumentace obsahuje informace o poplatcích, ale konkrétní sazby pro jednotlivé kategorie povolení nejsou v dostupných výtazích úplně specifikovány. Pro přesné určení výše poplatku pro konkrétní typ činnosti doporučuji konzultovat úplné znění § 36 a § 39 zákona.",
+      "scores": {
+        "semantic_correctness": 0.5,
+        "factual_accuracy": 0.5,
+        "completeness": 0.3
+      },
+      "response_time_ms": 43022.94445037842,
+      "cost_cents": 4.8123,
+      "tools_used": []
+    },
+    {
+      "id": 36,
+      "question": "Jak bezpečnostní zpráva hodnotí vliv provozu reaktoru na blízkou přírodní památku Bílá skála?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Bezpečnostní zpráva uvádí, že hranice přírodní památky Bílá skála probíhá ve vzdálenosti cca 50 m od areálu. Hodnocené území reaktoru nezasahuje do ochranného pásma této památky a provoz reaktoru nemá na tuto přírodní památku žádný negativní vliv (Kapitola 14.1.1; Kapitola 3.10).",
+      "model_answer": "# Hodnocení vlivu provozu reaktoru na přírodní památku Bílá skála\n\nBezpečnostní zpráva reaktoru VR-1 hodnotí vliv provozu na přírodní památku Bílá skála primárně z hlediska **rizika lesních požárů** a **prostorové vzdálenosti**.\n\n## Geografické umístění a ochranné pásmo\n\nPřírodní památka Bílá skála se nachází na východě od areálu, přičemž nejbližší hranice probíhá ve vzdálenosti přibližně 50 metrů od areálu. Zpráva explicitně uvádí, že \\cite{BZ_VR1_L3_941} „Území, na němž stojí areál MFF UK, sousedí na východě s přírodní památkou Bílá skála (nejbližší hranice probíhá ve vzdálenosti cca 50 m od areálu, hodnocené území tedy nezasahuje do ochranného pásma této přírodní památky) o rozloze 6,4 hektaru, která je tvořena skalním ostrohem 249,4 m.n.m. s bývalým lomem ve střední části a ostrohem Koráb 258,1 m.n.m. se zářezem železniční tratě.\"\n\nDále je potvrzeno, že \\cite{BZ_VR1_L3_381} „Území reaktoru se nachází také mimo 50 m ochranné pásmo přírodní památky Bílá Skála.\"\n\n## Hodnocení rizika lesních požárů\n\nKlíčovým aspektem hodnocení je analýza rizika lesních požárů. Bezpečnostní zpráva cituje posudek Hasičského záchranného sboru hlavního města Prahy, který dospěl k závěru, že \\cite{BZ_VR1_L3_169} „vzhledem k vlastnostem šíření požáru, který má tendenci se šířit směrem vzhůru po stráni, tedy od posuzované budovy s jaderným zařízením a intenzity požáru vyskytujících se dřevin, s přihlédnutím k proluce mezi budovou a přírodní lokalitou Bílá skála a Truhlářka, není jaderné zařízení ohroženo požáry v přírodní lokalitě.\"\n\n## Závěr\n\nBezpečnostní zpráva tedy hodnotí vliv provozu reaktoru na Bílou skálu jako **minimální**, a to z důvodu dostatečné vzdálenosti (50 m mimo ochranné pásmo) a fyzických charakteristik šíření požáru, které směřují od reaktoru směrem od památky.",
+      "scores": {
+        "semantic_correctness": 0.85,
+        "factual_accuracy": 1.0,
+        "completeness": 0.95
+      },
+      "response_time_ms": 116607.21445083618,
+      "cost_cents": 10.379900000000001,
+      "tools_used": []
+    },
+    {
+      "id": 37,
+      "question": "Kteří pracovníci vykonávají na reaktoru VR-1 činnosti zvláště důležité z hlediska jaderné bezpečnosti?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Podle vyhlášky č. 409/2016 Sb. a Bezpečnostní zprávy vykonávají tyto činnosti pracovníci ve funkcích: vedoucí spouštěcí skupiny, vedoucí směny, dozimetrista-mechanik, kontrolní fyzik a operátor reaktoru. (Kapitola 13.3).",
+      "model_answer": "# Pracovníci vykonávající činnosti zvláště důležité z hlediska jaderné bezpečnosti na reaktoru VR-1\n\nNa reaktoru VR-1 vykonávají činnosti zvláště důležité z hlediska jaderné bezpečnosti následující pracovníci:\n\n## 1. Vedoucí směny\nVedoucí směny zajišťuje manipulaci na dozorně, řízení uvádění do provozu a provozu jaderného reaktoru a dohled nad nimi, řízení manipulací s jaderným palivem v aktivní zóně jaderného reaktoru a dohled nad nimi, a řízení činnosti směny s dohledem nad ní \\cite{BZ_VR1_L3_828}.\n\n## 2. Operátor reaktoru\nOperátor reaktoru je vybraným pracovníkem vykonávajícím činnosti zvláště důležité z hlediska jaderné bezpečnosti. Bezprostředně řídí reaktor, provádí manipulace ve velínu a vede předepsanou provozní dokumentaci \\cite{BZ_VR1_L3_806}. Konkrétně zajišťuje manipulaci na dozorně a řízení uvádění do provozu a provozu jaderného reaktoru s dohledem nad těmito činnostmi \\cite{BZ_VR1_L3_830}.\n\n## 3. Kontrolní fyzik\nKontrolní fyzik zajišťuje řízení sestavení a uspořádání aktivní zóny jaderného reaktoru s dohledem nad nimi, provádění fyzikálních měření v průběhu fyzikálního a energetického spouštění jaderného reaktoru a řízení základního kritického experimentu s dohledem nad ním \\cite{BZ_VR1_L3_829}.\n\n## 4. Vedoucí spouštěcí skupiny\nVedoucí spouštěcí skupiny zajišťuje manipulaci na dozorně, řízení provádění jednotlivých kroků testů fyzikálního a energetického spouštění jaderného reaktoru a řízení dalších spouštěcích prací s dohledem nad nimi \\cite{BZ_VR1_L3_827}.\n\n## 5. Dozimetrista-mechanik\nDozimetrista-mechanik vykonává manipulace na hale reaktoru (manipulace se zařízeními a komponentami reaktoru, instalace experimentálních zařízení do reaktoru apod.) a provádění dozimetrické kontroly pracoviště reaktoru v průběhu jeho provozu \\cite{BZ_VR1_L3_826}.\n\nVšichni tito pracovníci se podrobují pravidelnému ověřování své osobnostní a zdravotní způsobilosti, neboť osoby obsluhující reaktor mají nezastupitelnou roli při zajištění jaderné bezpečnosti \\cite{BZ_VR1_L3_251}.",
+      "scores": {
+        "semantic_correctness": 1.0,
+        "factual_accuracy": 0.9,
+        "completeness": 0.95
+      },
+      "response_time_ms": 62466.2127494812,
+      "cost_cents": 7.446899999999999,
+      "tools_used": []
+    },
+    {
+      "id": 38,
+      "question": "Jaké jsou bezpečnostní limity teploty pro moderátor a pokrytí paliva reaktoru VR-1?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Limitní hodnota teploty moderátoru (chladiva) na vstupu do aktivní zóny je maximálně 45 °C. Limitní hodnota teploty na povrchu pokrytí nejzatíženějšího palivového článku při ustáleném provozu je 98 °C. Pro krátkodobé havarijní stavy nesmí teplota povrchu překročit 500 °C (Kapitola 16). Kritérium přijatelnosti je teplota pokrytí nejzatíženějšího palivového článku, která nesmí být vyšší než 400 °C",
+      "model_answer": "# Bezpečnostní limity teploty pro moderátor a pokrytí paliva reaktoru VR-1\n\nNa základě technické zprávy reaktoru VR-1 jsem identifikoval následující bezpečnostní teplotní limity:\n\n## Pokrytí paliva (palivové články)\n\nPokrytí palivových článků je vyrobeno z hliníkové slitiny SAV-1 a má následující kritické teplotní parametry:\n\n- **Teplota fázové změny pokrytí IRT-4M**: 550 °C \\cite{BZ_VR1_L3_501}\n- **Teplota tavení pokrytí**: 580 °C \\cite{BZ_VR1_L3_501}\n- **Bezpečnostní limit (kritérium přijatelnosti)**: 400 °C \\cite{BZ_VR1_L3_961}\n\nBezpečnostní limit 400 °C je stanoven pro teplotu pokrytí nejzatíženějšího palivového článku během rozšířených projektových podmínek. K vážnému poškození palivového pokrytí dochází zejména při dosažení teploty tavení v rozmezí 550–580 °C \\cite{BZ_VR1_L3_961}.\n\n## Moderátor\n\nPři normálním provozu reaktoru se teplota moderátoru v reaktorové nádobě pohybuje přibližně na úrovni teploty okolního prostředí (cca 20 °C). Vzhledem k nízkému výkonu reaktoru nedochází k významným změnám teploty moderátoru. Při dosažení maximálního výkonu reaktoru se změna teploty moderátoru v aktivní zóně pohybuje v oblasti desetin °C \\cite{BZ_VR1_L3_15}. Výstupní teplota moderátoru musí zůstat pod bodem sytosti vody pro daný tlak, aby se zabránilo povrchovému varu \\cite{BZ_VR1_L3_983}.\n\n⚠️ **Poznámka**: Extractor nenalezl konkrétní číselný bezpečnostní limit teploty moderátoru (např. maximální přípustná teplota v °C). Dostupné informace se zaměřují na kritérium, že teplota nesmí dosáhnout bodu sytosti, ale konkrétní hodnota tohoto limitu není v poskytnutých datech explicitně uvedena.",
+      "scores": {
+        "semantic_correctness": 0.3,
+        "factual_accuracy": 0.3,
+        "completeness": 0.25
+      },
+      "response_time_ms": 148241.05167388916,
+      "cost_cents": 13.221,
+      "tools_used": []
+    },
+    {
+      "id": 39,
+      "question": "Jaká technická opatření byla přijata na ochranu areálu reaktoru VR-1 proti povodním?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "Na základě zkušeností s povodní v roce 2002 byla vybudována technická opatření k zamezení dopadu povodní na areál. Patří sem protipovodňové bariéry, zpětné klapky na kanalizaci a soubor organizačních opatření. Účinnost těchto ochran byla v praxi ověřena během povodně v roce 2013, kdy nedošlo k žádnému dopadu na reaktor (Kapitola 3.4).",
+      "model_answer": "# Technická opatření na ochranu areálu reaktoru VR-1 proti povodním\n\nNa ochranu areálu reaktoru VR-1 proti povodním byla přijata následující technická opatření:\n\n## Protipovodňové bariéry a zpětné klapky\n\nV současné době je areál MFF UK v Praze 8 účinně chráněn **protipovodňovými barié-rami a zpětnými klapkami** \\cite{BZ_VR1_L3_338}. Tato opatření byla vytvořena v reakci na povodeň v srpnu roku 2002, kdy průtok Vltavy v Praze dosáhl 5300 m³/s \\cite{BZ_VR1_L3_337}.\n\n## Ověřená účinnost\n\nÚčinnost těchto ochranných opatření byla prokázána v červnu roku 2013, kdy došlo k dalšímu povodňovému průtoku Vltavy v Praze (3210 m³/s). Při této příležitosti se potvrdilo, že **povodeň neměla žádný dopad na reaktor VR-1** \\cite{BZ_VR1_L3_338}.\n\n## Organizační opatření\n\nVedle technických prvků jsou součástí ochrany také **organizační opatření** \\cite{BZ_VR1_L3_338}, která doplňují fyzické bariéry a zajišťují komplexní přístup k ochraně areálu.\n\nPřestože se areál nachází v zóně ohrožené pětsetletou povodní (Q500), přijatá technická opatření efektivně minimalizují dopad povodňových rizik na zařízení reaktoru.",
+      "scores": {
+        "semantic_correctness": 0.95,
+        "factual_accuracy": 1.0,
+        "completeness": 0.95
+      },
+      "response_time_ms": 45410.09783744812,
+      "cost_cents": 4.8512,
+      "tools_used": []
+    },
+    {
+      "id": 40,
+      "question": "Jak atomový zákon 263/2016 Sb. upravuje trestnou sazbu za zodpovědnost za jadernou havárii?",
+      "source_document": "Sb_2016_263_2024-01-01_IZ.pdf",
+      "reference_answer": "Atomový zákon (č. 263/2016 Sb.) je správním předpisem a neupravuje trestní sazby (odnětí svobody) za trestné činy. To řeší Trestní zákoník. Atomový zákon definuje skutkové podstaty přestupků a správních deliktů a stanovuje výši pokut, které mohou dosáhnout až 100 milionů Kč za opakované závažné porušení (např. § 199).",
+      "model_answer": "# Odpověď na dotaz o trestné sazbě za zodpovědnost za jadernou havárii\n\nAtomový zákon 263/2016 Sb. **neupravuje konkrétní trestné sazby** (délku vězení, výši trestů) za zodpovědnost za jadernou havárii. \n\n## Co zákon 263/2016 Sb. skutečně obsahuje\n\nZákon se zabývá **administrativními přestupky** a jejich sankcemi. V § 14 odst. (1) písm. a) se pouze zmiňuje možnost postihu za **trestný čin**, pokud souvisí s povolovanou nebo registrovanou činností v jaderné oblasti \\cite{Sb_2016_263_2024-01-01_IZ_L3_281}. Toto je však pouze obecné odkazování na existenci trestné odpovědnosti, nikoli konkrétní úprava trestních sankcí.\n\nZákon 263/2016 Sb. se primárně zaměřuje na:\n- **Administrativní přestupky** s pokutami (např. § 189, § 192, § 193)\n- **Odpovědnost držitelů povolení** za radiační havárie \\cite{Sb_2016_263_2024-01-01_IZ_L3_1851}\n- **Povinnosti při nápravě stavu** po radiační havárii \\cite{Sb_2016_263_2024-01-01_IZ_L3_2064}\n\n## Kde najít trestné sazby\n\nKonkrétní **trestní sazby** za trestné činy související s jadernými haváriemi jsou upraveny v **Trestním zákoně** (zákon č. 40/2009 Sb.), nikoli v atomovém zákoně. Atomový zákon 263/2016 Sb. je tedy pouze doplňujícím právním předpisem, který definuje administrativní odpovědnost a bezpečnostní požadavky.",
+      "scores": {
+        "semantic_correctness": 0.85,
+        "factual_accuracy": 0.85,
+        "completeness": 0.8
+      },
+      "response_time_ms": 252784.01160240173,
+      "cost_cents": 17.9002,
+      "tools_used": []
+    }
+  ]
+}
