@@ -39,10 +39,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import anthropic
 import numpy as np
 from dotenv import load_dotenv
 from langsmith import Client
-from openevals.llm import create_llm_as_judge
+from pydantic import BaseModel, Field
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -90,13 +91,16 @@ Z reference_outputs extrahuj "answer" (referenční odpověď).
 Z outputs extrahuj "answer" (odpověď systému).
 
 Kritéria hodnocení:
-- 1.0: Plná sémantická shoda - odpověď vyjadřuje stejný význam
-- 0.7-0.9: Většinová shoda - hlavní body jsou správné, mohou chybět detaily
-- 0.4-0.6: Částečná shoda - některé body jsou správné, jiné chybí nebo jsou špatně
-- 0.1-0.3: Minimální shoda - odpověď se jen okrajově dotýká správné odpovědi
-- 0.0: Žádná shoda - odpověď je zcela mimo téma nebo špatná
+- score 1: Odpověď vyjadřuje stejný nebo velmi podobný význam jako referenční odpověď (hlavní body jsou správné)
+- score 0: Odpověď je sémanticky odlišná, mimo téma, nebo zcela špatná
 
-Odpověz pouze číslem mezi 0.0 a 1.0.
+Nejdříve analyzuj odpověď, pak rozhodni.
+
+Odpověz POUZE validním JSON objektem v tomto formátu:
+{{
+  "rationale": "<stručné zdůvodnění tvého hodnocení v 1-2 větách>",
+  "score": <0 nebo 1>
+}}
 '''
 
 FACTUAL_ACCURACY_PROMPT = '''
@@ -121,13 +125,16 @@ Z reference_outputs extrahuj "answer" (referenční odpověď).
 Z outputs extrahuj "answer" (odpověď systému).
 
 Kritéria hodnocení:
-- 1.0: Všechna fakta jsou správná
-- 0.7-0.9: Drobné nepřesnosti, které nemění podstatu
-- 0.4-0.6: Některá fakta chybí nebo jsou nepřesná
-- 0.1-0.3: Závažné faktické chyby
-- 0.0: Fakta jsou zcela špatná nebo vymyšlená
+- score 1: Fakta v odpovědi jsou správná (čísla, jednotky, názvy odpovídají referenci, případně drobné nepřesnosti nemění podstatu)
+- score 0: Odpověď obsahuje faktické chyby, špatná čísla, nebo vymyšlená fakta
 
-Odpověz pouze číslem mezi 0.0 a 1.0.
+Nejdříve analyzuj fakta v odpovědi, pak rozhodni.
+
+Odpověz POUZE validním JSON objektem v tomto formátu:
+{{
+  "rationale": "<stručné zdůvodnění tvého hodnocení v 1-2 větách>",
+  "score": <0 nebo 1>
+}}
 '''
 
 COMPLETENESS_PROMPT = '''
@@ -147,14 +154,128 @@ Z outputs extrahuj "answer" (odpověď systému).
 Identifikuj klíčové body v referenční odpovědi a ověř, zda jsou obsaženy v odpovědi systému.
 
 Kritéria hodnocení:
-- 1.0: Všechny klíčové body jsou pokryty
-- 0.7-0.9: Většina klíčových bodů je pokryta
-- 0.4-0.6: Přibližně polovina klíčových bodů
-- 0.1-0.3: Pouze minimum klíčových bodů
-- 0.0: Žádné klíčové body nejsou pokryty
+- score 1: Odpověď pokrývá hlavní klíčové body z referenční odpovědi (většina důležitých informací je obsažena)
+- score 0: Odpověď vynechává důležité klíčové body nebo je příliš neúplná
 
-Odpověz pouze číslem mezi 0.0 a 1.0.
+Nejdříve identifikuj klíčové body a porovnej je, pak rozhodni.
+
+Odpověz POUZE validním JSON objektem v tomto formátu:
+{{
+  "rationale": "<stručné zdůvodnění tvého hodnocení v 1-2 větách>",
+  "score": <0 nebo 1>
+}}
 '''
+
+
+# =============================================================================
+# Structured Output Evaluator (Anthropic Native)
+# =============================================================================
+
+class EvaluationResult(BaseModel):
+    """Pydantic model for LLM-as-judge structured output."""
+    rationale: str = Field(description="Stručné zdůvodnění hodnocení v 1-2 větách")
+    score: int = Field(description="Binární skóre: 0 = neuspokojivé, 1 = uspokojivé")
+
+
+def create_structured_evaluator(
+    prompt_template: str,
+    feedback_key: str,
+    model: str = "claude-sonnet-4-5",
+):
+    """
+    Create an evaluator using Anthropic's tool use for guaranteed structured output.
+
+    Uses tool_choice to force Claude to return structured JSON with rationale-first pattern.
+    This approach is reliable across SDK versions and guarantees schema compliance.
+
+    Args:
+        prompt_template: The evaluation prompt template with {inputs}, {outputs}, {reference_outputs}
+        feedback_key: The key for this evaluation metric (e.g., "semantic_correctness")
+        model: Anthropic model to use (without provider prefix)
+
+    Returns:
+        Evaluator function compatible with LangSmith evaluate()
+    """
+    client = anthropic.Anthropic()
+
+    # Define the evaluation tool schema
+    evaluation_tool = {
+        "name": "submit_evaluation",
+        "description": "Submit the evaluation result with rationale and binary score",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "rationale": {
+                    "type": "string",
+                    "description": "Stručné zdůvodnění hodnocení v 1-2 větách",
+                },
+                "score": {
+                    "type": "integer",
+                    "enum": [0, 1],
+                    "description": "Binární skóre: 0 = neuspokojivé, 1 = uspokojivé",
+                },
+            },
+            "required": ["rationale", "score"],
+        },
+    }
+
+    def evaluator(inputs: Dict, outputs: Dict, reference_outputs: Dict) -> Dict:
+        """Evaluate using Anthropic tool use for structured output."""
+        logger.info(f"[EVALUATOR] Running evaluator for key={feedback_key}")
+        logger.info(f"[EVALUATOR] {feedback_key}: inputs type={type(inputs)}, outputs type={type(outputs)}")
+        logger.info(f"[EVALUATOR] {feedback_key}: inputs keys={list(inputs.keys()) if isinstance(inputs, dict) else 'not dict'}")
+        logger.info(f"[EVALUATOR] {feedback_key}: outputs keys={list(outputs.keys()) if isinstance(outputs, dict) else 'not dict'}")
+        # Format the prompt with actual values and instruction to use tool
+        prompt = prompt_template.format(
+            inputs=json.dumps(inputs, ensure_ascii=False, indent=2),
+            outputs=json.dumps(outputs, ensure_ascii=False, indent=2),
+            reference_outputs=json.dumps(reference_outputs, ensure_ascii=False, indent=2),
+        )
+        prompt += "\n\nPo analýze zavolej submit_evaluation tool s výsledkem hodnocení."
+
+        try:
+            logger.info(f"[EVALUATOR] {feedback_key}: Making API call to model={model}")
+            # Use tool_choice to force structured output
+            response = client.messages.create(
+                model=model,
+                max_tokens=512,
+                messages=[{"role": "user", "content": prompt}],
+                tools=[evaluation_tool],
+                tool_choice={"type": "tool", "name": "submit_evaluation"},
+            )
+            logger.info(f"[EVALUATOR] {feedback_key}: API call complete, response.content length={len(response.content)}")
+
+            # Extract tool use result
+            for block in response.content:
+                logger.info(f"[EVALUATOR] {feedback_key}: Block type={block.type}")
+                if block.type == "tool_use":
+                    logger.info(f"[EVALUATOR] {feedback_key}: block.input keys={list(block.input.keys())}")
+                    logger.info(f"[EVALUATOR] {feedback_key}: block.input={block.input}")
+                    result = {
+                        "key": feedback_key,
+                        "score": block.input.get("score", block.input.get("  score")),
+                        "comment": block.input.get("rationale", block.input.get("  rationale")),
+                    }
+                    logger.info(f"[EVALUATOR] {feedback_key} result: score={result['score']}")
+                    return result
+
+            # Fallback if no tool use found
+            logger.warning(f"[EVALUATOR] No tool use found in response for {feedback_key}")
+            return {
+                "key": feedback_key,
+                "score": 0,
+                "comment": "No evaluation result returned",
+            }
+
+        except Exception as e:
+            logger.error(f"[EVALUATOR] Evaluation error for {feedback_key}: {e}", exc_info=True)
+            return {
+                "key": feedback_key,
+                "score": 0,
+                "comment": f"Evaluation error: {str(e)}",
+            }
+
+    return evaluator
 
 
 # =============================================================================
@@ -287,28 +408,40 @@ def upload_dataset_to_langsmith(
 
 
 def create_evaluators(judge_model: str = "anthropic:claude-sonnet-4-5") -> List[Any]:
-    """Create LLM-as-judge evaluators."""
+    """
+    Create LLM-as-judge evaluators using Anthropic's native structured outputs.
+
+    Uses constrained decoding to guarantee JSON output with binary scores (0/1)
+    and rationale-first pattern for better reasoning.
+    """
+    # Extract model name from provider:model format (e.g., "anthropic:claude-sonnet-4-5")
+    if ":" in judge_model:
+        provider, model_name = judge_model.split(":", 1)
+        if provider != "anthropic":
+            raise ValueError(
+                f"Structured outputs only support Anthropic models, got provider: {provider}"
+            )
+    else:
+        model_name = judge_model
+
     evaluators = [
-        create_llm_as_judge(
-            prompt=SEMANTIC_CORRECTNESS_PROMPT,
+        create_structured_evaluator(
+            prompt_template=SEMANTIC_CORRECTNESS_PROMPT,
             feedback_key="semantic_correctness",
-            model=judge_model,
-            continuous=True,
+            model=model_name,
         ),
-        create_llm_as_judge(
-            prompt=FACTUAL_ACCURACY_PROMPT,
+        create_structured_evaluator(
+            prompt_template=FACTUAL_ACCURACY_PROMPT,
             feedback_key="factual_accuracy",
-            model=judge_model,
-            continuous=True,
+            model=model_name,
         ),
-        create_llm_as_judge(
-            prompt=COMPLETENESS_PROMPT,
+        create_structured_evaluator(
+            prompt_template=COMPLETENESS_PROMPT,
             feedback_key="completeness",
-            model=judge_model,
-            continuous=True,
+            model=model_name,
         ),
     ]
-    logger.info(f"Created {len(evaluators)} evaluators with model: {judge_model}")
+    logger.info(f"Created {len(evaluators)} structured output evaluators with model: {model_name}")
     return evaluators
 
 
@@ -583,9 +716,18 @@ def generate_summary(
             "reference_answer": reference.get("answer", ""),
             "model_answer": outputs.get("answer", ""),
             "scores": {
-                "semantic_correctness": feedback.get("semantic_correctness", {}).get("score"),
-                "factual_accuracy": feedback.get("factual_accuracy", {}).get("score"),
-                "completeness": feedback.get("completeness", {}).get("score"),
+                "semantic_correctness": {
+                    "score": feedback.get("semantic_correctness", {}).get("score"),
+                    "rationale": feedback.get("semantic_correctness", {}).get("rationale"),
+                },
+                "factual_accuracy": {
+                    "score": feedback.get("factual_accuracy", {}).get("score"),
+                    "rationale": feedback.get("factual_accuracy", {}).get("rationale"),
+                },
+                "completeness": {
+                    "score": feedback.get("completeness", {}).get("score"),
+                    "rationale": feedback.get("completeness", {}).get("rationale"),
+                },
             },
             "response_time_ms": outputs.get("response_time_ms"),
             "cost_cents": outputs.get("cost_cents"),
@@ -638,12 +780,27 @@ async def collect_results(results) -> List[Dict[str, Any]]:
                 reference_outputs = example.outputs if example.outputs else {}
 
             # Transform evaluation_results to feedback format
-            # eval_results = {'results': [EvaluationResult(key, score), ...]}
+            # eval_results = {'results': [EvaluationResult(key, score, comment), ...]}
+            # Results can be EvaluationResult objects (attributes) or plain dicts
             feedback = {}
             eval_list = eval_results.get("results", []) if isinstance(eval_results, dict) else []
+            logger.info(f"[COLLECT] eval_results raw: {eval_results}")
+            logger.info(f"[COLLECT] eval_list length: {len(eval_list)}")
             for eval_result in eval_list:
+                logger.debug(f"eval_result type: {type(eval_result)}, value: {eval_result}")
+                # Handle both object attributes and dict keys
                 if hasattr(eval_result, "key") and hasattr(eval_result, "score"):
-                    feedback[eval_result.key] = {"score": eval_result.score}
+                    # EvaluationResult object with attributes
+                    feedback[eval_result.key] = {
+                        "score": eval_result.score,
+                        "rationale": getattr(eval_result, "comment", None),
+                    }
+                elif isinstance(eval_result, dict) and "key" in eval_result:
+                    # Plain dict from custom evaluator
+                    feedback[eval_result["key"]] = {
+                        "score": eval_result.get("score"),
+                        "rationale": eval_result.get("comment"),
+                    }
 
             results_list.append({
                 "inputs": inputs,
@@ -694,10 +851,9 @@ def parse_args():
         choices=[
             "anthropic:claude-sonnet-4-5",
             "anthropic:claude-haiku-4-5",
-            "openai:gpt-4o-mini",
-            "openai:gpt-4o",
+            "anthropic:claude-opus-4-5",
         ],
-        help="Model to use for LLM-as-judge",
+        help="Model to use for LLM-as-judge (Anthropic models with structured outputs support)",
     )
     parser.add_argument(
         "--limit",

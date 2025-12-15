@@ -324,6 +324,13 @@ export function useChat() {
           role: 'user',
           content: content.trim(),
           timestamp: new Date().toISOString(),
+          // Store selected context metadata for display below message
+          selectedContext: selectedContext ? {
+            documentName: selectedContext.documentName,
+            lineCount: selectedContext.text.split('\n').filter(line => line.trim()).length || 1,
+            pageStart: selectedContext.pageStart,
+            pageEnd: selectedContext.pageEnd,
+          } : undefined,
         };
 
         // Add user message to conversation

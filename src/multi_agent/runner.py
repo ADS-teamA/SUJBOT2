@@ -395,15 +395,6 @@ class MultiAgentRunner:
                 except Exception as e:
                     logger.warning(f"Failed to load knowledge graph from {kg_backend}: {e}")
 
-            # Context assembler (optional)
-            context_assembler = None
-            try:
-                from ..context_assembly import ContextAssembler
-                context_assembler = ContextAssembler()
-                logger.info("Context assembler initialized")
-            except Exception as e:
-                logger.warning(f"Context assembler unavailable: {e}")
-
             # Tool config from config.json (not hardcoded defaults)
             agent_tools_config = self.config.get("agent_tools", {})
             tool_config = ToolConfig(
@@ -462,7 +453,7 @@ class MultiAgentRunner:
                 reranker=None,  # Reranker removed - HyDE + Expansion Fusion pipeline
                 graph_retriever=graph_retriever,
                 knowledge_graph=knowledge_graph,
-                context_assembler=None,  # TODO: Add context assembler if needed
+                context_assembler=None,
                 llm_provider=self.llm_provider,
                 config=tool_config,  # Use the full config from above, not minimal config
             )

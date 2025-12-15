@@ -72,6 +72,11 @@ Final Answer (Markdown Report)
 | **Prompts** | File-based (prompts/agents/*.txt) | Agent system prompts |
 | **Tools** | Existing src.agent.tools infrastructure | 15 specialized tools |
 
+### Related Documentation
+
+- **Detailed Execution Flows**: [`multi_agent_components.md`](multi_agent_components.md) - Component interactions, state transitions, code-level execution diagrams
+- **Quick Reference**: [`multi_agent_quick_reference.md`](multi_agent_quick_reference.md) - Commands, common patterns, troubleshooting
+
 ---
 
 ## 2. Core Components

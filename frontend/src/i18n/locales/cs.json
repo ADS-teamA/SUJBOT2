@@ -153,7 +153,8 @@
     "lines_one": "{{count}} řádek",
     "lines_few": "{{count}} řádky",
     "lines_other": "{{count}} řádků",
-    "clearSelection": "Zrušit výběr"
+    "clearSelection": "Zrušit výběr",
+    "fromDocument": "z {{document}}"
   },
   "admin": {
     "login": {

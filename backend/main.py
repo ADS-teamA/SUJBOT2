@@ -46,7 +46,7 @@ from sse_starlette.sse import EventSourceResponse
 
 # Import agent adapter and models
 from .agent_adapter import AgentAdapter
-from .models import ChatRequest, HealthResponse, ModelsResponse, ModelInfo, ClarificationRequest
+from .models import ChatRequest, HealthResponse, ClarificationRequest
 
 # Import new authentication system (Argon2 + PostgreSQL)
 from backend.auth.manager import AuthManager
@@ -325,39 +325,6 @@ async def health_check():
 # Protected Endpoints (require authentication)
 # =========================================================================
 # Note: Authentication endpoints are in routes/auth.py (/auth/login, /auth/logout, etc.)
-
-
-@app.get("/models", response_model=ModelsResponse, deprecated=True)
-async def get_models(user: Dict = Depends(get_current_user)):
-    """
-    [DEPRECATED] Get list of available models.
-
-    **This endpoint is deprecated.** Models are now configured in config.json
-    under `multi_agent.agents.*model` and `agent.model`. Dynamic model selection
-    has been removed from the frontend.
-
-    This endpoint will be removed in a future version.
-
-    Returns models with provider and description.
-    """
-    logger.warning(
-        "DEPRECATED: /models endpoint called. Models should be configured in config.json. "
-        "This endpoint will be removed in a future version."
-    )
-
-    if agent_adapter is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Agent not initialized"
-        )
-
-    models = agent_adapter.get_available_models()
-    default_model = agent_adapter.config.model
-
-    return ModelsResponse(
-        models=[ModelInfo(**m) for m in models],
-        default_model=default_model
-    )
 
 
 def _create_fallback_title(user_message: str, max_length: int = 50) -> str:
@@ -841,43 +808,6 @@ async def delete_message(conversation_id: str, message_id: str):
     """Delete a message from conversation history (frontend-managed)."""
     logger.info(f"Message delete requested: conversation={conversation_id}, message={message_id}")
     return {"success": True}
-
-
-@app.post("/model/switch", deprecated=True)
-async def switch_model(model: str):
-    """
-    [DEPRECATED] Switch to a different model.
-
-    **This endpoint is deprecated.** Models are now configured in config.json
-    under `multi_agent.agents.*model` and `agent.model`. Dynamic model switching
-    has been removed - each agent uses its configured model from config.json.
-
-    This endpoint will be removed in a future version.
-
-    Args:
-        model: Model identifier (ignored - for backward compatibility only)
-
-    Returns:
-        Success confirmation (no-op for backward compatibility)
-    """
-    logger.warning(
-        f"DEPRECATED: /model/switch endpoint called (requested model: {model}). "
-        "Model switching is no longer supported. Models should be configured in config.json. "
-        "This endpoint will be removed in a future version. Returning success for backward compatibility."
-    )
-
-    if agent_adapter is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Agent not initialized"
-        )
-
-    # Return success without doing anything (backward compatibility)
-    return {
-        "success": True,
-        "model": model,
-        "warning": "Model switching is deprecated. Configure models in config.json instead."
-    }
 
 
 @app.get("/")

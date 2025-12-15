@@ -3,14 +3,20 @@ Regulatory Cache (Level 1) - Caches regulatory documents.
 
 Highest reuse rate, longest TTL.
 Examples: GDPR text, CCPA text, HIPAA regulations, ISO standards.
+
+Uses TTLCache from src/utils/cache.py as internal storage (SSOT pattern).
 """
 
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+
+from src.utils.cache import TTLCache
 
 logger = logging.getLogger(__name__)
+
+# Cache key for single-value storage
+_CONTENT_KEY = "content"
 
 
 class RegulatoryCache:
@@ -18,6 +24,7 @@ class RegulatoryCache:
     Level 1 cache for regulatory documents.
 
     Caches high-reuse regulatory content like GDPR, CCPA, HIPAA.
+    Uses TTLCache internally for SSOT-compliant caching.
     """
 
     def __init__(self, regulatory_path: Path, ttl_hours: int = 24):
@@ -30,10 +37,11 @@ class RegulatoryCache:
         """
         self.regulatory_path = regulatory_path
         self.ttl_hours = ttl_hours
-        self._cached_content: Optional[str] = None
-        self._cache_timestamp: Optional[datetime] = None
-        self._hit_count = 0
-        self._miss_count = 0
+        self._cache = TTLCache[str](
+            ttl_seconds=ttl_hours * 3600,
+            max_size=1,  # Single document cache
+            name="RegulatoryCache"
+        )
 
         logger.info(f"RegulatoryCache initialized (path={regulatory_path}, ttl={ttl_hours}h)")
 
@@ -44,31 +52,23 @@ class RegulatoryCache:
         Returns:
             Cached content string or None
         """
-        # Check if cache is still valid
-        if self._is_cache_valid():
-            self._hit_count += 1
-            return self._cached_content
+        # Check if content is cached and valid
+        cached = self._cache.get(_CONTENT_KEY)
+        if cached is not None:
+            return cached
 
-        # Cache miss - load from disk
-        self._miss_count += 1
-        self._load_content()
+        # Cache miss - load from disk and cache
+        content = self._load_content()
+        if content:
+            self._cache.set(_CONTENT_KEY, content)
 
-        return self._cached_content
+        return content
 
-    def _is_cache_valid(self) -> bool:
-        """Check if cache is still valid."""
-        if self._cached_content is None or self._cache_timestamp is None:
-            return False
-
-        age = datetime.now() - self._cache_timestamp
-        return age < timedelta(hours=self.ttl_hours)
-
-    def _load_content(self) -> None:
+    def _load_content(self) -> Optional[str]:
         """Load regulatory content from disk."""
         if not self.regulatory_path.exists():
             logger.warning(f"Regulatory path does not exist: {self.regulatory_path}")
-            self._cached_content = None
-            return
+            return None
 
         try:
             # Load all .txt files from regulatory directory
@@ -84,37 +84,37 @@ class RegulatoryCache:
                     logger.warning(f"Failed to load {file_path}: {e}")
 
             if content_parts:
-                self._cached_content = "\n\n".join(content_parts)
-                self._cache_timestamp = datetime.now()
-
+                loaded_content = "\n\n".join(content_parts)
                 logger.info(
                     f"Loaded {len(content_parts)} regulatory documents "
-                    f"({len(self._cached_content)} chars)"
+                    f"({len(loaded_content)} chars)"
                 )
+                return loaded_content
             else:
                 logger.warning("No regulatory documents found")
-                self._cached_content = None
+                return None
 
         except Exception as e:
             logger.error(f"Failed to load regulatory content: {e}", exc_info=True)
-            self._cached_content = None
+            return None
 
     def invalidate(self) -> None:
         """Invalidate cache."""
-        self._cached_content = None
-        self._cache_timestamp = None
-
+        self._cache.clear()
         logger.info("Regulatory cache invalidated")
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
-        total = self._hit_count + self._miss_count
-        hit_rate = (self._hit_count / total * 100) if total > 0 else 0
+        base_stats = self._cache.get_stats()
+
+        # Get cached content size
+        cached_content = self._cache.get(_CONTENT_KEY)
+        cache_size = len(cached_content) if cached_content else 0
 
         return {
-            "hits": self._hit_count,
-            "misses": self._miss_count,
-            "hit_rate": round(hit_rate, 1),
-            "cached": self._cached_content is not None,
-            "cache_size": len(self._cached_content) if self._cached_content else 0,
+            "hits": base_stats["hits"],
+            "misses": base_stats["misses"],
+            "hit_rate": base_stats["hit_rate"] * 100,  # Convert to percentage
+            "cached": base_stats["size"] > 0,
+            "cache_size": cache_size,
         }

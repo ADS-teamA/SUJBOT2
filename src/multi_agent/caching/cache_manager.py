@@ -6,6 +6,7 @@ Coordinates:
 2. Contract Cache (Level 2) - Contract templates
 3. System Cache (Level 3) - System prompts
 
+All caches use TTLCache from src/utils/cache.py as internal storage (SSOT pattern).
 Implements Harvey AI's prompt caching strategy for 90% cost savings.
 """
 

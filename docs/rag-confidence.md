@@ -399,9 +399,87 @@ class RAGConfidenceScore:
 
 ---
 
+## CLI Display
+
+The RAG confidence score is displayed **after the agent's response** and **before the cost summary**.
+
+### Display Format
+
+```
+📊 RAG Confidence: [emoji] [interpretation] ([score])
+```
+
+- **Emoji**: `✓` for high confidence (green), `⚠️` for low confidence (yellow warning)
+- **Interpretation**: Human-readable confidence level
+- **Score**: Numerical confidence (0.00 to 1.00)
+
+### Example Outputs
+
+**High Confidence (0.92):**
+```
+> What is the moderator in VR-1 reactor?
+
+A: The VR-1 reactor uses light water as the moderator...
+
+📊 RAG Confidence: ✓ HIGH - Strong retrieval confidence (0.92)
+
+💰 This message: $0.0162
+```
+
+**Low Confidence (0.58):**
+```
+> What is the maximum operating temperature for component XYZ-123?
+
+A: Based on the available documentation, component specifications suggest...
+
+📊 RAG Confidence: ⚠️ LOW - Weak retrieval, mandatory review (0.58)
+
+💰 This message: $0.0138
+```
+
+### When Confidence is Displayed
+
+Confidence is displayed when:
+1. The agent uses the `search` or `exact_match_search` tool
+2. The retrieval returns results with scores
+
+Confidence is **not** displayed for commands (`/help`) or metadata tools (`get_document_list`).
+
+---
+
+## Troubleshooting
+
+### Issue: Confidence Score Not Displayed
+
+**Symptom:** No `📊 RAG Confidence` line in output.
+
+**Cause:** Agent used a tool without confidence scoring (e.g., `exact_match_search` before the fix, or metadata tools).
+
+**Solution:** Both `search` and `exact_match_search` now include confidence scoring. If using other tools like `get_document_list`, confidence doesn't apply.
+
+### Issue: Confidence Shows "Unknown" or 0.00
+
+**Possible causes:**
+1. Empty results (no chunks retrieved)
+2. Missing scores in chunks
+3. Exception during confidence calculation
+
+**Debug:** Enable debug mode with `--debug` flag and check logs for `RAG confidence scoring failed`.
+
+### Tools with RAG Confidence Scoring
+
+**✅ With Confidence:**
+- `search` - Hybrid search with BM25 + Dense + reranking
+- `exact_match_search` - Fast BM25 keyword search
+- `assess_retrieval_confidence` - Dedicated confidence tool
+
+**❌ Without Confidence (not applicable):**
+- `get_document_list`, `get_document_info`, `expand_context`, etc.
+
+---
+
 ## Related Documentation
 
-- **CLI Display Guide**: [`docs/rag-confidence-cli-display.md`](rag-confidence-cli-display.md) - **Visual examples of confidence display in CLI**
 - **Implementation**: [`src/agent/rag_confidence.py`](../src/agent/rag_confidence.py)
 - **Search Tool**: [`src/agent/tools/search.py`](../src/agent/tools/search.py)
 - **Assessment Tool**: [`src/agent/tools/filtered_search.py`](../src/agent/tools/filtered_search.py)

@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "date": "2025-12-15 09:31",
+    "experiment_prefix": "test-debug-eval3",
+    "judge_model": "anthropic:claude-sonnet-4-5",
+    "num_examples": 1
+  },
+  "metrics": {
+    "semantic_correctness": {
+      "mean": 0,
+      "std": 0,
+      "p50": 0,
+      "p99": 0
+    },
+    "factual_accuracy": {
+      "mean": 0,
+      "std": 0,
+      "p50": 0,
+      "p99": 0
+    },
+    "completeness": {
+      "mean": 0,
+      "std": 0,
+      "p50": 0,
+      "p99": 0
+    }
+  },
+  "cost": {
+    "total_cents": 17.728699999999996,
+    "avg_per_query_cents": 17.728699999999996
+  },
+  "response_time": {
+    "mean_ms": 177822.91507720947,
+    "p50_ms": 177822.91507720947,
+    "p99_ms": 177822.91507720947
+  },
+  "results": [
+    {
+      "id": 1,
+      "question": "Jaká voda se používá v reaktoru VR-1 a je tato voda pitná?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "V reaktoru se používá lehká demineralizovaná voda (H2O), která plní funkci moderátoru, reflektoru, chladiva a biologického stínění. Tato voda není pitná. Ačkoliv jde o chemicky čistou vodu, její pití je v reaktorové hale striktně zakázáno z důvodu vymezení kontrolovaného pásma a možného rizika. Pitná voda je k dispozici v šatně mimo kontrolované pásmo (Kapitola 10.2).",
+      "model_answer": "# Odpověď na dotaz: Jaká voda se používá v reaktoru VR-1 a je tato voda pitná?\n\nV reaktoru VR-1 se používá **demineralizovaná voda** \\cite{BZ_VR1_L3_596}, která slouží jako moderátor neutronů, reflektor, biologické stínění a chladivo \\cite{BZ_VR1_L3_421}. Tato voda je vyráběna pomocí dvoustupňové demineralizace na demineralizační stanici MIX 250 PP, která je umístěna v přízemí haly reaktoru \\cite{BZ_VR1_L3_577}.\n\n## Je tato voda pitná?\n\n**Ne, demineralizovaná voda používaná v reaktoru VR-1 není pitná.** Jedná se o speciálně upravenou vodu s odstraněnými minerály, která je určena výhradně pro technické účely v reaktoru. Demineralizovaná voda musí splňovat přísné požadavky na kvalitu, které jsou sledovány pravidelnými rozbory zaznamenávanými jako součást výsledku provozní kontroly \\cite{BZ_VR1_L3_596}.\n\nV reaktorové hale je přísně zakázáno pít vodu z důvodů vymezení kontrolovaného pásma. Pitná voda pro zaměstnance je zajištěna z veřejné vodovodní sítě a je dostupná v šatně mimo kontrolované pásmo, kde je také k dispozici automat na pitnou barelovou vodu \\cite{BZ_VR1_L3_580}.",
+      "scores": {
+        "semantic_correctness": {
+          "score": null,
+          "rationale": null
+        },
+        "factual_accuracy": {
+          "score": null,
+          "rationale": null
+        },
+        "completeness": {
+          "score": null,
+          "rationale": null
+        }
+      },
+      "response_time_ms": 177822.91507720947,
+      "cost_cents": 17.728699999999996,
+      "tools_used": []
+    }
+  ]
+}
