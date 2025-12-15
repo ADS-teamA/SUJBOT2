@@ -23,7 +23,7 @@ Usage:
     uv run python scripts/langsmith_eval.py --judge-model gpt-4o-mini
 
 Requirements:
-    - openevals (for LLM-as-judge)
+    - anthropic (for LLM-as-judge with structured outputs)
     - langsmith (for dataset management and evaluation)
     - Documents in eval.json must be indexed in PostgreSQL
 """
@@ -221,10 +221,10 @@ def create_structured_evaluator(
 
     def evaluator(inputs: Dict, outputs: Dict, reference_outputs: Dict) -> Dict:
         """Evaluate using Anthropic tool use for structured output."""
-        logger.info(f"[EVALUATOR] Running evaluator for key={feedback_key}")
-        logger.info(f"[EVALUATOR] {feedback_key}: inputs type={type(inputs)}, outputs type={type(outputs)}")
-        logger.info(f"[EVALUATOR] {feedback_key}: inputs keys={list(inputs.keys()) if isinstance(inputs, dict) else 'not dict'}")
-        logger.info(f"[EVALUATOR] {feedback_key}: outputs keys={list(outputs.keys()) if isinstance(outputs, dict) else 'not dict'}")
+        logger.debug(f"[EVALUATOR] Running evaluator for key={feedback_key}")
+        logger.debug(f"[EVALUATOR] {feedback_key}: inputs type={type(inputs)}, outputs type={type(outputs)}")
+        logger.debug(f"[EVALUATOR] {feedback_key}: inputs keys={list(inputs.keys()) if isinstance(inputs, dict) else 'not dict'}")
+        logger.debug(f"[EVALUATOR] {feedback_key}: outputs keys={list(outputs.keys()) if isinstance(outputs, dict) else 'not dict'}")
         # Format the prompt with actual values and instruction to use tool
         prompt = prompt_template.format(
             inputs=json.dumps(inputs, ensure_ascii=False, indent=2),
@@ -234,7 +234,7 @@ def create_structured_evaluator(
         prompt += "\n\nPo analýze zavolej submit_evaluation tool s výsledkem hodnocení."
 
         try:
-            logger.info(f"[EVALUATOR] {feedback_key}: Making API call to model={model}")
+            logger.debug(f"[EVALUATOR] {feedback_key}: Making API call to model={model}")
             # Use tool_choice to force structured output
             response = client.messages.create(
                 model=model,
@@ -243,18 +243,18 @@ def create_structured_evaluator(
                 tools=[evaluation_tool],
                 tool_choice={"type": "tool", "name": "submit_evaluation"},
             )
-            logger.info(f"[EVALUATOR] {feedback_key}: API call complete, response.content length={len(response.content)}")
+            logger.debug(f"[EVALUATOR] {feedback_key}: API call complete, response.content length={len(response.content)}")
 
             # Extract tool use result
             for block in response.content:
-                logger.info(f"[EVALUATOR] {feedback_key}: Block type={block.type}")
+                logger.debug(f"[EVALUATOR] {feedback_key}: Block type={block.type}")
                 if block.type == "tool_use":
-                    logger.info(f"[EVALUATOR] {feedback_key}: block.input keys={list(block.input.keys())}")
-                    logger.info(f"[EVALUATOR] {feedback_key}: block.input={block.input}")
+                    logger.debug(f"[EVALUATOR] {feedback_key}: block.input keys={list(block.input.keys())}")
+                    logger.debug(f"[EVALUATOR] {feedback_key}: block.input={block.input}")
                     result = {
                         "key": feedback_key,
-                        "score": block.input.get("score", block.input.get("  score")),
-                        "comment": block.input.get("rationale", block.input.get("  rationale")),
+                        "score": block.input.get("score"),
+                        "comment": block.input.get("rationale"),
                     }
                     logger.info(f"[EVALUATOR] {feedback_key} result: score={result['score']}")
                     return result
@@ -409,10 +409,10 @@ def upload_dataset_to_langsmith(
 
 def create_evaluators(judge_model: str = "anthropic:claude-sonnet-4-5") -> List[Any]:
     """
-    Create LLM-as-judge evaluators using Anthropic's native structured outputs.
+    Create LLM-as-judge evaluators using Anthropic's tool use for structured outputs.
 
-    Uses constrained decoding to guarantee JSON output with binary scores (0/1)
-    and rationale-first pattern for better reasoning.
+    Uses tool_choice with forced tool selection to guarantee JSON output with
+    binary scores (0/1) and rationale-first pattern for better reasoning.
     """
     # Extract model name from provider:model format (e.g., "anthropic:claude-sonnet-4-5")
     if ":" in judge_model:
@@ -446,7 +446,7 @@ def create_evaluators(judge_model: str = "anthropic:claude-sonnet-4-5") -> List[
 
 
 def wrap_evaluator(evaluator):
-    """Wrap openevals evaluator for LangSmith evaluate() signature."""
+    """Wrap evaluator function for LangSmith evaluate() signature compatibility."""
     def wrapped(inputs: Dict, outputs: Dict, reference_outputs: Dict) -> Dict:
         return evaluator(
             inputs=inputs,

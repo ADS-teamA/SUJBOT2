@@ -2,7 +2,7 @@
 Regulatory Cache (Level 1) - Caches regulatory documents.
 
 Highest reuse rate, longest TTL.
-Examples: GDPR text, CCPA text, HIPAA regulations, ISO standards.
+Examples: Regulatory requirements, compliance standards, legal frameworks.
 
 Uses TTLCache from src/utils/cache.py as internal storage (SSOT pattern).
 """
@@ -23,7 +23,7 @@ class RegulatoryCache:
     """
     Level 1 cache for regulatory documents.
 
-    Caches high-reuse regulatory content like GDPR, CCPA, HIPAA.
+    Caches high-reuse regulatory content (compliance standards, legal frameworks).
     Uses TTLCache internally for SSOT-compliant caching.
     """
 
@@ -81,7 +81,11 @@ class RegulatoryCache:
                         content_parts.append(f"## {file_path.stem}\n\n{content}")
 
                 except Exception as e:
-                    logger.warning(f"Failed to load {file_path}: {e}")
+                    logger.warning(
+                        f"Failed to load regulatory document {file_path.name}: {e}. "
+                        f"This document will NOT be included in prompts. "
+                        f"Check file encoding (must be UTF-8) and read permissions."
+                    )
 
             if content_parts:
                 loaded_content = "\n\n".join(content_parts)

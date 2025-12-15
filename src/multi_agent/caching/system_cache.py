@@ -65,20 +65,16 @@ class SystemCache:
         Returns:
             Concatenated cached prompts or None
         """
-        # Access internal cache dict (with lock awareness)
-        stats = self._cache.get_stats()
-        if stats["size"] == 0:
+        # Use public items() API for thread-safe iteration over non-expired entries
+        cached_items = self._cache.items()
+        if not cached_items:
             return None
 
         # Build content from all cached entries
-        content_parts = []
-        # Note: Direct access to _cache._cache is needed for iteration
-        # This is safe because TTLCache handles expiration on get()
-        with self._cache._lock:
-            for agent_name, entry in self._cache._cache.items():
-                content_parts.append(
-                    f"# {agent_name} System Prompt\n\n{entry.value}"
-                )
+        content_parts = [
+            f"# {agent_name} System Prompt\n\n{prompt}"
+            for agent_name, prompt in cached_items
+        ]
 
         return "\n\n".join(content_parts) if content_parts else None
 
@@ -100,11 +96,8 @@ class SystemCache:
         """Get cache statistics."""
         base_stats = self._cache.get_stats()
 
-        # Calculate total size
-        total_size = 0
-        with self._cache._lock:
-            for entry in self._cache._cache.values():
-                total_size += len(entry.value)
+        # Calculate total size using public API
+        total_size = self._cache.size_bytes()
 
         return {
             "hits": base_stats["hits"],

@@ -225,5 +225,17 @@ def create_cache_manager(config: Dict[str, Any]) -> Optional[CacheManager]:
         return cache_manager
 
     except Exception as e:
-        logger.error(f"Failed to create cache manager: {e}", exc_info=True)
+        # Provide actionable error context for debugging
+        regulatory_path = caching_config.get("regulatory_docs_path", "data/regulatory_templates")
+        contract_path = caching_config.get("contract_templates_path", "data/contract_templates")
+
+        logger.error(
+            f"Failed to create cache manager: {e}. "
+            f"Caching will be DISABLED for this session. "
+            f"Troubleshooting: (1) Check regulatory path exists: {regulatory_path}, "
+            f"(2) Check contract path exists: {contract_path}, "
+            f"(3) Verify file read permissions, "
+            f"(4) Ensure UTF-8 encoding for all template files.",
+            exc_info=True,
+        )
         return None

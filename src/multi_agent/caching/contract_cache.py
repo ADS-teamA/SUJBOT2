@@ -80,7 +80,11 @@ class ContractCache:
                         content_parts.append(f"## {file_path.stem}\n\n{content}")
 
                 except Exception as e:
-                    logger.warning(f"Failed to load {file_path}: {e}")
+                    logger.warning(
+                        f"Failed to load contract template {file_path.name}: {e}. "
+                        f"This template will NOT be included in prompts. "
+                        f"Check file encoding (must be UTF-8) and read permissions."
+                    )
 
             if content_parts:
                 loaded_content = "\n\n".join(content_parts)
