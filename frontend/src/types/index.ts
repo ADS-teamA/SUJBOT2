@@ -32,6 +32,21 @@ export interface ToolHealth {
   degradedTools?: string[];
 }
 
+/**
+ * Context selected from PDF when user message was sent.
+ * Stored in user messages to show indicator below message bubble.
+ */
+export interface MessageSelectedContext {
+  /** Human-readable document name */
+  documentName: string;
+  /** Number of non-empty lines in selection */
+  lineCount: number;
+  /** Starting page number (1-indexed) */
+  pageStart: number;
+  /** Ending page number (1-indexed) */
+  pageEnd: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -41,6 +56,7 @@ export interface Message {
   cost?: CostInfo;
   agentProgress?: AgentProgress;
   toolHealth?: ToolHealth;  // Tool availability status at query time
+  selectedContext?: MessageSelectedContext;  // Context from PDF selection (user messages only)
 }
 
 export interface ToolCall {
@@ -85,13 +101,6 @@ export interface Conversation {
   createdAt: string;  // ISO 8601 format for JSON serialization safety
   updatedAt: string;  // ISO 8601 format for JSON serialization safety
   userId?: number;  // Optional: included in responses from backend (user_id field)
-}
-
-export interface Model {
-  id: string;
-  name: string;
-  provider: 'anthropic' | 'openai' | 'google';
-  description: string;
 }
 
 export interface SSEEvent {

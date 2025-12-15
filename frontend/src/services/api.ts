@@ -2,13 +2,14 @@
  * API Service for backend communication
  *
  * Handles:
- * - SSE streaming for chat
+ * - SSE streaming for chat (via sseParser utility)
  * - Authentication (cookie-based with httpOnly)
- * - Model switching
  * - Health checks
+ * - Conversation management
  */
 
-import type { Model, HealthStatus, SSEEvent, Conversation, Message, AgentCostBreakdown } from '../types';
+import type { HealthStatus, SSEEvent, Conversation, Message, AgentCostBreakdown } from '../types';
+import { parseSSEStream } from './sseParser';
 
 // Use environment variable for API base URL
 // Empty string = relative URLs (same-origin, through Nginx proxy)
@@ -276,7 +277,6 @@ export class ApiService {
 
     const reader = response.body?.getReader();
     if (!reader) {
-      // Yield error event instead of throwing (consistent with other error handling)
       yield {
         event: 'error',
         data: {
@@ -287,171 +287,11 @@ export class ApiService {
       return;
     }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    // Timeout to prevent hanging on backend issues (10 minutes)
-    const STREAM_TIMEOUT_MS = 10 * 60 * 1000;
-    let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      reader.cancel('Stream timeout after 10 minutes');
-      console.error('⏰ API: Stream timeout - cancelling reader');
-    }, STREAM_TIMEOUT_MS);
-
-    try {
-      while (true) {
-        // Check if abort was requested before reading
-        if (abortSignal?.aborted) {
-          console.log('📡 API: Stream aborted before read');
-          break;
-        }
-
-        let done: boolean;
-        let value: Uint8Array | undefined;
-
-        try {
-          const result = await reader.read();
-          done = result.done;
-          value = result.value;
-        } catch (readError) {
-          // Check if read failed due to abort
-          if (readError instanceof Error && readError.name === 'AbortError') {
-            console.log('📡 API: Stream read aborted (page refresh or navigation)');
-            break;  // Clean exit
-          }
-          throw readError;  // Re-throw other errors
-        }
-
-        // Check for timeout (cancels reader, so next read may be done or throw)
-        if (timedOut) {
-          yield {
-            event: 'error',
-            data: {
-              error: 'Stream timeout after 10 minutes. The backend may be experiencing performance issues or the query is too complex. Try a simpler question or refresh the page.',
-              type: 'TimeoutError'
-            }
-          };
-          break;
-        }
-
-        if (done) {
-          break;
-        }
-
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-
-        // Process complete SSE messages
-        // Note: Backend sends CRLF (\r\n\r\n) so we need to split on that
-        const lines = buffer.split(/\r?\n\r?\n/);
-
-        // If split returned only 1 element, buffer doesn't contain separator yet
-        // Keep waiting for more data
-        if (lines.length === 1) {
-          continue;
-        }
-
-        // Last element is either incomplete or empty (if buffer ends with separator)
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-
-          // Skip SSE comments (ping/keepalive) - they start with ":"
-          // Example: ": ping - 2025-11-04 10:14:29.063439+00:00"
-          if (line.trim().startsWith(':')) {
-            continue;
-          }
-
-          // Parse SSE format:
-          // event: text_delta
-          // data: {"content": "Hello"}
-          const eventMatch = line.match(/^event:\s*(.+)$/m);
-          const dataMatch = line.match(/^data:\s*(.+)$/m);
-
-          if (eventMatch && dataMatch) {
-            const event = eventMatch[1].trim();
-
-            // Try to parse JSON data
-            try {
-              const data = JSON.parse(dataMatch[1]);
-
-              yield {
-                event: event as SSEEvent['event'],
-                data,
-              };
-            } catch (parseError) {
-              // JSON parsing failed - this is a serious error, not just a warning
-              console.error('❌ API: Failed to parse JSON in SSE data field:', {
-                event,
-                rawData: dataMatch[1],
-                error: parseError
-              });
-
-              // Yield error event to surface the issue to UI
-              yield {
-                event: 'error',
-                data: {
-                  error: `Failed to parse server response (event: ${event})`,
-                  type: 'JSONParseError',
-                  rawData: dataMatch[1].substring(0, 100)
-                }
-              };
-            }
-          } else {
-            // SSE format is invalid - this should NOT be just a warning
-            console.error('❌ API: Invalid SSE format - missing event or data field:', {
-              line,
-              hasEvent: !!eventMatch,
-              hasData: !!dataMatch
-            });
-
-            // Yield error event instead of silently dropping
-            yield {
-              event: 'error',
-              data: {
-                error: 'Server sent malformed response',
-                type: 'SSEFormatError',
-                details: line.substring(0, 100)
-              }
-            };
-          }
-        }
-      }
-    } finally {
-      clearTimeout(timeoutId);
-      reader.releaseLock();
-    }
-  }
-
-  /**
-   * Get list of available models
-   */
-  async getModels(): Promise<{ models: Model[]; defaultModel: string }> {
-    const response = await fetch(`${API_BASE_URL}/models`, {
-      headers: this.getHeaders(),
+    // Delegate SSE parsing to shared utility
+    yield* parseSSEStream(reader, {
+      timeoutMs: 10 * 60 * 1000,  // 10 minutes
+      abortSignal,
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch models: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  /**
-   * Switch to a different model
-   */
-  async switchModel(model: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/model/switch?model=${encodeURIComponent(model)}`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to switch model: ${response.status}`);
-    }
   }
 
   /**
@@ -539,81 +379,10 @@ export class ApiService {
       return;
     }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    // Timeout (10 minutes)
-    const STREAM_TIMEOUT_MS = 10 * 60 * 1000;
-    let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      reader.cancel('Stream timeout after 10 minutes');
-    }, STREAM_TIMEOUT_MS);
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (timedOut) {
-          yield {
-            event: 'error',
-            data: {
-              error: 'Stream timeout after 10 minutes',
-              type: 'TimeoutError'
-            }
-          };
-          break;
-        }
-
-        if (done) {
-          break;
-        }
-
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-
-        const lines = buffer.split(/\r?\n\r?\n/);
-
-        if (lines.length === 1) {
-          continue;
-        }
-
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.trim() || line.trim().startsWith(':')) {
-            continue;
-          }
-
-          const eventMatch = line.match(/^event:\s*(.+)$/m);
-          const dataMatch = line.match(/^data:\s*(.+)$/m);
-
-          if (eventMatch && dataMatch) {
-            const event = eventMatch[1].trim();
-
-            try {
-              const data = JSON.parse(dataMatch[1]);
-              yield {
-                event: event as SSEEvent['event'],
-                data,
-              };
-            } catch (parseError) {
-              console.error('❌ API: Failed to parse clarification JSON:', parseError);
-              yield {
-                event: 'error',
-                data: {
-                  error: `Failed to parse server response (event: ${event})`,
-                  type: 'JSONParseError'
-                }
-              };
-            }
-          }
-        }
-      }
-    } finally {
-      clearTimeout(timeoutId);
-      reader.releaseLock();
-    }
+    // Delegate SSE parsing to shared utility
+    yield* parseSSEStream(reader, {
+      timeoutMs: 10 * 60 * 1000,  // 10 minutes
+    });
   }
 
   /**

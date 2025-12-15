@@ -295,6 +295,90 @@ class TTLCache(BaseCache[T]):
                 "hit_rate": round(self.hit_rate, 3),
             }
 
+    def items(self) -> list[tuple[str, T]]:
+        """
+        Get all non-expired key-value pairs.
+
+        Thread-safe iteration over cache contents. Returns a snapshot
+        of all active (non-expired) entries at the time of the call.
+
+        Note: Does not update hit/miss statistics.
+
+        Returns:
+            List of (key, value) tuples for non-expired entries
+        """
+        now = datetime.now()
+        with self._lock:
+            return [
+                (key, entry.value)
+                for key, entry in self._cache.items()
+                if entry.expires_at > now
+            ]
+
+    def values(self) -> list[T]:
+        """
+        Get all non-expired values.
+
+        Thread-safe iteration over cache values. Returns a snapshot
+        of all active (non-expired) values at the time of the call.
+
+        Note: Does not update hit/miss statistics.
+
+        Returns:
+            List of values for non-expired entries
+        """
+        now = datetime.now()
+        with self._lock:
+            return [
+                entry.value
+                for entry in self._cache.values()
+                if entry.expires_at > now
+            ]
+
+    def keys(self) -> list[str]:
+        """
+        Get all non-expired keys.
+
+        Thread-safe iteration over cache keys. Returns a snapshot
+        of all active (non-expired) keys at the time of the call.
+
+        Note: Does not update hit/miss statistics.
+
+        Returns:
+            List of keys for non-expired entries
+        """
+        now = datetime.now()
+        with self._lock:
+            return [
+                key
+                for key, entry in self._cache.items()
+                if entry.expires_at > now
+            ]
+
+    def size_bytes(self, value_size_fn: Optional[callable] = None) -> int:
+        """
+        Calculate total size of cached values in bytes.
+
+        Thread-safe calculation of cache size. Uses provided function
+        to calculate value size, defaults to len() for string values.
+
+        Args:
+            value_size_fn: Function to calculate value size (default: len for strings)
+
+        Returns:
+            Total size in bytes (approximate for non-string values)
+        """
+        if value_size_fn is None:
+            value_size_fn = lambda v: len(v) if isinstance(v, (str, bytes)) else 0
+
+        now = datetime.now()
+        with self._lock:
+            return sum(
+                value_size_fn(entry.value)
+                for entry in self._cache.values()
+                if entry.expires_at > now
+            )
+
 
 # Convenience function for creating caches
 def create_cache(

@@ -66,22 +66,6 @@ class HealthResponse(BaseModel):
     details: Dict[str, Any] = Field(default_factory=dict)
 
 
-class ModelInfo(BaseModel):
-    """Available model information."""
-
-    id: str
-    name: str
-    provider: Literal["anthropic", "openai", "google"]
-    description: str
-
-
-class ModelsResponse(BaseModel):
-    """List of available models."""
-
-    models: List[ModelInfo]
-    default_model: str
-
-
 class ClarificationRequest(BaseModel):
     """Request to provide clarification for interrupted workflow."""
 

@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "date": "2025-12-15 09:37",
+    "experiment_prefix": "test-debug-eval5",
+    "judge_model": "anthropic:claude-sonnet-4-5",
+    "num_examples": 1
+  },
+  "metrics": {
+    "semantic_correctness": {
+      "mean": 0,
+      "std": 0,
+      "p50": 0,
+      "p99": 0
+    },
+    "factual_accuracy": {
+      "mean": 0,
+      "std": 0,
+      "p50": 0,
+      "p99": 0
+    },
+    "completeness": {
+      "mean": 0,
+      "std": 0,
+      "p50": 0,
+      "p99": 0
+    }
+  },
+  "cost": {
+    "total_cents": 11.294800000000002,
+    "avg_per_query_cents": 11.294800000000002
+  },
+  "response_time": {
+    "mean_ms": 124433.41302871704,
+    "p50_ms": 124433.41302871704,
+    "p99_ms": 124433.41302871704
+  },
+  "results": [
+    {
+      "id": 1,
+      "question": "Jaká voda se používá v reaktoru VR-1 a je tato voda pitná?",
+      "source_document": "BZ_VR1.pdf",
+      "reference_answer": "V reaktoru se používá lehká demineralizovaná voda (H2O), která plní funkci moderátoru, reflektoru, chladiva a biologického stínění. Tato voda není pitná. Ačkoliv jde o chemicky čistou vodu, její pití je v reaktorové hale striktně zakázáno z důvodu vymezení kontrolovaného pásma a možného rizika. Pitná voda je k dispozici v šatně mimo kontrolované pásmo (Kapitola 10.2).",
+      "model_answer": "# Odpověď na dotaz o vodě v reaktoru VR-1\n\n## Jaká voda se používá v reaktoru?\n\nV reaktoru VR-1 se používá **lehká demineralizovaná voda** (dále \"demivoda\"). Tato voda plní více kritických funkcí: slouží jako moderátor neutronů, reflektor, biologické stínění a zároveň jako chladivo \\cite{BZ_VR1_L3_421}. Demineralizovaná voda je vyráběna pomocí dvoustupňové demineralizace na demineralizační stanici MIX 250 PP, která se nachází v přízemí haly reaktoru \\cite{BZ_VR1_L3_577}.\n\nKvalita demineralizované vody používané pro chlazení musí splňovat požadované parametry definované v provozní dokumentaci. Kvalita je sledována pravidelnými rozbory, které jsou zaznamenány jako součást výsledku provozních kontrol \\cite{BZ_VR1_L3_596}.\n\n## Je tato voda pitná?\n\n**Ne, voda v reaktoru NENÍ pitná.** Jedná se o demineralizovanou vodu určenou výhradně pro provoz reaktoru, nikoli pro lidskou spotřebu.\n\nDůležité je rozlišit mezi dvěma systémy vody na pracovišti:\n\n- **Demineralizovaná voda v reaktoru**: Určena pouze pro technický provoz reaktoru\n- **Pitná voda**: Na pracovišti reaktoru VR-1 je rozvod pitné vody zajištěn z vodovodního rozvodu areálu MFF UK, který je napájen z veřejné vodovodní sítě \\cite{BZ_VR1_L3_580}. Využití pitné vody v prostorách reaktorové haly je povoleno pouze k užitkovým účelům a je **striktně zakázáno její pití** z důvodů vymezení kontrolovaného pásma \\cite{BZ_VR1_L3_580}. Pitná voda je k dispozici v šatně mimo kontrolované pásmo, kde je také umístěn automat na pitnou barelovou vodu \\cite{BZ_VR1_L3_580}.",
+      "scores": {
+        "semantic_correctness": {
+          "score": null,
+          "rationale": null
+        },
+        "factual_accuracy": {
+          "score": null,
+          "rationale": null
+        },
+        "completeness": {
+          "score": null,
+          "rationale": null
+        }
+      },
+      "response_time_ms": 124433.41302871704,
+      "cost_cents": 11.294800000000002,
+      "tools_used": []
+    }
+  ]
+}

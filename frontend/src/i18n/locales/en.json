@@ -151,7 +151,8 @@
   "selection": {
     "lines_one": "{{count}} line",
     "lines_other": "{{count}} lines",
-    "clearSelection": "Clear selection"
+    "clearSelection": "Clear selection",
+    "fromDocument": "from {{document}}"
   },
   "admin": {
     "login": {

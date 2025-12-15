@@ -13,7 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
-import { Clock, DollarSign, Edit2, RotateCw, Check, X } from 'lucide-react';
+import { Clock, DollarSign, Edit2, RotateCw, Check, X, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../design-system/utils/cn';
 import type { Message } from '../../types';
@@ -387,6 +387,26 @@ export function ChatMessage({
             </>
           )}
         </div>
+
+        {/* Selected context indicator for user messages */}
+        {isUser && message.selectedContext && (
+          <div
+            className={cn(
+              'flex items-center gap-1.5 px-1',
+              'text-xs text-accent-500 dark:text-accent-400',
+              'justify-end'
+            )}
+          >
+            <FileText size={12} />
+            <span>
+              {t('selection.lines', { count: message.selectedContext.lineCount })}
+              {' '}
+              {t('selection.fromDocument', {
+                document: message.selectedContext.documentName.replace(/_/g, ' ')
+              })}
+            </span>
+          </div>
+        )}
 
         {/* Action buttons and timestamp (outside bubble) */}
         <div

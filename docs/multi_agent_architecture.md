@@ -1,6 +1,6 @@
 # SUJBOT2 Multi-Agent System Architecture Overview
 
-**Last Updated:** 2025-11-26
+**Last Updated:** 2025-12-15
 **Status:** Production Ready (Phase 7 + SSOT Refactoring)
 **Entry Point:** `src/multi_agent/runner.py`
 
@@ -71,6 +71,11 @@ Final Answer (Markdown Report)
 | **Observability** | LangSmith | Tracing, debugging, cost monitoring |
 | **Prompts** | File-based (prompts/agents/*.txt) | Agent system prompts |
 | **Tools** | Existing src.agent.tools infrastructure | 15 specialized tools |
+
+### Related Documentation
+
+- **Detailed Execution Flows**: [`multi_agent_components.md`](multi_agent_components.md) - Component interactions, state transitions, code-level execution diagrams
+- **Quick Reference**: [`multi_agent_quick_reference.md`](multi_agent_quick_reference.md) - Commands, common patterns, troubleshooting
 
 ---
 
