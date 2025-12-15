@@ -165,42 +165,50 @@ def _sanitize_tsquery(text: str) -> str:
     return sanitized
 
 
-def _run_async_safe(coro, timeout: float = 30.0):
+def _run_async_safe(coro, timeout: float = 30.0, operation_name: str = "async operation"):
     """
     Safely run async coroutine from sync context.
 
     Handles two scenarios:
     1. No running event loop: Uses asyncio.run() directly
-    2. Already in async context: Uses nest_asyncio to allow nested loops
+    2. Already in async context: Uses nest_asyncio (applied at startup in backend/main.py)
 
     Args:
         coro: Async coroutine to execute
-        timeout: Timeout in seconds (default: 30) - used for async timeout
+        timeout: Timeout in seconds (default: 30)
+        operation_name: Name of operation for error messages (default: "async operation")
 
     Returns:
         Result of the coroutine
 
     Raises:
-        asyncio.TimeoutError: If execution exceeds timeout
+        TimeoutError: If execution exceeds timeout (with actionable message)
         RuntimeError: If execution fails
     """
-    import nest_asyncio
-
     try:
         # Check if we're already in an async context
         loop = asyncio.get_running_loop()
-    except RuntimeError as e:
-        # Check specifically for "no running event loop" error
-        if "no running event loop" not in str(e).lower():
-            # This is a different RuntimeError - re-raise it
-            logger.error(f"Unexpected RuntimeError in async context check: {e}")
-            raise
+    except RuntimeError:
         # No running event loop - use asyncio.run() with timeout
-        return asyncio.run(asyncio.wait_for(coro, timeout=timeout))
+        # This is the expected case when called from sync context
+        loop = None
 
-    # If we get here, we have a running loop - use nest_asyncio
-    nest_asyncio.apply(loop)
-    return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
+    try:
+        if loop is None:
+            return asyncio.run(asyncio.wait_for(coro, timeout=timeout))
+        else:
+            # Already in async context - nest_asyncio should be applied at startup
+            # (backend/main.py applies it early to allow nested loops)
+            return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
+    except asyncio.TimeoutError as e:
+        logger.error(
+            f"Timeout ({timeout}s) exceeded during {operation_name}. "
+            "Consider increasing timeout or simplifying the query."
+        )
+        raise TimeoutError(
+            f"Operation '{operation_name}' timed out after {timeout} seconds. "
+            "The database may be under heavy load. Please try again."
+        ) from e
 
 
 class PostgresVectorStoreAdapter(VectorStoreAdapter):

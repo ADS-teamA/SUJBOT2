@@ -1191,12 +1191,21 @@ export function useChat() {
             };
           })
         );
+      } else {
+        // Log why we couldn't update state (helps debug edge cases)
+        console.warn('⚠️ useChat: Could not clear agent progress on cancel', {
+          hasCurrentMessage: !!currentMessageRef.current,
+          hasConversationId: !!currentConversationId,
+        });
       }
 
       // Clean up streaming state
       setIsStreaming(false);
       currentMessageRef.current = null;
       currentToolCallsRef.current = new Map();
+    } else {
+      // Log when there's nothing to cancel (helps debug)
+      console.log('🛑 useChat: cancelStreaming called but no active stream');
     }
   }, [currentConversationId]);
 

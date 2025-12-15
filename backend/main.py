@@ -18,8 +18,18 @@ Security features:
 # CRITICAL: Apply nest_asyncio early to allow nested event loops
 # This must be done ONCE at startup, not dynamically during requests
 # (prevents IndexError: pop from empty deque in asyncio)
-import nest_asyncio
-nest_asyncio.apply()
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError as e:
+    import sys
+    print(f"FATAL: nest_asyncio is required but not installed: {e}", file=sys.stderr)
+    print("Install with: pip install nest_asyncio", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    import sys
+    print(f"FATAL: Failed to apply nest_asyncio: {e}", file=sys.stderr)
+    sys.exit(1)
 
 import asyncio
 import json

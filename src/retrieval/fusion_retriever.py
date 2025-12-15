@@ -1,18 +1,18 @@
 """
-HyDE + Expansion Fusion Retriever
+HyDE + Expansion Fusion Retriever (4-Signal Fusion)
 
 Core retrieval algorithm:
 1. Generate HyDE document + 2 query expansions (LLM)
-2. Embed all variants (3 embeddings)
+2. Embed all variants (original + hyde + 2 expansions = 4 embeddings)
 3. Search vector store with each embedding (PARALLEL with asyncio.gather)
 4. Min-max normalize each score set
-5. Weighted fusion: final = 0.6 * hyde + 0.4 * avg(expansions)
+5. Weighted fusion: final = 0.5 * original + 0.25 * hyde + 0.25 * avg(expansions)
 6. Return top-k results
 
 Research basis:
 - HyDE: Gao et al. (2022) - +15-30% recall for zero-shot retrieval
 - Query Expansion: Standard IR technique for vocabulary mismatch
-- Weighted Fusion: Empirically optimized (w_hyde=0.6, w_exp=0.4)
+- 4-Signal Fusion: original query for keyword match + semantic variants
 """
 
 import asyncio
@@ -26,43 +26,50 @@ from .deepinfra_client import DeepInfraClient
 from .hyde_expansion import HyDEExpansionGenerator, HyDEExpansionResult
 
 
-def _run_async_safe(coro, timeout: float = 30.0):
+def _run_async_safe(coro, timeout: float = 30.0, operation_name: str = "async operation"):
     """
     Safely run async coroutine from sync context.
 
     Handles two scenarios:
     1. No running event loop: Uses asyncio.run() directly
-    2. Already in async context: Uses nest_asyncio to allow nested loops
+    2. Already in async context: Uses nest_asyncio (applied at startup in backend/main.py)
 
     Args:
         coro: Async coroutine to execute
         timeout: Timeout in seconds (default: 30)
+        operation_name: Name of operation for error messages (default: "async operation")
 
     Returns:
         Result of the coroutine
 
     Raises:
-        asyncio.TimeoutError: If execution exceeds timeout
+        TimeoutError: If execution exceeds timeout (with actionable message)
         RuntimeError: If execution fails
     """
-    import nest_asyncio
-
     try:
         # Check if we're already in an async context
         loop = asyncio.get_running_loop()
-    except RuntimeError as e:
-        # Check specifically for "no running event loop" error
-        if "no running event loop" not in str(e).lower():
-            # This is a different RuntimeError - re-raise it
-            logger.error(f"Unexpected RuntimeError in async context check: {e}")
-            raise
+    except RuntimeError:
         # No running event loop - use asyncio.run() with timeout
-        return asyncio.run(asyncio.wait_for(coro, timeout=timeout))
+        # This is the expected case when called from sync context
+        loop = None
 
-    # If we get here, we have a running loop - use nest_asyncio
-    # IMPORTANT: Pass the specific loop to avoid corrupting other loops
-    nest_asyncio.apply(loop)
-    return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
+    try:
+        if loop is None:
+            return asyncio.run(asyncio.wait_for(coro, timeout=timeout))
+        else:
+            # Already in async context - nest_asyncio should be applied at startup
+            # (backend/main.py applies it early to allow nested loops)
+            return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
+    except asyncio.TimeoutError as e:
+        logger.error(
+            f"Timeout ({timeout}s) exceeded during {operation_name}. "
+            "Consider increasing timeout or simplifying the query."
+        )
+        raise TimeoutError(
+            f"Operation '{operation_name}' timed out after {timeout} seconds. "
+            "The database or search service may be under heavy load. Please try again."
+        ) from e
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +215,8 @@ class FusionRetriever:
                     self._parallel_search(
                         query, orig_emb, hyde_emb, exp_0_emb, exp_1_emb,
                         candidates_k, document_filter
-                    )
+                    ),
+                    operation_name="Layer 3 parallel search"
                 )
             else:
                 # Fallback to sequential (for backwards compatibility)
@@ -390,6 +398,7 @@ class FusionRetriever:
 
         This is ~4x faster than sequential searches.
         Original query uses HYBRID search (vector + BM25).
+        Uses return_exceptions=True to handle partial failures gracefully.
         """
         results = await asyncio.gather(
             # Original query: HYBRID search for keyword matching
@@ -415,8 +424,38 @@ class FusionRetriever:
                 k=k,
                 document_filter=document_filter,
             ),
+            return_exceptions=True,  # Don't fail all if one fails
         )
-        return results[0], results[1], results[2], results[3]
+
+        # Handle partial failures - log errors and return empty list for failed searches
+        search_names = ["original", "hyde", "expansion_0", "expansion_1"]
+        processed_results = []
+        failed_count = 0
+
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Parallel search '{search_names[i]}' failed: {result}",
+                    exc_info=result if logger.isEnabledFor(logging.DEBUG) else None
+                )
+                processed_results.append([])  # Empty list for failed search
+                failed_count += 1
+            else:
+                processed_results.append(result)
+
+        if failed_count == 4:
+            # All searches failed - raise the first exception
+            first_error = next(r for r in results if isinstance(r, Exception))
+            raise RuntimeError(
+                f"All parallel searches failed. First error: {first_error}"
+            ) from first_error
+
+        if failed_count > 0:
+            logger.warning(
+                f"{failed_count}/4 parallel searches failed, proceeding with partial results"
+            )
+
+        return tuple(processed_results)
 
     def search_layer2(
         self,
@@ -490,7 +529,8 @@ class FusionRetriever:
                     self._parallel_search_layer2(
                         hyde_emb, exp_0_emb, exp_1_emb,
                         candidates_k, document_filter
-                    )
+                    ),
+                    operation_name="Layer 2 parallel search"
                 )
             else:
                 # Sequential fallback
@@ -572,6 +612,12 @@ class FusionRetriever:
         exp0_min, exp0_max = self._get_min_max(exp0_scores)
         exp1_min, exp1_max = self._get_min_max(exp1_scores)
 
+        # For Layer 2, we only have hyde + expansions (no original query embedding)
+        # Normalize weights to sum to 1.0 for Layer 2
+        l2_total_weight = self.config.hyde_weight + self.config.expansion_weight
+        l2_hyde_weight = self.config.hyde_weight / l2_total_weight  # 0.5
+        l2_exp_weight = self.config.expansion_weight / l2_total_weight  # 0.5
+
         fused_results = []
         for section_id, data in section_data.items():
             hyde_norm = self._normalize_score(data["hyde"], hyde_min, hyde_max)
@@ -579,9 +625,10 @@ class FusionRetriever:
             exp1_norm = self._normalize_score(data["exp1"], exp1_min, exp1_max)
 
             exp_avg = (exp0_norm + exp1_norm) / 2.0
+            # Use normalized weights so scores range from 0 to 1.0 (not 0 to 0.5)
             fused_score = (
-                self.config.hyde_weight * hyde_norm
-                + self.config.expansion_weight * exp_avg
+                l2_hyde_weight * hyde_norm
+                + l2_exp_weight * exp_avg
             )
 
             result = data["data"].copy()
@@ -607,6 +654,7 @@ class FusionRetriever:
     ) -> tuple:
         """
         Execute parallel Layer 2 searches with asyncio.gather.
+        Uses return_exceptions=True to handle partial failures gracefully.
         """
         results = await asyncio.gather(
             self.vector_store._async_search_layer2(
@@ -624,5 +672,34 @@ class FusionRetriever:
                 k=k,
                 document_filter=document_filter,
             ),
+            return_exceptions=True,  # Don't fail all if one fails
         )
-        return results[0], results[1], results[2]
+
+        # Handle partial failures
+        search_names = ["hyde", "expansion_0", "expansion_1"]
+        processed_results = []
+        failed_count = 0
+
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(
+                    f"L2 parallel search '{search_names[i]}' failed: {result}",
+                    exc_info=result if logger.isEnabledFor(logging.DEBUG) else None
+                )
+                processed_results.append([])
+                failed_count += 1
+            else:
+                processed_results.append(result)
+
+        if failed_count == 3:
+            first_error = next(r for r in results if isinstance(r, Exception))
+            raise RuntimeError(
+                f"All L2 parallel searches failed. First error: {first_error}"
+            ) from first_error
+
+        if failed_count > 0:
+            logger.warning(
+                f"{failed_count}/3 L2 parallel searches failed, proceeding with partial results"
+            )
+
+        return tuple(processed_results)
