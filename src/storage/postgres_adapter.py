@@ -629,23 +629,66 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         """
         dense_rows = await conn.fetch(dense_sql, *params)
 
-        # 2. Get BM25 results (same number of candidates for balanced fusion)
-        bm25_results = []
+        # 2. Get sparse results (BM25 or PostgreSQL full-text search)
+        sparse_results = []
         if self.bm25_store:
+            # Use external BM25 store if available
             try:
                 if layer == 1:
-                    bm25_results = self.bm25_store.search_layer1(query_text, k=candidates_k)
+                    sparse_results = self.bm25_store.search_layer1(query_text, k=candidates_k)
                 elif layer == 2:
-                    bm25_results = self.bm25_store.search_layer2(
+                    sparse_results = self.bm25_store.search_layer2(
                         query_text, k=candidates_k, document_filter=document_filter
                     )
                 else:  # layer == 3
-                    bm25_results = self.bm25_store.search_layer3(
+                    sparse_results = self.bm25_store.search_layer3(
                         query_text, k=candidates_k, document_filter=document_filter
                     )
             except Exception as e:
-                logger.warning(f"BM25 search failed: {e}. Using dense-only.")
-                bm25_results = []
+                logger.warning(f"BM25 search failed: {e}. Falling back to PostgreSQL full-text.")
+                sparse_results = []
+
+        # Fallback to PostgreSQL full-text search if BM25 not available or failed
+        if not sparse_results and layer >= 2:  # content_tsv exists on layer2/3
+            try:
+                # Convert query to tsquery (simple words with OR)
+                # Handle Czech characters and create search terms
+                search_terms = " | ".join(
+                    word for word in query_text.split()
+                    if len(word) > 2 and word.isalnum()
+                )
+                if search_terms:
+                    fts_where = "WHERE content_tsv @@ to_tsquery('simple', $1)"
+                    fts_params = [search_terms]
+                    fts_param_idx = 1
+
+                    if document_filter:
+                        fts_param_idx += 1
+                        fts_where += f" AND document_id = ${fts_param_idx}"
+                        fts_params.append(document_filter)
+
+                    fts_param_idx += 1
+                    fts_sql = f"""
+                        SELECT chunk_id,
+                               ts_rank(content_tsv, to_tsquery('simple', $1)) AS score
+                        FROM vectors.layer{layer}
+                        {fts_where}
+                        ORDER BY score DESC
+                        LIMIT ${fts_param_idx}
+                    """
+                    fts_params.append(candidates_k)
+                    fts_rows = await conn.fetch(fts_sql, *fts_params)
+                    sparse_results = [
+                        {"chunk_id": row["chunk_id"], "score": float(row["score"])}
+                        for row in fts_rows
+                    ]
+                    logger.debug(f"PostgreSQL FTS returned {len(sparse_results)} results")
+            except Exception as e:
+                logger.warning(f"PostgreSQL FTS failed: {e}. Using dense-only.")
+                sparse_results = []
+
+        # Legacy variable name for compatibility
+        bm25_results = sparse_results
 
         # 3. RRF Fusion with Missing Rank Imputation
         # RRF k=60 is research-optimal (see hybrid_search.py and CLAUDE.md #8)
@@ -804,6 +847,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         document_filter: Optional[str] = None,
         similarity_threshold: Optional[float] = None,
         metadata_filter: Optional[MetadataFilter] = None,
+        query_text: Optional[str] = None,
     ) -> List[Dict]:
         """
         Direct Layer 3 search (sync wrapper).
@@ -814,13 +858,14 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             document_filter: Filter by document ID
             similarity_threshold: Minimum similarity score
             metadata_filter: Filter by categories, keywords, entities
+            query_text: Original query text for hybrid search (BM25 + vector)
 
         Returns:
             List of matching chunks
         """
         return _run_async_safe(
             self._async_search_layer3(
-                query_embedding, k, document_filter, similarity_threshold, metadata_filter
+                query_embedding, k, document_filter, similarity_threshold, metadata_filter, query_text
             )
         )
 
@@ -831,6 +876,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         document_filter: Optional[str] = None,
         similarity_threshold: Optional[float] = None,
         metadata_filter: Optional[MetadataFilter] = None,
+        query_text: Optional[str] = None,
     ) -> List[Dict]:
         """
         Direct Layer 3 search (async version for parallel execution).
@@ -843,12 +889,13 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             document_filter: Filter by document ID
             similarity_threshold: Minimum similarity score
             metadata_filter: Filter by categories, keywords, entities
+            query_text: Original query text for hybrid search (BM25 + vector)
 
         Returns:
             List of matching chunks
         """
         return await self._async_search_layer3(
-            query_embedding, k, document_filter, similarity_threshold, metadata_filter
+            query_embedding, k, document_filter, similarity_threshold, metadata_filter, query_text
         )
 
     async def _ensure_pool(self):
@@ -866,6 +913,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         document_filter: Optional[str],
         similarity_threshold: Optional[float],
         metadata_filter: Optional[MetadataFilter] = None,
+        query_text: Optional[str] = None,
     ) -> List[Dict]:
         """
         Async Layer 3 search with optional metadata filtering.
@@ -876,6 +924,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             document_filter: Filter by document ID
             similarity_threshold: Minimum similarity score
             metadata_filter: Filter by categories, keywords, entities
+            query_text: Original query text for hybrid search (BM25 + vector)
 
         Returns:
             List of matching chunks
@@ -891,6 +940,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 k=k,
                 document_filter=document_filter,
                 metadata_filter=metadata_filter,
+                query_text=query_text,
             )
 
             # Apply similarity threshold

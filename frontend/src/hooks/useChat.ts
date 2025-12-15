@@ -1169,12 +1169,36 @@ export function useChat() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
 
+      // Clear agent progress in the message state (fixes progress animation on cancel)
+      // IMPORTANT: Messages are stored in conversations[].messages, not a separate state
+      if (currentMessageRef.current && currentConversationId) {
+        const messageId = currentMessageRef.current.id;
+        setConversations((prev) =>
+          prev.map((conv) => {
+            if (conv.id !== currentConversationId) return conv;
+            return {
+              ...conv,
+              messages: conv.messages.map((msg) =>
+                msg.id === messageId
+                  ? {
+                      ...msg,
+                      agentProgress: msg.agentProgress
+                        ? { ...msg.agentProgress, isStreaming: false, currentAgent: null }
+                        : undefined,
+                    }
+                  : msg
+              ),
+            };
+          })
+        );
+      }
+
       // Clean up streaming state
       setIsStreaming(false);
       currentMessageRef.current = null;
       currentToolCallsRef.current = new Map();
     }
-  }, []);
+  }, [currentConversationId]);
 
   /**
    * Clear spending limit error (dismiss modal)

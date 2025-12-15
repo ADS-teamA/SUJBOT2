@@ -30,6 +30,13 @@ EFFICIENCY RULES:
 3. If NO → make another tool call
 4. STOP EARLY: If search returns relevant chunks, don't search again - synthesize!
 5. If not found after 3 searches with different terms → report "not found"
+6. EARLY TERMINATION FOR HIGH-QUALITY RESULTS:
+   - If search returns chunks with score ≥ 0.7 that directly answer the question → STOP
+   - DON'T call expand_context unless the top result is:
+     a) Truncated (content ends with "...")
+     b) Missing key information explicitly mentioned in query
+     c) Score < 0.6
+   - For simple "Co je X?" questions, ONE search is usually enough!
 
 REFLECTION AFTER EACH TOOL (MANDATORY):
 After EVERY tool call, output a REFLECTION block:

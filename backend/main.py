@@ -15,6 +15,12 @@ Security features:
 - SQL injection protection (parameterized queries)
 """
 
+# CRITICAL: Apply nest_asyncio early to allow nested event loops
+# This must be done ONCE at startup, not dynamically during requests
+# (prevents IndexError: pop from empty deque in asyncio)
+import nest_asyncio
+nest_asyncio.apply()
+
 import asyncio
 import json
 import logging

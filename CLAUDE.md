@@ -20,12 +20,20 @@ mcp__langsmith__list_datasets      # List evaluation datasets
 
 ## LangSmith Evaluation
 
-Run QA evaluation on indexed documents using LLM-as-judge:
+Run QA evaluation on indexed documents using LLM-as-judge.
 
+**When user says "evaluuj v langsmith", run this command:**
 ```bash
-# Full evaluation (20 QA pairs, ~$1.50)
-uv run python scripts/langsmith_eval.py
+uv run python scripts/langsmith_eval.py \
+    --dataset-path dataset/dataset_exp_ver_2.json \
+    --dataset-name "sujbot2-eval-qa-40" \
+    --replace-dataset \
+    --experiment-prefix "sujbot2-qa-40-optimized" \
+    --judge-model anthropic:claude-sonnet-4-5
+```
 
+**Other commands:**
+```bash
 # Quick test (5 examples)
 uv run python scripts/langsmith_eval.py --limit 5
 
@@ -41,8 +49,8 @@ uv run python scripts/langsmith_eval.py --judge-model openai:gpt-4o-mini
 - `factual_accuracy` - Are numbers/names/dates correct?
 - `completeness` - Are all key points covered?
 
-**Dataset:** `dataset/eval.json` (20 Czech legal/nuclear QA pairs)
-**LangSmith Dataset:** `sujbot2-eval-qa`
+**Dataset:** `dataset/dataset_exp_ver_2.json` (40 Czech legal/nuclear QA pairs)
+**LangSmith Dataset:** `sujbot2-eval-qa-40`
 
 ## Common Commands
 
@@ -109,6 +117,7 @@ Storage (PostgreSQL: vectors + graph + checkpoints)
 - `src/exceptions.py` - Typed exception hierarchy (SSOT for error handling)
 - `src/utils/cache.py` - Unified `LRUCache` + `TTLCache` abstractions
 - `src/multi_agent/core/agent_initializer.py` - SSOT for agent initialization
+- `src/multi_agent/prompts/loader.py` - SSOT for loading system prompts from `prompts/`
 - `src/agent/providers/factory.py` - Provider creation + `detect_provider_from_model()`
 
 ## Critical Constraints (DO NOT CHANGE)
@@ -334,7 +343,53 @@ result = cache.get("key")  # None if not found
 # Provider detection (don't inline this logic!)
 from src.agent.providers.factory import detect_provider_from_model
 provider = detect_provider_from_model("claude-sonnet-4")  # → "anthropic"
+
+# Load prompts (SSOT: prompts/ directory)
+from src.multi_agent.prompts.loader import load_prompt, get_prompt_loader
+system_prompt = load_prompt("extractor")  # Loads prompts/agents/extractor.txt
 ```
+
+### System Prompts (SSOT: `prompts/` directory)
+
+**CRITICAL: ALL LLM system prompts MUST be loaded from `prompts/` directory!**
+
+```
+prompts/
+├── agents/                    # Multi-agent system prompts
+│   ├── orchestrator.txt       # Orchestrator routing/synthesis
+│   ├── extractor.txt          # Extractor agent
+│   ├── classifier.txt         # Classifier agent
+│   ├── compliance.txt         # Compliance agent
+│   ├── risk_verifier.txt      # Risk verifier agent
+│   ├── requirement_extractor.txt
+│   ├── citation_auditor.txt
+│   └── gap_synthesizer.txt
+├── document_summary.txt       # Document summary generation
+├── section_summary.txt        # Section summary generation
+├── hyde_expansion.txt         # HyDE query expansion
+├── entity_extraction.txt      # Entity extraction (legacy)
+└── relationship_extraction.txt # Relationship extraction (legacy)
+```
+
+**How to load prompts:**
+```python
+# For multi-agent system (agents in prompts/agents/)
+from src.multi_agent.prompts.loader import load_prompt, get_prompt_loader
+system_prompt = load_prompt("extractor")  # → prompts/agents/extractor.txt
+
+# For pipeline components (prompts in prompts/)
+from pathlib import Path
+prompts_dir = Path(__file__).parent.parent / "prompts"
+prompt = (prompts_dir / "document_summary.txt").read_text()
+```
+
+**Rules:**
+- ❌ **NEVER** hardcode system prompts in Python code
+- ❌ **NEVER** use inline f-strings for complex system prompts
+- ✅ **ALWAYS** load from `prompts/` directory
+- ✅ **ALWAYS** use `PromptLoader` for agent prompts (supports caching, hot-reload)
+
+**Why:** Prompts are easier to iterate on, version control, and review when externalized.
 
 ### Code Quality
 
@@ -497,5 +552,5 @@ curl -s "https://eu.api.smith.langchain.com/api/v1/runs/query" \
 
 ---
 
-**Last Updated:** 2025-12-12
-**Version:** PHASE 1-7 + Multi-Agent + Graphiti KG + Gemini Extractor + Exception Hierarchy + SSOT Refactoring + LangSmith Evaluation
+**Last Updated:** 2025-12-15
+**Version:** PHASE 1-7 + Multi-Agent + Graphiti KG + Gemini Extractor + Exception Hierarchy + SSOT Refactoring + LangSmith Evaluation + Prompts SSOT
