@@ -511,11 +511,23 @@ async def chat_stream(
     generated_title = None
     if request.conversation_id and not request.skip_save_user_message:
         try:
+            # Build user message metadata (for selectedContext display after page refresh)
+            user_metadata = None
+            if request.selected_context:
+                user_metadata = {
+                    "selected_context": {
+                        "document_name": request.selected_context.document_name,
+                        "line_count": len([l for l in request.selected_context.text.split('\n') if l.strip()]),
+                        "page_start": request.selected_context.page_start,
+                        "page_end": request.selected_context.page_end,
+                    }
+                }
+
             await adapter.append_message(
                 conversation_id=request.conversation_id,
                 role="user",
                 content=request.message,
-                metadata=None
+                metadata=user_metadata
             )
             logger.debug(f"Saved user message to conversation {request.conversation_id}")
 
