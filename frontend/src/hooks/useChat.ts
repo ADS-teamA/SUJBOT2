@@ -326,6 +326,7 @@ export function useChat() {
           timestamp: new Date().toISOString(),
           // Store selected context metadata for display below message
           selectedContext: selectedContext ? {
+            documentId: selectedContext.documentId,
             documentName: selectedContext.documentName,
             lineCount: selectedContext.text.split('\n').filter(line => line.trim()).length || 1,
             pageStart: selectedContext.pageStart,

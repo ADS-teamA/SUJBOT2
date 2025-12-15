@@ -542,6 +542,23 @@ export class ApiService {
         };
       }
 
+      // Extract selectedContext from metadata for user messages (persisted indicator)
+      let selectedContext = undefined;
+      if (msg.role === 'user' && msg.metadata?.selected_context) {
+        const sc = msg.metadata.selected_context;
+        // Type-safe extraction with validation
+        if (sc.document_name && typeof sc.line_count === 'number' &&
+            typeof sc.page_start === 'number' && typeof sc.page_end === 'number') {
+          selectedContext = {
+            documentId: sc.document_id,
+            documentName: sc.document_name,
+            lineCount: sc.line_count,
+            pageStart: sc.page_start,
+            pageEnd: sc.page_end,
+          };
+        }
+      }
+
       return {
         id: msg.id,
         role: msg.role,
@@ -550,6 +567,7 @@ export class ApiService {
         metadata: msg.metadata,
         cost, // Transformed cost data
         toolCalls: msg.metadata?.tool_calls, // Map toolCalls from metadata if present
+        selectedContext, // Persisted PDF selection indicator
       };
     });
   }
