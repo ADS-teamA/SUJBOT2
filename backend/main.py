@@ -514,10 +514,13 @@ async def chat_stream(
             # Build user message metadata (for selectedContext display after page refresh)
             user_metadata = None
             if request.selected_context:
+                # Calculate line count same way as frontend: non-empty lines, min 1
+                line_count = len([l for l in request.selected_context.text.split('\n') if l.strip()]) or 1
                 user_metadata = {
                     "selected_context": {
+                        "document_id": request.selected_context.document_id,
                         "document_name": request.selected_context.document_name,
-                        "line_count": len([l for l in request.selected_context.text.split('\n') if l.strip()]),
+                        "line_count": line_count,
                         "page_start": request.selected_context.page_start,
                         "page_end": request.selected_context.page_end,
                     }

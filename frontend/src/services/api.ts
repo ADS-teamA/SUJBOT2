@@ -546,12 +546,17 @@ export class ApiService {
       let selectedContext = undefined;
       if (msg.role === 'user' && msg.metadata?.selected_context) {
         const sc = msg.metadata.selected_context;
-        selectedContext = {
-          documentName: sc.document_name,
-          lineCount: sc.line_count,
-          pageStart: sc.page_start,
-          pageEnd: sc.page_end,
-        };
+        // Type-safe extraction with validation
+        if (sc.document_name && typeof sc.line_count === 'number' &&
+            typeof sc.page_start === 'number' && typeof sc.page_end === 'number') {
+          selectedContext = {
+            documentId: sc.document_id,
+            documentName: sc.document_name,
+            lineCount: sc.line_count,
+            pageStart: sc.page_start,
+            pageEnd: sc.page_end,
+          };
+        }
       }
 
       return {

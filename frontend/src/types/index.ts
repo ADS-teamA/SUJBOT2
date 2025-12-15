@@ -37,6 +37,8 @@ export interface ToolHealth {
  * Stored in user messages to show indicator below message bubble.
  */
 export interface MessageSelectedContext {
+  /** Document ID for potential future features (e.g., click to open PDF) */
+  documentId?: string;
   /** Human-readable document name */
   documentName: string;
   /** Number of non-empty lines in selection */
