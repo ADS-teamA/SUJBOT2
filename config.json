@@ -62,7 +62,7 @@
       "eng"
     ],
     "detect_language_per_element": true,
-    "infer_table_structure": true,
+    "infer_table_structure": false,
     "extract_images": false,
     "include_page_breaks": true
   },

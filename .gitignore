@@ -77,6 +77,7 @@ htmlcov/
 data_test/*.pdf
 !data_test/.gitkeep
 data_legacy/
+chunking_data/
 
 # Note: output/ is now tracked - contains indexed documents for testing
 

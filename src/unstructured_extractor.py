@@ -1,8 +1,6 @@
 """
 PHASE 1: Document Extraction using Unstructured.io
 
-Multi-format document extraction replacing Docling (v1.x → v2.x).
-
 Supported Formats (tested):
 - PDF (.pdf) - detectron2_mask_rcnn (Mask R-CNN X_101_32x8d_FPN_3x - most accurate)
 - PowerPoint (.pptx, .ppt) - presentation structure and speaker notes
@@ -12,11 +10,6 @@ Supported Formats (tested):
 - LaTeX (.tex, .latex) - scientific documents with math
 
 Additional formats supported via partition_auto() fallback - see Unstructured.io docs.
-
-Migration from Docling:
-- Reason: Improved § paragraph detection in legal documents (10/10 vs 0/10 on test doc Sb_1997_18)
-- Breaking changes: Configuration env vars, data structure fields extended
-- See README.md "Migration Guide" for upgrade instructions
 
 Features:
 - Explicit hierarchy via parent_id relationships (not font-size inference)
@@ -51,6 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import math
+from typing import Any
 
 import numpy as np
 
@@ -88,19 +82,14 @@ class DocumentSection:
     Data structure used throughout the indexing pipeline (Phases 1-7).
     Designed for compatibility with downstream chunking and embedding tools.
 
-    Previously used with Docling (v1.x), now populated by Unstructured.io (v2.x).
+    Populated by Unstructured.io (v2.x).
     Field structure remains stable to preserve existing vector stores and tests.
-
-    Note on level vs depth:
-    - level: Semantic hierarchy (0=document, 1=chapter, 2=section, 3=subsection)
-    - depth: Tree position (depth = parent.depth + 1)
-    - They are NOT equivalent: documents with skipped levels break depth = level + 1
     """
 
     section_id: str
     title: str
     content: str
-    level: int  # Hierarchy level (0=root, 1=major, 2=chapter, 3=section, etc.)
+    level: int  # Semantic hierarchy level (0=root, 1=major, 2=chapter, 3=section, etc.)
     depth: int  # Depth in hierarchy tree (1=root, 2=child of root, etc.)
     parent_id: Optional[str]
     children_ids: List[str]
@@ -153,7 +142,6 @@ class DocumentSection:
             "char_start": self.char_start,
             "char_end": self.char_end,
             "content_length": self.content_length,
-            "element_type": self.element_type,
             "element_category": self.element_category,
             "summary": self.summary,
         }
@@ -192,7 +180,7 @@ class ExtractedDocument:
     Output of PHASE 1+2: Document extraction and summary generation.
     Used as input for PHASE 3 (multi-layer chunking) and downstream pipeline.
 
-    Previously populated by Docling (v1.x), now by Unstructured.io (v2.x).
+    Populated by Unstructured.io (v2.x).
     """
 
     # Identification
@@ -226,7 +214,7 @@ class ExtractedDocument:
     title: Optional[str] = None
 
     # Extraction metadata
-    extraction_method: str = "unstructured_detectron2"
+    extraction_method: str = "unstructured_yolox"
     config: Optional[Dict] = None
 
     def __post_init__(self) -> None:
@@ -300,7 +288,7 @@ class ExtractionConfig:
 
     # Unstructured model configuration
     strategy: str = "hi_res"  # "hi_res", "fast", "ocr_only"
-    model: str = "detectron2_mask_rcnn"  # "detectron2_mask_rcnn" (most accurate), "yolox" (faster)
+    model: str = "yolox"  # "detectron2_mask_rcnn" (most accurate), "yolox" (faster)
 
     # Language detection
     languages: List[str] = field(default_factory=lambda: ["ces", "eng"])
@@ -395,7 +383,7 @@ class ExtractionConfig:
             gemini_file_size_threshold_mb=get_float_env("GEMINI_FILE_SIZE_THRESHOLD_MB", 10.0),
             # Unstructured settings
             strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
-            model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),
+            model=os.getenv("UNSTRUCTURED_MODEL", "yolox"),
             languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),
             detect_language_per_element=get_bool_env("UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT", True),
             infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", True),
@@ -442,7 +430,7 @@ def _normalize_text_diacritics(text: str) -> str:
         "mimořádná událost"
 
     Note:
-        Applied automatically in _build_sections() and detect_element_type_score()
+        Applied automatically in _build_sections()
         to ensure consistent text quality throughout the extraction pipeline.
     """
     # 1. NFC normalization (combining marks → precomposed)
@@ -626,202 +614,475 @@ def filter_rotated_elements(
 # GENERIC HIERARCHY DETECTION
 # ============================================================================
 
-
-def detect_element_type_score(element: Element) -> Tuple[str, float]:
+def _get_structure_signature(text: str) -> str:
     """
-    Detect element type and assign hierarchy score.
-
-    Returns:
-        Tuple of (type_name, score)
-        - score: 0.0 (low hierarchy) to 1.0 (high hierarchy)
+    Generate a 'signature' for a title to detect if two titles are siblings.
     """
-    category = element.category if hasattr(element, 'category') else 'Unknown'
-    text = _normalize_text_diacritics(str(element)).strip()
+    text = text.strip().lower()
+    tokens = text.split()
+    if not tokens:
+        return ""
 
-    # Title elements are high priority
-    if category == "Title":
-        # Check for document title patterns
-        if any(kw in text.upper() for kw in ["ZÁKON", "VYHLÁŠKA", "NAŘÍZENÍ", "SMĚRNICE"]):
-            return ("Document Title", 1.0)
-        # Check for major parts
-        if re.search(r"^(ČÁST|PART|CHAPTER|HLAVA|ARTICLE)\s+[IVX\d]+", text, re.IGNORECASE):
-            return ("Major Heading", 0.9)
-        # Check for paragraphs
-        if re.match(r"^§\s*\d+", text):
-            return ("Paragraph", 0.8)
-        # Generic title
-        return ("Title", 0.7)
+    # 1. Structural Markers: Only care about the marker word.
+    # Note: Keys are normalized (lowercase, no dots) to match stripped token.
+    markers = {
+        '§': 'section',
+        'section': 'section',
+        'article': 'article',
+        'článek': 'article',
+        'čl': 'article',  # Cleaned 'čl.' matches this
+        'chapter': 'chapter',
+        'hlava': 'chapter',
+        'part': 'part',
+        'část': 'part',
+        'oddíl': 'division',
+        'díl': 'division',
+        'zakon': 'law',
+        'zákon': 'law'
+    }
 
-    # ListItem indicates subsections
-    if category == "ListItem":
-        # Numbered subsections
-        if re.match(r"^\(\d+\)", text):
-            return ("Subsection", 0.5)
-        # Lettered items
-        if re.match(r"^[a-z]\)", text):
-            return ("Item", 0.4)
-        # Numbered items
-        if re.match(r"^\d+\.", text):
-            return ("Sub-item", 0.3)
-        return ("ListItem", 0.5)
+    # Strip punctuation from first token (e.g. "Čl." -> "čl")
+    first_token_clean = re.sub(r'[^\w§]', '', tokens[0])
 
-    # Narrative text is low priority
-    if category == "NarrativeText":
-        return ("Narrative Text", 0.2)
+    if first_token_clean in markers:
+        return markers[first_token_clean]
 
-    # Headers/footers are outside hierarchy (PageBreaks removed - not structural)
-    if category in ["Header", "Footer"]:
-        return (category, 0.0)
+        # 2. Numbered items
+    if re.match(r'^[\d\.]+$', tokens[0]):
+        return "numbered_item"
 
-    # Tables
-    if category == "Table":
-        return ("Table", 0.6)
+    # 3. Lettered items (a), b))
+    if re.match(r'^[a-z]\)$', tokens[0]):
+        return "lettered_item"
 
-    return ("Unknown", 0.3)
+    return text[:20]
 
 
-def detect_hierarchy_generic(elements: List[Element], config: ExtractionConfig) -> List[Dict]:
+def _get_numbering_depth(text: str) -> int:
     """
-    Generic hierarchy detection based on parent_id relationships.
-
-    Uses Unstructured.io's element.id and parent_id to build clean hierarchy tree.
-    NOT language or document-type specific.
-
-    Args:
-        elements: List of Unstructured elements
-        config: Extraction configuration
-
-    Returns:
-        List of dicts with hierarchy metadata for each element
+    Calculates depth based on numbering pattern (e.g., '1.2.3' -> 3).
+    Returns 0 if no numbering detected.
+    Handles '1.', '1.2', 'A.1' patterns.
     """
-    logger.info(f"Detecting hierarchy for {len(elements)} elements (parent-based)")
+    text = text.strip()
+    match = re.match(r'^((?:[A-Za-z0-9]+\.)+[A-Za-z0-9]*)\s', text + " ")
+    if match:
+        numbering = match.group(1).rstrip('.')
+        if numbering:
+            return len(numbering.split('.'))
+    return 0
 
-    # First pass: Extract element.id and parent_id, build lookup table
+
+def _get_list_style(text: str) -> str:
+    """
+    Determine list style to match continuations across pages.
+    e.g. '1.', 'a)', 'A.', '(1)'
+    """
+    text = text.strip()
+    if re.match(r'^\d+\.', text): return "decimal_dot"  # 1.
+    if re.match(r'^[a-z]\)', text): return "alpha_paren"  # a)
+    if re.match(r'^\([a-z]\)', text): return "paren_alpha_paren"  # (a)
+    if re.match(r'^\(\d+\)', text): return "paren_decimal_paren"  # (1)
+    if re.match(r'^[A-Z]\.', text): return "upper_alpha_dot"  # A.
+    return "unknown"
+
+
+def build_robust_hierarchy(elements: List[Element], config: ExtractionConfig) -> List[Dict]:
+    """
+    Builds a robust hierarchy by cleaning Unstructured.io output.
+
+    Logic:
+    0. Classify UncategorizedText that looks like Titles/Headers (Multi-signal similarity).
+    1. Filter Headers/Footers.
+    2. Flatten NarrativeText.
+    3. Detect Siblings & Cousins using signatures AND numbering depth.
+    4. Fix Page Orphans by adopting grandparent if sibling conflict exists (Local only).
+    """
+    logger.info(f"Building robust hierarchy for {len(elements)} elements...")
+    if not elements:
+        return []
+
+    # --- Pass 0: Statistics & Classification Correction ---
+    # Collect data for similarity comparison
+    title_sizes = []
+    title_x_positions = []  # Track left-alignment
+
+    # NEW: Track known header/footer text content for exact matching
+    known_header_footer_texts = set()
+    header_sizes = []  # Track header/footer sizes
+
+    # NEW: Track spatial zones for headers and footers
+    header_y_ranges = []  # List of (y_min, y_max)
+    footer_y_ranges = []
+
+    for elem in elements:
+        meta = getattr(elem, 'metadata', None)
+        size = 0.0
+        x_pos = 0.0
+        y_min = 0.0
+        y_max = 0.0
+
+        if meta and hasattr(meta, 'to_dict'):
+            meta_dict = meta.to_dict()
+            size = meta_dict.get('font_size', 0.0) or 0.0
+
+            # Extract coordinates
+            coords = meta_dict.get('coordinates', {})
+            if coords and 'points' in coords:
+                points = coords['points']
+                ys = [p[1] for p in points]
+                xs = [p[0] for p in points]
+                if ys: y_min, y_max = min(ys), max(ys)
+                if xs: x_pos = min(xs)
+
+        cat = getattr(elem, 'category', 'Unknown')
+        if cat == 'Title' and size > 0:
+            title_sizes.append(size)
+            title_x_positions.append(x_pos)
+        elif cat == 'Header':
+            if size > 0: header_sizes.append(size)
+            if y_max > 0: header_y_ranges.append((y_min, y_max))
+            text_content = _normalize_text_diacritics(str(elem)).strip().lower()
+            if text_content: known_header_footer_texts.add(text_content)
+        elif cat == 'Footer':
+            if size > 0: header_sizes.append(size)
+            if y_max > 0: footer_y_ranges.append((y_min, y_max))
+            text_content = _normalize_text_diacritics(str(elem)).strip().lower()
+            if text_content: known_header_footer_texts.add(text_content)
+
+    avg_title_size = np.mean(title_sizes) if title_sizes else 0.0
+    avg_title_x = np.mean(title_x_positions) if title_x_positions else 0.0
+    avg_header_size = np.mean(header_sizes) if header_sizes else 0.0
+
+    # Correction Loop
+    for elem in elements:
+        cat = getattr(elem, 'category', 'Unknown')
+        meta = getattr(elem, 'metadata', None)
+        size = 0.0
+        x_pos = 0.0
+        y_min = 0.0
+        y_max = 0.0
+        page_height = 0.0
+
+        if meta and hasattr(meta, 'to_dict'):
+            meta_dict = meta.to_dict()
+            size = meta_dict.get('font_size', 0.0) or 0.0
+            coords = meta_dict.get('coordinates', {})
+            if coords and 'points' in coords:
+                points = coords['points']
+                ys = [p[1] for p in points]
+                xs = [p[0] for p in points]
+                if ys: y_min, y_max = min(ys), max(ys)
+                if xs: x_pos = min(xs)
+                page_height = coords.get('layout_height', 0.0)
+                if not page_height and coords.get('system') == 'PixelSpace':
+                    page_height = 842.0
+
+        text_raw = str(elem).strip()
+        text_norm = _normalize_text_diacritics(text_raw).strip().lower()
+
+        if cat == 'UncategorizedText':
+
+            # --- Rule 0: Content-Based Header/Footer Downgrade ---
+            if text_norm in known_header_footer_texts:
+                new_cat = 'Header' if (page_height > 0 and y_min < page_height / 2) else 'Footer'
+                elem.category = new_cat
+                logger.debug(f"Downgraded UncategorizedText to {new_cat} (content match)")
+                continue
+
+                # --- Rule 0b: Positional Header/Footer Downgrade ---
+            y_center = (y_min + y_max) / 2
+            is_in_header_zone = False
+            is_in_footer_zone = False
+
+            for h_min, h_max in header_y_ranges:
+                if h_min - 5 <= y_center <= h_max + 5:
+                    is_in_header_zone = True;
+                    break
+            for f_min, f_max in footer_y_ranges:
+                if f_min - 5 <= y_center <= f_max + 5:
+                    is_in_footer_zone = True;
+                    break
+
+            if is_in_header_zone:
+                elem.category = 'Header';
+                continue
+            if is_in_footer_zone:
+                elem.category = 'Footer';
+                continue
+
+            # Upgrade Title candidates
+            title_score = 0.0
+            if avg_title_size > 0 and abs(size - avg_title_size) < 1.5:
+                title_score += 0.5
+            elif avg_title_size > 0 and size > avg_title_size:
+                title_score += 0.5
+
+            if _get_structure_signature(text_raw) != text_raw[:20]:
+                title_score += 0.3
+            elif _get_numbering_depth(text_raw) > 0:
+                title_score += 0.3
+            if avg_title_x > 0 and abs(x_pos - avg_title_x) < 50: title_score += 0.2
+
+            if title_score >= 0.5:
+                elem.category = 'Title'
+                continue
+
+            # Visual Downgrade fallback
+            if page_height > 0:
+                is_top = y_min < (page_height * 0.10)
+                is_bottom = y_min > (page_height * 0.90)
+                is_header_size = (avg_header_size > 0 and abs(size - avg_header_size) < 1.5)
+                is_small = size < avg_title_size * 0.8 if avg_title_size > 0 else False
+
+                if (is_top or is_bottom) and (is_header_size or is_small):
+                    new_cat = 'Header' if is_top else 'Footer'
+                    elem.category = new_cat
+
+    # --- Pass 1: Feature Extraction ---
     features = []
-    id_to_index = {}  # Map element.id -> index in features list
-
-    # Track last valid structural parent per page (for page break continuity)
-    last_structural_by_page = {}
-    current_page = None
+    id_to_index = {}
+    header_footer_ids = set()
 
     for i, elem in enumerate(elements):
-        # Get element's unique ID (Unstructured provides elem.id, or elem.element_id for custom)
-        element_id = None
-        if hasattr(elem, 'id') and elem.id:
-            element_id = elem.id
-        elif hasattr(elem, 'element_id') and elem.element_id:
-            element_id = elem.element_id
-        else:
-            element_id = f"elem_{i}"
+        element_id = getattr(elem, 'id', f"elem_{i}")
+        metadata = getattr(elem, 'metadata', None)
+        parent_id = getattr(metadata, 'parent_id', None)
+        page_number = getattr(metadata, 'page_number', None)
+        category = getattr(elem, 'category', 'Unknown')
 
-        # Get parent_id from metadata
-        parent_id = getattr(elem.metadata, 'parent_id', None) if hasattr(elem, 'metadata') else None
+        font_size = 0.0
+        if metadata and hasattr(metadata, 'to_dict'):
+            font_size = metadata.to_dict().get('font_size', 0.0) or 0.0
 
-        # Check for pre-computed level/depth from custom parsers (e.g., LaTeX)
-        preset_level = getattr(elem.metadata, 'section_level', None) if hasattr(elem, 'metadata') else None
-        preset_depth = getattr(elem.metadata, 'section_depth', None) if hasattr(elem, 'metadata') else None
+        if category in ["Header", "Footer"]:
+            header_footer_ids.add(element_id)
 
-        # Track page number
-        page_number = getattr(elem.metadata, 'page_number', None) if hasattr(elem, 'metadata') else None
+        signature = None
+        numbering_depth = 0
+        list_style = "unknown"
 
-        type_name, type_score = detect_element_type_score(elem)
+        if category == "Title" or category == "ListItem":  # Check lists too for siblings
+            signature = _get_structure_signature(str(elem))
+            numbering_depth = _get_numbering_depth(str(elem))
 
-        # Check if element is structural (Title, ListItem) - potential parent
-        elem_category = elem.category if hasattr(elem, 'category') else None
-        is_structural = elem_category in ["Title", "ListItem"]
+        if category == "ListItem":
+            list_style = _get_list_style(str(elem))
 
-        # Page break continuity: if no parent but page changed, use last structural from previous page
-        if parent_id is None and page_number is not None and current_page is not None:
-            if page_number != current_page and current_page in last_structural_by_page:
-                # Inherit parent from last structural element on previous page
-                parent_id = last_structural_by_page[current_page]
-                logger.debug(f"Page break detected (page {current_page} -> {page_number}): "
-                           f"element {i} inherits parent from previous page")
-
-        # Update current page tracking
-        if page_number is not None:
-            current_page = page_number
-            if is_structural and parent_id is not None:
-                # Track this as potential parent for next page
-                last_structural_by_page[current_page] = element_id
-
-        features.append({
+        feat = {
             "element": elem,
             "index": i,
             "element_id": element_id,
-            "parent_id": parent_id,
-            "type_name": type_name,
-            "type_score": type_score,
-            "level": preset_level,  # Use preset if available, otherwise compute in second pass
-            "depth": preset_depth,  # Use preset if available
+            "original_parent_id": parent_id,
             "page_number": page_number,
-        })
-
-        # Build lookup: element ID -> index
+            "category": category,
+            "font_size": font_size,
+            "signature": signature,
+            "numbering_depth": numbering_depth,
+            "list_style": list_style,
+            "true_parent_id": None,
+            "level": 0
+        }
+        features.append(feat)
         id_to_index[element_id] = i
 
-    # Second pass: Calculate level and depth based on parent hierarchy (skip if preset)
-    def get_level(feat_index: int, visited: set = None) -> int:
-        """
-        Recursively calculate level based on parent chain.
+    # --- Pass 2: Resolve Parents ---
+    def find_valid_parent(current_parent_id: Optional[str], child_feat: Dict) -> Optional[str]:
+        if not current_parent_id or current_parent_id not in id_to_index:
+            return None
 
-        Args:
-            feat_index: Index of feature in features list
-            visited: Set of visited indices (to detect cycles)
+        parent_idx = id_to_index[current_parent_id]
+        parent_feat = features[parent_idx]
 
-        Returns:
-            Level (0 = root, 1 = child of root, etc.)
-        """
-        if visited is None:
-            visited = set()
+        # RULE 1: Skip Headers/Footers
+        if parent_feat["element_id"] in header_footer_ids:
+            return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-        # Cycle detection
-        if feat_index in visited:
-            logger.warning(f"Cycle detected in parent hierarchy at index {feat_index}")
-            return 0
+        # RULE 2: Flatten Content (Text cannot be a parent)
+        if parent_feat["category"] not in ["Title", "ListItem"]:
+            return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-        visited.add(feat_index)
-        feat = features[feat_index]
+        # RULE 3: Title Hierarchy Checks
+        if (child_feat["category"] == "Title" and parent_feat["category"] == "Title") or \
+                (child_feat["category"] == "ListItem" and parent_feat["category"] == "ListItem"):
 
-        # If level already computed or preset, return it (memoization)
-        if feat["level"] is not None:
-            return feat["level"]
+            # A. Numbering Hierarchy Check
+            if child_feat["numbering_depth"] > 0 and parent_feat["numbering_depth"] > 0:
+                if child_feat["numbering_depth"] <= parent_feat["numbering_depth"]:
+                    return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-        # No parent → root level
-        if feat["parent_id"] is None:
-            feat["level"] = 0
-            return 0
+            # B. Immediate Sibling Detection (Signature)
+            if child_feat["signature"] and child_feat["signature"] == parent_feat["signature"]:
+                return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-        # Has parent → find parent by ID
-        parent_index = id_to_index.get(feat["parent_id"])
+            # C. Font Size Check
+            if parent_feat["font_size"] > 0 and child_feat["font_size"] >= (parent_feat["font_size"] - 0.5):
+                return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-        if parent_index is None:
-            # Parent not found (shouldn't happen with valid Unstructured output)
-            logger.debug(f"Parent ID {feat['parent_id']} not found for element {feat_index}")
-            feat["level"] = 0
-            return 0
+            # D. Ancestor Scan (Cousin Detection)
+            if child_feat["signature"]:
+                # Use current true_parent (which is resolved so far) to traverse up
+                ancestor_id = parent_feat.get("true_parent_id")
+                # Also fall back to original parent structure if true parent is not set or we want to scan raw structure
+                if not ancestor_id:
+                    ancestor_id = parent_feat["original_parent_id"]
 
-        # Recursive: get parent's level and add 1
-        parent_level = get_level(parent_index, visited.copy())
-        feat["level"] = parent_level + 1
-        return feat["level"]
+                depth_limit = 20
 
-    # Calculate levels for all elements
-    for i in range(len(features)):
-        if features[i]["level"] is None:
-            get_level(i)
+                while ancestor_id and ancestor_id in id_to_index and depth_limit > 0:
+                    ancestor_idx = id_to_index[ancestor_id]
+                    ancestor_feat = features[ancestor_idx]
 
-    # Log level distribution
-    level_counts = {}
+                    if (ancestor_feat["category"] == child_feat["category"] and  # Same type (Title/List)
+                            ancestor_feat["signature"] == child_feat["signature"]):
+                        # Match found! This ancestor is our "cousin".
+                        # We should be siblings with them, so we take their parent.
+                        return find_valid_parent(ancestor_feat["original_parent_id"], child_feat)
+
+                    # Move up using original_parent for raw structure scan
+                    ancestor_id = ancestor_feat["original_parent_id"]
+                    depth_limit -= 1
+
+        return parent_feat["element_id"]
+
     for feat in features:
-        level = feat["level"]
-        level_counts[level] = level_counts.get(level, 0) + 1
+        if feat["element_id"] not in header_footer_ids:
+            feat["true_parent_id"] = find_valid_parent(feat["original_parent_id"], feat)
 
-    logger.info(f"Hierarchy detection complete: {len(features)} elements")
-    logger.info(f"Level distribution: {dict(sorted(level_counts.items()))}")
+    # --- Pass 3: Assign Levels & Fix Page Orphans ---
+    final_features = []
+    last_title_by_page = {}
+    last_list_item_by_page = {}  # Track list items for cross-page lists
+    current_page = None
 
-    return features
+    def calculate_level(feat_id: str, visited: set) -> int:
+        if not feat_id or feat_id not in id_to_index: return 0
+        if feat_id in visited: return 0
+        visited.add(feat_id)
+        parent_feat = features[id_to_index[feat_id]]
+        return calculate_level(parent_feat["true_parent_id"], visited) + 1
 
+    for i, feat in enumerate(features):
+        if feat["element_id"] in header_footer_ids:
+            continue
+
+        if feat["page_number"] is not None:
+            current_page = feat["page_number"]
+
+        # Fix Orphans
+        if feat["true_parent_id"] is None and current_page is not None:
+            potential_parent_id = None
+
+            # --- NarrativeText Bridging ---
+            # If NarrativeText is orphaned, try to attach to previous element (if List Item)
+            if feat["category"] in ["NarrativeText", "UncategorizedText"]:
+                if i > 0:
+                    prev_feat = features[i - 1]
+                    # If previous was a ListItem, we likely belong to its parent (sibling of item)
+                    # or to the item itself? Usually text follows item as description.
+                    # Let's attach to the ListItem's parent to keep flow correct.
+                    if prev_feat["category"] == "ListItem":
+                        # Check if prev item has a parent, otherwise we attach to prev item (risky?)
+                        # Safer: Attach to prev item's parent so we are indentation-aligned
+                        grandparent_id = prev_feat.get("true_parent_id")
+                        if grandparent_id:
+                            feat["true_parent_id"] = grandparent_id
+                            potential_parent_id = None
+                    # If previous was Title, we are likely content of that Title
+                    elif prev_feat["category"] == "Title":
+                        feat["true_parent_id"] = prev_feat["element_id"]
+                        potential_parent_id = None
+
+            # --- ListItem Continuation Check (Simplified) ---
+            # If this is a ListItem, try to attach to parent of last ListItem on previous page
+            if feat["category"] == "ListItem":
+                if (current_page - 1) in last_list_item_by_page:
+                    prev_item_id = last_list_item_by_page[current_page - 1]
+                    prev_item = features[id_to_index[prev_item_id]]
+
+                    # Adopt previous item's parent to become its sibling
+                    grandparent_id = prev_item.get("true_parent_id")
+                    if grandparent_id:
+                        feat["true_parent_id"] = grandparent_id
+                        potential_parent_id = None  # Skip title check
+                    else:
+                        # Previous item was root? Attach to same root (None)
+                        potential_parent_id = None
+
+                        # --- Title/Standard Orphan Check ---
+            if feat["true_parent_id"] is None:
+                if current_page in last_title_by_page:
+                    potential_parent_id = last_title_by_page[current_page]
+                elif (current_page - 1) in last_title_by_page:
+                    potential_parent_id = last_title_by_page[current_page - 1]
+
+            if potential_parent_id and potential_parent_id in id_to_index:
+                parent_feat = features[id_to_index[potential_parent_id]]
+                should_adopt = True
+
+                if feat["category"] == "Title" and parent_feat["category"] == "Title":
+
+                    # 1. Numbering Check for Orphans
+                    if feat["numbering_depth"] > 0 and parent_feat["numbering_depth"] > 0:
+                        if feat["numbering_depth"] <= parent_feat["numbering_depth"]:
+                            # Adopt GRANDPARENT instead of remaining Orphan
+                            grandparent_id = parent_feat.get("true_parent_id")
+                            if grandparent_id:
+                                feat["true_parent_id"] = grandparent_id
+                                should_adopt = False
+                            else:
+                                should_adopt = False
+
+                    # 2. Signature Check
+                    elif feat["signature"] and feat["signature"] == parent_feat["signature"]:
+                        # Adopt GRANDPARENT
+                        grandparent_id = parent_feat.get("true_parent_id")
+                        if grandparent_id:
+                            feat["true_parent_id"] = grandparent_id
+                            should_adopt = False
+                        else:
+                            should_adopt = False
+
+                    # 3. Font Check
+                    elif feat["font_size"] > (parent_feat["font_size"] + 0.5):
+                        should_adopt = False
+
+                    # 4. Ancestor Scan (Cousin Detection for Orphans)
+                    elif feat["signature"]:
+                        # Check up the hierarchy of the potential parent (last title)
+                        ancestor_id = parent_feat.get("true_parent_id")  # Use resolved parent
+                        depth_limit = 20
+                        while ancestor_id and ancestor_id in id_to_index and depth_limit > 0:
+                            ancestor_idx = id_to_index[ancestor_id]
+                            ancestor_feat = features[ancestor_idx]
+
+                            if (ancestor_feat["category"] == "Title" and
+                                    ancestor_feat["signature"] == feat["signature"]):
+                                # We matched an ancestor of the potential parent!
+                                # So we should adopt THAT ancestor's parent.
+                                grandparent_id = ancestor_feat.get("true_parent_id")
+                                if grandparent_id:
+                                    feat["true_parent_id"] = grandparent_id
+                                should_adopt = False  # Handled manually
+                                break
+
+                            ancestor_id = ancestor_feat.get("true_parent_id")  # Keep going up resolved chain
+                            depth_limit -= 1
+
+                if should_adopt:
+                    feat["true_parent_id"] = potential_parent_id
+
+        # Update Trackers
+        if feat["category"] == "Title" and current_page is not None:
+            last_title_by_page[current_page] = feat["element_id"]
+        elif feat["category"] == "ListItem" and current_page is not None:
+            last_list_item_by_page[current_page] = feat["element_id"]
+
+        feat["level"] = calculate_level(feat["true_parent_id"], set())
+        final_features.append(feat)
+
+    logger.info(f"Hierarchy built: {len(final_features)} valid elements.")
+    return final_features
 
 # ============================================================================
 # UNSTRUCTURED EXTRACTOR
@@ -912,7 +1173,7 @@ class UnstructuredExtractor:
 
         # Detect hierarchy
         if getattr(self.config, 'enable_generic_hierarchy', True):
-            hierarchy_features = detect_hierarchy_generic(elements, self.config)
+            hierarchy_features = build_robust_hierarchy(elements, self.config)
         else:
             # Fallback: simple type-based hierarchy
             hierarchy_features = [
@@ -932,30 +1193,34 @@ class UnstructuredExtractor:
         tables = self._extract_tables(elements)
 
         # PHASE 2: Generate summaries (hierarchical document summary from section summaries)
-        # OPTIMIZATION: Skip if summaries already exist (e.g., from Gemini extraction)
         if self.config.generate_summaries:
             from src.summary_generator import SummaryGenerator
             from src.config import SummarizationConfig, get_config
 
-            # Check for existing summaries (from Gemini extraction)
-            existing_summaries = sum(
-                1 for s in sections if s.summary and len(s.summary.strip()) >= 50
-            )
-            total_sections = len(sections)
+            # Load summarization config from config.json
+            root_config = get_config()
+            summary_config = SummarizationConfig.from_config(root_config.summarization)
 
-            if existing_summaries == total_sections:
-                # All sections already have summaries - skip regeneration
-                logger.info(
-                    f"PHASE 2: [SKIPPED] - All {total_sections} sections already have summaries "
-                    "(from extraction)"
-                )
-                section_summaries = [s.summary for s in sections if s.summary]
+            summary_gen = SummaryGenerator(config=summary_config)
 
-                # Still generate document summary from existing section summaries
-                root_config = get_config()
-                summary_config = SummarizationConfig.from_config(root_config.summarization)
-                summary_gen = SummaryGenerator(config=summary_config)
+            # Generate section summaries
+            section_summaries = []
+            for section in sections:
+                if section.content and len(section.content.strip()) > 50:  # Min length threshold
+                    try:
+                        section.summary = summary_gen.generate_section_summary(
+                            section.content, section.title or ""
+                        )
+                        section_summaries.append(section.summary)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to generate summary for section '{section.title}': {e}"
+                        )
+                        section.summary = None
 
+            # Generate hierarchical document summary from section summaries (NOT full text)
+            # This follows CLAUDE.md constraint: "ALWAYS generate from section summaries"
+            if section_summaries:
                 try:
                     document_summary = summary_gen.generate_document_summary(
                         section_summaries=section_summaries
@@ -964,52 +1229,7 @@ class UnstructuredExtractor:
                     logger.warning(f"Failed to generate document summary: {e}")
                     document_summary = "(Document summary unavailable)"
             else:
-                # Generate missing summaries
-                if existing_summaries > 0:
-                    logger.info(
-                        f"PHASE 2: Generating summaries for {total_sections - existing_summaries} "
-                        f"sections (partial - {existing_summaries} already exist)"
-                    )
-                else:
-                    logger.info("PHASE 2: Generating section summaries...")
-
-                # Load summarization config from config.json
-                root_config = get_config()
-                summary_config = SummarizationConfig.from_config(root_config.summarization)
-                summary_gen = SummaryGenerator(config=summary_config)
-
-                # Generate section summaries (only for sections without existing summary)
-                section_summaries = []
-                for section in sections:
-                    # Skip sections that already have valid summaries
-                    if section.summary and len(section.summary.strip()) >= 50:
-                        section_summaries.append(section.summary)
-                        continue
-
-                    if section.content and len(section.content.strip()) > 50:  # Min length threshold
-                        try:
-                            section.summary = summary_gen.generate_section_summary(
-                                section.content, section.title or ""
-                            )
-                            section_summaries.append(section.summary)
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to generate summary for section '{section.title}': {e}"
-                            )
-                            section.summary = None
-
-                # Generate hierarchical document summary from section summaries (NOT full text)
-                # This follows CLAUDE.md constraint: "ALWAYS generate from section summaries"
-                if section_summaries:
-                    try:
-                        document_summary = summary_gen.generate_document_summary(
-                            section_summaries=section_summaries
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to generate document summary: {e}")
-                        document_summary = "(Document summary unavailable)"
-                else:
-                    document_summary = "(No section summaries available)"
+                document_summary = "(No section summaries available)"
         else:
             document_summary = None
 
@@ -1075,7 +1295,7 @@ class UnstructuredExtractor:
         strategy = getattr(self.config, 'strategy', 'hi_res')
         model = getattr(self.config, 'model', 'yolox')
         languages = getattr(self.config, 'languages', ['ces', 'eng'])
-        include_page_breaks = getattr(self.config, 'include_page_breaks', True)
+        include_page_breaks = getattr(self.config, 'include_page_breaks', False)
         infer_table_structure = getattr(self.config, 'infer_table_structure', True)
         extract_images = getattr(self.config, 'extract_images', False)
 
@@ -1332,107 +1552,116 @@ class UnstructuredExtractor:
             )
 
     def _build_sections(self, hierarchy_features: List[Dict]) -> List[DocumentSection]:
-        """Build DocumentSection objects from hierarchy features."""
-        sections = []
+        """
+        Build DocumentSection objects from hierarchy_features produced by
+        `build_robust_hierarchy`.
+
+        Assumptions about each feature dict:
+            - feat["element"]: Unstructured element
+            - feat["element_id"]: unique id
+            - feat["true_parent_id"]: cleaned parent element_id or None
+            - feat["level"]: integer depth (0 for root)
+            - feat["page_number"], feat["category"] may be present
+        """
+        sections: List[DocumentSection] = []
         char_offset = 0
 
-        # Build parent-child relationships
+        # ------------------------------------------------------------------ #
+        # 1. Create all sections and map element_id -> section_id
+        # ------------------------------------------------------------------ #
+        elemid_to_sectionid: Dict[str, str] = {}
+
         for i, feat in enumerate(hierarchy_features):
             elem = feat["element"]
             text = _normalize_text_diacritics(str(elem))
+            elem_category = getattr(elem, 'category', None)
 
-            # Extract title from element
-            # Use element category directly - more reliable than type_name
-            elem_category = elem.category if hasattr(elem, 'category') else None
-
-            if elem_category in ["Title", "ListItem"]:
-                # Title or ListItem - use as section title
-                title = text.strip()
-            elif elem_category == "UncategorizedText" and (
-                # Check if it looks like a structural heading
-                re.match(r'^§\s*\d+', text) or  # § paragraph
-                re.match(r'^(ČÁST|HLAVA|ČLÁNEK|CHAPTER|ARTICLE)\s+[IVX\d]+', text, re.IGNORECASE) or  # Major heading
-                re.match(r'^\(\d+\)', text)  # Subsection (1), (2), etc.
-            ):
-                # UncategorizedText that looks structural - use as title
-                title = text.strip()
-            elif feat["type_name"] in ["Document Title", "Major Heading", "Paragraph"]:
-                # Fallback: check type_name for custom-detected types
+            # Title elements get their text as title, others get content only
+            if elem_category == "Title":
                 title = text.strip()
             else:
                 # NarrativeText and other content - no title, only content
                 title = ""
 
-            # Find parent
-            parent_id = None
-            ancestors = []
-            depth = 1
-
-            # Look backwards for parent (higher hierarchy level)
-            current_level = feat["level"]
-            for j in range(i - 1, -1, -1):
-                if hierarchy_features[j]["level"] < current_level:
-                    parent_id = f"sec_{j+1}"
-                    depth = hierarchy_features[j].get("depth", 1) + 1
-
-                    # Collect ancestors - walk up parent chain collecting only progressively higher levels
-                    k = j
-                    prev_level = current_level  # Track previous level to ensure we only go up
-                    while k >= 0:
-                        elem_k = hierarchy_features[k]["element"]
-                        elem_k_level = hierarchy_features[k]["level"]
-                        elem_k_category = elem_k.category if hasattr(elem_k, 'category') else None
-
-                        # Only add if this is at a higher level (lower number) than previous
-                        if elem_k_level < prev_level:
-                            # Skip Headers, Footers - they're not structural content
-                            if elem_k_category not in ["Header", "Footer"]:
-                                ancestor_title = str(elem_k).strip()[:100]
-                                if ancestor_title:  # Only add non-empty titles
-                                    ancestors.insert(0, ancestor_title)
-                            prev_level = elem_k_level  # Update for next iteration
-
-                        k -= 1
-                        if elem_k_level == 0:  # Reached root
-                            break
-                    break
-
-            # Store depth for parent lookup
-            feat["depth"] = depth
-
-            # Build path
-            path_parts = ancestors + ([title] if title else [])
-            path = " > ".join(path_parts) if path_parts else "Untitled"
+            section_id = f"sec_{i + 1}"
+            elemid_to_sectionid[feat["element_id"]] = section_id
 
             section = DocumentSection(
-                section_id=f"sec_{i+1}",
+                section_id=section_id,
                 title=title,
                 content=text,
-                level=feat["level"],
-                depth=depth,
-                parent_id=parent_id,
-                children_ids=[],  # Will be populated below
-                ancestors=ancestors,
-                path=path,
-                page_number=getattr(elem.metadata, 'page_number', 0) if hasattr(elem, 'metadata') else 0,
+                level=feat["level"],  # level from robust hierarchy
+                depth=1,  # filled later
+                parent_id=None,  # filled later using true_parent_id
+                children_ids=[],
+                ancestors=[],
+                path="",  # filled later
+                page_number=getattr(elem.metadata, 'page_number', 0)
+                if hasattr(elem, 'metadata') else 0,
                 char_start=char_offset,
                 char_end=char_offset + len(text),
                 content_length=len(text),
-                element_type=type(elem).__name__,  # e.g., "Title", "NarrativeText", "ListItem"
-                element_category=elem.category if hasattr(elem, 'category') else None,
+                element_category=elem_category,
             )
 
             sections.append(section)
-            char_offset += len(text) + 2  # +2 for \n\n separator
+            char_offset += len(text) + 2  # +2 for '\n\n' separator
 
-        # Populate children_ids
+        # ------------------------------------------------------------------ #
+        # 2. Wire parent_id from true_parent_id
+        # ------------------------------------------------------------------ #
+        for feat, section in zip(hierarchy_features, sections):
+            true_parent_elem_id = feat.get("true_parent_id")
+            if true_parent_elem_id is None:
+                section.parent_id = None
+                continue
+
+            parent_section_id = elemid_to_sectionid.get(true_parent_elem_id)
+            section.parent_id = parent_section_id
+
+        # ------------------------------------------------------------------ #
+        # 3. Compute children_ids
+        # ------------------------------------------------------------------ #
+        section_by_id: Dict[str, DocumentSection] = {s.section_id: s for s in sections}
+
         for section in sections:
-            if section.parent_id:
-                parent_idx = int(section.parent_id.split("_")[1]) - 1
-                if 0 <= parent_idx < len(sections):
-                    sections[parent_idx].children_ids.append(section.section_id)
+            if section.parent_id and section.parent_id in section_by_id:
+                parent = section_by_id[section.parent_id]
+                parent.children_ids.append(section.section_id)
 
-        # VALIDATION: Check parent-child relationships across page boundaries
+        # ------------------------------------------------------------------ #
+        # 4. Compute ancestors, path, and depth
+        # ------------------------------------------------------------------ #
+        def compute_ancestors_and_depth(sec: DocumentSection) -> None:
+            if sec.ancestors:
+                # Already computed
+                return
+
+            ancestors: List[str] = []
+            current = sec
+            # Walk up until no parent
+            while current.parent_id:
+                parent = section_by_id.get(current.parent_id)
+                if not parent:
+                    break
+                # Use parent.title if available, otherwise a short prefix of content
+                label = (parent.title or parent.content[:100]).strip()
+                if label:
+                    ancestors.insert(0, label)
+                current = parent
+
+            sec.ancestors = ancestors
+            # Depth: number of ancestors + 1 (so roots are depth=1)
+            sec.depth = len(ancestors) + 1
+            path_parts = ancestors + ([sec.title] if sec.title else [])
+            sec.path = " > ".join(path_parts) if path_parts else "Untitled"
+
+        for section in sections:
+            compute_ancestors_and_depth(section)
+
+        # ------------------------------------------------------------------ #
+        # 5. Validate cross-page relationships
+        # ------------------------------------------------------------------ #
         self._validate_page_boundary_hierarchy(sections)
 
         return sections
