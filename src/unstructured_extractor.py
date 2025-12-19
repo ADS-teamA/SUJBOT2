@@ -214,7 +214,7 @@ class ExtractedDocument:
     title: Optional[str] = None
 
     # Extraction metadata
-    extraction_method: str = "unstructured_detectron2"
+    extraction_method: str = "unstructured_yolox"
     config: Optional[Dict] = None
 
     def __post_init__(self) -> None:
@@ -288,7 +288,7 @@ class ExtractionConfig:
 
     # Unstructured model configuration
     strategy: str = "hi_res"  # "hi_res", "fast", "ocr_only"
-    model: str = "detectron2_mask_rcnn"  # "detectron2_mask_rcnn" (most accurate), "yolox" (faster)
+    model: str = "yolox"  # "detectron2_mask_rcnn" (most accurate), "yolox" (faster)
 
     # Language detection
     languages: List[str] = field(default_factory=lambda: ["ces", "eng"])
@@ -383,7 +383,7 @@ class ExtractionConfig:
             gemini_file_size_threshold_mb=get_float_env("GEMINI_FILE_SIZE_THRESHOLD_MB", 10.0),
             # Unstructured settings
             strategy=os.getenv("UNSTRUCTURED_STRATEGY", "hi_res"),
-            model=os.getenv("UNSTRUCTURED_MODEL", "detectron2_mask_rcnn"),
+            model=os.getenv("UNSTRUCTURED_MODEL", "yolox"),
             languages=os.getenv("UNSTRUCTURED_LANGUAGES", "ces,eng").split(","),
             detect_language_per_element=get_bool_env("UNSTRUCTURED_DETECT_LANGUAGE_PER_ELEMENT", True),
             infer_table_structure=get_bool_env("UNSTRUCTURED_INFER_TABLE_STRUCTURE", True),
@@ -613,162 +613,475 @@ def filter_rotated_elements(
 # ============================================================================
 # GENERIC HIERARCHY DETECTION
 # ============================================================================
+
+def _get_structure_signature(text: str) -> str:
+    """
+    Generate a 'signature' for a title to detect if two titles are siblings.
+    """
+    text = text.strip().lower()
+    tokens = text.split()
+    if not tokens:
+        return ""
+
+    # 1. Structural Markers: Only care about the marker word.
+    # Note: Keys are normalized (lowercase, no dots) to match stripped token.
+    markers = {
+        '§': 'section',
+        'section': 'section',
+        'article': 'article',
+        'článek': 'article',
+        'čl': 'article',  # Cleaned 'čl.' matches this
+        'chapter': 'chapter',
+        'hlava': 'chapter',
+        'part': 'part',
+        'část': 'part',
+        'oddíl': 'division',
+        'díl': 'division',
+        'zakon': 'law',
+        'zákon': 'law'
+    }
+
+    # Strip punctuation from first token (e.g. "Čl." -> "čl")
+    first_token_clean = re.sub(r'[^\w§]', '', tokens[0])
+
+    if first_token_clean in markers:
+        return markers[first_token_clean]
+
+        # 2. Numbered items
+    if re.match(r'^[\d\.]+$', tokens[0]):
+        return "numbered_item"
+
+    # 3. Lettered items (a), b))
+    if re.match(r'^[a-z]\)$', tokens[0]):
+        return "lettered_item"
+
+    return text[:20]
+
+
+def _get_numbering_depth(text: str) -> int:
+    """
+    Calculates depth based on numbering pattern (e.g., '1.2.3' -> 3).
+    Returns 0 if no numbering detected.
+    Handles '1.', '1.2', 'A.1' patterns.
+    """
+    text = text.strip()
+    match = re.match(r'^((?:[A-Za-z0-9]+\.)+[A-Za-z0-9]*)\s', text + " ")
+    if match:
+        numbering = match.group(1).rstrip('.')
+        if numbering:
+            return len(numbering.split('.'))
+    return 0
+
+
+def _get_list_style(text: str) -> str:
+    """
+    Determine list style to match continuations across pages.
+    e.g. '1.', 'a)', 'A.', '(1)'
+    """
+    text = text.strip()
+    if re.match(r'^\d+\.', text): return "decimal_dot"  # 1.
+    if re.match(r'^[a-z]\)', text): return "alpha_paren"  # a)
+    if re.match(r'^\([a-z]\)', text): return "paren_alpha_paren"  # (a)
+    if re.match(r'^\(\d+\)', text): return "paren_decimal_paren"  # (1)
+    if re.match(r'^[A-Z]\.', text): return "upper_alpha_dot"  # A.
+    return "unknown"
+
+
 def build_robust_hierarchy(elements: List[Element], config: ExtractionConfig) -> List[Dict]:
     """
-    Simplified hierarchy builder with 3 goals:
+    Builds a robust hierarchy by cleaning Unstructured.io output.
 
-    1) Drop/ignore Header and Footer as parents.
-    2) Do NOT invent clever sibling/ancestor rules – only follow Unstructured's parent_id.
-    3) If parent_id is missing or invalid (e.g. page break), attach to last Title on
-       the same page (or previous page) as a simple fallback.
-
-    Returns a list of feature dicts:
-        - element
-        - element_id
-        - original_parent_id
-        - true_parent_id
-        - level        (0 = root)
-        - page_number
-        - category
+    Logic:
+    0. Classify UncategorizedText that looks like Titles/Headers (Multi-signal similarity).
+    1. Filter Headers/Footers.
+    2. Flatten NarrativeText.
+    3. Detect Siblings & Cousins using signatures AND numbering depth.
+    4. Fix Page Orphans by adopting grandparent if sibling conflict exists (Local only).
     """
-
-    logger.info(f"Building simple robust hierarchy for {len(elements)} elements...")
-
+    logger.info(f"Building robust hierarchy for {len(elements)} elements...")
     if not elements:
         return []
 
-    # ------------------------------------------------------------------ #
-    # Pass 1: Collect basic features and identify headers/footers
-    # ------------------------------------------------------------------ #
-    features: List[Dict[str, Any]] = []
-    id_to_index: Dict[str, int] = {}
-    header_footer_ids: set = set()
+    # --- Pass 0: Statistics & Classification Correction ---
+    # Collect data for similarity comparison
+    title_sizes = []
+    title_x_positions = []  # Track left-alignment
+
+    # NEW: Track known header/footer text content for exact matching
+    known_header_footer_texts = set()
+    header_sizes = []  # Track header/footer sizes
+
+    # NEW: Track spatial zones for headers and footers
+    header_y_ranges = []  # List of (y_min, y_max)
+    footer_y_ranges = []
+
+    for elem in elements:
+        meta = getattr(elem, 'metadata', None)
+        size = 0.0
+        x_pos = 0.0
+        y_min = 0.0
+        y_max = 0.0
+
+        if meta and hasattr(meta, 'to_dict'):
+            meta_dict = meta.to_dict()
+            size = meta_dict.get('font_size', 0.0) or 0.0
+
+            # Extract coordinates
+            coords = meta_dict.get('coordinates', {})
+            if coords and 'points' in coords:
+                points = coords['points']
+                ys = [p[1] for p in points]
+                xs = [p[0] for p in points]
+                if ys: y_min, y_max = min(ys), max(ys)
+                if xs: x_pos = min(xs)
+
+        cat = getattr(elem, 'category', 'Unknown')
+        if cat == 'Title' and size > 0:
+            title_sizes.append(size)
+            title_x_positions.append(x_pos)
+        elif cat == 'Header':
+            if size > 0: header_sizes.append(size)
+            if y_max > 0: header_y_ranges.append((y_min, y_max))
+            text_content = _normalize_text_diacritics(str(elem)).strip().lower()
+            if text_content: known_header_footer_texts.add(text_content)
+        elif cat == 'Footer':
+            if size > 0: header_sizes.append(size)
+            if y_max > 0: footer_y_ranges.append((y_min, y_max))
+            text_content = _normalize_text_diacritics(str(elem)).strip().lower()
+            if text_content: known_header_footer_texts.add(text_content)
+
+    avg_title_size = np.mean(title_sizes) if title_sizes else 0.0
+    avg_title_x = np.mean(title_x_positions) if title_x_positions else 0.0
+    avg_header_size = np.mean(header_sizes) if header_sizes else 0.0
+
+    # Correction Loop
+    for elem in elements:
+        cat = getattr(elem, 'category', 'Unknown')
+        meta = getattr(elem, 'metadata', None)
+        size = 0.0
+        x_pos = 0.0
+        y_min = 0.0
+        y_max = 0.0
+        page_height = 0.0
+
+        if meta and hasattr(meta, 'to_dict'):
+            meta_dict = meta.to_dict()
+            size = meta_dict.get('font_size', 0.0) or 0.0
+            coords = meta_dict.get('coordinates', {})
+            if coords and 'points' in coords:
+                points = coords['points']
+                ys = [p[1] for p in points]
+                xs = [p[0] for p in points]
+                if ys: y_min, y_max = min(ys), max(ys)
+                if xs: x_pos = min(xs)
+                page_height = coords.get('layout_height', 0.0)
+                if not page_height and coords.get('system') == 'PixelSpace':
+                    page_height = 842.0
+
+        text_raw = str(elem).strip()
+        text_norm = _normalize_text_diacritics(text_raw).strip().lower()
+
+        if cat == 'UncategorizedText':
+
+            # --- Rule 0: Content-Based Header/Footer Downgrade ---
+            if text_norm in known_header_footer_texts:
+                new_cat = 'Header' if (page_height > 0 and y_min < page_height / 2) else 'Footer'
+                elem.category = new_cat
+                logger.debug(f"Downgraded UncategorizedText to {new_cat} (content match)")
+                continue
+
+                # --- Rule 0b: Positional Header/Footer Downgrade ---
+            y_center = (y_min + y_max) / 2
+            is_in_header_zone = False
+            is_in_footer_zone = False
+
+            for h_min, h_max in header_y_ranges:
+                if h_min - 5 <= y_center <= h_max + 5:
+                    is_in_header_zone = True;
+                    break
+            for f_min, f_max in footer_y_ranges:
+                if f_min - 5 <= y_center <= f_max + 5:
+                    is_in_footer_zone = True;
+                    break
+
+            if is_in_header_zone:
+                elem.category = 'Header';
+                continue
+            if is_in_footer_zone:
+                elem.category = 'Footer';
+                continue
+
+            # Upgrade Title candidates
+            title_score = 0.0
+            if avg_title_size > 0 and abs(size - avg_title_size) < 1.5:
+                title_score += 0.5
+            elif avg_title_size > 0 and size > avg_title_size:
+                title_score += 0.5
+
+            if _get_structure_signature(text_raw) != text_raw[:20]:
+                title_score += 0.3
+            elif _get_numbering_depth(text_raw) > 0:
+                title_score += 0.3
+            if avg_title_x > 0 and abs(x_pos - avg_title_x) < 50: title_score += 0.2
+
+            if title_score >= 0.5:
+                elem.category = 'Title'
+                continue
+
+            # Visual Downgrade fallback
+            if page_height > 0:
+                is_top = y_min < (page_height * 0.10)
+                is_bottom = y_min > (page_height * 0.90)
+                is_header_size = (avg_header_size > 0 and abs(size - avg_header_size) < 1.5)
+                is_small = size < avg_title_size * 0.8 if avg_title_size > 0 else False
+
+                if (is_top or is_bottom) and (is_header_size or is_small):
+                    new_cat = 'Header' if is_top else 'Footer'
+                    elem.category = new_cat
+
+    # --- Pass 1: Feature Extraction ---
+    features = []
+    id_to_index = {}
+    header_footer_ids = set()
 
     for i, elem in enumerate(elements):
-        element_id = getattr(elem, "id", f"elem_{i}")
-        metadata = getattr(elem, "metadata", None)
-        parent_id = getattr(metadata, "parent_id", None)
-        page_number = getattr(metadata, "page_number", None)
-        category = getattr(elem, "category", "Unknown")
+        element_id = getattr(elem, 'id', f"elem_{i}")
+        metadata = getattr(elem, 'metadata', None)
+        parent_id = getattr(metadata, 'parent_id', None)
+        page_number = getattr(metadata, 'page_number', None)
+        category = getattr(elem, 'category', 'Unknown')
+
+        font_size = 0.0
+        if metadata and hasattr(metadata, 'to_dict'):
+            font_size = metadata.to_dict().get('font_size', 0.0) or 0.0
 
         if category in ["Header", "Footer"]:
             header_footer_ids.add(element_id)
+
+        signature = None
+        numbering_depth = 0
+        list_style = "unknown"
+
+        if category == "Title" or category == "ListItem":  # Check lists too for siblings
+            signature = _get_structure_signature(str(elem))
+            numbering_depth = _get_numbering_depth(str(elem))
+
+        if category == "ListItem":
+            list_style = _get_list_style(str(elem))
 
         feat = {
             "element": elem,
             "index": i,
             "element_id": element_id,
             "original_parent_id": parent_id,
-            "true_parent_id": None,   # filled later
             "page_number": page_number,
             "category": category,
-            "level": 0,               # filled later
+            "font_size": font_size,
+            "signature": signature,
+            "numbering_depth": numbering_depth,
+            "list_style": list_style,
+            "true_parent_id": None,
+            "level": 0
         }
         features.append(feat)
         id_to_index[element_id] = i
 
-    # ------------------------------------------------------------------ #
-    # Pass 2: Follow parent_id chain, skipping headers/footers and non-structural parents
-    # ------------------------------------------------------------------ #
-    def resolve_parent_id(raw_parent_id: Optional[str]) -> Optional[str]:
-        """
-        Follow the original parent_id chain until we:
-          - hit a valid structural parent (Title/ListItem), or
-          - hit None / missing / unknown.
-        """
-        current_id = raw_parent_id
+    # --- Pass 2: Resolve Parents ---
+    def find_valid_parent(current_parent_id: Optional[str], child_feat: Dict) -> Optional[str]:
+        if not current_parent_id or current_parent_id not in id_to_index:
+            return None
 
-        while current_id:
-            if current_id not in id_to_index:
-                return None  # parent element not present
+        parent_idx = id_to_index[current_parent_id]
+        parent_feat = features[parent_idx]
 
-            parent_feat = features[id_to_index[current_id]]
-            parent_cat = parent_feat["category"]
+        # RULE 1: Skip Headers/Footers
+        if parent_feat["element_id"] in header_footer_ids:
+            return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-            # Skip headers/footers as parents entirely
-            if parent_feat["element_id"] in header_footer_ids:
-                current_id = parent_feat["original_parent_id"]
-                continue
+        # RULE 2: Flatten Content (Text cannot be a parent)
+        if parent_feat["category"] not in ["Title", "ListItem"]:
+            return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-            # Only allow Titles and ListItems to act as parents
-            if parent_cat not in ["Title", "ListItem"]:
-                current_id = parent_feat["original_parent_id"]
-                continue
+        # RULE 3: Title Hierarchy Checks
+        if (child_feat["category"] == "Title" and parent_feat["category"] == "Title") or \
+                (child_feat["category"] == "ListItem" and parent_feat["category"] == "ListItem"):
 
-            # Found an acceptable parent
-            return parent_feat["element_id"]
+            # A. Numbering Hierarchy Check
+            if child_feat["numbering_depth"] > 0 and parent_feat["numbering_depth"] > 0:
+                if child_feat["numbering_depth"] <= parent_feat["numbering_depth"]:
+                    return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-        return None
+            # B. Immediate Sibling Detection (Signature)
+            if child_feat["signature"] and child_feat["signature"] == parent_feat["signature"]:
+                return find_valid_parent(parent_feat["original_parent_id"], child_feat)
 
-    # First pass: raw parent resolution (ignoring page breaks/orphans)
+            # C. Font Size Check
+            if parent_feat["font_size"] > 0 and child_feat["font_size"] >= (parent_feat["font_size"] - 0.5):
+                return find_valid_parent(parent_feat["original_parent_id"], child_feat)
+
+            # D. Ancestor Scan (Cousin Detection)
+            if child_feat["signature"]:
+                # Use current true_parent (which is resolved so far) to traverse up
+                ancestor_id = parent_feat.get("true_parent_id")
+                # Also fall back to original parent structure if true parent is not set or we want to scan raw structure
+                if not ancestor_id:
+                    ancestor_id = parent_feat["original_parent_id"]
+
+                depth_limit = 20
+
+                while ancestor_id and ancestor_id in id_to_index and depth_limit > 0:
+                    ancestor_idx = id_to_index[ancestor_id]
+                    ancestor_feat = features[ancestor_idx]
+
+                    if (ancestor_feat["category"] == child_feat["category"] and  # Same type (Title/List)
+                            ancestor_feat["signature"] == child_feat["signature"]):
+                        # Match found! This ancestor is our "cousin".
+                        # We should be siblings with them, so we take their parent.
+                        return find_valid_parent(ancestor_feat["original_parent_id"], child_feat)
+
+                    # Move up using original_parent for raw structure scan
+                    ancestor_id = ancestor_feat["original_parent_id"]
+                    depth_limit -= 1
+
+        return parent_feat["element_id"]
+
     for feat in features:
+        if feat["element_id"] not in header_footer_ids:
+            feat["true_parent_id"] = find_valid_parent(feat["original_parent_id"], feat)
+
+    # --- Pass 3: Assign Levels & Fix Page Orphans ---
+    final_features = []
+    last_title_by_page = {}
+    last_list_item_by_page = {}  # Track list items for cross-page lists
+    current_page = None
+
+    def calculate_level(feat_id: str, visited: set) -> int:
+        if not feat_id or feat_id not in id_to_index: return 0
+        if feat_id in visited: return 0
+        visited.add(feat_id)
+        parent_feat = features[id_to_index[feat_id]]
+        return calculate_level(parent_feat["true_parent_id"], visited) + 1
+
+    for i, feat in enumerate(features):
         if feat["element_id"] in header_footer_ids:
-            # They will be removed later, but keep true_parent_id=None
-            continue
-        feat["true_parent_id"] = resolve_parent_id(feat["original_parent_id"])
-
-    # ------------------------------------------------------------------ #
-    # Pass 3: Page-break repair for orphans (no true_parent_id)
-    # ------------------------------------------------------------------ #
-    last_title_by_page: Dict[int, str] = {}
-    current_page: Optional[int] = None
-
-    # Traverse in element order, track last Title per page
-    for feat in features:
-        if feat["element_id"] in header_footer_ids:
             continue
 
-        page = feat["page_number"]
-        if page is not None:
-            current_page = page
+        if feat["page_number"] is not None:
+            current_page = feat["page_number"]
 
-        # If this element has no parent, try attaching to last title
+        # Fix Orphans
         if feat["true_parent_id"] is None and current_page is not None:
-            candidate_parent_id: Optional[str] = None
+            potential_parent_id = None
 
-            # Prefer same page
-            if current_page in last_title_by_page:
-                candidate_parent_id = last_title_by_page[current_page]
-            # Otherwise, fallback to previous page's last title
-            elif (current_page - 1) in last_title_by_page:
-                candidate_parent_id = last_title_by_page[current_page - 1]
+            # --- NarrativeText Bridging ---
+            # If NarrativeText is orphaned, try to attach to previous element (if List Item)
+            if feat["category"] in ["NarrativeText", "UncategorizedText"]:
+                if i > 0:
+                    prev_feat = features[i - 1]
+                    # If previous was a ListItem, we likely belong to its parent (sibling of item)
+                    # or to the item itself? Usually text follows item as description.
+                    # Let's attach to the ListItem's parent to keep flow correct.
+                    if prev_feat["category"] == "ListItem":
+                        # Check if prev item has a parent, otherwise we attach to prev item (risky?)
+                        # Safer: Attach to prev item's parent so we are indentation-aligned
+                        grandparent_id = prev_feat.get("true_parent_id")
+                        if grandparent_id:
+                            feat["true_parent_id"] = grandparent_id
+                            potential_parent_id = None
+                    # If previous was Title, we are likely content of that Title
+                    elif prev_feat["category"] == "Title":
+                        feat["true_parent_id"] = prev_feat["element_id"]
+                        potential_parent_id = None
 
-            if candidate_parent_id is not None:
-                feat["true_parent_id"] = candidate_parent_id
+            # --- ListItem Continuation Check (Simplified) ---
+            # If this is a ListItem, try to attach to parent of last ListItem on previous page
+            if feat["category"] == "ListItem":
+                if (current_page - 1) in last_list_item_by_page:
+                    prev_item_id = last_list_item_by_page[current_page - 1]
+                    prev_item = features[id_to_index[prev_item_id]]
 
-        # Update last_title_by_page if this is a Title
+                    # Adopt previous item's parent to become its sibling
+                    grandparent_id = prev_item.get("true_parent_id")
+                    if grandparent_id:
+                        feat["true_parent_id"] = grandparent_id
+                        potential_parent_id = None  # Skip title check
+                    else:
+                        # Previous item was root? Attach to same root (None)
+                        potential_parent_id = None
+
+                        # --- Title/Standard Orphan Check ---
+            if feat["true_parent_id"] is None:
+                if current_page in last_title_by_page:
+                    potential_parent_id = last_title_by_page[current_page]
+                elif (current_page - 1) in last_title_by_page:
+                    potential_parent_id = last_title_by_page[current_page - 1]
+
+            if potential_parent_id and potential_parent_id in id_to_index:
+                parent_feat = features[id_to_index[potential_parent_id]]
+                should_adopt = True
+
+                if feat["category"] == "Title" and parent_feat["category"] == "Title":
+
+                    # 1. Numbering Check for Orphans
+                    if feat["numbering_depth"] > 0 and parent_feat["numbering_depth"] > 0:
+                        if feat["numbering_depth"] <= parent_feat["numbering_depth"]:
+                            # Adopt GRANDPARENT instead of remaining Orphan
+                            grandparent_id = parent_feat.get("true_parent_id")
+                            if grandparent_id:
+                                feat["true_parent_id"] = grandparent_id
+                                should_adopt = False
+                            else:
+                                should_adopt = False
+
+                    # 2. Signature Check
+                    elif feat["signature"] and feat["signature"] == parent_feat["signature"]:
+                        # Adopt GRANDPARENT
+                        grandparent_id = parent_feat.get("true_parent_id")
+                        if grandparent_id:
+                            feat["true_parent_id"] = grandparent_id
+                            should_adopt = False
+                        else:
+                            should_adopt = False
+
+                    # 3. Font Check
+                    elif feat["font_size"] > (parent_feat["font_size"] + 0.5):
+                        should_adopt = False
+
+                    # 4. Ancestor Scan (Cousin Detection for Orphans)
+                    elif feat["signature"]:
+                        # Check up the hierarchy of the potential parent (last title)
+                        ancestor_id = parent_feat.get("true_parent_id")  # Use resolved parent
+                        depth_limit = 20
+                        while ancestor_id and ancestor_id in id_to_index and depth_limit > 0:
+                            ancestor_idx = id_to_index[ancestor_id]
+                            ancestor_feat = features[ancestor_idx]
+
+                            if (ancestor_feat["category"] == "Title" and
+                                    ancestor_feat["signature"] == feat["signature"]):
+                                # We matched an ancestor of the potential parent!
+                                # So we should adopt THAT ancestor's parent.
+                                grandparent_id = ancestor_feat.get("true_parent_id")
+                                if grandparent_id:
+                                    feat["true_parent_id"] = grandparent_id
+                                should_adopt = False  # Handled manually
+                                break
+
+                            ancestor_id = ancestor_feat.get("true_parent_id")  # Keep going up resolved chain
+                            depth_limit -= 1
+
+                if should_adopt:
+                    feat["true_parent_id"] = potential_parent_id
+
+        # Update Trackers
         if feat["category"] == "Title" and current_page is not None:
             last_title_by_page[current_page] = feat["element_id"]
+        elif feat["category"] == "ListItem" and current_page is not None:
+            last_list_item_by_page[current_page] = feat["element_id"]
 
-    # ------------------------------------------------------------------ #
-    # Pass 4: Compute levels based on true_parent_id chain
-    # ------------------------------------------------------------------ #
-    def compute_level(feat_id: str, visited: set) -> int:
-        """
-        Level = number of ancestors up the true_parent_id chain.
-        Roots: level 0.
-        """
-        if not feat_id or feat_id not in id_to_index:
-            return 0
-        if feat_id in visited:
-            return 0  # cycle safeguard
-
-        visited.add(feat_id)
-        parent_id = features[id_to_index[feat_id]]["true_parent_id"]
-        if not parent_id:
-            return 0
-        return compute_level(parent_id, visited) + 1
-
-    final_features: List[Dict[str, Any]] = []
-    for feat in features:
-        # Completely drop header/footer elements from the final list
-        if feat["element_id"] in header_footer_ids:
-            continue
-
-        feat["level"] = compute_level(feat["element_id"], set())
+        feat["level"] = calculate_level(feat["true_parent_id"], set())
         final_features.append(feat)
 
-    logger.info(f"Simple hierarchy built: {len(final_features)} content elements.")
+    logger.info(f"Hierarchy built: {len(final_features)} valid elements.")
     return final_features
 
 # ============================================================================
@@ -1278,7 +1591,7 @@ class UnstructuredExtractor:
                 title=title,
                 content=text,
                 level=feat["level"],  # level from robust hierarchy
-                depth=0,  # filled later
+                depth=1,  # filled later
                 parent_id=None,  # filled later using true_parent_id
                 children_ids=[],
                 ancestors=[],

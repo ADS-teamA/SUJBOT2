@@ -139,7 +139,51 @@ class UnifiedDocumentPipeline:
             # PATH B: Fallback to Standard Unstructured
             # This infers hierarchy based on font sizes, etc.
             logger.info("🛡️ PATH B: Fallback to Unstructured Native Hierarchy")
-            return self.unstructured_extractor.extract(file_path)
+            return self._process_fallback_structure(file_path)
+
+    def _process_fallback_structure(
+            self,
+            file_path: Path,
+            start_time: float
+    ) -> ExtractedDocument:
+        """
+        Path B: Fallback logic.
+
+        1. Calls unstructured_extractor.extract() (Handles rotation, hierarchy, paths).
+        2. Removes standalone 'Title' partitions.
+        3. Assigns the text of the removed Title to the 'title' attribute of
+           subsequent content partitions.
+        """
+        # 1. Reuse existing extraction (this runs filter_rotated, build_robust_hierarchy, etc.)
+        extracted_doc = self.unstructured_extractor.extract(file_path)
+
+        raw_sections = extracted_doc.sections
+        refined_sections = []
+
+        # State to track the most recent Title text encountered
+        current_active_title = ""
+
+        for sec in raw_sections:
+            if sec.element_category == "Title":
+                # Captures the title text to apply to following content
+                current_active_title = sec.content
+                # REMOVE the Title element itself from the output list
+                continue
+
+            # For all other elements (NarrativeText, ListItem, Table, etc.)
+            # Apply the most recent title text to this partition
+            if current_active_title:
+                sec.title = current_active_title
+
+            # Add to output
+            refined_sections.append(sec)
+
+        # 3. Update the extracted document
+        extracted_doc.sections = refined_sections
+        extracted_doc.num_sections = len(refined_sections)
+        extracted_doc.extraction_method = "fallback_unstructured_merge_titles"
+
+        return extracted_doc
 
     def _try_retrieve_structure(self, parser: PDFParser) -> tuple[Optional[HierarchyNode], Optional[str], float]:
         """
@@ -489,6 +533,7 @@ def test_single_document(file_path_str: str, output_dir: str = "test_results_pip
         # --- FIX START: Define config explicitly ---
         config = ExtractionConfig(
             strategy="hi_res",
+            backend="gemini",
             model="yolox",  # Use the model that worked in your isolated test
             infer_table_structure=False,  # <--- DISABLE THIS to stop the crash
             extract_tables=False  # Disable extraction storage as well
