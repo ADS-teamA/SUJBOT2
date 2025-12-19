@@ -11,7 +11,6 @@ Based on PIPELINE.md research findings.
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
@@ -29,9 +28,9 @@ def test_phase1_only(pdf_path: Path, output_dir: Path):
 
     config = ExtractionConfig(
         strategy="hi_res",  # Use hi_res strategy for accuracy
-        model="yolox",  # Most accurate model
+        model="detectron2_mask_rcnn",  # Most accurate model
         generate_summaries=False,  # Disable PHASE 2
-        extract_tables=False,
+        extract_tables=True,
     )
 
     extractor = UnstructuredExtractor(config)
@@ -48,8 +47,7 @@ def test_phase1_only(pdf_path: Path, output_dir: Path):
     print(f"  Total chars: {result.total_chars}")
 
     # Save to JSON
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = output_dir / f"{pdf_path.stem}_{timestamp}_phase1_only.json"
+    output_path = output_dir / f"{pdf_path.stem}_phase1_only.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
@@ -155,7 +153,7 @@ def compare_results(phase1_result, phase2_result):
 
 def main():
     # Test document
-    pdf_path = Path("data/Sb_1997_18_2017-01-01_IZ.pdf")
+    pdf_path = Path("data/regulace/GRI/GRI 306_ Effluents and Waste 2016.pdf")
 
     if not pdf_path.exists():
         print(f"Error: {pdf_path} not found")
@@ -166,20 +164,20 @@ def main():
 
     # Run tests
     phase1_result = test_phase1_only(pdf_path, output_dir)
-    # phase2_result = test_phase1_phase2(pdf_path, output_dir)
-    #
-    # # Compare
-    # compare_results(phase1_result, phase2_result)
-    #
-    # print()
-    # print("=" * 80)
-    # print("✓ ALL TESTS COMPLETED")
-    # print("=" * 80)
-    # print()
-    # print("Next steps:")
-    # print("  1. Review extracted hierarchy in JSON files")
-    # print("  2. Test on your nuclear documentation PDFs")
-    # print("  3. Proceed to PHASE 3: Multi-layer chunking with SAC")
+    phase2_result = test_phase1_phase2(pdf_path, output_dir)
+
+    # Compare
+    compare_results(phase1_result, phase2_result)
+
+    print()
+    print("=" * 80)
+    print("✓ ALL TESTS COMPLETED")
+    print("=" * 80)
+    print()
+    print("Next steps:")
+    print("  1. Review extracted hierarchy in JSON files")
+    print("  2. Test on your nuclear documentation PDFs")
+    print("  3. Proceed to PHASE 3: Multi-layer chunking with SAC")
 
 
 if __name__ == "__main__":

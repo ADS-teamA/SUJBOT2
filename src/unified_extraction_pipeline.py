@@ -143,8 +143,7 @@ class UnifiedDocumentPipeline:
 
     def _process_fallback_structure(
             self,
-            file_path: Path,
-            start_time: float
+            file_path: Path
     ) -> ExtractedDocument:
         """
         Path B: Fallback logic.

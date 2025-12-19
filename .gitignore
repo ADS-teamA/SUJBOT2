@@ -79,10 +79,6 @@ data_test/*.pdf
 data_legacy/
 chunking_data/
 
-#modified test files
-tests/test_unstructured_chunking.py
-tests/test_phase1_phase2_extraction.py
-
 # Note: output/ is now tracked - contains indexed documents for testing
 
 # Backup files
