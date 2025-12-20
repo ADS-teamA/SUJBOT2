@@ -627,6 +627,78 @@ export class ApiService {
       throw new Error(`Failed to truncate messages: ${response.status}`);
     }
   }
+
+  // =========================================================================
+  // Feedback Methods (for LangSmith integration)
+  // =========================================================================
+
+  /**
+   * Submit user feedback for an assistant message
+   * Stores in PostgreSQL and sends to LangSmith for trace correlation
+   */
+  async submitFeedback(
+    messageId: number,
+    score: 1 | -1,
+    runId?: string | null,
+    comment?: string
+  ): Promise<FeedbackResponse> {
+    const response = await fetch(`${API_BASE_URL}/feedback`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({
+        message_id: messageId,
+        run_id: runId || null,
+        score,
+        comment: comment || null,
+      }),
+    });
+
+    if (response.status === 409) {
+      throw new Error('Feedback already submitted for this message');
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to submit feedback' }));
+      throw new Error(error.detail || 'Failed to submit feedback');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get existing feedback for a message (if any)
+   * Used to restore feedback state on page refresh
+   */
+  async getFeedback(messageId: number): Promise<ExistingFeedbackResponse> {
+    const response = await fetch(`${API_BASE_URL}/feedback/${messageId}`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get feedback: ${response.status}`);
+    }
+
+    return response.json();
+  }
+}
+
+// Feedback response types
+export interface FeedbackResponse {
+  id: number;
+  message_id: number;
+  score: number;
+  comment: string | null;
+  langsmith_synced: boolean;
+  created_at: string;
+}
+
+export interface ExistingFeedbackResponse {
+  has_feedback: boolean;
+  score?: number;
+  comment?: string;
 }
 
 // Singleton instance

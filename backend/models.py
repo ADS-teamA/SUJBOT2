@@ -200,3 +200,28 @@ class AdminStatsResponse(BaseModel):
     avg_spent_per_message_czk: float = Field(default=0.0, ge=0)
     avg_spent_per_conversation_czk: float = Field(default=0.0, ge=0)
     timestamp: str
+
+
+# =============================================================================
+# Admin Conversation Viewing Models (Read-Only)
+# =============================================================================
+
+
+class AdminConversationResponse(BaseModel):
+    """Admin view of a user conversation (read-only)."""
+
+    id: str = Field(..., description="Conversation UUID")
+    title: str = Field(..., description="Conversation title")
+    message_count: int = Field(..., ge=0, description="Number of messages")
+    created_at: str = Field(..., description="ISO timestamp of creation")
+    updated_at: str = Field(..., description="ISO timestamp of last update")
+
+
+class AdminMessageResponse(BaseModel):
+    """Admin view of a conversation message (read-only)."""
+
+    id: int = Field(..., description="Message ID")
+    role: Literal["user", "assistant", "system"] = Field(..., description="Message role")
+    content: str = Field(..., description="Message content")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Message metadata")
+    created_at: str = Field(..., description="ISO timestamp of creation")

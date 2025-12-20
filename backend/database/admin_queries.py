@@ -23,6 +23,7 @@ Usage:
 from typing import Optional, Dict, List, NoReturn
 from datetime import datetime, timezone
 import logging
+import json
 import asyncpg
 
 from src.exceptions import DatabaseConnectionError, StorageError
@@ -375,3 +376,119 @@ class AdminQueries:
                 "latency_ms": None,
                 "message": str(e)
             }
+
+    # =========================================================================
+    # Conversation Access (Admin View - Read Only)
+    # =========================================================================
+
+    async def get_user_conversations(self, user_id: int, limit: int = 50) -> List[Dict]:
+        """
+        Get all conversations for a user (admin access).
+
+        Args:
+            user_id: User ID to fetch conversations for
+            limit: Maximum number of conversations to return
+
+        Returns:
+            List of conversation dicts with message counts
+
+        Raises:
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT
+                        c.id,
+                        c.title,
+                        c.created_at,
+                        c.updated_at,
+                        COUNT(m.id) as message_count
+                    FROM auth.conversations c
+                    LEFT JOIN auth.messages m ON c.id = m.conversation_id
+                    WHERE c.user_id = $1
+                    GROUP BY c.id, c.title, c.created_at, c.updated_at
+                    ORDER BY c.updated_at DESC
+                    LIMIT $2
+                    """,
+                    user_id, limit
+                )
+                return [dict(row) for row in rows]
+        except Exception as e:
+            self._handle_db_error("get_user_conversations", {"user_id": user_id}, e)
+
+    async def verify_conversation_ownership(self, conversation_id: str, user_id: int) -> bool:
+        """
+        Verify that a conversation belongs to a specific user.
+
+        Args:
+            conversation_id: Conversation UUID to check
+            user_id: Expected owner user ID
+
+        Returns:
+            True if conversation belongs to user, False otherwise
+
+        Raises:
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                is_owner = await conn.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM auth.conversations WHERE id = $1 AND user_id = $2)",
+                    conversation_id, user_id
+                )
+                return is_owner
+        except Exception as e:
+            self._handle_db_error(
+                "verify_conversation_ownership",
+                {"conversation_id": conversation_id, "user_id": user_id},
+                e
+            )
+
+    async def get_conversation_history(self, conversation_id: str, limit: int = 200) -> List[Dict]:
+        """
+        Get message history for a conversation (admin access).
+
+        Args:
+            conversation_id: Conversation UUID
+            limit: Maximum number of messages to return
+
+        Returns:
+            List of message dicts ordered by creation time (ascending)
+
+        Raises:
+            DatabaseConnectionError: If database connection fails
+            StorageError: For other database errors
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, role, content, metadata, created_at
+                    FROM auth.messages
+                    WHERE conversation_id = $1
+                    ORDER BY created_at ASC
+                    LIMIT $2
+                    """,
+                    conversation_id, limit
+                )
+                messages = []
+                for row in rows:
+                    msg = dict(row)
+                    # Parse metadata JSON string to dict
+                    if msg.get("metadata"):
+                        try:
+                            msg["metadata"] = json.loads(msg["metadata"])
+                        except (json.JSONDecodeError, TypeError):
+                            msg["metadata"] = None
+                    messages.append(msg)
+                return messages
+        except Exception as e:
+            self._handle_db_error(
+                "get_conversation_history",
+                {"conversation_id": conversation_id},
+                e
+            )

@@ -697,13 +697,22 @@ export function useChat() {
                 )
               );
             }
+          } else if (event.event === 'message_saved') {
+            // Message saved to database - capture message ID for feedback
+            if (currentMessageRef.current && event.data?.message_id) {
+              currentMessageRef.current.dbMessageId = event.data.message_id;
+            }
           } else if (event.event === 'done') {
             // Stream completed - mark streaming as finished
             if (currentMessageRef.current?.agentProgress) {
               currentMessageRef.current.agentProgress.isStreaming = false;
               currentMessageRef.current.agentProgress.currentAgent = null;
             }
-            break;
+            // Capture run_id for feedback correlation (LangSmith trace ID)
+            if (currentMessageRef.current && event.data?.run_id) {
+              currentMessageRef.current.runId = event.data.run_id;
+            }
+            // Don't break yet - wait for message_saved event
           } else if (event.event === 'error') {
             // Error occurred
             console.error('Stream error:', event.data);
@@ -1025,13 +1034,22 @@ export function useChat() {
                 })
               );
             }
+          } else if (event.event === 'message_saved') {
+            // Message saved to database - capture message ID for feedback
+            if (currentMessageRef.current && event.data?.message_id) {
+              currentMessageRef.current.dbMessageId = event.data.message_id;
+            }
           } else if (event.event === 'done') {
             // Stream completed - mark streaming as finished
             if (currentMessageRef.current?.agentProgress) {
               currentMessageRef.current.agentProgress.isStreaming = false;
               currentMessageRef.current.agentProgress.currentAgent = null;
             }
-            break;
+            // Capture run_id for feedback correlation (LangSmith trace ID)
+            if (currentMessageRef.current && event.data?.run_id) {
+              currentMessageRef.current.runId = event.data.run_id;
+            }
+            // Don't break yet - wait for message_saved event
           } else if (event.event === 'error') {
             // Error occurred
             console.error('Clarification stream error:', event.data);

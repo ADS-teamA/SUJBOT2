@@ -224,6 +224,28 @@
       "spendingResetSuccess": "Výdaje byly úspěšně resetovány",
       "spendingResetError": "Nepodařilo se resetovat výdaje",
       "blocked": "Zablokován"
+    },
+    "conversations": {
+      "sectionTitle": "Historie konverzací",
+      "title": "Konverzace",
+      "noConversations": "Zatím žádné konverzace",
+      "messages": "zpráv",
+      "chatHistory": "Historie chatu",
+      "loadError": "Nepodařilo se načíst konverzace",
+      "loadMessagesError": "Nepodařilo se načíst zprávy",
+      "readOnly": "Pouze ke čtení",
+      "selectConversation": "Vyberte konverzaci k zobrazení"
     }
+  },
+  "feedback": {
+    "helpful": "Užitečné",
+    "notHelpful": "Neužitečné",
+    "addComment": "Přidat komentář",
+    "rating": "Hodnocení",
+    "commentPlaceholder": "Co by se mohlo zlepšit? (volitelné)",
+    "submit": "Odeslat",
+    "cancel": "Zrušit",
+    "submitted": "Zpětná vazba odeslána",
+    "thankYou": "Děkujeme za vaši zpětnou vazbu!"
   }
 }
