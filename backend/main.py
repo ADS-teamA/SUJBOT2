@@ -56,6 +56,7 @@ from backend.middleware.rate_limit import RateLimitMiddleware
 from backend.middleware.security_headers import SecurityHeadersMiddleware
 from backend.routes.auth import router as auth_router, set_dependencies
 from backend.routes.conversations import router as conversations_router, set_postgres_adapter, get_postgres_adapter
+from backend.routes.feedback import router as feedback_router, set_postgres_adapter as set_feedback_postgres_adapter
 from backend.routes.citations import router as citations_router
 from backend.routes.documents import router as documents_router
 from backend.routes.settings import router as settings_router
@@ -141,8 +142,9 @@ async def lifespan(app: FastAPI):
         await postgres_adapter.initialize()
         logger.info("✓ PostgreSQL connection pool initialized")
 
-        # Set PostgreSQL adapter for conversation routes
+        # Set PostgreSQL adapter for conversation and feedback routes
         set_postgres_adapter(postgres_adapter)
+        set_feedback_postgres_adapter(postgres_adapter)
 
         # =====================================================================
         # 3. Initialize Authentication System
@@ -293,6 +295,9 @@ app.include_router(settings_router)
 
 # Register admin routes (/admin/login, /admin/users, /admin/health, /admin/stats)
 app.include_router(admin_router)
+
+# Register feedback routes (/feedback)
+app.include_router(feedback_router)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -633,18 +638,29 @@ async def chat_stream(
                 }
 
             # Stream completed successfully - save assistant message to database
+            saved_message_id = None
             if request.conversation_id and collected_response:
                 try:
-                    await adapter.append_message(
+                    saved_message_id = await adapter.append_message(
                         conversation_id=request.conversation_id,
                         role="assistant",
                         content=collected_response,
                         metadata=collected_metadata if collected_metadata else None
                     )
-                    logger.debug(f"Saved assistant message to conversation {request.conversation_id}")
+                    logger.debug(f"Saved assistant message {saved_message_id} to conversation {request.conversation_id}")
+
+                    # Send message_saved event with database ID for feedback functionality
+                    yield {
+                        "event": "message_saved",
+                        "data": json.dumps({"message_id": saved_message_id}, ensure_ascii=False)
+                    }
                 except Exception as e:
                     logger.error(f"Failed to save assistant message: {e}", exc_info=True)
-                    # Don't crash stream if database save fails - message was already sent to client
+                    # Inform frontend that save failed - feedback won't work for this message
+                    yield {
+                        "event": "message_saved",
+                        "data": json.dumps({"message_id": None, "error": "Failed to save message"}, ensure_ascii=False)
+                    }
 
             # Record spending for this message
             if auth_queries and collected_metadata.get("cost"):

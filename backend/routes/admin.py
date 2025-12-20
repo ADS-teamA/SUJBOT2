@@ -14,8 +14,8 @@ Endpoints:
 All endpoints (except /admin/login) require admin JWT token.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from typing import Optional, Dict
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
+from typing import Optional, Dict, List
 from datetime import datetime, timezone
 import logging
 import os
@@ -34,6 +34,8 @@ from backend.models import (
     ServiceHealthDetail,
     AdminHealthResponse,
     AdminStatsResponse,
+    AdminConversationResponse,
+    AdminMessageResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -183,6 +185,7 @@ async def admin_login(
         secure=is_production,
         samesite="lax",
         max_age=86400,  # 24 hours
+        path="/",  # Cookie valid for all paths (needed for /auth/me check)
     )
 
     # Update last login timestamp
@@ -646,3 +649,110 @@ async def reset_user_spending(
         "user_id": user_id,
         "reset_at": datetime.now(timezone.utc).isoformat()
     }
+
+
+# =============================================================================
+# Conversation Viewing Endpoints (Read-Only)
+# =============================================================================
+
+
+@router.get("/users/{user_id}/conversations", response_model=List[AdminConversationResponse])
+async def list_user_conversations(
+    user_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    admin: Dict = Depends(get_current_admin_user),
+    admin_queries: AdminQueries = Depends(get_admin_queries)
+):
+    """
+    List all conversations for a specific user (admin view).
+
+    Read-only access - returns conversations with metadata but not messages.
+
+    Args:
+        user_id: User ID to fetch conversations for
+        limit: Maximum number of conversations to return (1-200, default 50)
+
+    Returns:
+        List of conversations with id, title, message_count, timestamps
+
+    Raises:
+        HTTPException 404: User not found
+    """
+    # Verify user exists
+    user = await admin_queries.get_user_full(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Get conversations
+    conversations = await admin_queries.get_user_conversations(user_id, limit=limit)
+
+    return [
+        AdminConversationResponse(
+            id=conv["id"],
+            title=conv["title"] or "New Conversation",
+            message_count=conv.get("message_count", 0),
+            created_at=conv["created_at"].isoformat(),
+            updated_at=conv["updated_at"].isoformat()
+        )
+        for conv in conversations
+    ]
+
+
+@router.get(
+    "/users/{user_id}/conversations/{conversation_id}/messages",
+    response_model=List[AdminMessageResponse]
+)
+async def get_user_conversation_messages(
+    user_id: int,
+    conversation_id: str,
+    limit: int = Query(default=200, ge=1, le=1000),
+    admin: Dict = Depends(get_current_admin_user),
+    admin_queries: AdminQueries = Depends(get_admin_queries)
+):
+    """
+    Get all messages for a specific conversation (admin view).
+
+    Read-only access - no modification allowed.
+
+    Args:
+        user_id: User ID who owns the conversation
+        conversation_id: Conversation UUID to fetch messages from
+        limit: Maximum number of messages to return (1-1000, default 200)
+
+    Returns:
+        List of messages with id, role, content, metadata, created_at
+
+    Raises:
+        HTTPException 404: User or conversation not found
+    """
+    # Verify user exists
+    user = await admin_queries.get_user_full(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Verify conversation belongs to user
+    if not await admin_queries.verify_conversation_ownership(conversation_id, user_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+
+    # Get messages
+    messages = await admin_queries.get_conversation_history(conversation_id, limit=limit)
+
+    return [
+        AdminMessageResponse(
+            id=msg["id"],
+            role=msg["role"],
+            content=msg["content"],
+            metadata=msg.get("metadata"),
+            created_at=msg["created_at"].isoformat()
+        )
+        for msg in messages
+    ]

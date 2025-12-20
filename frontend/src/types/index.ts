@@ -59,6 +59,18 @@ export interface Message {
   agentProgress?: AgentProgress;
   toolHealth?: ToolHealth;  // Tool availability status at query time
   selectedContext?: MessageSelectedContext;  // Context from PDF selection (user messages only)
+  runId?: string;  // LangSmith trace ID for feedback correlation (assistant messages only)
+  dbMessageId?: number;  // Database message ID for feedback submission
+  feedback?: MessageFeedback;  // User feedback on this message (assistant messages only)
+}
+
+/**
+ * User feedback on an assistant message.
+ * Used for LangSmith debugging and dataset creation.
+ */
+export interface MessageFeedback {
+  score: 1 | -1;  // 1=thumbs up, -1=thumbs down
+  comment?: string;
 }
 
 export interface ToolCall {
@@ -106,7 +118,7 @@ export interface Conversation {
 }
 
 export interface SSEEvent {
-  event: 'tool_health' | 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress' | 'title_update';
+  event: 'tool_health' | 'text_delta' | 'tool_call' | 'tool_result' | 'tool_calls_summary' | 'cost_summary' | 'done' | 'error' | 'clarification_needed' | 'agent_start' | 'progress' | 'title_update' | 'message_saved';
   data: any;
 }
 

@@ -222,6 +222,29 @@
       "spendingResetSuccess": "Spending reset successfully",
       "spendingResetError": "Failed to reset spending",
       "blocked": "Blocked"
+    },
+    "conversations": {
+      "sectionTitle": "Conversation History",
+      "title": "Conversations",
+      "noConversations": "No conversations yet",
+      "messages": "messages",
+      "chatHistory": "Chat History",
+      "loadError": "Failed to load conversations",
+      "loadMessagesError": "Failed to load messages",
+      "readOnly": "Read-only",
+      "selectConversation": "Select a conversation to view"
     }
+  },
+  "feedback": {
+    "helpful": "Helpful",
+    "notHelpful": "Not helpful",
+    "addComment": "Add comment",
+    "rating": "Rating",
+    "commentPlaceholder": "What could be improved? (optional)",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "submitted": "Feedback submitted",
+    "thankYou": "Thank you for your feedback!",
+    "error": "Failed to submit feedback"
   }
 }

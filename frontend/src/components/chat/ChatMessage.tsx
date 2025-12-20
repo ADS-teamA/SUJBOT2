@@ -19,6 +19,7 @@ import { cn } from '../../design-system/utils/cn';
 import type { Message } from '../../types';
 import { ToolCallDisplay } from './ToolCallDisplay';
 import { ProgressPhaseDisplay } from './ProgressPhaseDisplay';
+import { FeedbackButtons } from './FeedbackButtons';
 import { CitationLink } from '../citation/CitationLink';
 import { preprocessCitations } from '../../utils/citations';
 
@@ -449,6 +450,16 @@ export function ChatMessage({
                 </button>
               )}
             </div>
+          )}
+
+          {/* Feedback buttons for assistant messages (only when not streaming) */}
+          {!isUser && !message.agentProgress?.isStreaming && (
+            <FeedbackButtons
+              dbMessageId={message.dbMessageId}
+              runId={message.runId}
+              existingFeedback={message.feedback}
+              disabled={disabled}
+            />
           )}
 
           {/* Timestamp with inline details toggle */}

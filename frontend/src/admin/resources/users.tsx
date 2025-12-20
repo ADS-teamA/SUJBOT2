@@ -40,6 +40,7 @@ import {
   Confirm,
 } from 'react-admin';
 import { getApiBaseUrl } from '../dataProvider';
+import { AdminConversationViewer } from '../components/AdminConversationViewer';
 
 // Props for custom field components (React Admin passes label)
 interface FieldProps {
@@ -309,6 +310,35 @@ export const UserCreate = () => {
   );
 };
 
+/**
+ * ConversationSection - Wrapper component to access record context for conversation viewer
+ */
+const ConversationSection = () => {
+  const { t } = useTranslation();
+  const record = useRecordContext();
+
+  if (!record) return null;
+
+  return (
+    <div style={{ marginTop: '32px', gridColumn: '1 / -1' }}>
+      <h3
+        style={{
+          fontSize: '16px',
+          fontWeight: 600,
+          marginBottom: '16px',
+          color: '#374151',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        {t('admin.conversations.sectionTitle')}
+      </h3>
+      <AdminConversationViewer userId={Number(record.id)} />
+    </div>
+  );
+};
+
 export const UserShow = () => {
   const { t } = useTranslation();
   return (
@@ -328,6 +358,8 @@ export const UserShow = () => {
         <DateField source="created_at" label={t('admin.users.createdAt')} showTime />
         <DateField source="updated_at" label={t('admin.users.updatedAt')} showTime />
         <DateField source="last_login_at" label={t('admin.users.lastLogin')} showTime />
+        {/* User Conversation History */}
+        <ConversationSection />
       </SimpleShowLayout>
     </Show>
   );

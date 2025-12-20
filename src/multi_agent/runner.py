@@ -16,6 +16,7 @@ import logging
 import asyncio
 import json
 import os
+import uuid
 from typing import Optional, Dict, Any, AsyncGenerator, List
 from pathlib import Path
 from dotenv import load_dotenv
@@ -747,11 +748,20 @@ class MultiAgentRunner:
 
             # Run workflow with streaming to get intermediate state updates
             # Pass event_bus through config (not state) to avoid serialization issues
+            run_id = None  # LangSmith trace ID for user feedback
+
+            # Generate run_id for LangSmith correlation if tracing is enabled
+            if self.langsmith and self.langsmith.is_enabled():
+                run_id = str(uuid.uuid4())
+                logger.info(f"LangSmith tracing enabled, generated run_id: {run_id[:8]}...")
+
             config = {
                 "configurable": {
                     "thread_id": thread_id,
                     "event_bus": event_bus,  # Pass through config, not state
-                }
+                },
+                # Pass run_id to LangGraph so traces are correlated
+                **({"run_id": run_id} if run_id else {}),
             }
             final_result = None
 
@@ -865,6 +875,7 @@ class MultiAgentRunner:
                 "errors": result.get("errors", []),
                 "synthesis_mode": synthesis_mode,  # For metrics: "lightweight" or "full"
                 "tool_executions": tool_executions_serialized,  # For evaluation tracking
+                "run_id": run_id,  # LangSmith trace ID for user feedback correlation
             }
 
             # Always yield final result (function is now always a generator)

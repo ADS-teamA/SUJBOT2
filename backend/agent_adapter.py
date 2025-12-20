@@ -543,6 +543,7 @@ class AgentAdapter:
             complexity_score = result.get("complexity_score", 0)
             query_type = result.get("query_type", "unknown")
             agent_sequence = result.get("agent_sequence", [])
+            run_id = result.get("run_id")  # LangSmith trace ID for user feedback
 
             # Emit workflow summary
             yield {
@@ -648,6 +649,7 @@ class AgentAdapter:
                     "agent_sequence": agent_sequence,
                     "complexity_score": complexity_score,
                     "query_type": query_type,
+                    "run_id": run_id,  # LangSmith trace ID for user feedback
                 }
             }
 
