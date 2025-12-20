@@ -478,12 +478,15 @@ class AdminQueries:
                 messages = []
                 for row in rows:
                     msg = dict(row)
-                    # Parse metadata JSON string to dict
+                    # Parse metadata - handle both string (TEXT) and dict (JSONB) returns
                     if msg.get("metadata"):
-                        try:
-                            msg["metadata"] = json.loads(msg["metadata"])
-                        except (json.JSONDecodeError, TypeError):
-                            msg["metadata"] = None
+                        if isinstance(msg["metadata"], str):
+                            try:
+                                msg["metadata"] = json.loads(msg["metadata"])
+                            except json.JSONDecodeError:
+                                logger.warning(f"Failed to parse metadata JSON for message {msg.get('id')}")
+                                msg["metadata"] = None
+                        # If already a dict (JSONB), keep as-is
                     messages.append(msg)
                 return messages
         except Exception as e:

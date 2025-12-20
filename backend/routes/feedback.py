@@ -10,11 +10,13 @@ import logging
 import os
 from typing import Dict, Optional
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from pydantic import BaseModel, Field
 
 from backend.middleware.auth import get_current_user
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
+from src.exceptions import StorageError, FeedbackSubmissionError
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 logger = logging.getLogger(__name__)
@@ -100,7 +102,8 @@ def _get_langsmith_client():
                 logger.info(f"LangSmith client initialized for feedback (endpoint: {endpoint})")
             except ImportError:
                 logger.warning("langsmith package not installed, feedback sync disabled")
-            except Exception as e:
+            except (OSError, ValueError) as e:
+                # OSError: Network issues, ValueError: Invalid configuration
                 logger.error(f"Failed to initialize LangSmith client: {e}")
         else:
             logger.info("LANGSMITH_API_KEY not set, feedback sync disabled")
@@ -138,9 +141,13 @@ async def _ensure_feedback_table(adapter: PostgreSQLStorageAdapter):
             )
         _table_created = True
         logger.debug("Feedback table verified/created")
-    except Exception as e:
-        logger.error(f"Failed to ensure feedback table: {e}")
-        raise
+    except asyncpg.PostgresError as e:
+        logger.error(f"Failed to ensure feedback table: {e}", exc_info=True)
+        raise StorageError(
+            message="Failed to create feedback table",
+            details={"error_type": type(e).__name__},
+            cause=e
+        )
 
 
 # ============================================================================
@@ -202,8 +209,9 @@ def _send_to_langsmith(run_id: str, score: int, comment: Optional[str]) -> bool:
             f"score={langsmith_score}, has_comment={comment is not None}"
         )
         return True
-    except Exception as e:
-        logger.error(f"Failed to send feedback to LangSmith: {e}")
+    except (OSError, ValueError, RuntimeError) as e:
+        # OSError: Network errors, ValueError: Invalid data, RuntimeError: Client issues
+        logger.warning(f"Failed to send feedback to LangSmith: {e}")
         return False
 
 
@@ -265,13 +273,13 @@ async def submit_feedback(
                 request.score,
                 request.comment,
             )
-    except Exception as e:
-        # Check for unique constraint violation (duplicate feedback)
-        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Feedback already submitted for this message",
-            )
+    except asyncpg.UniqueViolationError:
+        # Duplicate feedback (user already rated this message)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Feedback already submitted for this message",
+        )
+    except asyncpg.PostgresError as e:
         logger.error(f"Failed to insert feedback: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -297,7 +305,8 @@ async def submit_feedback(
                         """,
                         row["id"],
                     )
-            except Exception as e:
+            except asyncpg.PostgresError as e:
+                # Non-critical: flag update failed but feedback was saved
                 logger.warning(f"Failed to update langsmith_synced flag: {e}")
 
     logger.info(
@@ -357,8 +366,8 @@ async def get_feedback(
         else:
             return ExistingFeedbackResponse(has_feedback=False)
 
-    except Exception as e:
-        logger.error(f"Failed to get feedback for message {message_id}: {e}")
+    except asyncpg.PostgresError as e:
+        logger.error(f"Failed to get feedback for message {message_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve feedback",
