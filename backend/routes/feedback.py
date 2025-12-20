@@ -6,17 +6,18 @@ Stores feedback in PostgreSQL and sends to LangSmith for trace correlation.
 All endpoints require JWT authentication and verify message ownership.
 """
 
+import asyncio
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status, Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.middleware.auth import get_current_user
 from src.storage.postgres_adapter import PostgreSQLStorageAdapter
-from src.exceptions import StorageError, FeedbackSubmissionError
+from src.exceptions import StorageError
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 logger = logging.getLogger(__name__)
@@ -29,9 +30,9 @@ logger = logging.getLogger(__name__)
 class FeedbackRequest(BaseModel):
     """Request model for submitting feedback."""
 
-    message_id: int = Field(..., description="Database message ID")
+    message_id: int = Field(..., ge=1, description="Database message ID")
     run_id: Optional[str] = Field(None, description="LangSmith trace ID for correlation")
-    score: int = Field(..., description="1=thumbs up, -1=thumbs down")
+    score: Literal[-1, 1] = Field(..., description="1=thumbs up, -1=thumbs down")
     comment: Optional[str] = Field(None, max_length=2000, description="Optional comment")
 
     class Config:
@@ -48,10 +49,10 @@ class FeedbackRequest(BaseModel):
 class FeedbackResponse(BaseModel):
     """Response model for submitted feedback."""
 
-    id: int
-    message_id: int
-    score: int
-    comment: Optional[str]
+    id: int = Field(..., ge=1)
+    message_id: int = Field(..., ge=1)
+    score: Literal[-1, 1]
+    comment: Optional[str] = None
     langsmith_synced: bool
     created_at: str
 
@@ -60,8 +61,17 @@ class ExistingFeedbackResponse(BaseModel):
     """Response model for checking existing feedback."""
 
     has_feedback: bool
-    score: Optional[int] = None
+    score: Optional[Literal[-1, 1]] = None
     comment: Optional[str] = None
+
+    @model_validator(mode="after")
+    def check_consistency(self) -> "ExistingFeedbackResponse":
+        """Ensure score/comment are only present when has_feedback is True."""
+        if self.has_feedback and self.score is None:
+            raise ValueError("score required when has_feedback is True")
+        if not self.has_feedback and (self.score is not None or self.comment is not None):
+            raise ValueError("score and comment must be None when has_feedback is False")
+        return self
 
 
 # ============================================================================
@@ -71,6 +81,7 @@ class ExistingFeedbackResponse(BaseModel):
 _postgres_adapter: Optional[PostgreSQLStorageAdapter] = None
 _langsmith_client = None
 _table_created = False
+_initialization_lock = asyncio.Lock()
 
 
 def set_postgres_adapter(adapter: PostgreSQLStorageAdapter):
@@ -116,38 +127,43 @@ async def _ensure_feedback_table(adapter: PostgreSQLStorageAdapter):
     if _table_created:
         return
 
-    try:
-        async with adapter.pool.acquire() as conn:
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS auth.message_feedback (
-                    id SERIAL PRIMARY KEY,
-                    message_id INTEGER NOT NULL REFERENCES auth.messages(id) ON DELETE CASCADE,
-                    user_id INTEGER NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-                    run_id TEXT,
-                    score INTEGER NOT NULL CHECK (score IN (-1, 1)),
-                    comment TEXT,
-                    langsmith_synced BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                    UNIQUE(message_id, user_id)
+    async with _initialization_lock:
+        # Double-check after acquiring lock to prevent race condition
+        if _table_created:
+            return
+
+        try:
+            async with adapter.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS auth.message_feedback (
+                        id SERIAL PRIMARY KEY,
+                        message_id INTEGER NOT NULL REFERENCES auth.messages(id) ON DELETE CASCADE,
+                        user_id INTEGER NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+                        run_id TEXT,
+                        score INTEGER NOT NULL CHECK (score IN (-1, 1)),
+                        comment TEXT,
+                        langsmith_synced BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                        UNIQUE(message_id, user_id)
+                    )
+                    """
                 )
-                """
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_message_feedback_message_id
+                    ON auth.message_feedback(message_id)
+                    """
+                )
+            _table_created = True
+            logger.debug("Feedback table verified/created")
+        except asyncpg.PostgresError as e:
+            logger.error(f"Failed to ensure feedback table: {e}", exc_info=True)
+            raise StorageError(
+                message="Failed to create feedback table",
+                details={"error_type": type(e).__name__},
+                cause=e
             )
-            await conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_message_feedback_message_id
-                ON auth.message_feedback(message_id)
-                """
-            )
-        _table_created = True
-        logger.debug("Feedback table verified/created")
-    except asyncpg.PostgresError as e:
-        logger.error(f"Failed to ensure feedback table: {e}", exc_info=True)
-        raise StorageError(
-            message="Failed to create feedback table",
-            details={"error_type": type(e).__name__},
-            cause=e
-        )
 
 
 # ============================================================================
@@ -161,26 +177,46 @@ async def _verify_message_ownership(
     """
     Verify that the user owns the conversation containing the message.
 
-    Returns True if user owns the message, False otherwise.
+    Args:
+        adapter: PostgreSQL storage adapter
+        message_id: ID of the message to check
+        user_id: ID of the user to verify ownership for
+
+    Returns:
+        True if user owns the message, False otherwise
+
+    Raises:
+        StorageError: If database query fails
     """
-    async with adapter.pool.acquire() as conn:
-        result = await conn.fetchval(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM auth.messages m
-                JOIN auth.conversations c ON m.conversation_id = c.id
-                WHERE m.id = $1 AND c.user_id = $2
+    try:
+        async with adapter.pool.acquire() as conn:
+            result = await conn.fetchval(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM auth.messages m
+                    JOIN auth.conversations c ON m.conversation_id = c.id
+                    WHERE m.id = $1 AND c.user_id = $2
+                )
+                """,
+                message_id,
+                user_id,
             )
-            """,
-            message_id,
-            user_id,
+            return bool(result)
+    except asyncpg.PostgresError as e:
+        logger.error(
+            f"Failed to verify message ownership: message_id={message_id}, user_id={user_id}",
+            exc_info=True
         )
-        return bool(result)
+        raise StorageError(
+            message="Failed to verify message ownership",
+            details={"message_id": message_id, "user_id": user_id},
+            cause=e
+        )
 
 
 def _send_to_langsmith(run_id: str, score: int, comment: Optional[str]) -> bool:
     """
-    Send feedback to LangSmith.
+    Send feedback to LangSmith (synchronous, may add latency to response).
 
     Args:
         run_id: LangSmith trace/run ID
@@ -209,9 +245,12 @@ def _send_to_langsmith(run_id: str, score: int, comment: Optional[str]) -> bool:
             f"score={langsmith_score}, has_comment={comment is not None}"
         )
         return True
-    except (OSError, ValueError, RuntimeError) as e:
-        # OSError: Network errors, ValueError: Invalid data, RuntimeError: Client issues
-        logger.warning(f"Failed to send feedback to LangSmith: {e}")
+    except Exception as e:
+        # Log at error level since this is data loss for observability
+        logger.error(
+            f"Failed to send feedback to LangSmith: {type(e).__name__}: {e}",
+            extra={"run_id": run_id[:8] if run_id else None, "score": score}
+        )
         return False
 
 
@@ -240,14 +279,12 @@ async def submit_feedback(
 
     Returns:
         Created feedback record
-    """
-    # Validate score
-    if request.score not in (-1, 1):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Score must be -1 (thumbs down) or 1 (thumbs up)",
-        )
 
+    Raises:
+        HTTPException 403: If user doesn't own the message's conversation
+        HTTPException 409: If feedback already submitted for this message
+        HTTPException 500: If database save fails
+    """
     # Ensure feedback table exists
     await _ensure_feedback_table(adapter)
 
@@ -286,7 +323,7 @@ async def submit_feedback(
             detail="Failed to save feedback",
         )
 
-    # Send to LangSmith (async, don't block response)
+    # Send to LangSmith (synchronous, may add latency)
     langsmith_synced = False
     if request.run_id:
         langsmith_synced = _send_to_langsmith(
@@ -326,7 +363,7 @@ async def submit_feedback(
 
 @router.get("/{message_id}", response_model=ExistingFeedbackResponse)
 async def get_feedback(
-    message_id: int = Path(..., description="Message ID to check"),
+    message_id: int = Path(..., ge=1, description="Message ID to check"),
     user: Dict = Depends(get_current_user),
     adapter: PostgreSQLStorageAdapter = Depends(get_postgres_adapter),
 ):
@@ -334,6 +371,7 @@ async def get_feedback(
     Check if user has submitted feedback for a message.
 
     Used by frontend to restore feedback state on page refresh.
+    Only returns feedback for messages the user owns.
 
     Args:
         message_id: ID of the message to check
@@ -345,6 +383,11 @@ async def get_feedback(
     """
     # Ensure feedback table exists
     await _ensure_feedback_table(adapter)
+
+    # Verify user owns the message's conversation (security check)
+    # Return empty response instead of 403 to avoid leaking message existence
+    if not await _verify_message_ownership(adapter, message_id, user["id"]):
+        return ExistingFeedbackResponse(has_feedback=False)
 
     try:
         async with adapter.pool.acquire() as conn:

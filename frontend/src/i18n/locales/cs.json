@@ -246,6 +246,7 @@
     "submit": "Odeslat",
     "cancel": "Zrušit",
     "submitted": "Zpětná vazba odeslána",
-    "thankYou": "Děkujeme za vaši zpětnou vazbu!"
+    "thankYou": "Děkujeme za vaši zpětnou vazbu!",
+    "error": "Nepodařilo se odeslat zpětnou vazbu"
   }
 }

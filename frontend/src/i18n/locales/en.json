@@ -244,6 +244,7 @@
     "submit": "Submit",
     "cancel": "Cancel",
     "submitted": "Feedback submitted",
-    "thankYou": "Thank you for your feedback!"
+    "thankYou": "Thank you for your feedback!",
+    "error": "Failed to submit feedback"
   }
 }

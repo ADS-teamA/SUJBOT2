@@ -43,6 +43,7 @@ export function FeedbackButtons({
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [comment, setComment] = useState('');
   const [pendingScore, setPendingScore] = useState<1 | -1 | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // If no database message ID, can't submit feedback
   if (!dbMessageId) {
@@ -81,14 +82,17 @@ export function FeedbackButtons({
     if (isSubmitting || disabled) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
       await apiService.submitFeedback(dbMessageId, score, runId);
       const newFeedback: MessageFeedback = { score };
       setFeedback(newFeedback);
       onFeedbackSubmit?.(newFeedback);
-    } catch (error) {
-      console.error('Failed to submit feedback:', error);
-      // Could show a toast here
+    } catch (err) {
+      console.error('Failed to submit feedback:', err);
+      setError(t('feedback.error'));
+      // Clear error after 3 seconds
+      setTimeout(() => setError(null), 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -103,6 +107,7 @@ export function FeedbackButtons({
     if (!pendingScore || isSubmitting) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
       await apiService.submitFeedback(dbMessageId, pendingScore, runId, comment.trim() || undefined);
       const newFeedback: MessageFeedback = {
@@ -114,8 +119,11 @@ export function FeedbackButtons({
       setShowCommentModal(false);
       setComment('');
       setPendingScore(null);
-    } catch (error) {
-      console.error('Failed to submit feedback:', error);
+    } catch (err) {
+      console.error('Failed to submit feedback:', err);
+      setError(t('feedback.error'));
+      // Clear error after 3 seconds
+      setTimeout(() => setError(null), 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -130,6 +138,13 @@ export function FeedbackButtons({
   return (
     <>
       <div className="flex items-center gap-1 mt-2">
+        {/* Error message */}
+        {error && (
+          <span className="text-xs text-red-500 dark:text-red-400 mr-2">
+            {error}
+          </span>
+        )}
+
         {/* Thumbs up */}
         <button
           onClick={() => handleScore(1)}

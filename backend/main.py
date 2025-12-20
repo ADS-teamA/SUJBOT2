@@ -656,7 +656,11 @@ async def chat_stream(
                     }
                 except Exception as e:
                     logger.error(f"Failed to save assistant message: {e}", exc_info=True)
-                    # Don't crash stream if database save fails - message was already sent to client
+                    # Inform frontend that save failed - feedback won't work for this message
+                    yield {
+                        "event": "message_saved",
+                        "data": json.dumps({"message_id": None, "error": "Failed to save message"}, ensure_ascii=False)
+                    }
 
             # Record spending for this message
             if auth_queries and collected_metadata.get("cost"):
