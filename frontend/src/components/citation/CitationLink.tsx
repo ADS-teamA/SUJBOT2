@@ -52,13 +52,17 @@ export function CitationLink({ chunkId }: CitationLinkProps) {
 
   const metadata = citationCache.get(chunkId);
 
-  // Hover handlers with delay
+  // Unique ID for ARIA tooltip relationship
+  const tooltipId = `citation-preview-${chunkId.replace(/[^a-zA-Z0-9]/g, '-')}`;
+
+  // Hover/focus handlers with delay
   const handleMouseEnter = useCallback((ref: React.RefObject<HTMLElement | null>) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     hoverTimeoutRef.current = setTimeout(() => {
-      setIsHovered(true);
+      // Only show preview if ref is still valid (prevents race condition)
       if (ref.current) {
         setAnchorRect(ref.current.getBoundingClientRect());
+        setIsHovered(true);
       }
     }, HOVER_ENTER_DELAY);
   }, []);
@@ -127,6 +131,7 @@ export function CitationLink({ chunkId }: CitationLinkProps) {
     if (!isHovered || !metadata) return null;
     return createPortal(
       <CitationPreview
+        id={tooltipId}
         metadata={metadata}
         anchorRect={anchorRect}
         onMouseEnter={handlePreviewMouseEnter}
@@ -142,13 +147,19 @@ export function CitationLink({ chunkId }: CitationLinkProps) {
       <>
         <span
           ref={spanRef}
+          tabIndex={0}
+          role="button"
+          aria-describedby={isHovered ? tooltipId : undefined}
           onMouseEnter={() => handleMouseEnter(spanRef)}
           onMouseLeave={handleMouseLeave}
+          onFocus={() => handleMouseEnter(spanRef)}
+          onBlur={handleMouseLeave}
           className={cn(
             'inline-flex items-center gap-1 px-1.5 py-0.5 rounded',
             'bg-accent-100 dark:bg-accent-800',
             'text-accent-600 dark:text-accent-400',
-            'text-xs font-mono'
+            'text-xs font-mono',
+            'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1'
           )}
         >
           <FileText size={10} className="opacity-50" />
@@ -164,9 +175,12 @@ export function CitationLink({ chunkId }: CitationLinkProps) {
     <>
       <button
         ref={buttonRef}
+        aria-describedby={isHovered ? tooltipId : undefined}
         onClick={handleClick}
         onMouseEnter={() => handleMouseEnter(buttonRef)}
         onMouseLeave={handleMouseLeave}
+        onFocus={() => handleMouseEnter(buttonRef)}
+        onBlur={handleMouseLeave}
         className={cn(
           'inline-flex items-center gap-1 px-1.5 py-0.5 rounded',
           'bg-blue-100 dark:bg-blue-900/40',
@@ -176,7 +190,8 @@ export function CitationLink({ chunkId }: CitationLinkProps) {
           'text-xs font-mono',
           'transition-colors duration-150',
           'cursor-pointer',
-          'border border-blue-200 dark:border-blue-700/50'
+          'border border-blue-200 dark:border-blue-700/50',
+          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1'
         )}
       >
         <FileText size={10} />

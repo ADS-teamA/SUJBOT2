@@ -21,6 +21,8 @@ import { timing } from '../../design-system/tokens/timing';
 import type { CitationMetadata } from '../../types';
 
 interface CitationPreviewProps {
+  /** Unique ID for ARIA tooltip relationship */
+  id: string;
   metadata: CitationMetadata;
   anchorRect: DOMRect | null;
   onMouseEnter: () => void;
@@ -33,6 +35,7 @@ const POPOVER_MAX_HEIGHT = 300;
 const ESTIMATED_HEIGHT = 200; // Initial estimate for positioning
 
 export function CitationPreview({
+  id,
   metadata,
   anchorRect,
   onMouseEnter,
@@ -54,20 +57,15 @@ export function CitationPreview({
     gap: 8,
   });
 
-  // Measure actual height after render
+  // Measure actual height after render, then trigger fade-in
   useEffect(() => {
     if (popoverRef.current) {
       const height = Math.min(popoverRef.current.scrollHeight, POPOVER_MAX_HEIGHT);
       setActualHeight(height);
+      // Trigger fade-in after height measurement completes
+      requestAnimationFrame(() => setIsVisible(true));
     }
   }, [metadata.content]);
-
-  // Fade in animation
-  useEffect(() => {
-    // Small delay for DOM to settle before animation
-    const timer = setTimeout(() => setIsVisible(true), 10);
-    return () => clearTimeout(timer);
-  }, []);
 
   if (!position) return null;
 
@@ -76,6 +74,7 @@ export function CitationPreview({
 
   return (
     <div
+      id={id}
       ref={popoverRef}
       role="tooltip"
       onMouseEnter={onMouseEnter}

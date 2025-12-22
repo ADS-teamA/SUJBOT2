@@ -4,10 +4,23 @@
  * Calculates optimal popover position relative to anchor element.
  * Automatically flips above/below based on viewport constraints.
  *
- * Usage:
- * const position = usePopoverPosition(anchorRect, 200, 320, 8);
+ * @param options - Configuration options
+ * @param options.anchorRect - DOMRect of the anchor element (null returns null)
+ * @param options.popoverHeight - Height of the popover in pixels
+ * @param options.popoverWidth - Width of the popover in pixels
+ * @param options.gap - Space between anchor and popover (default: 8px)
+ * @param options.viewportPadding - Minimum distance from viewport edges (default: 8px)
+ *
+ * @returns PopoverPosition with top, left, placement, and arrowLeft, or null if anchorRect is null
+ *
+ * @example
+ * const position = usePopoverPosition({
+ *   anchorRect: elementRef.current?.getBoundingClientRect() ?? null,
+ *   popoverHeight: 200,
+ *   popoverWidth: 320,
+ * });
  * if (position) {
- *   style={{ top: position.top, left: position.left }}
+ *   return <div style={{ top: position.top, left: position.left }} />;
  * }
  */
 
@@ -17,7 +30,8 @@ export interface PopoverPosition {
   top: number;
   left: number;
   placement: 'top' | 'bottom';
-  arrowLeft: number; // Arrow horizontal position relative to popover
+  /** Arrow horizontal position relative to popover (clamped to 12px from edges) */
+  arrowLeft: number;
 }
 
 interface UsePopoverPositionOptions {
@@ -37,6 +51,7 @@ export function usePopoverPosition({
 }: UsePopoverPositionOptions): PopoverPosition | null {
   return useMemo(() => {
     if (!anchorRect) return null;
+    if (typeof window === 'undefined') return null; // SSR guard
 
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
