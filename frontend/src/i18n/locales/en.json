@@ -246,5 +246,13 @@
     "submitted": "Feedback submitted",
     "thankYou": "Thank you for your feedback!",
     "error": "Failed to submit feedback"
+  },
+  "citation": {
+    "preview": "Preview",
+    "source": "Source",
+    "page": "Page",
+    "section": "Section",
+    "noContent": "No preview available",
+    "clickToView": "Click to view in PDF"
   }
 }
