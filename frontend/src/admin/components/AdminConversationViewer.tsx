@@ -65,7 +65,10 @@ export function AdminConversationViewer({ userId }: AdminConversationViewerProps
     try {
       const response = await fetch(
         `${getApiBaseUrl()}/admin/users/${userId}/conversations`,
-        { credentials: 'include' }
+        {
+          credentials: 'include',
+          headers: { Accept: 'application/json' },
+        }
       );
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -86,7 +89,10 @@ export function AdminConversationViewer({ userId }: AdminConversationViewerProps
     try {
       const response = await fetch(
         `${getApiBaseUrl()}/admin/users/${userId}/conversations/${conversationId}/messages`,
-        { credentials: 'include' }
+        {
+          credentials: 'include',
+          headers: { Accept: 'application/json' },
+        }
       );
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
