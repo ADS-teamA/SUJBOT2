@@ -239,7 +239,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         Args:
             connection_string: PostgreSQL DSN (postgresql://user:pass@host:port/db)
             pool_size: Connection pool size (default: 20)
-            dimensions: Embedding dimensionality (default: 3072 for text-embedding-3-large)
+            dimensions: Embedding dimensionality (default: 4096 for Qwen3-Embedding-8B)
         """
         self.connection_string = connection_string
         self.pool_size = pool_size
@@ -282,15 +282,16 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
 
                 self.pool = await asyncpg.create_pool(
                     dsn=self.connection_string,
-                    min_size=2,
+                    min_size=4,  # Optimized: 4 parallel searches need 4 connections
                     max_size=self.pool_size,
                     max_queries=50000,
                     max_inactive_connection_lifetime=300,
-                    command_timeout=60,
+                    command_timeout=30,  # Optimized: fail fast for stuck queries
+                    statement_cache_size=100,  # Optimized: cache prepared statements
                 )
-                logger.info(f"PostgreSQL connection pool created (size={self.pool_size})")
+                logger.info(f"PostgreSQL connection pool created (min=4, max={self.pool_size})")
 
-                # Verify extensions
+                # Verify pgvector extension is installed
                 async with self.pool.acquire() as conn:
                     extensions = await conn.fetch(
                         "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'age')"

@@ -36,9 +36,6 @@ from .model_registry import ModelRegistry
 # Metadata structures
 from .metadata import ChunkMetadata
 
-# FAISS utilities
-from .faiss_utils import reconstruct_all_vectors, get_index_stats, validate_index
-
 __all__ = [
     # Security
     "sanitize_error",
@@ -60,8 +57,4 @@ __all__ = [
     "ModelRegistry",
     # Metadata
     "ChunkMetadata",
-    # FAISS utilities
-    "reconstruct_all_vectors",
-    "get_index_stats",
-    "validate_index",
 ]

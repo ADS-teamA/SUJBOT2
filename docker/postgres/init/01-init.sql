@@ -292,17 +292,19 @@ CREATE INDEX IF NOT EXISTS idx_layer2_embedding_ivfflat
 ON vectors.layer2 USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
 
--- Layer 3: HNSW (PRIMARY retrieval, highest quality)
--- NOTE: This can take 2-4 hours to build for 1M vectors!
--- Use IVFFlat for development, HNSW for production
-CREATE INDEX IF NOT EXISTS idx_layer3_embedding_hnsw
-ON vectors.layer3 USING hnsw (embedding vector_cosine_ops)
-WITH (m = 16, ef_construction = 64);
-
--- Alternative: IVFFlat for faster builds (uncomment for development)
--- CREATE INDEX IF NOT EXISTS idx_layer3_embedding_ivfflat
--- ON vectors.layer3 USING ivfflat (embedding vector_cosine_ops)
--- WITH (lists = 1000);
+-- Layer 3: Vector index
+-- NOTE: pgvector 0.8.x has a 2000 dimension limit for HNSW/IVFFlat indexes
+-- Qwen3-Embedding-8B produces 4096-dim vectors, so NO INDEX is possible
+-- Options: 1) Upgrade to pgvector 0.9+ (16000 dim limit)
+--          2) Use embedding model with ≤2000 dims (e.g., text-embedding-3-large = 3072 dims won't work either)
+--          3) Use sequential scan (acceptable for <10k vectors)
+--
+-- For now, using sequential scan which is fast for small datasets
+-- Uncomment below if using pgvector 0.9+ or lower-dim embeddings:
+--
+-- CREATE INDEX IF NOT EXISTS idx_layer3_embedding_hnsw
+-- ON vectors.layer3 USING hnsw (embedding vector_cosine_ops)
+-- WITH (m = 16, ef_construction = 64);
 
 -- ============================================================================
 -- Full-Text Search Indexes (GIN for tsvector)
