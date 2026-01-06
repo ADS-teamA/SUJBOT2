@@ -115,11 +115,11 @@ class FusionRetriever:
 
     Algorithm:
     1. Generate HyDE doc + 2 expansions via LLM
-    2. Embed hyde_doc, expansion_0, expansion_1
-    3. Search PostgreSQL with each embedding (k * 3 candidates)
+    2. Embed original query + hyde_doc + expansion_0 + expansion_1 (4 embeddings)
+    3. Search PostgreSQL with each embedding (k * candidates_multiplier)
     4. Collect unique chunks with scores from each method
     5. Min-max normalize each score set to [0, 1]
-    6. Fuse: final = 0.6 * hyde_norm + 0.4 * avg(exp_0_norm, exp_1_norm)
+    6. Fuse: final = 0.5 * original + 0.25 * hyde + 0.25 * avg(expansions)
     7. Sort by fused score, return top-k
 
     Example:
@@ -417,15 +417,22 @@ class FusionRetriever:
             data_list.append((d["data"], d["orig"], d["hyde"], d["exp0"], d["exp1"]))
 
         # Vectorized min-max normalization per column
-        with np.errstate(invalid='ignore'):
-            mins = np.nanmin(scores, axis=0)
-            maxs = np.nanmax(scores, axis=0)
-            ranges = maxs - mins
-            # Handle constant columns (all same value or single value)
-            ranges = np.where(ranges > 0, ranges, 1.0)
-            normalized = (scores - mins) / ranges
-            # Replace NaN (missing scores) with 0.0
-            normalized = np.nan_to_num(normalized, nan=0.0)
+        mins = np.nanmin(scores, axis=0)
+        maxs = np.nanmax(scores, axis=0)
+        ranges = maxs - mins
+
+        # Handle constant columns (all same value or single value)
+        # Log warning for debugging but don't fail - this is normal for sparse results
+        constant_cols = ranges == 0
+        if constant_cols.any():
+            col_names = ["orig", "hyde", "exp0", "exp1"]
+            constant_names = [col_names[i] for i in range(4) if constant_cols[i]]
+            logger.debug(f"Constant score columns detected: {constant_names}")
+
+        ranges = np.where(ranges > 0, ranges, 1.0)
+        normalized = (scores - mins) / ranges
+        # Replace NaN (missing scores) with 0.0
+        normalized = np.nan_to_num(normalized, nan=0.0)
 
         # Weighted fusion using matrix multiplication
         # Weights: [original=0.5, hyde=0.25, exp0=0.125, exp1=0.125]

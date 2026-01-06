@@ -6,7 +6,7 @@ Uses OpenAI-compatible API format.
 
 Models:
 - Embedding: Qwen/Qwen3-Embedding-8B (4096 dimensions)
-- LLM: Qwen/Qwen2.5-7B-Instruct
+- LLM: mistralai/Mistral-7B-Instruct-v0.3 (faster than Qwen2.5-7B)
 """
 
 import hashlib

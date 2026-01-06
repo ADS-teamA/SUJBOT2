@@ -239,7 +239,7 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         Args:
             connection_string: PostgreSQL DSN (postgresql://user:pass@host:port/db)
             pool_size: Connection pool size (default: 20)
-            dimensions: Embedding dimensionality (default: 3072 for text-embedding-3-large)
+            dimensions: Embedding dimensionality (default: 4096 for Qwen3-Embedding-8B)
         """
         self.connection_string = connection_string
         self.pool_size = pool_size
@@ -281,10 +281,14 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                 logger.info(f"Attempting to connect to PostgreSQL (attempt {attempt}/{max_retries})...")
 
                 async def _init_connection(conn):
-                    """Initialize each connection with HNSW search parameters."""
-                    # Set HNSW search quality parameter for better recall/latency tradeoff
-                    # ef_search=64 balances accuracy vs speed (default ~40, max ~100)
-                    await conn.execute("SET hnsw.ef_search = 64")
+                    """Initialize each connection with pgvector search parameters."""
+                    try:
+                        # Set HNSW ef_search for indexed layers (layer1/2 use IVFFlat).
+                        # Default is 40, max is 1000 (higher = better recall, slower).
+                        await conn.execute("SET hnsw.ef_search = 64")
+                    except Exception as e:
+                        # Log but don't fail - HNSW param is optimization, not required
+                        logger.warning(f"Failed to set hnsw.ef_search: {e}")
 
                 self.pool = await asyncpg.create_pool(
                     dsn=self.connection_string,
@@ -532,13 +536,6 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             param_idx += 1
             params.append(k)
 
-            # For layer3, use halfvec casting to leverage HNSW index
-            # Index: subvector(embedding, 1, 4000)::halfvec(4000)
-            if layer == 3:
-                distance_expr = "subvector(embedding, 1, 4000)::halfvec(4000) <=> subvector($1::vector, 1, 4000)::halfvec(4000)"
-            else:
-                distance_expr = "embedding <=> $1::vector"
-
             sql = f"""
                 SELECT
                     chunk_id,
@@ -547,10 +544,10 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     content,
                     {section_columns}
                     hierarchical_path,
-                    1 - ({distance_expr}) AS score
+                    1 - (embedding <=> $1::vector) AS score
                 FROM vectors.layer{layer}
                 {where_clause}
-                ORDER BY {distance_expr}
+                ORDER BY embedding <=> $1::vector
                 LIMIT ${param_idx}
             """
             rows = await conn.fetch(sql, *params)
@@ -641,20 +638,13 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
         param_idx += 1
         params.append(candidates_k)
 
-        # For layer3, use halfvec casting to leverage HNSW index
-        # Index: subvector(embedding, 1, 4000)::halfvec(4000)
-        if layer == 3:
-            distance_expr = "subvector(embedding, 1, 4000)::halfvec(4000) <=> subvector($1::vector, 1, 4000)::halfvec(4000)"
-        else:
-            distance_expr = "embedding <=> $1::vector"
-
         # Get dense results with filtering
         dense_sql = f"""
             SELECT chunk_id, document_id, content, metadata, {section_columns} hierarchical_path,
-                   1 - ({distance_expr}) AS score
+                   1 - (embedding <=> $1::vector) AS score
             FROM vectors.layer{layer}
             {where_clause}
-            ORDER BY {distance_expr}
+            ORDER BY embedding <=> $1::vector
             LIMIT ${param_idx}
         """
         dense_rows = await conn.fetch(dense_sql, *params)
