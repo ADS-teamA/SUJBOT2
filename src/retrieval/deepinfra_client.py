@@ -36,7 +36,7 @@ class DeepInfraConfig:
 
     api_key: Optional[str] = None  # Defaults to DEEPINFRA_API_KEY env var
     embedding_model: str = "Qwen/Qwen3-Embedding-8B"
-    llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    llm_model: str = "mistralai/Mistral-7B-Instruct-v0.3"  # Faster than Qwen2.5-7B
     base_url: str = "https://api.deepinfra.com/v1/openai"
     timeout: int = 60
     max_retries: int = 3
