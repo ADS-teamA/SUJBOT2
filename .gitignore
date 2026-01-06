@@ -84,9 +84,14 @@ chunking_data/
 # Backup files
 *.bak
 *.backup
+*.tar.gz
 results_all/
 
 # Generated data folders
 benchmarks/
 clean_text/
 vector_db/
+data/
+benchmark_dataset/
+dataset/
+evaluations/

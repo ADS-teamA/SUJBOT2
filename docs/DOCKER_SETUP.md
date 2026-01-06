@@ -12,7 +12,7 @@
 2. [Prerequisites](#prerequisites)
 3. [Environment Setup](#environment-setup)
 4. [Docker Services](#docker-services)
-5. [Migration from FAISS](#migration-from-faiss)
+5. [Storage Backend](#storage-backend)
 6. [Development Workflow](#development-workflow)
 7. [Production Deployment](#production-deployment)
 8. [Troubleshooting](#troubleshooting)
@@ -36,13 +36,7 @@ docker-compose up -d
 # 4. Wait for services to be healthy
 docker-compose ps
 
-# 5. (Optional) Migrate existing FAISS data
-python scripts/migrate_faiss_to_postgres.py \
-    --faiss-dir vector_db/ \
-    --db-url postgresql://postgres:sujbot_secure_password@localhost:5432/sujbot \
-    --verify
-
-# 6. Access application
+# 5. Access application
 # Frontend: http://localhost:5173
 # Backend API: http://localhost:8000/docs
 # PostgreSQL: localhost:5432
@@ -166,59 +160,28 @@ docker-compose down -v
 
 ---
 
-## 🔄 Migration from FAISS
+## 🔄 Storage Backend
 
-### Pre-Migration Checklist
+**PostgreSQL is the only supported storage backend.** FAISS support has been removed.
 
-- [ ] Backup existing `vector_db/` directory
-- [ ] Docker services are running (`docker-compose ps`)
-- [ ] PostgreSQL is healthy (green in `docker-compose ps`)
-- [ ] At least 4GB free RAM for migration process
+All vector storage uses PostgreSQL with pgvector extension:
+- `vectors.layer1` - Document-level embeddings
+- `vectors.layer2` - Section-level embeddings
+- `vectors.layer3` - Chunk-level embeddings (primary retrieval)
 
-### Run Migration
-
-```bash
-# Activate Python environment (if using uv)
-source .venv/bin/activate  # or: uv venv
-
-# Run migration script
-python scripts/migrate_faiss_to_postgres.py \
-    --faiss-dir vector_db/ \
-    --db-url postgresql://postgres:sujbot_secure_password@localhost:5432/sujbot \
-    --batch-size 500 \
-    --verify
-
-# Migration output:
-# ✓ Layer 1: Migrated 150 vectors
-# ✓ Layer 2: Migrated 2,345 vectors
-# ✓ Layer 3: Migrated 12,789 vectors
-# ✓ Verification: Test search successful
-```
-
-### Migration Performance
-
-| Documents | Vectors | Time (IVFFlat) | Time (HNSW) |
-|-----------|---------|----------------|-------------|
-| 10        | ~1K     | 1-2 minutes    | 5-10 minutes|
-| 100       | ~10K    | 5-10 minutes   | 30-60 minutes|
-| 1000      | ~100K   | 30-60 minutes  | 2-4 hours   |
-
-**Note:** HNSW index building is the bottleneck. Use IVFFlat for development.
-
-### Verify Migration
+### Verify Database
 
 ```bash
 # Connect to PostgreSQL
 docker-compose exec postgres psql -U postgres -d sujbot
 
 # Check vector counts
-SELECT * FROM metadata.vector_store_stats;
-
-# Test vector search
-SELECT chunk_id, content, 1 - (embedding <=> '[0.1, 0.2, ...]'::vector) AS score
-FROM vectors.layer3
-ORDER BY embedding <=> '[0.1, 0.2, ...]'::vector
-LIMIT 5;
+SELECT
+    'layer1' as layer, count(*) FROM vectors.layer1
+UNION ALL SELECT
+    'layer2', count(*) FROM vectors.layer2
+UNION ALL SELECT
+    'layer3', count(*) FROM vectors.layer3;
 
 # Exit
 \q
@@ -415,23 +378,6 @@ curl http://localhost:8000/health
 # Should include: http://localhost:5173
 ```
 
-### Migration Fails
-
-```bash
-# Check FAISS directory exists
-ls -la vector_db/
-
-# Verify files
-# Should have: faiss_layer*.index, metadata_layer*.pkl, bm25_layer*.pkl
-
-# Run migration with verbose logging
-python scripts/migrate_faiss_to_postgres.py \
-    --faiss-dir vector_db/ \
-    --db-url postgresql://postgres:sujbot_secure_password@localhost:5432/sujbot \
-    --batch-size 100 \  # Reduce batch size
-    --verify
-```
-
 ### Slow Query Performance
 
 ```bash
@@ -592,10 +538,9 @@ docker-compose down -v
 - `docker/postgres/postgresql.conf` - Performance config
 - `docker/nginx/nginx.conf` - Frontend production config
 - `src/storage/*.py` - Abstraction layer (4 files)
-- `scripts/migrate_faiss_to_postgres.py` - Migration script
 
 ---
 
-**Last Updated:** 2025-11-12
-**Version:** 1.0.0
+**Last Updated:** 2026-01-06
+**Version:** 1.1.0
 **Architecture:** Docker Compose + PostgreSQL (pgvector + Apache AGE)
