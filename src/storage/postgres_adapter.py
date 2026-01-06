@@ -280,16 +280,6 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
             try:
                 logger.info(f"Attempting to connect to PostgreSQL (attempt {attempt}/{max_retries})...")
 
-                async def _init_connection(conn):
-                    """Initialize each connection with pgvector search parameters."""
-                    try:
-                        # Set HNSW ef_search for indexed layers (layer1/2 use IVFFlat).
-                        # Default is 40, max is 1000 (higher = better recall, slower).
-                        await conn.execute("SET hnsw.ef_search = 64")
-                    except Exception as e:
-                        # Log but don't fail - HNSW param is optimization, not required
-                        logger.warning(f"Failed to set hnsw.ef_search: {e}")
-
                 self.pool = await asyncpg.create_pool(
                     dsn=self.connection_string,
                     min_size=4,  # Optimized: 4 parallel searches need 4 connections
@@ -298,9 +288,8 @@ class PostgresVectorStoreAdapter(VectorStoreAdapter):
                     max_inactive_connection_lifetime=300,
                     command_timeout=30,  # Optimized: fail fast for stuck queries
                     statement_cache_size=100,  # Optimized: cache prepared statements
-                    init=_init_connection,  # Set HNSW params on each connection
                 )
-                logger.info(f"PostgreSQL connection pool created (min=4, max={self.pool_size}, ef_search=64)")
+                logger.info(f"PostgreSQL connection pool created (min=4, max={self.pool_size})")
 
                 # Verify pgvector extension is installed
                 async with self.pool.acquire() as conn:
